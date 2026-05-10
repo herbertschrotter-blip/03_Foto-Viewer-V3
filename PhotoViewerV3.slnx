@@ -7,5 +7,6 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/PhotoViewerV3.Tests/PhotoViewerV3.Tests.csproj" />
+    <Project Path="tests/PhotoViewerV3.PerfTests/PhotoViewerV3.PerfTests.csproj" />
   </Folder>
 </Solution>

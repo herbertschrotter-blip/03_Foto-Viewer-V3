@@ -3,8 +3,8 @@
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  Title="PhotoViewer V3"
-                 Height="720"
-                 Width="1200"
+                 Height="800"
+                 Width="1280"
                  WindowStartupLocation="CenterScreen"
                  WindowBackdropType="Mica"
                  ExtendsContentIntoTitleBar="True">
@@ -17,36 +17,45 @@
 
         <ui:TitleBar Grid.Row="0" Title="PhotoViewer V3" />
 
-        <ui:NavigationView Grid.Row="1"
+        <ui:NavigationView x:Name="MainNav"
+                           Grid.Row="1"
                            PaneDisplayMode="Left"
-                           OpenPaneLength="280"
+                           OpenPaneLength="260"
                            IsBackButtonVisible="Collapsed">
 
             <ui:NavigationView.MenuItems>
-                <ui:NavigationViewItem Content="Alle Fotos">
+                <ui:NavigationViewItem Content="Alle Fotos" Tag="placeholder">
                     <ui:NavigationViewItem.Icon>
                         <ui:SymbolIcon Symbol="Image24" />
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
-                <ui:NavigationViewItem Content="Videos">
+                <ui:NavigationViewItem Content="Videos" Tag="placeholder">
                     <ui:NavigationViewItem.Icon>
                         <ui:SymbolIcon Symbol="Video24" />
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
-                <ui:NavigationViewItem Content="Favoriten">
+                <ui:NavigationViewItem Content="Favoriten" Tag="placeholder">
                     <ui:NavigationViewItem.Icon>
                         <ui:SymbolIcon Symbol="Heart24" />
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
-                <ui:NavigationViewItem Content="Ordner">
+                <ui:NavigationViewItem Content="Ordner" Tag="placeholder">
                     <ui:NavigationViewItem.Icon>
                         <ui:SymbolIcon Symbol="Folder24" />
+                    </ui:NavigationViewItem.Icon>
+                </ui:NavigationViewItem>
+                <ui:NavigationViewItem x:Name="SpikeGalleryItem"
+                                       Content="Spike: Gallery"
+                                       Tag="spike-gallery"
+                                       PreviewMouseLeftButtonDown="SpikeGalleryItem_OnPreviewMouseLeftButtonDown">
+                    <ui:NavigationViewItem.Icon>
+                        <ui:SymbolIcon Symbol="Beaker24" />
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
             </ui:NavigationView.MenuItems>
 
             <ui:NavigationView.FooterMenuItems>
-                <ui:NavigationViewItem Content="Einstellungen">
+                <ui:NavigationViewItem Content="Einstellungen" Tag="placeholder">
                     <ui:NavigationViewItem.Icon>
                         <ui:SymbolIcon Symbol="Settings24" />
                     </ui:NavigationViewItem.Icon>
@@ -54,22 +63,7 @@
             </ui:NavigationView.FooterMenuItems>
 
             <ui:NavigationView.ContentOverlay>
-                <Grid>
-                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                        <ui:SymbolIcon Symbol="ImageMultiple24"
-                                       FontSize="64"
-                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                       HorizontalAlignment="Center" />
-                        <ui:TextBlock FontTypography="Title"
-                                      Text="PhotoViewer V3"
-                                      HorizontalAlignment="Center"
-                                      Margin="0,16,0,8" />
-                        <ui:TextBlock FontTypography="Body"
-                                      Text="Skeleton steht. Tag 1 abgeschlossen."
-                                      Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                      HorizontalAlignment="Center" />
-                    </StackPanel>
-                </Grid>
+                <ContentControl x:Name="ContentArea" />
             </ui:NavigationView.ContentOverlay>
 
         </ui:NavigationView>

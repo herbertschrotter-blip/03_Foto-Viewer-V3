@@ -1,6 +1,10 @@
+using System;
 using System.IO;
 using System.Windows;
 using PhotoViewerV3.Services.Infrastructure;
+using PhotoViewerV3.Spike02.Data;
+using PhotoViewerV3.Spike02.ViewModels;
+using PhotoViewerV3.Spike02.Views;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Serilog;
@@ -38,9 +42,17 @@ public partial class App : Application
             .Build();
     }
 
+    public IServiceProvider Services => _host.Services;
+
     private static void ConfigureServices(IServiceCollection services, IAppDataPaths paths)
     {
         services.AddSingleton<IAppDataPaths>(paths);
+
+        // Spike #2 — Virtual Grid
+        services.AddSingleton<GalleryPageSource>();
+        services.AddSingleton<GalleryViewModel>();
+        services.AddTransient<GalleryView>();
+
         services.AddSingleton<MainWindow>();
     }
 
@@ -59,6 +71,7 @@ public partial class App : Application
     protected override async void OnExit(ExitEventArgs e)
     {
         Log.Information("PhotoViewer V3 wird beendet");
+        _host.Services.GetService<GalleryPageSource>()?.Dispose();
         await _host.StopAsync();
         _host.Dispose();
         Log.CloseAndFlush();
