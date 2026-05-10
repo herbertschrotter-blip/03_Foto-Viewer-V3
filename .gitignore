@@ -1,0 +1,75 @@
+# Runtime State
+state.json
+
+# Media Thumbnails & Converted
+.thumbs/
+.converted/
+
+# Temp & Cache
+.temp/
+.cache/
+
+# PowerShell
+*.ps1~
+*.swp
+*~
+
+# OS Files
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+
+# Logs
+*.log
+*.tmp
+
+# IDE
+.vscode/settings.json
+.idea/
+
+# Build Artifacts
+*.dll
+*.exe
+*.pdb
+
+# User Specific
+*.user
+*.suo
+
+# FFmpeg Binaries
+ffmpeg/
+ffmpeg.exe
+ffplay.exe
+ffprobe.exe
+
+# Debug-Log
+debug.log
+
+# Logging
+Lib/Core/char-map.json
+
+# File Sorter
+file-sorter-patterns.json.backup
+file-sorter-patterns.json
+file-sorter-sublevels.json.backup
+file-sorter-sublevels.json
+_undo-history.json
+_flatten-undo.json
+
+# Claude Code tool config
+.claude/
+
+# .NET Build Output
+[Bb]in/
+[Oo]bj/
+*.userprefs
+
+# Visual Studio
+.vs/
+.vscode/
+*.suo
+*.csproj.user
+
+# Rider
+.idea/

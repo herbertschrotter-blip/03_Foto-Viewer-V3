@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>PhotoViewer V3 — Lightbox</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  font-family: 'Segoe UI Variable', 'Segoe UI', -apple-system, sans-serif;
+  font-size: 13px;
+  color: #e4e7eb;
+  background: #000;
+  overflow: hidden;
+  user-select: none;
+}
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  background: #0a0a0a;
+  display: grid;
+  grid-template-rows: 56px 1fr 100px;
+}
+
+/* === Top Bar === */
+.top-bar {
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 12px;
+  background: linear-gradient(180deg, rgba(0,0,0,0.85), rgba(0,0,0,0.4));
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  z-index: 10;
+}
+
+.top-bar .filename {
+  font-size: 14px;
+  font-weight: 500;
+  color: #fff;
+}
+.top-bar .filemeta {
+  font-size: 12px;
+  color: #a0aec0;
+}
+.top-bar .counter {
+  margin-left: auto;
+  font-size: 13px;
+  color: #cbd5e0;
+  background: rgba(255,255,255,0.06);
+  padding: 5px 12px;
+  border-radius: 20px;
+}
+.top-bar .actions {
+  display: flex;
+  gap: 4px;
+}
+.top-bar .actions button {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  color: #cbd5e0;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background 0.15s, color 0.15s;
+}
+.top-bar .actions button:hover {
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+}
+.top-bar .actions .danger:hover {
+  background: rgba(239,68,68,0.2);
+  color: #ef4444;
+}
+.top-bar .actions .close {
+  margin-left: 8px;
+}
+.top-bar .actions .close:hover {
+  background: #ef4444;
+  color: #fff;
+}
+
+/* === Stage (Image / Video Area) === */
+.stage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  overflow: hidden;
+}
+
+.media {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 4px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  background: linear-gradient(135deg, #614385, #516395);
+  width: 900px;
+  aspect-ratio: 3/2;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.media .placeholder-text {
+  font-size: 72px;
+  color: rgba(255,255,255,0.18);
+  font-weight: 200;
+  letter-spacing: 4px;
+}
+
+/* Nav Arrows */
+.nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(0,0,0,0.5);
+  color: #fff;
+  font-size: 22px;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+.nav:hover {
+  background: rgba(255,255,255,0.12);
+  border-color: rgba(255,255,255,0.3);
+  transform: translateY(-50%) scale(1.06);
+}
+.nav.prev { left: 24px; }
+.nav.next { right: 24px; }
+
+/* Info Panel (right edge) */
+.info-panel {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  width: 260px;
+  background: rgba(20,22,28,0.85);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  padding: 16px;
+  backdrop-filter: blur(12px);
+  font-size: 12px;
+}
+.info-panel h3 {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #a0aec0;
+  margin-bottom: 10px;
+}
+.info-panel .row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.info-panel .row:last-child { border-bottom: none; }
+.info-panel .label { color: #a0aec0; }
+.info-panel .value { color: #e4e7eb; font-weight: 500; text-align: right; }
+
+/* === Bottom Filmstrip === */
+.filmstrip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 16px;
+  background: linear-gradient(0deg, rgba(0,0,0,0.85), rgba(0,0,0,0.4));
+  backdrop-filter: blur(8px);
+  border-top: 1px solid rgba(255,255,255,0.06);
+  overflow-x: auto;
+  z-index: 10;
+}
+.filmstrip::-webkit-scrollbar { height: 4px; }
+.filmstrip::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+
+.strip-thumb {
+  width: 76px;
+  height: 76px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  opacity: 0.55;
+  transition: all 0.15s;
+  border: 2px solid transparent;
+}
+.strip-thumb:hover { opacity: 0.9; }
+.strip-thumb.current {
+  opacity: 1;
+  border-color: #818cf8;
+  box-shadow: 0 0 0 1px rgba(129,140,248,0.4), 0 4px 12px rgba(129,140,248,0.3);
+}
+.strip-thumb .image {
+  width: 100%; height: 100%;
+  background-size: cover;
+  background-position: center;
+}
+.strip-thumb .vid-mark {
+  position: absolute;
+  bottom: 4px; right: 4px;
+  background: rgba(0,0,0,0.75);
+  color: white;
+  font-size: 9px;
+  padding: 1px 4px;
+  border-radius: 2px;
+}
+
+.bg1 { background: linear-gradient(135deg, #fbb040, #d2691e); }
+.bg2 { background: linear-gradient(135deg, #4ca1af, #2c3e50); }
+.bg3 { background: linear-gradient(135deg, #ee9ca7, #ffdde1); }
+.bg4 { background: linear-gradient(135deg, #56ab2f, #a8e063); }
+.bg5 { background: linear-gradient(135deg, #614385, #516395); }
+.bg6 { background: linear-gradient(135deg, #ff7e5f, #feb47b); }
+.bg7 { background: linear-gradient(135deg, #355c7d, #6c5b7b); }
+.bg8 { background: linear-gradient(135deg, #cc2b5e, #753a88); }
+.bg9 { background: linear-gradient(135deg, #2980b9, #6dd5fa); }
+.bg10{ background: linear-gradient(135deg, #134e5e, #71b280); }
+.bg11{ background: linear-gradient(135deg, #ffafbd, #ffc3a0); }
+.bg12{ background: linear-gradient(135deg, #2c3e50, #fd746c); }
+
+/* Hint at the bottom for keyboard shortcuts */
+.kb-hint {
+  position: absolute;
+  bottom: 110px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  color: #6b7280;
+}
+.kb-hint kbd {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: inherit;
+  font-size: 10px;
+  color: #cbd5e0;
+}
+</style>
+</head>
+<body>
+
+<div class="lightbox">
+
+  <!-- Top Bar -->
+  <div class="top-bar">
+    <div>
+      <div class="filename">IMG_4287.jpg</div>
+      <div class="filemeta">D:\Fotos\2026\Urlaub Italien · 4032 × 3024 · 3,8 MB · 02.05.2026 14:23</div>
+    </div>
+    <div class="counter">5 / 234</div>
+    <div class="actions">
+      <button title="Drehen links">↺</button>
+      <button title="Drehen rechts">↻</button>
+      <button title="Favorit">⭐</button>
+      <button title="Info anzeigen">ⓘ</button>
+      <button title="Im Explorer öffnen">📂</button>
+      <button title="Verschieben">➡</button>
+      <button class="danger" title="Löschen">🗑</button>
+      <button class="close" title="Schließen (Esc)">×</button>
+    </div>
+  </div>
+
+  <!-- Stage -->
+  <div class="stage">
+
+    <button class="nav prev" title="Vorheriges (←)">‹</button>
+
+    <div class="media">
+      <div class="placeholder-text">IMG_4287</div>
+    </div>
+
+    <button class="nav next" title="Nächstes (→)">›</button>
+
+    <!-- Info Panel -->
+    <div class="info-panel">
+      <h3>Datei-Info</h3>
+      <div class="row"><span class="label">Name</span><span class="value">IMG_4287.jpg</span></div>
+      <div class="row"><span class="label">Größe</span><span class="value">3,8 MB</span></div>
+      <div class="row"><span class="label">Auflösung</span><span class="value">4032 × 3024</span></div>
+      <div class="row"><span class="label">Aufnahme</span><span class="value">02.05.2026 14:23</span></div>
+      <div class="row"><span class="label">Kamera</span><span class="value">iPhone 15 Pro</span></div>
+      <div class="row"><span class="label">Objektiv</span><span class="value">Hauptkamera 24 mm</span></div>
+      <div class="row"><span class="label">Blende</span><span class="value">ƒ/1.78</span></div>
+      <div class="row"><span class="label">ISO</span><span class="value">100</span></div>
+      <div class="row"><span class="label">Belichtung</span><span class="value">1/240 s</span></div>
+    </div>
+  </div>
+
+  <!-- Keyboard Hint -->
+  <div class="kb-hint">
+    <span><kbd>←</kbd> <kbd>→</kbd> Navigation</span>
+    <span><kbd>Space</kbd> Auswählen</span>
+    <span><kbd>F</kbd> Vollbild</span>
+    <span><kbd>Entf</kbd> Löschen</span>
+    <span><kbd>Esc</kbd> Schließen</span>
+  </div>
+
+  <!-- Filmstrip -->
+  <div class="filmstrip">
+    <div class="strip-thumb"><div class="image bg1"></div></div>
+    <div class="strip-thumb"><div class="image bg2"></div></div>
+    <div class="strip-thumb"><div class="image bg3"></div></div>
+    <div class="strip-thumb"><div class="image bg4"></div><div class="vid-mark">0:42</div></div>
+    <div class="strip-thumb current"><div class="image bg5"></div></div>
+    <div class="strip-thumb"><div class="image bg6"></div></div>
+    <div class="strip-thumb"><div class="image bg7"></div></div>
+    <div class="strip-thumb"><div class="image bg8"></div><div class="vid-mark">2:18</div></div>
+    <div class="strip-thumb"><div class="image bg9"></div></div>
+    <div class="strip-thumb"><div class="image bg10"></div></div>
+    <div class="strip-thumb"><div class="image bg11"></div></div>
+    <div class="strip-thumb"><div class="image bg12"></div><div class="vid-mark">0:17</div></div>
+    <div class="strip-thumb"><div class="image bg2"></div></div>
+    <div class="strip-thumb"><div class="image bg5"></div></div>
+    <div class="strip-thumb"><div class="image bg9"></div></div>
+    <div class="strip-thumb"><div class="image bg1"></div></div>
+    <div class="strip-thumb"><div class="image bg7"></div></div>
+    <div class="strip-thumb"><div class="image bg3"></div></div>
+  </div>
+
+</div>
+
+</body>
+</html>

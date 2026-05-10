@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/PhotoViewerV3.Data/PhotoViewerV3.Data.csproj" />
+    <Project Path="src/PhotoViewerV3.Domain/PhotoViewerV3.Domain.csproj" />
+    <Project Path="src/PhotoViewerV3.Services/PhotoViewerV3.Services.csproj" />
+    <Project Path="src/PhotoViewerV3.Wpf/PhotoViewerV3.Wpf.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/PhotoViewerV3.Tests/PhotoViewerV3.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>PhotoViewer V3 — Fluent (Dunkel)</title>
+<style>
+/* === WinUI 3 / Fluent Design Tokens (Dark) === */
+:root {
+  --mica-base:        #202020;
+  --layer-default:    rgba(43,43,43,0.7);
+  --layer-alt:        rgba(50,50,50,0.85);
+  --layer-card:       #2C2C2C;
+  --layer-secondary:  rgba(255,255,255,0.0418);
+  --layer-tertiary:   rgba(255,255,255,0.0605);
+  --layer-quaternary: rgba(255,255,255,0.0837);
+
+  --text-primary:     #FFFFFF;
+  --text-secondary:   #D0D0D0;
+  --text-tertiary:    #A0A0A0;
+  --text-disabled:    #6A6A6A;
+  --text-on-accent:   #FFFFFF;
+
+  --stroke-default:   rgba(255,255,255,0.0837);
+  --stroke-secondary: rgba(255,255,255,0.0698);
+  --stroke-divider:   rgba(255,255,255,0.0837);
+  --stroke-card:      rgba(255,255,255,0.0578);
+
+  --accent:           #818CF8;
+  --accent-light:     #A5B0FF;
+  --accent-dark:      #6066D8;
+  --accent-soft:      rgba(129,140,248,0.12);
+  --accent-soft-2:    rgba(129,140,248,0.24);
+
+  --success:          #6CCB5F;
+  --warning:          #FCE100;
+  --danger:           #FF6B5E;
+
+  --shadow-card:      0 2px 4px rgba(0,0,0,0.18), 0 1px 2px rgba(0,0,0,0.22);
+  --shadow-flyout:    0 8px 16px rgba(0,0,0,0.4);
+  --shadow-dialog:    0 32px 64px rgba(0,0,0,0.55);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+@font-face {
+  font-family: 'Segoe Fluent Icons';
+  src: local('Segoe Fluent Icons'), local('Segoe MDL2 Assets');
+}
+
+html, body {
+  height: 100%;
+  font-family: 'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
+  font-size: 14px;
+  color: var(--text-primary);
+  background: var(--mica-base);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+.icon {
+  font-family: 'Segoe Fluent Icons', 'Segoe MDL2 Assets';
+  font-style: normal;
+  font-weight: normal;
+  display: inline-block;
+  line-height: 1;
+}
+
+.window {
+  height: 100vh;
+  display: grid;
+  grid-template-rows: 32px 1fr;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(129,140,248,0.10), transparent 50%),
+    radial-gradient(circle at 100% 100%, rgba(180,150,200,0.06), transparent 50%),
+    var(--mica-base);
+}
+
+/* Title Bar */
+.titlebar {
+  display: flex; align-items: center;
+  font-size: 12px; color: var(--text-secondary);
+  user-select: none;
+  padding-left: 12px;
+  position: relative; z-index: 100;
+}
+.titlebar .app-title { flex: 1; }
+.titlebar .window-controls { display: flex; height: 100%; }
+.titlebar .window-controls button {
+  width: 46px; border: none; background: transparent;
+  color: var(--text-primary); cursor: pointer;
+  font-family: 'Segoe Fluent Icons','Segoe MDL2 Assets';
+  font-size: 10px;
+  display: flex; align-items: center; justify-content: center;
+}
+.titlebar .window-controls button:hover { background: var(--layer-tertiary); }
+.titlebar .window-controls .close:hover { background: #C42B1C; color: #fff; }
+
+.main {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  overflow: hidden;
+}
+
+/* NavigationView */
+.navview {
+  display: flex;
+  flex-direction: column;
+  background: var(--layer-default);
+  backdrop-filter: blur(20px);
+  border-right: 1px solid var(--stroke-secondary);
+  overflow: hidden;
+}
+
+.navview-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px;
+}
+.navview-header .logo {
+  width: 28px; height: 28px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-light));
+  border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+  color: white; font-family: 'Segoe Fluent Icons','Segoe MDL2 Assets'; font-size: 14px;
+  box-shadow: 0 2px 8px rgba(129,140,248,0.4);
+}
+.navview-header .title-block .app-name {
+  font-size: 14px; font-weight: 600; color: var(--text-primary);
+}
+.navview-header .title-block .version {
+  font-size: 11px; color: var(--text-tertiary);
+}
+
+.navview-search {
+  margin: 4px 8px 8px;
+  display: flex; align-items: center; gap: 8px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--stroke-default);
+  border-radius: 4px;
+  background: var(--layer-card);
+}
+.navview-search:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.navview-search input {
+  flex: 1; border: none; outline: none; background: transparent;
+  font-size: 13px; color: var(--text-primary); font-family: inherit;
+}
+.navview-search input::placeholder { color: var(--text-tertiary); }
+.navview-search .icon { color: var(--text-tertiary); font-size: 14px; }
+
+.navview-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 4px 8px;
+}
+.navview-list::-webkit-scrollbar { width: 6px; }
+.navview-list::-webkit-scrollbar-thumb { background: var(--text-disabled); border-radius: 3px; }
+
+.nav-section-header {
+  font-size: 11px; font-weight: 600;
+  color: var(--text-tertiary);
+  padding: 12px 14px 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.nav-item {
+  display: flex; align-items: center; gap: 12px;
+  height: 36px;
+  padding: 0 12px;
+  margin: 2px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  position: relative;
+  font-size: 14px;
+  color: var(--text-primary);
+  user-select: none;
+}
+.nav-item:hover { background: var(--layer-secondary); }
+.nav-item.selected {
+  background: var(--accent-soft);
+  font-weight: 500;
+}
+.nav-item.selected::before {
+  content: '';
+  position: absolute;
+  left: -4px; top: 8px; bottom: 8px;
+  width: 3px;
+  background: var(--accent);
+  border-radius: 2px;
+}
+.nav-item .icon {
+  font-size: 16px; width: 20px; text-align: center;
+  color: var(--text-secondary);
+}
+.nav-item.selected .icon { color: var(--accent); }
+.nav-item .label { flex: 1; }
+.nav-item .badge {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  background: var(--layer-secondary);
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+.nav-item.selected .badge { background: var(--accent-soft-2); color: var(--accent-light); }
+
+.nav-children { padding-left: 16px; }
+.nav-children .nav-item { font-size: 13px; height: 32px; }
+
+.navview-footer {
+  border-top: 1px solid var(--stroke-secondary);
+  padding: 4px;
+}
+
+/* Content */
+.content {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: transparent;
+}
+
+.command-bar {
+  display: flex; align-items: center; gap: 4px;
+  padding: 8px 16px;
+}
+.cmd-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px; font-family: inherit;
+  cursor: pointer;
+}
+.cmd-btn:hover { background: var(--layer-secondary); }
+.cmd-btn:active { background: var(--layer-tertiary); }
+.cmd-btn .icon { font-size: 14px; color: var(--text-secondary); }
+.cmd-btn.accent {
+  background: var(--accent);
+  color: #1A1A1A;
+  border-color: transparent;
+  font-weight: 500;
+}
+.cmd-btn.accent .icon { color: #1A1A1A; }
+.cmd-btn.accent:hover { background: var(--accent-light); }
+.cmd-divider { width: 1px; height: 20px; background: var(--stroke-divider); margin: 0 6px; }
+.cmd-spacer { flex: 1; }
+.cmd-btn.icon-only { padding: 0; width: 32px; justify-content: center; }
+
+.page-header {
+  padding: 8px 24px 12px;
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+}
+.breadcrumb {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 2px;
+}
+.breadcrumb .crumb { padding: 2px 6px; border-radius: 4px; cursor: pointer; }
+.breadcrumb .crumb:hover { background: var(--layer-secondary); color: var(--text-primary); }
+.breadcrumb .sep { color: var(--text-tertiary); font-family: 'Segoe Fluent Icons','Segoe MDL2 Assets'; font-size: 10px; }
+.breadcrumb .current { color: var(--text-primary); font-weight: 500; padding: 2px 6px; }
+
+.page-title {
+  font-size: 28px; font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  line-height: 1.1;
+}
+.page-meta {
+  margin-left: 8px; margin-bottom: 6px;
+  font-size: 12px; color: var(--text-tertiary);
+}
+.page-actions {
+  margin-left: auto; display: flex; gap: 8px; align-items: center;
+}
+.size-control {
+  display: flex; align-items: center; gap: 8px;
+  height: 32px; padding: 0 10px;
+  border: 1px solid var(--stroke-default);
+  border-radius: 4px;
+  background: var(--layer-card);
+  font-size: 12px; color: var(--text-secondary);
+}
+.size-control input[type="range"] {
+  width: 100px; accent-color: var(--accent);
+}
+
+.filter-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 24px 12px;
+}
+.pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 14px;
+  font-size: 12px;
+  border: 1px solid var(--stroke-default);
+  background: var(--layer-card);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.pill:hover { background: var(--layer-secondary); }
+.pill.active {
+  background: var(--accent);
+  color: #1A1A1A;
+  border-color: var(--accent-dark);
+  font-weight: 500;
+}
+.pill .icon { font-size: 13px; }
+.pill .count {
+  font-size: 11px;
+  background: var(--layer-secondary);
+  padding: 1px 6px;
+  border-radius: 8px;
+}
+.pill.active .count { background: rgba(0,0,0,0.18); }
+
+.grid-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 24px 24px;
+}
+.grid-container::-webkit-scrollbar { width: 8px; }
+.grid-container::-webkit-scrollbar-thumb { background: var(--text-disabled); border-radius: 4px; }
+
+.thumb-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.thumb {
+  aspect-ratio: 1;
+  background: var(--layer-card);
+  border: 1px solid var(--stroke-card);
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.thumb:hover {
+  border-color: var(--stroke-divider);
+  box-shadow: var(--shadow-card);
+  transform: translateY(-1px);
+}
+.thumb.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent), var(--shadow-card);
+}
+.thumb .image {
+  width: 100%; height: 100%;
+  background-size: cover;
+  background-position: center;
+}
+.thumb .checkbox {
+  position: absolute; top: 8px; left: 8px;
+  width: 20px; height: 20px;
+  border-radius: 4px;
+  background: rgba(0,0,0,0.6);
+  border: 1px solid rgba(255,255,255,0.3);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; color: white;
+  opacity: 0;
+  transition: opacity 0.1s;
+  font-family: 'Segoe Fluent Icons','Segoe MDL2 Assets';
+  backdrop-filter: blur(8px);
+}
+.thumb:hover .checkbox, .thumb.selected .checkbox { opacity: 1; }
+.thumb.selected .checkbox {
+  background: var(--accent); color: #1A1A1A; border-color: var(--accent-dark);
+}
+.thumb .video-badge {
+  position: absolute; bottom: 8px; right: 8px;
+  background: rgba(0,0,0,0.7);
+  color: white; font-size: 11px;
+  padding: 3px 7px;
+  border-radius: 10px;
+  display: flex; align-items: center; gap: 4px;
+  backdrop-filter: blur(8px);
+}
+.thumb .video-badge .icon { font-size: 10px; }
+.thumb .play-overlay {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.55); color: white;
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(8px);
+  font-family: 'Segoe Fluent Icons','Segoe MDL2 Assets';
+  font-size: 16px;
+  pointer-events: none;
+}
+.thumb .codec-tag {
+  position: absolute; top: 8px; right: 8px;
+  background: rgba(0,0,0,0.7); color: white;
+  font-size: 9px; font-weight: 600;
+  padding: 2px 6px; border-radius: 3px;
+  letter-spacing: 0.3px;
+  backdrop-filter: blur(8px);
+}
+
+.bg1 { background: linear-gradient(135deg, #fbb040, #d2691e); }
+.bg2 { background: linear-gradient(135deg, #4ca1af, #2c3e50); }
+.bg3 { background: linear-gradient(135deg, #ee9ca7, #ffdde1); }
+.bg4 { background: linear-gradient(135deg, #56ab2f, #a8e063); }
+.bg5 { background: linear-gradient(135deg, #614385, #516395); }
+.bg6 { background: linear-gradient(135deg, #ff7e5f, #feb47b); }
+.bg7 { background: linear-gradient(135deg, #355c7d, #6c5b7b); }
+.bg8 { background: linear-gradient(135deg, #cc2b5e, #753a88); }
+.bg9 { background: linear-gradient(135deg, #2980b9, #6dd5fa); }
+.bg10{ background: linear-gradient(135deg, #134e5e, #71b280); }
+.bg11{ background: linear-gradient(135deg, #ffafbd, #ffc3a0); }
+.bg12{ background: linear-gradient(135deg, #2c3e50, #fd746c); }
+
+.infobar {
+  margin: 0 24px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--layer-card);
+  border: 1px solid var(--stroke-default);
+  border-left: 4px solid var(--accent);
+  border-radius: 4px;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.infobar .icon { color: var(--accent); font-size: 16px; }
+.infobar .text { flex: 1; }
+.infobar .dismiss {
+  font-family: 'Segoe Fluent Icons','Segoe MDL2 Assets';
+  font-size: 10px;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  width: 24px; height: 24px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 4px;
+}
+.infobar .dismiss:hover { background: var(--layer-secondary); }
+
+.action-flyout {
+  position: fixed;
+  bottom: 24px;
+  left: calc(50% + 140px);
+  transform: translateX(-50%);
+  background: var(--layer-card);
+  border: 1px solid var(--stroke-default);
+  border-radius: 8px;
+  padding: 6px;
+  display: flex; gap: 2px; align-items: center;
+  box-shadow: var(--shadow-flyout);
+  backdrop-filter: blur(20px);
+  z-index: 100;
+}
+.action-flyout .count {
+  padding: 0 14px;
+  font-size: 13px; font-weight: 600;
+  color: var(--accent);
+  border-right: 1px solid var(--stroke-divider);
+  margin-right: 4px;
+  height: 28px; display: flex; align-items: center;
+}
+.action-flyout button {
+  border: none; background: transparent;
+  height: 32px; padding: 0 10px;
+  border-radius: 4px;
+  font-size: 13px; color: var(--text-primary); cursor: pointer;
+  display: flex; align-items: center; gap: 6px;
+  font-family: inherit;
+}
+.action-flyout button:hover { background: var(--layer-secondary); }
+.action-flyout button.danger:hover { background: rgba(255,107,94,0.12); color: var(--danger); }
+.action-flyout button .icon { font-size: 14px; color: var(--text-secondary); }
+.action-flyout button.danger:hover .icon { color: var(--danger); }
+</style>
+</head>
+<body>
+
+<div class="window">
+
+  <div class="titlebar">
+    <div class="app-title">PhotoViewer V3</div>
+    <div class="window-controls">
+      <button title="Minimieren">&#xE921;</button>
+      <button title="Maximieren">&#xE922;</button>
+      <button class="close" title="Schließen">&#xE8BB;</button>
+    </div>
+  </div>
+
+  <div class="main">
+
+    <div class="navview">
+      <div class="navview-header">
+        <div class="logo"><span>&#xE91B;</span></div>
+        <div class="title-block">
+          <div class="app-name">PhotoViewer V3</div>
+          <div class="version">Version 2.0</div>
+        </div>
+      </div>
+
+      <div class="navview-search">
+        <span class="icon">&#xE721;</span>
+        <input type="text" placeholder="Suchen…">
+      </div>
+
+      <div class="navview-list">
+        <div class="nav-section-header">Bibliothek</div>
+
+        <div class="nav-item">
+          <span class="icon">&#xE838;</span>
+          <span class="label">Alle Fotos</span>
+          <span class="badge">10.004</span>
+        </div>
+        <div class="nav-item">
+          <span class="icon">&#xE714;</span>
+          <span class="label">Videos</span>
+          <span class="badge">347</span>
+        </div>
+        <div class="nav-item">
+          <span class="icon">&#xE734;</span>
+          <span class="label">Favoriten</span>
+          <span class="badge">82</span>
+        </div>
+        <div class="nav-item">
+          <span class="icon">&#xE823;</span>
+          <span class="label">Zuletzt</span>
+        </div>
+
+        <div class="nav-section-header">Ordner</div>
+
+        <div class="nav-item">
+          <span class="icon">&#xED25;</span>
+          <span class="label">2026</span>
+          <span class="badge">412</span>
+        </div>
+        <div class="nav-children">
+          <div class="nav-item">
+            <span class="icon">&#xE8B7;</span>
+            <span class="label">Januar</span>
+            <span class="badge">87</span>
+          </div>
+          <div class="nav-item selected">
+            <span class="icon">&#xE8B7;</span>
+            <span class="label">Urlaub Italien</span>
+            <span class="badge">234</span>
+          </div>
+          <div class="nav-item">
+            <span class="icon">&#xE8B7;</span>
+            <span class="label">Familie</span>
+            <span class="badge">91</span>
+          </div>
+        </div>
+
+        <div class="nav-item">
+          <span class="icon">&#xED25;</span>
+          <span class="label">2025</span>
+          <span class="badge">1.842</span>
+        </div>
+        <div class="nav-item">
+          <span class="icon">&#xED25;</span>
+          <span class="label">2024</span>
+          <span class="badge">2.117</span>
+        </div>
+        <div class="nav-item">
+          <span class="icon">&#xE7B8;</span>
+          <span class="label">Archiv</span>
+          <span class="badge">5.633</span>
+        </div>
+
+        <div class="nav-section-header">Tools</div>
+
+        <div class="nav-item">
+          <span class="icon">&#xE8CB;</span>
+          <span class="label">File-Sorter</span>
+        </div>
+        <div class="nav-item">
+          <span class="icon">&#xE8DE;</span>
+          <span class="label">Flatten &amp; Move</span>
+        </div>
+        <div class="nav-item">
+          <span class="icon">&#xE74D;</span>
+          <span class="label">Papierkorb</span>
+        </div>
+      </div>
+
+      <div class="navview-footer">
+        <div class="nav-item">
+          <span class="icon">&#xE713;</span>
+          <span class="label">Einstellungen</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <div class="command-bar">
+        <button class="cmd-btn accent">
+          <span class="icon">&#xE838;</span>
+          <span>Ordner öffnen</span>
+        </button>
+        <div class="cmd-divider"></div>
+        <button class="cmd-btn">
+          <span class="icon">&#xE8CB;</span>
+          <span>Sortieren</span>
+          <span class="icon" style="font-size:10px">&#xE70D;</span>
+        </button>
+        <button class="cmd-btn">
+          <span class="icon">&#xE71C;</span>
+          <span>Filter</span>
+        </button>
+        <div class="cmd-divider"></div>
+        <button class="cmd-btn icon-only" title="Aktualisieren"><span class="icon">&#xE72C;</span></button>
+        <button class="cmd-btn icon-only" title="Diashow"><span class="icon">&#xE786;</span></button>
+        <div class="cmd-spacer"></div>
+        <button class="cmd-btn icon-only" title="Theme wechseln"><span class="icon">&#xE793;</span></button>
+        <button class="cmd-btn icon-only" title="Hilfe"><span class="icon">&#xE897;</span></button>
+        <button class="cmd-btn icon-only" title="Mehr"><span class="icon">&#xE712;</span></button>
+      </div>
+
+      <div class="page-header">
+        <div>
+          <div class="breadcrumb">
+            <span class="crumb">D:\Fotos</span>
+            <span class="sep">&#xE76C;</span>
+            <span class="crumb">2026</span>
+            <span class="sep">&#xE76C;</span>
+            <span class="current">Urlaub Italien</span>
+          </div>
+          <div class="page-title">Urlaub Italien</div>
+        </div>
+        <div class="page-meta">234 Elemente · 1,8 GB</div>
+        <div class="page-actions">
+          <div class="size-control">
+            <span class="icon" style="font-family:'Segoe Fluent Icons','Segoe MDL2 Assets'">&#xE71F;</span>
+            <input type="range" min="100" max="320" value="180">
+            <span style="font-size:11px">180px</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="filter-row">
+        <div class="pill active">
+          <span>Alle</span>
+          <span class="count">234</span>
+        </div>
+        <div class="pill">
+          <span class="icon">&#xEB9F;</span>
+          <span>Bilder</span>
+          <span class="count">218</span>
+        </div>
+        <div class="pill">
+          <span class="icon">&#xE714;</span>
+          <span>Videos</span>
+          <span class="count">16</span>
+        </div>
+        <div class="pill">
+          <span class="icon">&#xE734;</span>
+          <span>Favoriten</span>
+          <span class="count">12</span>
+        </div>
+      </div>
+
+      <div class="infobar">
+        <span class="icon">&#xE946;</span>
+        <span class="text">Thumbnails werden im Hintergrund generiert (87 von 234 verarbeitet)</span>
+        <span class="dismiss">&#xE8BB;</span>
+      </div>
+
+      <div class="grid-container">
+        <div class="thumb-grid">
+          <div class="thumb selected"><div class="image bg1"></div><div class="checkbox">&#xE73E;</div></div>
+          <div class="thumb"><div class="image bg2"></div><div class="checkbox"></div></div>
+          <div class="thumb selected"><div class="image bg3"></div><div class="checkbox">&#xE73E;</div></div>
+          <div class="thumb">
+            <div class="image bg4"></div>
+            <div class="checkbox"></div>
+            <div class="play-overlay">&#xE768;</div>
+            <div class="codec-tag">H.264</div>
+            <div class="video-badge"><span class="icon">&#xE714;</span><span>0:42</span></div>
+          </div>
+          <div class="thumb"><div class="image bg5"></div><div class="checkbox"></div></div>
+          <div class="thumb"><div class="image bg6"></div><div class="checkbox"></div></div>
+          <div class="thumb selected"><div class="image bg7"></div><div class="checkbox">&#xE73E;</div></div>
+          <div class="thumb">
+            <div class="image bg8"></div>
+            <div class="checkbox"></div>
+            <div class="play-overlay">&#xE768;</div>
+            <div class="codec-tag">HEVC</div>
+            <div class="video-badge"><span class="icon">&#xE714;</span><span>2:18</span></div>
+          </div>
+          <div class="thumb"><div class="image bg9"></div><div class="checkbox"></div></div>
+          <div class="thumb"><div class="image bg10"></div><div class="checkbox"></div></div>
+          <div class="thumb"><div class="image bg11"></div><div class="checkbox"></div></div>
+          <div class="thumb">
+            <div class="image bg12"></div>
+            <div class="checkbox"></div>
+            <div class="play-overlay">&#xE768;</div>
+            <div class="codec-tag">WMV3</div>
+            <div class="video-badge"><span class="icon">&#xE714;</span><span>0:17</span></div>
+          </div>
+          <div class="thumb"><div class="image bg2"></div><div class="checkbox"></div></div>
+          <div class="thumb"><div class="image bg5"></div><div class="checkbox"></div></div>
+          <div class="thumb"><div class="image bg9"></div><div class="checkbox"></div></div>
+          <div class="thumb"><div class="image bg1"></div><div class="checkbox"></div></div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+<div class="action-flyout">
+  <div class="count">3 ausgewählt</div>
+  <button><span class="icon">&#xE8C8;</span><span>Kopieren</span></button>
+  <button><span class="icon">&#xE8DE;</span><span>Verschieben</span></button>
+  <button><span class="icon">&#xE8AC;</span><span>Umbenennen</span></button>
+  <button class="danger"><span class="icon">&#xE74D;</span><span>Löschen</span></button>
+  <button title="Aufheben"><span class="icon">&#xE8BB;</span></button>
+</div>
+
+</body>
+</html>
