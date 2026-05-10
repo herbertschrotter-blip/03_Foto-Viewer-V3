@@ -22,6 +22,8 @@
     <PackageReference Include="Microsoft.Data.Sqlite" />
     <PackageReference Include="CommunityToolkit.Mvvm" />
     <PackageReference Include="WPF-UI" />
+    <PackageReference Include="LibVLCSharp.WPF" />
+    <PackageReference Include="VideoLAN.LibVLC.Windows" />
     <PackageReference Include="Serilog.Extensions.Hosting" />
     <PackageReference Include="Serilog.Sinks.File" />
     <PackageReference Include="Serilog.Sinks.Console" />

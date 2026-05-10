@@ -23,9 +23,9 @@
     <!-- WPF-UI Theme -->
     <PackageVersion Include="WPF-UI" Version="4.0.2" />
 
-    <!-- Video (V0.1: kommt nach LibVLC-Spike rein) -->
-    <!-- <PackageVersion Include="LibVLCSharp.WPF" Version="3.9.7.1" /> -->
-    <!-- <PackageVersion Include="VideoLAN.LibVLC.Windows" Version="3.0.21" /> -->
+    <!-- Video (Spike #3 — Cutline ab V0.1 falls rot) -->
+    <PackageVersion Include="LibVLCSharp.WPF" Version="3.9.3" />
+    <PackageVersion Include="VideoLAN.LibVLC.Windows" Version="3.0.21" />
 
     <!-- Logging via Serilog -->
     <PackageVersion Include="Serilog.Extensions.Hosting" Version="9.0.0" />

@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using Microsoft.Extensions.DependencyInjection;
 using PhotoViewerV3.Spike02.Views;
+using PhotoViewerV3.Spike03.Views;
 using Serilog;
 using Wpf.Ui.Controls;
 using WpfTextBlock = System.Windows.Controls.TextBlock;
@@ -15,6 +16,7 @@ public partial class MainWindow : FluentWindow
     private readonly IServiceProvider _services;
     private FrameworkElement? _placeholder;
     private GalleryView? _galleryView;
+    private SpikeLightboxView? _lightboxView;
 
     public MainWindow(IServiceProvider services)
     {
@@ -49,12 +51,21 @@ public partial class MainWindow : FluentWindow
         ApplySelection("spike-gallery", "Spike: Gallery");
     }
 
+    private void SpikeLightboxItem_OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        Log.Information("Spike-Lightbox NavItem Click (PreviewMouseLeftButtonDown)");
+        ApplySelection("spike-lightbox", "Spike: Lightbox");
+    }
+
     private void ApplySelection(string? tag, string? label)
     {
         switch (tag)
         {
             case "spike-gallery":
                 ContentArea.Content = _galleryView ??= _services.GetRequiredService<GalleryView>();
+                return;
+            case "spike-lightbox":
+                ContentArea.Content = _lightboxView ??= _services.GetRequiredService<SpikeLightboxView>();
                 return;
             default:
                 ContentArea.Content = BuildPlaceholder($"'{label ?? "?"}' ist im V0.1-Backlog — noch nicht implementiert.");

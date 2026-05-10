@@ -52,6 +52,14 @@
                         <ui:SymbolIcon Symbol="Beaker24" />
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
+                <ui:NavigationViewItem x:Name="SpikeLightboxItem"
+                                       Content="Spike: Lightbox"
+                                       Tag="spike-lightbox"
+                                       PreviewMouseLeftButtonDown="SpikeLightboxItem_OnPreviewMouseLeftButtonDown">
+                    <ui:NavigationViewItem.Icon>
+                        <ui:SymbolIcon Symbol="Play24" />
+                    </ui:NavigationViewItem.Icon>
+                </ui:NavigationViewItem>
             </ui:NavigationView.MenuItems>
 
             <ui:NavigationView.FooterMenuItems>

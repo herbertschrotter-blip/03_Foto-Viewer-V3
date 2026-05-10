@@ -5,6 +5,9 @@ using PhotoViewerV3.Services.Infrastructure;
 using PhotoViewerV3.Spike02.Data;
 using PhotoViewerV3.Spike02.ViewModels;
 using PhotoViewerV3.Spike02.Views;
+using PhotoViewerV3.Spike03.Services;
+using PhotoViewerV3.Spike03.ViewModels;
+using PhotoViewerV3.Spike03.Views;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Serilog;
@@ -53,6 +56,11 @@ public partial class App : Application
         services.AddSingleton<GalleryViewModel>();
         services.AddTransient<GalleryView>();
 
+        // Spike #3 — LibVLCSharp Lightbox
+        services.AddSingleton<SpikeMediaDownloader>();
+        services.AddSingleton<SpikeLightboxViewModel>();
+        services.AddTransient<SpikeLightboxView>();
+
         services.AddSingleton<MainWindow>();
     }
 
@@ -72,6 +80,8 @@ public partial class App : Application
     {
         Log.Information("PhotoViewer V3 wird beendet");
         _host.Services.GetService<GalleryPageSource>()?.Dispose();
+        _host.Services.GetService<SpikeLightboxViewModel>()?.Dispose();
+        _host.Services.GetService<SpikeMediaDownloader>()?.Dispose();
         await _host.StopAsync();
         _host.Dispose();
         Log.CloseAndFlush();

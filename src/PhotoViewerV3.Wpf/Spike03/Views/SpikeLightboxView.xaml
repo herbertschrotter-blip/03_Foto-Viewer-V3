@@ -1,0 +1,164 @@
+<UserControl x:Class="PhotoViewerV3.Spike03.Views.SpikeLightboxView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:vlc="clr-namespace:LibVLCSharp.WPF;assembly=LibVLCSharp.WPF"
+             mc:Ignorable="d"
+             d:DesignWidth="900"
+             d:DesignHeight="600">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    </UserControl.Resources>
+
+    <Grid Margin="16,8,16,12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Title -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
+            <ui:TextBlock FontTypography="Title" Text="Spike: Lightbox" />
+            <ui:TextBlock FontTypography="Caption"
+                          Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                          VerticalAlignment="Bottom"
+                          Margin="12,0,0,4"
+                          Text="LibVLCSharp 3.9.3 + VideoLAN.LibVLC.Windows 3.0.21" />
+        </StackPanel>
+
+        <!-- Download + Open Toolbar -->
+        <Grid Grid.Row="1" Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                <ui:Button Content="Sample laden (Sintel, ~4 MB)"
+                           Command="{Binding DownloadSampleCommand}"
+                           Margin="0,0,8,0" />
+                <ui:Button Content="Öffnen + Play"
+                           Appearance="Primary"
+                           Command="{Binding OpenAndPlayCommand}"
+                           IsEnabled="{Binding IsLocallyAvailable}" />
+            </StackPanel>
+
+            <ProgressBar Grid.Column="1"
+                         Value="{Binding DownloadFraction, Mode=OneWay}"
+                         Maximum="1"
+                         Height="6"
+                         Margin="16,0,16,0"
+                         VerticalAlignment="Center"
+                         Visibility="{Binding IsDownloading, Converter={StaticResource BoolToVis}}" />
+
+            <StackPanel Grid.Column="2" Orientation="Horizontal">
+                <ui:Button Content="Lightbox-Window öffnen"
+                           Command="{Binding OpenInWindowCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                           CommandParameter="{Binding}"
+                           IsEnabled="{Binding IsLocallyAvailable}" />
+            </StackPanel>
+        </Grid>
+
+        <!-- Embedded VideoView -->
+        <Border Grid.Row="2"
+                Background="Black"
+                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="6">
+            <Grid>
+                <vlc:VideoView x:Name="EmbeddedVideo"
+                               MediaPlayer="{Binding Player}" />
+                <ui:TextBlock FontTypography="Body"
+                              Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center"
+                              Text="Lade ein Sample und drücke 'Öffnen + Play'."
+                              Visibility="{Binding IsReady, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}" />
+            </Grid>
+        </Border>
+
+        <!-- Transport -->
+        <Grid Grid.Row="3" Margin="0,10,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                <ui:Button Content="Play / Pause"
+                           Command="{Binding PlayPauseCommand}"
+                           IsEnabled="{Binding IsReady}"
+                           Margin="0,0,8,0" />
+                <ui:Button Content="Stop"
+                           Command="{Binding StopPlaybackCommand}"
+                           IsEnabled="{Binding IsReady}"
+                           Margin="0,0,8,0" />
+                <ui:Button Content="Dispose + Reopen (Lifecycle-Test)"
+                           Command="{Binding DisposeAndReopenCommand}"
+                           IsEnabled="{Binding IsReady}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                <ui:TextBlock FontTypography="Caption"
+                              Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                              Text="{Binding PositionMs, StringFormat='{}{0:N0} ms'}" />
+                <TextBlock Text=" / " Margin="4,0,4,0"
+                           Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                <ui:TextBlock FontTypography="Caption"
+                              Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                              Text="{Binding DurationMs, StringFormat='{}{0:N0} ms'}" />
+            </StackPanel>
+        </Grid>
+
+        <!-- Statusleiste -->
+        <Border Grid.Row="4" Margin="0,8,0,0"
+                Padding="10,6"
+                Background="{DynamicResource LayerFillColorAltBrush}"
+                CornerRadius="4">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0"
+                           Text="{Binding Status}"
+                           VerticalAlignment="Center"
+                           FontSize="12"
+                           TextWrapping="Wrap" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <TextBlock Text="{Binding TimeToFirstFrameMs, StringFormat='Time-to-First-Frame: {0:N0} ms'}"
+                               FontSize="12"
+                               Margin="0,0,16,0"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    <TextBlock Text="{Binding DisposeLoopCount, StringFormat='Dispose-Loops: {0}'}"
+                               FontSize="12"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Error overlay -->
+        <Border Grid.Row="2"
+                Background="{DynamicResource SystemFillColorCriticalBackgroundBrush}"
+                BorderBrush="{DynamicResource SystemFillColorCriticalBrush}"
+                BorderThickness="1"
+                CornerRadius="6"
+                Padding="16"
+                VerticalAlignment="Top"
+                HorizontalAlignment="Stretch"
+                Margin="0,12"
+                Visibility="{Binding ErrorMessage, Converter={StaticResource BoolToVis}, FallbackValue=Collapsed}">
+            <StackPanel>
+                <ui:TextBlock FontTypography="BodyStrong" Text="Spike-Fehler" />
+                <TextBlock Text="{Binding ErrorMessage}" TextWrapping="Wrap" Margin="0,4,0,0" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>
