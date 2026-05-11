@@ -69,21 +69,46 @@ public static class FfmpegProcessRunner
         return null;
     }
 
-    public static async Task<FfmpegResult> ExtractStillFrameAsync(
+    public static Task<FfmpegResult> ExtractStillFrameAsync(
         string ffmpegExe,
         string inputPath,
         string outputJpgPath,
         TimeSpan timeout,
         CancellationToken externalCt)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(outputJpgPath)!);
-        if (File.Exists(outputJpgPath))
-        {
-            File.Delete(outputJpgPath);
-        }
-
         // -ss 1 = skip 1s into video, -frames:v 1 = grab one frame, -y = overwrite
         var args = $"-hide_banner -loglevel error -y -ss 1 -i \"{inputPath}\" -frames:v 1 -q:v 4 \"{outputJpgPath}\"";
+        return RunAsync(ffmpegExe, args, outputJpgPath, timeout, externalCt);
+    }
+
+    /// <summary>
+    /// Bewusst langsamer Reencode (libx264 slower-Preset) — zum Testen der
+    /// Cancel-Mechanik, weil schnelle Frame-Extracts auf moderner HW oft
+    /// schon abgeschlossen sind, bevor ein Timeout greift.
+    /// </summary>
+    public static Task<FfmpegResult> SlowReencodeAsync(
+        string ffmpegExe,
+        string inputPath,
+        string outputMp4Path,
+        TimeSpan timeout,
+        CancellationToken externalCt)
+    {
+        var args = $"-hide_banner -loglevel error -y -i \"{inputPath}\" -c:v libx264 -preset slower -crf 18 -c:a copy \"{outputMp4Path}\"";
+        return RunAsync(ffmpegExe, args, outputMp4Path, timeout, externalCt);
+    }
+
+    private static async Task<FfmpegResult> RunAsync(
+        string ffmpegExe,
+        string args,
+        string outputPath,
+        TimeSpan timeout,
+        CancellationToken externalCt)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+        if (File.Exists(outputPath))
+        {
+            File.Delete(outputPath);
+        }
 
         var psi = new ProcessStartInfo(ffmpegExe, args)
         {
@@ -160,7 +185,7 @@ public static class FfmpegProcessRunner
         }
 
         var stderrTail = TrimStdErrTail(stderrBuffer.ToString());
-        var success = !cancelled && proc.ExitCode == 0 && File.Exists(outputJpgPath);
+        var success = !cancelled && proc.ExitCode == 0 && File.Exists(outputPath);
         return new FfmpegResult(success, cancelled, proc.ExitCode, stderrTail, sw.Elapsed);
     }
 

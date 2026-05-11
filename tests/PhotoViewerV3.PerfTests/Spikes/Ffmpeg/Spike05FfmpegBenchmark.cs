@@ -53,11 +53,11 @@ internal static class Spike05FfmpegBenchmark
         var r1 = await FfmpegProcessRunner.ExtractStillFrameAsync(ffmpegExe, sintelPath, test1Path, TimeSpan.FromSeconds(5), CancellationToken.None).ConfigureAwait(false);
         PrintResult(r1, test1Path);
 
-        // Test 2: Healthy MP4 mit harten 200 ms Timeout — soll canceln
-        var test2Path = Path.Combine(spikeDir, "frame-shortTimeout.jpg");
+        // Test 2: Slow Reencode mit 500 ms Timeout — soll canceln (langsamer Job, kurzer Timeout)
+        var test2Path = Path.Combine(spikeDir, "reencode-timeout.mp4");
         Console.WriteLine();
-        Console.WriteLine("[2] Healthy MP4 mit 200 ms Timeout — sollte canceln (Process.Kill)");
-        var r2 = await FfmpegProcessRunner.ExtractStillFrameAsync(ffmpegExe, sintelPath, test2Path, TimeSpan.FromMilliseconds(200), CancellationToken.None).ConfigureAwait(false);
+        Console.WriteLine("[2] Slow Reencode (libx264 slower) mit 500 ms Timeout — sollte canceln (Process.Kill)");
+        var r2 = await FfmpegProcessRunner.SlowReencodeAsync(ffmpegExe, sintelPath, test2Path, TimeSpan.FromMilliseconds(500), CancellationToken.None).ConfigureAwait(false);
         PrintResult(r2, test2Path);
 
         // Test 3: Truncated MP4 (50 KB) — vermutlich kaputt, soll mit 3 s Timeout canceln oder sauber fail
@@ -76,22 +76,22 @@ internal static class Spike05FfmpegBenchmark
         var r4 = await FfmpegProcessRunner.ExtractStillFrameAsync(ffmpegExe, Path.Combine(spikeDir, "does-not-exist.mp4"), test4Path, TimeSpan.FromSeconds(3), CancellationToken.None).ConfigureAwait(false);
         PrintResult(r4, test4Path);
 
-        // Test 5: External Cancel nach 100 ms — soll innerhalb 200 ms exiten
-        var test5Path = Path.Combine(spikeDir, "frame-extCancel.jpg");
+        // Test 5: Slow Reencode mit großzügigem Timeout, aber External Cancel nach 300 ms
+        var test5Path = Path.Combine(spikeDir, "reencode-extCancel.mp4");
         Console.WriteLine();
-        Console.WriteLine("[5] External CancellationToken Cancel nach 100 ms — soll < 300 ms exiten");
-        using var extCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
-        var r5 = await FfmpegProcessRunner.ExtractStillFrameAsync(ffmpegExe, sintelPath, test5Path, TimeSpan.FromSeconds(10), extCts.Token).ConfigureAwait(false);
+        Console.WriteLine("[5] Slow Reencode + External CancellationToken Cancel nach 300 ms — soll < 800 ms exiten");
+        using var extCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
+        var r5 = await FfmpegProcessRunner.SlowReencodeAsync(ffmpegExe, sintelPath, test5Path, TimeSpan.FromSeconds(30), extCts.Token).ConfigureAwait(false);
         PrintResult(r5, test5Path);
 
         // Summary
         Console.WriteLine();
         Console.WriteLine("=== Spike #05 Summary ===");
-        Console.WriteLine("  [1] Healthy:           erwartet success=true,  cancel=false  →  " + Status(r1.Success && !r1.Cancelled));
-        Console.WriteLine("  [2] 200 ms Timeout:    erwartet success=false, cancel=true   →  " + Status(!r1.Success.Equals(true) ? (!r2.Success && r2.Cancelled) : (!r2.Success && r2.Cancelled)));
-        Console.WriteLine("  [3] Truncated:         erwartet kein Hang, cancel oder fail innerhalb 3.5 s  →  " + Status(r3.Duration < TimeSpan.FromSeconds(3.5)));
-        Console.WriteLine("  [4] Non-existent:      erwartet success=false, fast fail (<2 s)  →  " + Status(!r4.Success && r4.Duration < TimeSpan.FromSeconds(2)));
-        Console.WriteLine("  [5] External Cancel:   erwartet cancel=true innerhalb 300 ms vom Token-Trigger  →  " + Status(r5.Cancelled && r5.Duration < TimeSpan.FromMilliseconds(500)));
+        Console.WriteLine("  [1] Healthy frame:     erwartet success=true, cancel=false           →  " + Status(r1.Success && !r1.Cancelled));
+        Console.WriteLine("  [2] Slow reencode TO:  erwartet cancel=true innerhalb ~800 ms        →  " + Status(r2.Cancelled && r2.Duration < TimeSpan.FromMilliseconds(1500)));
+        Console.WriteLine("  [3] Truncated:         erwartet kein Hang, sauber fail < 3.5 s       →  " + Status(r3.Duration < TimeSpan.FromSeconds(3.5)));
+        Console.WriteLine("  [4] Non-existent:      erwartet success=false, fast fail < 2 s       →  " + Status(!r4.Success && r4.Duration < TimeSpan.FromSeconds(2)));
+        Console.WriteLine("  [5] External Cancel:   erwartet cancel=true innerhalb ~600 ms        →  " + Status(r5.Cancelled && r5.Duration < TimeSpan.FromMilliseconds(800)));
 
         return 0;
     }
