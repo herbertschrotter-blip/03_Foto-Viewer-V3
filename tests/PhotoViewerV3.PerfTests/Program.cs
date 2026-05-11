@@ -9,6 +9,7 @@ internal static class Program
     private const string SpikeWicBenchmark = "spike04-wic-benchmark";
     private const string SpikeFfmpegCancel = "spike05-ffmpeg-cancel";
     private const string SpikeStorageDetection = "spike06-storage-detection";
+    private const string SpikeV01Scan = "spike-v01-scan";
 
     public static async Task<int> Main(string[] args)
     {
@@ -24,6 +25,7 @@ internal static class Program
             SpikeWicBenchmark => await Spikes.Wic.Spike04WicBenchmark.RunAsync(args[1..]),
             SpikeFfmpegCancel => await Spikes.Ffmpeg.Spike05FfmpegBenchmark.RunAsync(args[1..]),
             SpikeStorageDetection => await Spikes.Storage.Spike06StorageDetection.RunAsync(args[1..]),
+            SpikeV01Scan => await Spikes.V01Scan.SpikeV01Scan.RunAsync(args[1..]),
             _ => UnknownCommand(args[0]),
         };
     }
@@ -48,5 +50,7 @@ internal static class Program
         Console.WriteLine("    FFmpeg Cancel/Timeout-Verhalten (benötigt ffmpeg.exe im PATH).");
         Console.WriteLine($"  {SpikeStorageDetection} [--path PATH ...]");
         Console.WriteLine("    Storage-Profile-Detection für mehrere Pfade (lokal / UNC).");
+        Console.WriteLine($"  {SpikeV01Scan} --root PATH [--name NAME] [--clear]");
+        Console.WriteLine("    V0.1 End-to-End-Scan: Migration → Library → Scan → DB-Schreibe → FTS.");
     }
 }

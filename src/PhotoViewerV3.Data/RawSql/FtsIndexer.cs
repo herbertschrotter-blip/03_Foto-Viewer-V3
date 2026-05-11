@@ -16,18 +16,33 @@ public sealed class FtsIndexer
     /// Befüllt FilesFts mit allen aktuell in Files vorhandenen Rows.
     /// Im Initial-Scan-Modus: FilesFts ist leer, alle Files werden indexiert.
     /// </summary>
+    /// <remarks>
+    /// FTS5-Virtual-Tables liefern für <c>ExecuteNonQuery()</c> systematisch 0 als
+    /// affected-rows-Count (kein "real" Tabellen-Schreibvorgang aus SQLite's Sicht).
+    /// Daher zählen wir nach dem INSERT explizit nach.
+    /// </remarks>
     public FtsReport PopulateAll(SqliteConnection connection)
     {
         var sw = Stopwatch.StartNew();
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = """
-            INSERT INTO FilesFts(rowid, Name, Extension)
-            SELECT Id, Name, Extension FROM Files
-            WHERE Id NOT IN (SELECT rowid FROM FilesFts);
-            """;
-        var affected = cmd.ExecuteNonQuery();
+        using (var insertCmd = connection.CreateCommand())
+        {
+            insertCmd.CommandText = """
+                INSERT INTO FilesFts(rowid, Name, Extension)
+                SELECT Id, Name, Extension FROM Files
+                WHERE Id NOT IN (SELECT rowid FROM FilesFts);
+                """;
+            insertCmd.ExecuteNonQuery();
+        }
+
+        long count;
+        using (var countCmd = connection.CreateCommand())
+        {
+            countCmd.CommandText = "SELECT COUNT(*) FROM FilesFts;";
+            count = (long)(countCmd.ExecuteScalar() ?? 0L);
+        }
+
         sw.Stop();
-        return new FtsReport(affected, sw.Elapsed);
+        return new FtsReport(count, sw.Elapsed);
     }
 
     /// <summary>
