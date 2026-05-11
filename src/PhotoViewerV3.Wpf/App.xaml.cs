@@ -1,6 +1,8 @@
 using System;
 using System.IO;
 using System.Windows;
+using PhotoViewerV3.Services;
+using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Infrastructure;
 using PhotoViewerV3.Spike02.Data;
 using PhotoViewerV3.Spike02.ViewModels;
@@ -49,7 +51,11 @@ public partial class App : Application
 
     private static void ConfigureServices(IServiceCollection services, IAppDataPaths paths)
     {
+        // Produktive Services-Schicht (Database, …) via AddPhotoViewerServices.
+        // AppDataPaths-Instance wird hier explizit injected, sodass die im App-Constructor
+        // bereits initialisierte Instance verwendet wird (Logging-Pfad).
         services.AddSingleton<IAppDataPaths>(paths);
+        services.AddPhotoViewerServices();
 
         // Spike #2 — Virtual Grid
         services.AddSingleton<GalleryPageSource>();
@@ -69,6 +75,27 @@ public partial class App : Application
         await _host.StartAsync();
 
         Log.Information("PhotoViewer V3 startet — AppData: {AppDataRoot}", _host.Services.GetRequiredService<IAppDataPaths>().AppDataRoot);
+
+        // Library-DB initialisieren (Migration anwenden, Crash-Recovery)
+        try
+        {
+            var initializer = _host.Services.GetRequiredService<DatabaseInitializer>();
+            var result = await initializer.InitializeAsync().ConfigureAwait(true);
+            Log.Information(
+                "Library-DB bereit: {Path} — {Migrated} neu migriert, {Stale} Stale-Thumbnails wiederhergestellt",
+                result.DatabasePath, result.NewlyMigrated, result.StaleThumbnailsRecovered);
+        }
+        catch (Exception dbEx)
+        {
+            Log.Error(dbEx, "Library-DB-Init fehlgeschlagen");
+            MessageBox.Show(
+                $"Datenbank-Initialisierung fehlgeschlagen:\n{dbEx.Message}\n\nApp wird beendet.",
+                "PhotoViewer V3",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            Shutdown(1);
+            return;
+        }
 
         var mainWindow = _host.Services.GetRequiredService<MainWindow>();
         mainWindow.Show();
