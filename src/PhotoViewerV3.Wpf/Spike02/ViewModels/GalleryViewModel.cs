@@ -2,33 +2,36 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
-using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using PhotoViewerV3.Services.Infrastructure;
+using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Spike02.Data;
 
 namespace PhotoViewerV3.Spike02.ViewModels;
 
 public sealed partial class GalleryViewModel : ObservableObject
 {
-    private const string SpikeDbRelativePath = @"spike-01\library-spike.db";
-
-    private readonly IAppDataPaths _paths;
+    private readonly ILibraryContextFactory _contextFactory;
     private readonly GalleryPageSource _source;
     private readonly ILogger<GalleryViewModel> _logger;
 
     private CancellationTokenSource? _activeLoadCts;
     private bool _isInitialized;
     private DateTime _startupBegin;
+    private int _libraryId;
 
-    public GalleryViewModel(IAppDataPaths paths, GalleryPageSource source, ILogger<GalleryViewModel> logger)
+    public GalleryViewModel(
+        ILibraryContextFactory contextFactory,
+        GalleryPageSource source,
+        ILogger<GalleryViewModel> logger)
     {
-        _paths = paths;
+        _contextFactory = contextFactory;
         _source = source;
         _logger = logger;
         CurrentPage = new ObservableCollection<GalleryFileDto>();
@@ -47,6 +50,7 @@ public sealed partial class GalleryViewModel : ObservableObject
     [ObservableProperty] private double _firstPageLoadMs;
     [ObservableProperty] private string? _errorMessage;
     [ObservableProperty] private string _dbPathDisplay = string.Empty;
+    [ObservableProperty] private string _libraryNameDisplay = string.Empty;
 
     public int PageCount => Math.Max(1, (TotalCount + PageSize - 1) / PageSize);
     public int DisplayPageIndex => PageIndex + 1;
@@ -75,40 +79,51 @@ public sealed partial class GalleryViewModel : ObservableObject
 
         _isInitialized = true;
         _startupBegin = DateTime.UtcNow;
+        DbPathDisplay = _contextFactory.DatabasePath;
 
-        var dbPath = Path.Combine(_paths.AppDataRoot, "spike-01", "library-spike.db");
-        DbPathDisplay = dbPath;
-
-        var spikeDir = Path.GetDirectoryName(dbPath)!;
-        var fileExists = File.Exists(dbPath);
-        var dirExists = Directory.Exists(spikeDir);
-        _logger.LogInformation(
-            "Diag: AppDataRoot='{Root}' Len={RootLen}; dbPath='{DbPath}' Len={DbLen}; File.Exists={Exists}; Directory.Exists={DirExists}",
-            _paths.AppDataRoot, _paths.AppDataRoot.Length, dbPath, dbPath.Length, fileExists, dirExists);
-
-        if (dirExists)
+        // Aktive Library bestimmen (ADR-0003: eine aktive Library).
+        // Sortierung: zuletzt geöffnet > zuletzt angelegt. NULLs landen bei DESC unten.
+        try
         {
-            try
+            await using var ctx = _contextFactory.Create();
+            var lib = await ctx.Libraries
+                .OrderByDescending(l => l.LastOpenedAt)
+                .ThenByDescending(l => l.CreatedAt)
+                .Select(l => new { l.Id, l.Name, l.RootPath })
+                .FirstOrDefaultAsync()
+                .ConfigureAwait(false);
+
+            if (lib is null)
             {
-                var entries = Directory.GetFileSystemEntries(spikeDir);
-                _logger.LogInformation("Diag: Spike-Verzeichnis Inhalt ({Count}): {Entries}",
-                    entries.Length, string.Join("; ", entries));
+                ErrorMessage = "Noch keine Library angelegt. Bitte zuerst per CLI scannen:\n" +
+                               "dotnet run --project tests/PhotoViewerV3.PerfTests -c Release -- spike-v01-scan --root <PFAD> --name <NAME>";
+                _logger.LogWarning("Keine Library in DB gefunden — Gallery bleibt leer");
+                return;
             }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Diag: Fehler beim Lesen des Spike-Verzeichnisses");
-            }
+
+            _libraryId = lib.Id;
+            LibraryNameDisplay = $"{lib.Name}  ·  {lib.RootPath}";
+            _logger.LogInformation("Aktive Library: Id={Id} Name={Name} RootPath={RootPath}", lib.Id, lib.Name, lib.RootPath);
         }
-
-        if (!_source.TryOpen(dbPath, out var error))
+        catch (Exception ex)
         {
-            ErrorMessage = $"{error}\nBitte zuerst Spike #01 ausführen, um die Test-DB zu erzeugen:\n" +
-                           "dotnet run --project tests/PhotoViewerV3.PerfTests -c Release -- spike01-sqlite-bulk";
-            _logger.LogWarning("Spike-DB nicht geöffnet: {Error}", error);
+            ErrorMessage = $"Library konnte nicht geladen werden: {ex.Message}";
+            _logger.LogError(ex, "Fehler beim Lesen der Libraries-Tabelle");
             return;
         }
 
-        _logger.LogInformation("Spike-DB geöffnet: {Path}", dbPath);
+        try
+        {
+            _source.Open();
+            _logger.LogInformation("Gallery-DB geöffnet: {Path}", _source.DatabasePath);
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Datenbank konnte nicht geöffnet werden: {ex.Message}";
+            _logger.LogError(ex, "Fehler beim Öffnen der Gallery-DB");
+            return;
+        }
+
         await ReloadAsync().ConfigureAwait(false);
         FirstPageLoadMs = (DateTime.UtcNow - _startupBegin).TotalMilliseconds;
         _logger.LogInformation("Start Gallery → erste Page sichtbar: {Ms:N1} ms", FirstPageLoadMs);
@@ -250,7 +265,7 @@ public sealed partial class GalleryViewModel : ObservableObject
     private GalleryQuery BuildQuery()
     {
         var term = string.IsNullOrWhiteSpace(SearchTerm) ? null : SearchTerm.Trim();
-        return new GalleryQuery(Filter, term);
+        return new GalleryQuery(_libraryId, Filter, term);
     }
 
     private Task ReplaceItemsAsync(IReadOnlyList<GalleryFileDto> rows)

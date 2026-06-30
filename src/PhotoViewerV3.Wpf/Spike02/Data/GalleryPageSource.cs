@@ -1,50 +1,38 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
+using PhotoViewerV3.Services.Database;
 
 namespace PhotoViewerV3.Spike02.Data;
 
-public sealed record GalleryQuery(GalleryFilter Filter, string? SearchTerm)
+public sealed record GalleryQuery(int LibraryId, GalleryFilter Filter, string? SearchTerm)
 {
     public bool HasSearch => !string.IsNullOrWhiteSpace(SearchTerm);
 }
 
 public sealed class GalleryPageSource : IDisposable
 {
-    private const int LibraryId = 1;
+    private readonly ILibraryContextFactory _factory;
     private SqliteConnection? _connection;
 
-    public bool IsOpen => _connection is not null;
-    public string? DatabasePath { get; private set; }
-
-    public bool TryOpen(string dbPath, out string? error)
+    public GalleryPageSource(ILibraryContextFactory factory)
     {
-        if (!File.Exists(dbPath))
+        _factory = factory;
+    }
+
+    public bool IsOpen => _connection is not null;
+    public string DatabasePath => _factory.DatabasePath;
+
+    public void Open()
+    {
+        if (_connection is not null)
         {
-            error = $"Datenbank nicht gefunden: {dbPath}";
-            return false;
+            return;
         }
 
-        var cs = new SqliteConnectionStringBuilder
-        {
-            DataSource = dbPath,
-            Mode = SqliteOpenMode.ReadOnly,
-            Pooling = false,
-        }.ToString();
-
-        var conn = new SqliteConnection(cs);
-        conn.Open();
-        using var pragma = conn.CreateCommand();
-        pragma.CommandText = "PRAGMA temp_store = MEMORY;";
-        pragma.ExecuteNonQuery();
-
-        _connection = conn;
-        DatabasePath = dbPath;
-        error = null;
-        return true;
+        _connection = _factory.OpenSqliteConnection();
     }
 
     public int GetTotalCount(GalleryQuery query)
@@ -146,7 +134,7 @@ public sealed class GalleryPageSource : IDisposable
 
     private static void BindFilterParams(SqliteCommand cmd, GalleryQuery query)
     {
-        cmd.Parameters.AddWithValue("$libId", LibraryId);
+        cmd.Parameters.AddWithValue("$libId", query.LibraryId);
         if (query.HasSearch)
         {
             cmd.Parameters.AddWithValue("$term", query.SearchTerm!);
@@ -157,7 +145,7 @@ public sealed class GalleryPageSource : IDisposable
     {
         if (_connection is null)
         {
-            throw new InvalidOperationException("GalleryPageSource ist nicht geöffnet.");
+            throw new InvalidOperationException("GalleryPageSource ist nicht geöffnet. Open() vor dem ersten Query aufrufen.");
         }
 
         return _connection;

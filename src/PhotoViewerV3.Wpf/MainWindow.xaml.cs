@@ -23,7 +23,7 @@ public partial class MainWindow : FluentWindow
         _services = services;
         InitializeComponent();
         ContentArea.Content = BuildPlaceholder(
-            "Wähle einen Bereich links.\n\n'Spike: Gallery' zeigt das paged virtualisierte Grid auf der 500k-Spike-Datenbank.");
+            "Wähle einen Bereich links.\n\n'Gallery' zeigt das paged virtualisierte Grid auf der aktiven Library.");
 
         Loaded += MainWindow_OnLoaded;
     }

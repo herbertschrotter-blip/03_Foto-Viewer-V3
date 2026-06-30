@@ -45,7 +45,7 @@
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
                 <ui:NavigationViewItem x:Name="SpikeGalleryItem"
-                                       Content="Spike: Gallery"
+                                       Content="Gallery"
                                        Tag="spike-gallery"
                                        PreviewMouseLeftButtonDown="SpikeGalleryItem_OnPreviewMouseLeftButtonDown">
                     <ui:NavigationViewItem.Icon>

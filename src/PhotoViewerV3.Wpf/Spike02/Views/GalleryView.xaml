@@ -21,14 +21,13 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- Title / first-load badge -->
+        <!-- Title / library badge -->
         <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
-            <ui:TextBlock FontTypography="Title" Text="Spike: Gallery" />
-            <ui:TextBlock FontTypography="Caption"
-                          Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+            <ui:TextBlock FontTypography="Title" Text="Gallery" />
+            <ui:TextBlock FontTypography="BodyStrong"
                           VerticalAlignment="Bottom"
-                          Margin="12,0,0,4"
-                          Text="{Binding DbPathDisplay, StringFormat=DB: {0}}" />
+                          Margin="16,0,0,4"
+                          Text="{Binding LibraryNameDisplay}" />
         </StackPanel>
 
         <!-- Toolbar: Filter pills + search -->
@@ -228,8 +227,12 @@
                 HorizontalAlignment="Stretch"
                 Visibility="{Binding ErrorMessage, Converter={StaticResource BoolToVis}, FallbackValue=Collapsed}">
             <StackPanel>
-                <ui:TextBlock FontTypography="BodyStrong" Text="Spike-Datenbank nicht geöffnet" />
+                <ui:TextBlock FontTypography="BodyStrong" Text="Gallery konnte nicht geladen werden" />
                 <TextBlock Text="{Binding ErrorMessage}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                <TextBlock Text="{Binding DbPathDisplay, StringFormat='DB: {0}'}"
+                           FontSize="11"
+                           Margin="0,8,0,0"
+                           Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
             </StackPanel>
         </Border>
     </Grid>
