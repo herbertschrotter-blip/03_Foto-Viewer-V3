@@ -234,13 +234,32 @@ public sealed class FileOperationHardeningTests
     {
         using var fx = await TempLibraryFixture.CreateAsync();
         var library = await fx.CreateLibraryAsync();
-        // Root und „2024“ haben keine Dateien → der Scanner legt nur die Blätter an, mit ParentId NULL.
+        // Altkatalog nachstellen: Der V0.1-Scanner legte nur Ordner MIT Dateien an (Root und „2024“ fehlten,
+        // die Blätter hatten ParentId NULL). Der heutige Scanner schreibt die volle Kette, daher wird der
+        // Alt-Zustand hier explizit hergestellt — die Reparaturlogik muss solche Kataloge weiterhin heilen.
         fx.WriteLibraryFile(Path.Combine("2024", "01", "a.jpg"));
         fx.WriteLibraryFile(Path.Combine("2024", "02_alt", "b.jpg"));
         await fx.ScanAsync(library.Id);
-        var leaf01 = (await fx.FindFolderAsync(Path.Combine(fx.LibraryRoot, "2024", "01")))!;
-        var leaf02 = (await fx.FindFolderAsync(Path.Combine(fx.LibraryRoot, "2024", "02_alt")))!;
-        leaf01.ParentId.Should().BeNull("Vorbedingung: Scanner kennt den leeren Elternordner nicht");
+        var path01 = Path.Combine(fx.LibraryRoot, "2024", "01");
+        var path02 = Path.Combine(fx.LibraryRoot, "2024", "02_alt");
+        var path2024 = Path.Combine(fx.LibraryRoot, "2024");
+        await using (var setup = fx.CreateContext())
+        {
+            var rows = await setup.Folders.Where(f => f.LibraryId == library.Id).ToListAsync();
+            foreach (var r in rows.Where(r => r.Path.Equals(path01, StringComparison.OrdinalIgnoreCase)
+                                           || r.Path.Equals(path02, StringComparison.OrdinalIgnoreCase)))
+            {
+                r.ParentId = null;
+            }
+
+            setup.Folders.RemoveRange(rows.Where(r => r.Path.Equals(fx.LibraryRoot, StringComparison.OrdinalIgnoreCase)
+                                                   || r.Path.Equals(path2024, StringComparison.OrdinalIgnoreCase)));
+            await setup.SaveChangesAsync();
+        }
+
+        var leaf01 = (await fx.FindFolderAsync(path01))!;
+        var leaf02 = (await fx.FindFolderAsync(path02))!;
+        leaf01.ParentId.Should().BeNull("Vorbedingung: Altkatalog ohne Elternordner");
         leaf02.ParentId.Should().BeNull();
         (await fx.FindFolderAsync(Path.Combine(fx.LibraryRoot, "2024"))).Should().BeNull();
         var a = (await fx.FindFileAsync("a.jpg"))!;
