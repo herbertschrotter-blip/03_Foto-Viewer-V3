@@ -11,6 +11,7 @@ using PhotoViewerV3.Services.Thumbnails;
 using PhotoViewerV3.Lightbox;
 using PhotoViewerV3.Settings;
 using PhotoViewerV3.Shell;
+using PhotoViewerV3.Sorter;
 using PhotoViewerV3.Thumbnails;
 using PhotoViewerV3.Spike02.Data;
 using PhotoViewerV3.Spike02.ViewModels;
@@ -97,6 +98,7 @@ public partial class App : Application
         services.AddSingleton<GalleryViewModel>();
         services.AddTransient<GalleryView>();
         services.AddGallery();
+        services.AddSorterUi();
 
         // Spike #3 — LibVLCSharp Lightbox
         services.AddSingleton<SpikeMediaDownloader>();

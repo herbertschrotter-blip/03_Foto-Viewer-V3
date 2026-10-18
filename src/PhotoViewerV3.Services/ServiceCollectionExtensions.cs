@@ -8,6 +8,7 @@ using PhotoViewerV3.Services.Library;
 using PhotoViewerV3.Services.Media;
 using PhotoViewerV3.Services.Operations;
 using PhotoViewerV3.Services.Scanning;
+using PhotoViewerV3.Services.Sorter;
 using PhotoViewerV3.Services.Thumbnails;
 
 namespace PhotoViewerV3.Services;
@@ -52,6 +53,7 @@ public static class ServiceCollectionExtensions
         // Datei-Operationen (Papierkorb/Move/Rename/Undo) + Katalog-Metadaten (Favorit/Bewertung)
         services.AddOperations();
         services.AddCatalog();
+        services.AddSorter();
 
         return services;
     }

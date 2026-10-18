@@ -7,6 +7,7 @@
                  xmlns:folders="clr-namespace:PhotoViewerV3.Folders"
                  xmlns:settings="clr-namespace:PhotoViewerV3.Settings"
                  xmlns:gallery="clr-namespace:PhotoViewerV3.Spike02.Views"
+                 xmlns:sorter="clr-namespace:PhotoViewerV3.Sorter"
                  Title="PhotoViewer V3"
                  Height="800"
                  Width="1280"
@@ -51,6 +52,13 @@
                                        TargetPageType="{x:Type folders:FolderTreePage}">
                     <ui:NavigationViewItem.Icon>
                         <ui:SymbolIcon Symbol="Folder24" />
+                    </ui:NavigationViewItem.Icon>
+                </ui:NavigationViewItem>
+                <ui:NavigationViewItem Content="Sortieren"
+                                       TargetPageTag="sorter"
+                                       TargetPageType="{x:Type sorter:SorterPage}">
+                    <ui:NavigationViewItem.Icon>
+                        <ui:SymbolIcon Symbol="FolderArrowRight24" />
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
             </ui:NavigationView.MenuItems>
