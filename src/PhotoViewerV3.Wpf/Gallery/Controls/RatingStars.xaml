@@ -1,0 +1,62 @@
+<UserControl x:Class="PhotoViewerV3.Gallery.Controls.RatingStars"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:conv="clr-namespace:PhotoViewerV3.Gallery.Converters"
+             x:Name="Root"
+             Focusable="False">
+    <UserControl.Resources>
+        <conv:RatingThresholdConverter x:Key="Threshold" />
+
+        <!-- Rahmenloser Stern-Button ohne Hover-/Pressed-Chrome (kein Flackern über Thumbnails) -->
+        <Style x:Key="StarButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="1,0" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <ContentPresenter Margin="{TemplateBinding Padding}" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="StarIcon" TargetType="ui:SymbolIcon">
+            <Setter Property="Symbol" Value="Star24" />
+            <Setter Property="FontSize" Value="{Binding StarSize, ElementName=Root}" />
+            <Setter Property="Foreground" Value="{Binding EmptyBrush, ElementName=Root}" />
+            <Style.Triggers>
+                <Trigger Property="Filled" Value="True">
+                    <Setter Property="Foreground" Value="{Binding FilledBrush, ElementName=Root}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
+    <StackPanel Orientation="Horizontal" MouseLeave="OnStarsLeave">
+        <Button Style="{StaticResource StarButton}" Tag="1" ToolTip="1 Stern" Click="OnStarClick" MouseEnter="OnStarEnter">
+            <ui:SymbolIcon Style="{StaticResource StarIcon}"
+                           Filled="{Binding DisplayValue, ElementName=Root, Converter={StaticResource Threshold}, ConverterParameter=1}" />
+        </Button>
+        <Button Style="{StaticResource StarButton}" Tag="2" ToolTip="2 Sterne" Click="OnStarClick" MouseEnter="OnStarEnter">
+            <ui:SymbolIcon Style="{StaticResource StarIcon}"
+                           Filled="{Binding DisplayValue, ElementName=Root, Converter={StaticResource Threshold}, ConverterParameter=2}" />
+        </Button>
+        <Button Style="{StaticResource StarButton}" Tag="3" ToolTip="3 Sterne" Click="OnStarClick" MouseEnter="OnStarEnter">
+            <ui:SymbolIcon Style="{StaticResource StarIcon}"
+                           Filled="{Binding DisplayValue, ElementName=Root, Converter={StaticResource Threshold}, ConverterParameter=3}" />
+        </Button>
+        <Button Style="{StaticResource StarButton}" Tag="4" ToolTip="4 Sterne" Click="OnStarClick" MouseEnter="OnStarEnter">
+            <ui:SymbolIcon Style="{StaticResource StarIcon}"
+                           Filled="{Binding DisplayValue, ElementName=Root, Converter={StaticResource Threshold}, ConverterParameter=4}" />
+        </Button>
+        <Button Style="{StaticResource StarButton}" Tag="5" ToolTip="5 Sterne" Click="OnStarClick" MouseEnter="OnStarEnter">
+            <ui:SymbolIcon Style="{StaticResource StarIcon}"
+                           Filled="{Binding DisplayValue, ElementName=Root, Converter={StaticResource Threshold}, ConverterParameter=5}" />
+        </Button>
+    </StackPanel>
+</UserControl>

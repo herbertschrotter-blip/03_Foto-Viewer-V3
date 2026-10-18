@@ -6,15 +6,273 @@
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:data="clr-namespace:PhotoViewerV3.Spike02.Data"
              xmlns:vm="clr-namespace:PhotoViewerV3.Spike02.ViewModels"
+             xmlns:conv="clr-namespace:PhotoViewerV3.Gallery.Converters"
+             xmlns:gc="clr-namespace:PhotoViewerV3.Gallery.Controls"
              mc:Ignorable="d"
-             d:DesignWidth="900"
-             d:DesignHeight="600">
+             d:DataContext="{d:DesignInstance Type=vm:GalleryViewModel, IsDesignTimeCreatable=False}"
+             d:DesignWidth="1000"
+             d:DesignHeight="700"
+             Focusable="False">
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        <conv:InverseBoolToVisibilityConverter x:Key="InverseBoolToVis" />
+        <conv:InverseBoolConverter x:Key="InverseBool" />
+        <conv:StringToVisibilityConverter x:Key="StringToVis" />
+        <conv:NullToVisibilityConverter x:Key="NullToVis" />
+        <conv:EnumEqualsConverter x:Key="EnumEquals" />
+
+        <!-- Rahmenloser Overlay-Button auf der Kachel (Herz) — kein Hover-Chrome über dem Bild -->
+        <Style x:Key="TileOverlayButton" TargetType="Button">
+            <Setter Property="Background" Value="#66000000" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="4" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                CornerRadius="12"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Kachel-Container: eigene Vorlage statt Standard-ListBoxItem (kein Highlight-Flackern),
+             Auswahl = 2px Rahmen in Akzentfarbe + Häkchen oben links. -->
+        <Style x:Key="TileContainerStyle" TargetType="ListBoxItem">
+            <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Stretch" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Grid Margin="6">
+                            <Border x:Name="Frame"
+                                    CornerRadius="6"
+                                    BorderThickness="2"
+                                    BorderBrush="Transparent"
+                                    Background="{DynamicResource ControlFillColorDefaultBrush}">
+                                <Border CornerRadius="5" ClipToBounds="True">
+                                    <ContentPresenter />
+                                </Border>
+                            </Border>
+                            <Border x:Name="Check"
+                                    Width="20" Height="20"
+                                    CornerRadius="10"
+                                    HorizontalAlignment="Left"
+                                    VerticalAlignment="Top"
+                                    Margin="8"
+                                    Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                    Visibility="Collapsed">
+                                <ui:SymbolIcon Symbol="Checkmark24"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center" />
+                            </Border>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource ControlStrongStrokeColorDefaultBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                                <Setter TargetName="Check" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <EventSetter Event="MouseDoubleClick" Handler="OnItemDoubleClick" />
+        </Style>
+
+        <!-- Kachel-Inhalt -->
+        <DataTemplate x:Key="TileTemplate" DataType="{x:Type vm:GalleryItem}">
+            <Grid x:Name="Tile" Background="Transparent">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <!-- Medienbereich -->
+                <Grid Grid.Row="0" ClipToBounds="True">
+                    <!-- Platzhalter (Bild), solange kein Thumbnail da ist -->
+                    <ui:SymbolIcon Symbol="Image24"
+                                   FontSize="48"
+                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   Visibility="{Binding IsVideo, Converter={StaticResource InverseBoolToVis}}" />
+
+                    <!-- Echtes Vorschaubild (null → Platzhalter bleibt sichtbar) -->
+                    <Image x:Name="Thumb"
+                           Source="{Binding Thumbnail}"
+                           Stretch="UniformToFill"
+                           HorizontalAlignment="Stretch"
+                           VerticalAlignment="Stretch"
+                           RenderOptions.BitmapScalingMode="HighQuality" />
+
+                    <!-- Video: Play-Overlay (immer sichtbar) -->
+                    <Border Width="36" Height="36"
+                            CornerRadius="18"
+                            Background="#8C000000"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            IsHitTestVisible="False"
+                            Visibility="{Binding IsVideo, Converter={StaticResource BoolToVis}}">
+                        <ui:SymbolIcon Symbol="Play24" Filled="True" FontSize="18" Foreground="White"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+
+                    <!-- „fehlt“-Badge oben mittig -->
+                    <Border HorizontalAlignment="Center"
+                            VerticalAlignment="Top"
+                            Margin="0,6,0,0"
+                            Padding="6,1"
+                            CornerRadius="3"
+                            Background="#CCC42B1C"
+                            IsHitTestVisible="False"
+                            Visibility="{Binding Missing, Converter={StaticResource BoolToVis}}">
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="Warning16" FontSize="11" Foreground="White" Margin="0,0,3,0" />
+                            <TextBlock Text="fehlt" FontSize="10" Foreground="White" FontWeight="SemiBold" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Herz oben rechts: Toggle Favorit (sichtbar wenn gesetzt, sonst bei Hover) -->
+                    <Button x:Name="HeartButton"
+                            Style="{StaticResource TileOverlayButton}"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Top"
+                            Margin="0,4,4,0"
+                            Opacity="0"
+                            ToolTip="Favorit umschalten"
+                            AutomationProperties.Name="Favorit umschalten"
+                            Command="{Binding DataContext.ToggleFavoriteCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                            CommandParameter="{Binding}">
+                        <ui:SymbolIcon x:Name="HeartIcon"
+                                       Symbol="Heart24"
+                                       FontSize="16"
+                                       Foreground="White"
+                                       Filled="{Binding IsFavorite}" />
+                    </Button>
+
+                    <!-- Extension-Badge unten links -->
+                    <Border HorizontalAlignment="Left"
+                            VerticalAlignment="Bottom"
+                            Margin="4,0,0,4"
+                            Padding="6,1"
+                            CornerRadius="3"
+                            IsHitTestVisible="False"
+                            Background="{DynamicResource AccentFillColorTertiaryBrush}">
+                        <TextBlock Text="{Binding Extension}"
+                                   FontSize="10"
+                                   Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                    </Border>
+
+                    <!-- Sterne unten rechts: Bewertung (sichtbar wenn gesetzt, sonst bei Hover) -->
+                    <Border x:Name="StarsHost"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Bottom"
+                            Margin="0,0,4,4"
+                            Padding="4,2"
+                            CornerRadius="9"
+                            Background="#66000000"
+                            Opacity="0">
+                        <gc:RatingStars Value="{Binding Rating}"
+                                        StarSize="11"
+                                        FilledBrush="#FFD166"
+                                        EmptyBrush="#CCFFFFFF"
+                                        Command="{Binding DataContext.SetItemRatingCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                        CommandParameter="{Binding}" />
+                    </Border>
+                </Grid>
+
+                <!-- Dateiname + Größe -->
+                <Border Grid.Row="1"
+                        Background="{DynamicResource SubtleFillColorTertiaryBrush}"
+                        Padding="8,4">
+                    <StackPanel>
+                        <TextBlock Text="{Binding Name}"
+                                   ToolTip="{Binding SourcePath}"
+                                   TextTrimming="CharacterEllipsis"
+                                   FontSize="11" />
+                        <TextBlock Text="{Binding SizeDisplay}"
+                                   FontSize="10"
+                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+            <DataTemplate.Triggers>
+                <Trigger SourceName="Tile" Property="IsMouseOver" Value="True">
+                    <Setter TargetName="HeartButton" Property="Opacity" Value="1" />
+                    <Setter TargetName="StarsHost" Property="Opacity" Value="1" />
+                </Trigger>
+                <DataTrigger Binding="{Binding IsFavorite}" Value="True">
+                    <Setter TargetName="HeartButton" Property="Opacity" Value="1" />
+                    <Setter TargetName="HeartIcon" Property="Foreground" Value="#FF6B6B" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding HasRating}" Value="True">
+                    <Setter TargetName="StarsHost" Property="Opacity" Value="1" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Missing}" Value="True">
+                    <Setter TargetName="Thumb" Property="Opacity" Value="0.45" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <!-- Unterordner-Kachel (Container-State) -->
+        <DataTemplate x:Key="SubfolderTemplate" DataType="{x:Type data:GallerySubfolderDto}">
+            <ui:Button Width="168" Height="124"
+                       Margin="6"
+                       Padding="12"
+                       HorizontalContentAlignment="Stretch"
+                       VerticalContentAlignment="Stretch"
+                       ToolTip="{Binding Path}"
+                       AutomationProperties.Name="{Binding Name}"
+                       Command="{Binding DataContext.OpenSubfolderCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                       CommandParameter="{Binding}">
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <ui:SymbolIcon Symbol="Folder24"
+                                   FontSize="36"
+                                   Foreground="{DynamicResource AccentFillColorDefaultBrush}"
+                                   HorizontalAlignment="Center" />
+                    <TextBlock Text="{Binding Name}"
+                               FontSize="12"
+                               FontWeight="SemiBold"
+                               TextTrimming="CharacterEllipsis"
+                               TextAlignment="Center"
+                               MaxWidth="140"
+                               Margin="0,8,0,2" />
+                    <TextBlock Text="{Binding FileCountDisplay}"
+                               FontSize="11"
+                               TextAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                </StackPanel>
+            </ui:Button>
+        </DataTemplate>
     </UserControl.Resources>
+
+    <UserControl.InputBindings>
+        <KeyBinding Modifiers="Ctrl" Key="Left" Command="{Binding PrevPageCommand}" />
+        <KeyBinding Modifiers="Ctrl" Key="Right" Command="{Binding NextPageCommand}" />
+        <KeyBinding Modifiers="Ctrl" Key="Home" Command="{Binding FirstPageCommand}" />
+        <KeyBinding Modifiers="Ctrl" Key="End" Command="{Binding LastPageCommand}" />
+        <KeyBinding Key="F5" Command="{Binding ReloadCommand}" />
+    </UserControl.InputBindings>
 
     <Grid Margin="16,8,16,12">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -22,151 +280,321 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- Title / library badge -->
-        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
-            <ui:TextBlock FontTypography="Title" Text="Gallery" />
+        <!-- Kopf: Titel + Library -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,6">
+            <ui:TextBlock FontTypography="Title" Text="Galerie" />
             <ui:TextBlock FontTypography="BodyStrong"
                           VerticalAlignment="Bottom"
                           Margin="16,0,0,4"
                           Text="{Binding LibraryNameDisplay}" />
         </StackPanel>
 
-        <!-- Toolbar: Filter pills + search -->
-        <Grid Grid.Row="1" Margin="0,0,0,10">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
+        <!-- Library-Root offline -->
+        <ui:InfoBar Grid.Row="1"
+                    Margin="0,0,0,8"
+                    Severity="Warning"
+                    IsClosable="False"
+                    Title="Bibliotheksordner nicht erreichbar"
+                    Message="Der Ordner der Bibliothek ist offline. Vorschaubilder, Lightbox und Dateiaktionen stehen erst wieder zur Verfügung, wenn er erreichbar ist."
+                    IsOpen="{Binding IsRootOffline, Mode=OneWay}" />
 
-            <StackPanel Grid.Column="0" Orientation="Horizontal">
-                <RadioButton Content="Alle"        GroupName="Filter" IsChecked="True"
-                             Command="{Binding SetFilterCommand}" CommandParameter="All"
-                             Margin="0,0,8,0" />
-                <RadioButton Content="Bilder"      GroupName="Filter"
-                             Command="{Binding SetFilterCommand}" CommandParameter="Images"
-                             Margin="0,0,8,0" />
-                <RadioButton Content="Videos"      GroupName="Filter"
-                             Command="{Binding SetFilterCommand}" CommandParameter="Videos"
-                             Margin="0,0,8,0" />
-                <RadioButton Content="Favoriten"   GroupName="Filter"
-                             Command="{Binding SetFilterCommand}" CommandParameter="Favorites" />
-            </StackPanel>
+        <!-- Toolbar: Zeile 1 Filter + Ordner-Chip + Suche, Zeile 2 Sortierung + Seitengröße + Rückgängig -->
+        <Grid Grid.Row="2" Margin="0,0,0,8" IsEnabled="{Binding HasLibrary}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
 
-            <ui:TextBox Grid.Column="1"
-                        PlaceholderText="FTS-Suche (z.B. Urlaub, IMG, Berge)…"
-                        Margin="16,0,8,0"
-                        Text="{Binding SearchTerm, UpdateSourceTrigger=PropertyChanged}">
-                <ui:TextBox.InputBindings>
-                    <KeyBinding Key="Return" Command="{Binding SearchCommand}" />
-                </ui:TextBox.InputBindings>
-            </ui:TextBox>
+            <Grid Grid.Row="0" Margin="0,0,0,6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
 
-            <StackPanel Grid.Column="2" Orientation="Horizontal">
-                <ui:Button Content="Suchen"  Command="{Binding SearchCommand}"      Margin="0,0,4,0" />
-                <ui:Button Content="Clear"   Command="{Binding ClearSearchCommand}" />
-            </StackPanel>
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <RadioButton Content="Alle" GroupName="Filter" Margin="0,0,8,0"
+                                 IsChecked="{Binding Filter, Converter={StaticResource EnumEquals}, ConverterParameter=All}" />
+                    <RadioButton Content="Bilder" GroupName="Filter" Margin="0,0,8,0"
+                                 IsChecked="{Binding Filter, Converter={StaticResource EnumEquals}, ConverterParameter=Images}" />
+                    <RadioButton Content="Videos" GroupName="Filter" Margin="0,0,8,0"
+                                 IsChecked="{Binding Filter, Converter={StaticResource EnumEquals}, ConverterParameter=Videos}" />
+                    <RadioButton Content="Favoriten" GroupName="Filter"
+                                 IsChecked="{Binding Filter, Converter={StaticResource EnumEquals}, ConverterParameter=Favorites}" />
+                </StackPanel>
+
+                <!-- Ordner-Chip -->
+                <Border Grid.Column="1"
+                        Margin="16,0,0,0"
+                        Padding="10,3,4,3"
+                        CornerRadius="14"
+                        VerticalAlignment="Center"
+                        Background="{DynamicResource AccentFillColorTertiaryBrush}"
+                        Visibility="{Binding HasFolderFilter, Converter={StaticResource BoolToVis}}">
+                    <StackPanel Orientation="Horizontal">
+                        <ui:SymbolIcon Symbol="Folder24" FontSize="14" Margin="0,0,6,0"
+                                       Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                        <TextBlock Text="{Binding FolderChipText}"
+                                   FontSize="12"
+                                   VerticalAlignment="Center"
+                                   MaxWidth="260"
+                                   TextTrimming="CharacterEllipsis"
+                                   Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                        <Button Style="{StaticResource TileOverlayButton}"
+                                Background="Transparent"
+                                Padding="3"
+                                Margin="6,0,0,0"
+                                ToolTip="Ordnerfilter aufheben"
+                                AutomationProperties.Name="Ordnerfilter aufheben"
+                                Command="{Binding ClearFolderFilterCommand}">
+                            <ui:SymbolIcon Symbol="Dismiss16" FontSize="12"
+                                           Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                        </Button>
+                    </StackPanel>
+                </Border>
+
+                <ui:TextBox Grid.Column="2"
+                            AutomationProperties.AutomationId="GallerySearchBox"
+                            Icon="{ui:SymbolIcon Search24}"
+                            PlaceholderText="Suche nach Dateiname oder Endung…"
+                            Margin="16,0,8,0"
+                            MinWidth="200"
+                            Text="{Binding SearchTerm, UpdateSourceTrigger=PropertyChanged}">
+                    <ui:TextBox.InputBindings>
+                        <KeyBinding Key="Return" Command="{Binding SearchCommand}" />
+                        <KeyBinding Key="Escape" Command="{Binding ClearSearchCommand}" />
+                    </ui:TextBox.InputBindings>
+                </ui:TextBox>
+
+                <StackPanel Grid.Column="3" Orientation="Horizontal">
+                    <ui:Button Content="Suchen" Command="{Binding SearchCommand}" Margin="0,0,4,0" />
+                    <ui:Button Content="Leeren" Command="{Binding ClearSearchCommand}" />
+                </StackPanel>
+            </Grid>
+
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <ui:SymbolIcon Symbol="ArrowSort24" FontSize="16" Margin="0,0,6,0"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    <ComboBox MinWidth="170"
+                              AutomationProperties.AutomationId="GallerySortCombo"
+                              ItemsSource="{Binding SortOptions}"
+                              SelectedItem="{Binding SelectedSort, Mode=TwoWay}"
+                              DisplayMemberPath="Label"
+                              ToolTip="Sortierung" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
+                    <TextBlock Text="Pro Seite:" VerticalAlignment="Center" Margin="0,0,6,0"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    <ComboBox MinWidth="80"
+                              AutomationProperties.AutomationId="GalleryPageSizeCombo"
+                              ItemsSource="{Binding PageSizeOptions}"
+                              SelectedItem="{Binding PageSize, Mode=TwoWay}"
+                              ToolTip="Dateien pro Seite" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="3" Orientation="Horizontal">
+                    <ui:Button Content="Rückgängig"
+                               Icon="{ui:SymbolIcon ArrowUndo24}"
+                               ToolTip="Letzte Datei-Operation rückgängig machen"
+                               Command="{Binding UndoCommand}"
+                               Margin="0,0,4,0" />
+                    <ui:Button Icon="{ui:SymbolIcon ArrowClockwise24}"
+                               ToolTip="Aktualisieren (F5)"
+                               AutomationProperties.Name="Aktualisieren"
+                               Command="{Binding ReloadCommand}" />
+                </StackPanel>
+            </Grid>
         </Grid>
 
-        <!-- Items: 500 Tiles per Page in WrapPanel -->
-        <Border Grid.Row="2"
+        <!-- Inhalt -->
+        <Border Grid.Row="3"
                 BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
                 BorderThickness="1"
                 CornerRadius="6"
                 Background="{DynamicResource LayerFillColorDefaultBrush}">
-            <ScrollViewer x:Name="GalleryScroll"
-                          HorizontalScrollBarVisibility="Disabled"
-                          VerticalScrollBarVisibility="Auto"
-                          Padding="8">
-                <ItemsControl ItemsSource="{Binding CurrentPage}"
-                              VirtualizingStackPanel.IsVirtualizing="True"
-                              VirtualizingStackPanel.VirtualizationMode="Recycling"
-                              ScrollViewer.CanContentScroll="False">
-                    <ItemsControl.ItemsPanel>
+            <Grid>
+                <!-- Kachel-Grid: eine Page (≤ 1000 Items), Mehrfachauswahl -->
+                <ListBox x:Name="GalleryList"
+                         AutomationProperties.AutomationId="GalleryList"
+                         ItemsSource="{Binding CurrentPage}"
+                         ItemTemplate="{StaticResource TileTemplate}"
+                         ItemContainerStyle="{StaticResource TileContainerStyle}"
+                         SelectionMode="Extended"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         Padding="8"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         ScrollViewer.VerticalScrollBarVisibility="Auto"
+                         ScrollViewer.CanContentScroll="False"
+                         KeyboardNavigation.DirectionalNavigation="Contained"
+                         KeyDown="OnListKeyDown"
+                         Visibility="{Binding ShowGrid, Converter={StaticResource BoolToVis}}">
+                    <ListBox.ItemsPanel>
                         <ItemsPanelTemplate>
                             <WrapPanel ItemWidth="180" ItemHeight="160" />
                         </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate DataType="{x:Type vm:GalleryItem}">
-                            <Border Margin="6"
-                                    CornerRadius="6"
-                                    Background="{DynamicResource ControlFillColorDefaultBrush}"
-                                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                                    BorderThickness="1">
-                                <Grid>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="*" />
-                                        <RowDefinition Height="Auto" />
-                                    </Grid.RowDefinitions>
+                    </ListBox.ItemsPanel>
+                    <ListBox.InputBindings>
+                        <KeyBinding Key="Delete" Command="{Binding RecycleSelectionCommand}" />
+                        <KeyBinding Key="Escape" Command="{Binding ClearSelectionCommand}" />
+                        <KeyBinding Modifiers="Ctrl" Key="A" Command="{Binding SelectAllCommand}" />
+                    </ListBox.InputBindings>
+                </ListBox>
 
-                                    <!-- Media area: Thumbnail überlagert die Platzhalter-Icons, sobald geladen -->
-                                    <Grid Grid.Row="0" ClipToBounds="True">
-                                        <ui:SymbolIcon Symbol="Image24"
-                                                       FontSize="48"
-                                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                                       HorizontalAlignment="Center"
-                                                       VerticalAlignment="Center"
-                                                       Visibility="{Binding IsVideo, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}" />
-                                        <Grid Visibility="{Binding IsVideo, Converter={StaticResource BoolToVis}}">
-                                            <ui:SymbolIcon Symbol="Video24"
-                                                           FontSize="48"
-                                                           Foreground="{DynamicResource AccentFillColorDefaultBrush}"
-                                                           HorizontalAlignment="Center"
-                                                           VerticalAlignment="Center" />
-                                        </Grid>
+                <!-- Container-State: Unterordner-Kacheln -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              Padding="8"
+                              Visibility="{Binding ShowSubfolders, Converter={StaticResource BoolToVis}}">
+                    <StackPanel>
+                        <TextBlock Margin="12,8,12,4"
+                                   FontSize="13"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   TextWrapping="Wrap">
+                            <Run Text="Dieser Ordner enthält keine Dateien direkt. Wähle einen Unterordner:" />
+                        </TextBlock>
+                        <ItemsControl ItemsSource="{Binding Subfolders}"
+                                      ItemTemplate="{StaticResource SubfolderTemplate}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
 
-                                        <!-- Echtes Vorschaubild (null → Icons bleiben sichtbar) -->
-                                        <Image Source="{Binding Thumbnail}"
-                                               Stretch="UniformToFill"
-                                               HorizontalAlignment="Stretch"
-                                               VerticalAlignment="Stretch"
-                                               RenderOptions.BitmapScalingMode="HighQuality" />
-                                        <!-- Favorite badge top right -->
-                                        <TextBlock Text="&#x2665;"
-                                                   FontSize="16"
-                                                   FontWeight="Bold"
-                                                   Foreground="#E66B6B"
-                                                   HorizontalAlignment="Right"
-                                                   VerticalAlignment="Top"
-                                                   Margin="0,4,6,0"
-                                                   Visibility="{Binding IsFavorite, Converter={StaticResource BoolToVis}}" />
-                                        <!-- Extension badge bottom right -->
-                                        <Border HorizontalAlignment="Right"
-                                                VerticalAlignment="Bottom"
-                                                Margin="0,0,6,4"
-                                                Padding="6,1"
-                                                CornerRadius="3"
-                                                Background="{DynamicResource AccentFillColorTertiaryBrush}">
-                                            <TextBlock Text="{Binding Extension}"
-                                                       FontSize="10"
-                                                       Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
-                                        </Border>
-                                    </Grid>
+                <!-- Leerzustand: keine Bibliothek -->
+                <StackPanel VerticalAlignment="Center"
+                            HorizontalAlignment="Center"
+                            MaxWidth="420"
+                            Visibility="{Binding ShowNoLibrary, Converter={StaticResource BoolToVis}}">
+                    <ui:SymbolIcon Symbol="Library24" FontSize="48"
+                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                   HorizontalAlignment="Center" />
+                    <ui:TextBlock FontTypography="Subtitle" Text="Noch keine Bibliothek"
+                                  TextAlignment="Center" Margin="0,12,0,4" />
+                    <TextBlock Text="Lege unter „Bibliothek“ eine Bibliothek an und starte den Scan — danach erscheinen hier die Fotos und Videos."
+                               TextWrapping="Wrap"
+                               TextAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
 
-                                    <!-- Filename strip -->
-                                    <Border Grid.Row="1"
-                                            Background="{DynamicResource SubtleFillColorTertiaryBrush}"
-                                            Padding="8,4">
-                                        <StackPanel>
-                                            <TextBlock Text="{Binding Name}"
-                                                       TextTrimming="CharacterEllipsis"
-                                                       FontSize="11" />
-                                            <TextBlock Text="{Binding SizeDisplay}"
-                                                       FontSize="10"
-                                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
-                                        </StackPanel>
-                                    </Border>
-                                </Grid>
-                            </Border>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </ScrollViewer>
+                <!-- Leerzustand: keine Treffer -->
+                <StackPanel VerticalAlignment="Center"
+                            HorizontalAlignment="Center"
+                            MaxWidth="420"
+                            Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVis}}">
+                    <ui:SymbolIcon Symbol="ImageMultiple24" FontSize="48"
+                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                   HorizontalAlignment="Center" />
+                    <ui:TextBlock FontTypography="Subtitle" Text="Nichts gefunden"
+                                  TextAlignment="Center" Margin="0,12,0,4" />
+                    <TextBlock Text="{Binding EmptyMessage}"
+                               TextWrapping="Wrap"
+                               TextAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+
+                <!-- Fehler -->
+                <Border Background="{DynamicResource SystemFillColorCriticalBackgroundBrush}"
+                        BorderBrush="{DynamicResource SystemFillColorCriticalBrush}"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Padding="16"
+                        Margin="12"
+                        VerticalAlignment="Top"
+                        HorizontalAlignment="Stretch"
+                        Visibility="{Binding ErrorMessage, Converter={StaticResource StringToVis}}">
+                    <StackPanel>
+                        <ui:TextBlock FontTypography="BodyStrong" Text="Galerie meldet einen Fehler" />
+                        <TextBlock Text="{Binding ErrorMessage}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                        <TextBlock Text="{Binding DbPathDisplay, StringFormat='DB: {0}'}"
+                                   FontSize="11"
+                                   Margin="0,8,0,0"
+                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Schwebende Aktionsleiste (bei ≥ 1 ausgewählt) -->
+                <Border HorizontalAlignment="Center"
+                        VerticalAlignment="Bottom"
+                        Margin="0,0,0,16"
+                        Padding="6"
+                        CornerRadius="8"
+                        Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}"
+                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                        BorderThickness="1"
+                        IsEnabled="{Binding IsOperationRunning, Converter={StaticResource InverseBool}}"
+                        Visibility="{Binding HasSelection, Converter={StaticResource BoolToVis}}">
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="16" ShadowDepth="4" Opacity="0.35" />
+                    </Border.Effect>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding SelectionText}"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"
+                                   Margin="10,0,12,0"
+                                   Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                        <Border Width="1" Margin="0,4,6,4" Background="{DynamicResource ControlStrokeColorDefaultBrush}" />
+
+                        <ui:Button Appearance="Transparent" Content="Favorit"
+                                   Icon="{ui:SymbolIcon Heart24, Filled=True}"
+                                   ToolTip="Auswahl als Favorit markieren"
+                                   Command="{Binding FavoriteSelectionCommand}" />
+                        <ui:Button Appearance="Transparent" Content="Entfernen"
+                                   Icon="{ui:SymbolIcon Heart24}"
+                                   ToolTip="Favorit bei Auswahl entfernen"
+                                   AutomationProperties.Name="Favorit entfernen"
+                                   Command="{Binding UnfavoriteSelectionCommand}" />
+
+                        <Border Width="1" Margin="6,4,6,4" Background="{DynamicResource ControlStrokeColorDefaultBrush}" />
+
+                        <gc:RatingStars Value="{Binding SelectionRating}"
+                                        StarSize="18"
+                                        VerticalAlignment="Center"
+                                        Margin="4,0"
+                                        FilledBrush="#FFD166"
+                                        EmptyBrush="{DynamicResource TextFillColorTertiaryBrush}"
+                                        ToolTip="Bewertung für die Auswahl setzen"
+                                        Command="{Binding SetSelectionRatingCommand}" />
+                        <ui:Button Appearance="Transparent" ToolTip="Bewertung bei Auswahl löschen"
+                                   AutomationProperties.Name="Bewertung löschen"
+                                   Icon="{ui:SymbolIcon StarOff24}"
+                                   Command="{Binding ClearSelectionRatingCommand}" />
+
+                        <Border Width="1" Margin="6,4,6,4" Background="{DynamicResource ControlStrokeColorDefaultBrush}" />
+
+                        <ui:Button Appearance="Transparent" Content="Verschieben nach…"
+                                   Icon="{ui:SymbolIcon FolderArrowRight24}"
+                                   Command="{Binding MoveSelectionCommand}" />
+                        <ui:Button Appearance="Transparent" Content="Papierkorb"
+                                   Icon="{ui:SymbolIcon Delete24}"
+                                   ToolTip="Auswahl in den Papierkorb verschieben (Entf)"
+                                   Command="{Binding RecycleSelectionCommand}" />
+
+                        <Border Width="1" Margin="6,4,6,4" Background="{DynamicResource ControlStrokeColorDefaultBrush}" />
+
+                        <ui:Button Appearance="Transparent" ToolTip="Auswahl aufheben (Esc)"
+                                   AutomationProperties.Name="Auswahl aufheben"
+                                   Icon="{ui:SymbolIcon Dismiss24}"
+                                   Command="{Binding ClearSelectionCommand}" />
+                    </StackPanel>
+                </Border>
+            </Grid>
         </Border>
 
         <!-- Pager -->
-        <Grid Grid.Row="3" Margin="0,10,0,0">
+        <Grid Grid.Row="4" Margin="0,10,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
@@ -174,27 +602,31 @@
             </Grid.ColumnDefinitions>
 
             <StackPanel Grid.Column="0" Orientation="Horizontal">
-                <ui:Button Content="⏮"  Command="{Binding FirstPageCommand}" Margin="0,0,4,0" />
-                <ui:Button Content="◀"  Command="{Binding PrevPageCommand}"  Margin="0,0,8,0" />
+                <ui:Button Icon="{ui:SymbolIcon ChevronDoubleLeft20}" ToolTip="Erste Seite (Strg+Pos1)" AutomationProperties.Name="Erste Seite"
+                           Command="{Binding FirstPageCommand}" Margin="0,0,4,0" />
+                <ui:Button Icon="{ui:SymbolIcon ChevronLeft24}" ToolTip="Vorherige Seite (Strg+←)" AutomationProperties.Name="Vorherige Seite"
+                           Command="{Binding PrevPageCommand}" Margin="0,0,8,0" />
                 <ui:TextBlock VerticalAlignment="Center">
                     <Run Text="Seite " />
                     <Run Text="{Binding DisplayPageIndex, Mode=OneWay}" FontWeight="Bold" />
                     <Run Text=" / " />
                     <Run Text="{Binding PageCount, StringFormat=N0, Mode=OneWay}" />
                 </ui:TextBlock>
-                <ui:Button Content="▶"  Command="{Binding NextPageCommand}"  Margin="8,0,4,0" />
-                <ui:Button Content="⏭"  Command="{Binding LastPageCommand}" />
+                <ui:Button Icon="{ui:SymbolIcon ChevronRight24}" ToolTip="Nächste Seite (Strg+→)" AutomationProperties.Name="Nächste Seite"
+                           Command="{Binding NextPageCommand}" Margin="8,0,4,0" />
+                <ui:Button Icon="{ui:SymbolIcon ChevronDoubleRight20}" ToolTip="Letzte Seite (Strg+Ende)" AutomationProperties.Name="Letzte Seite"
+                           Command="{Binding LastPageCommand}" />
             </StackPanel>
 
             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                 <ui:TextBlock FontTypography="Caption"
                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                              Text="{Binding TotalCount, StringFormat='Total: {0:N0}'}" />
+                              Text="{Binding TotalCount, StringFormat='Gesamt: {0:N0}'}" />
             </StackPanel>
         </Grid>
 
-        <!-- Status / Telemetry -->
-        <Border Grid.Row="4" Margin="0,8,0,0"
+        <!-- Status / Telemetrie -->
+        <Border Grid.Row="5" Margin="0,8,0,0"
                 Padding="10,6"
                 Background="{DynamicResource LayerFillColorAltBrush}"
                 CornerRadius="4">
@@ -210,6 +642,7 @@
                                      Visibility="{Binding IsLoading, Converter={StaticResource BoolToVis}}" />
                     <TextBlock Text="{Binding StatusText}"
                                VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"
                                FontSize="12" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
@@ -217,31 +650,11 @@
                                FontSize="12"
                                Margin="0,0,16,0"
                                Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
-                    <TextBlock Text="{Binding LastPageLoadMs, StringFormat='Letzte Page: {0:N1} ms'}"
+                    <TextBlock Text="{Binding LastPageLoadMs, StringFormat='Letzte Seite: {0:N1} ms'}"
                                FontSize="12"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                 </StackPanel>
             </Grid>
-        </Border>
-
-        <!-- Error overlay -->
-        <Border Grid.Row="2"
-                Background="{DynamicResource SystemFillColorCriticalBackgroundBrush}"
-                BorderBrush="{DynamicResource SystemFillColorCriticalBrush}"
-                BorderThickness="1"
-                CornerRadius="6"
-                Padding="16"
-                VerticalAlignment="Top"
-                HorizontalAlignment="Stretch"
-                Visibility="{Binding ErrorMessage, Converter={StaticResource BoolToVis}, FallbackValue=Collapsed}">
-            <StackPanel>
-                <ui:TextBlock FontTypography="BodyStrong" Text="Gallery konnte nicht geladen werden" />
-                <TextBlock Text="{Binding ErrorMessage}" TextWrapping="Wrap" Margin="0,4,0,0" />
-                <TextBlock Text="{Binding DbPathDisplay, StringFormat='DB: {0}'}"
-                           FontSize="11"
-                           Margin="0,8,0,0"
-                           Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
-            </StackPanel>
         </Border>
     </Grid>
 </UserControl>

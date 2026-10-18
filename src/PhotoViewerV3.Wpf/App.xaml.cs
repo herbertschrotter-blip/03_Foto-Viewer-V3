@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Windows;
+using PhotoViewerV3.Gallery;
 using PhotoViewerV3.Services;
 using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Infrastructure;
@@ -69,6 +70,7 @@ public partial class App : Application
         services.AddSingleton<GalleryPageSource>();
         services.AddSingleton<GalleryViewModel>();
         services.AddTransient<GalleryView>();
+        services.AddGallery();
 
         // Spike #3 — LibVLCSharp Lightbox
         services.AddSingleton<SpikeMediaDownloader>();
