@@ -21,17 +21,23 @@ namespace PhotoViewerV3.Services.Thumbnails;
 /// In-Memory-State. DB-Status (Pending → Generated/Failed) wird serialisiert
 /// geschrieben (Single-Writer via SemaphoreSlim, gegen SQLITE_BUSY). Atomic
 /// .tmp+Move liegt in den Renderern. Siehe ADR-0007.
+/// Bilder, die WIC nicht decodieren kann (ErrorCode <c>wic_decode_failed</c>), bekommen einen
+/// zweiten Versuch über den optionalen <see cref="IFallbackImageThumbnailRenderer"/> (FFmpeg).
 /// </summary>
 public sealed class ThumbnailService : IThumbnailService, IDisposable
 {
     public const int Size = 320;
-    private const int MaxAttempts = 3;
+
+    /// <summary>Nach so vielen gescheiterten Versuchen wird eine Datei nicht mehr eingereiht.</summary>
+    public const int MaxAttempts = 3;
+
     private const int ErrorMessageMaxLen = 500;
 
     private readonly ILibraryContextFactory _factory;
     private readonly IAppDataPaths _paths;
     private readonly IImageThumbnailRenderer _imageRenderer;
     private readonly IVideoThumbnailRenderer _videoRenderer;
+    private readonly IFallbackImageThumbnailRenderer? _fallbackRenderer;
     private readonly ILogger<ThumbnailService> _logger;
 
     private readonly Channel<ThumbnailRequest> _imageChannel =
@@ -53,12 +59,14 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
         IAppDataPaths paths,
         IImageThumbnailRenderer imageRenderer,
         IVideoThumbnailRenderer videoRenderer,
-        ILogger<ThumbnailService> logger)
+        ILogger<ThumbnailService> logger,
+        IFallbackImageThumbnailRenderer? fallbackRenderer = null)
     {
         _factory = factory;
         _paths = paths;
         _imageRenderer = imageRenderer;
         _videoRenderer = videoRenderer;
+        _fallbackRenderer = fallbackRenderer;
         _logger = logger;
     }
 
@@ -216,7 +224,7 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
 
             ThumbnailRenderResult result = req.MediaType == MediaType.Video
                 ? await _videoRenderer.RenderAsync(req.SourcePath, cachePath, Size, _cts.Token).ConfigureAwait(false)
-                : _imageRenderer.Render(req.SourcePath, cachePath, Size);
+                : await RenderImageWithFallbackAsync(req, cachePath).ConfigureAwait(false);
 
             if (result.Success)
             {
@@ -246,6 +254,33 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
         {
             Interlocked.Decrement(ref _pending);
         }
+    }
+
+    /// <summary>
+    /// Bild via WIC; scheitert WIC am Decoding (<see cref="ThumbnailErrorCodes.WicDecodeFailed"/>)
+    /// und ist der Fallback-Renderer verfügbar, zweiter Versuch via FFmpeg. Erst danach Failed —
+    /// mit dem ErrorCode des Fallbacks und beiden Fehlertexten.
+    /// </summary>
+    private async Task<ThumbnailRenderResult> RenderImageWithFallbackAsync(ThumbnailRequest req, string cachePath)
+    {
+        var result = _imageRenderer.Render(req.SourcePath, cachePath, Size);
+        if (result.Success
+            || result.ErrorCode != ThumbnailErrorCodes.WicDecodeFailed
+            || _fallbackRenderer is not { IsAvailable: true })
+        {
+            return result;
+        }
+
+        _logger.LogDebug("WIC konnte {Path} nicht decodieren — FFmpeg-Fallback", req.SourcePath);
+        var fallback = await _fallbackRenderer.RenderAsync(req.SourcePath, cachePath, Size, _cts.Token).ConfigureAwait(false);
+        if (fallback.Success)
+        {
+            return fallback;
+        }
+
+        return ThumbnailRenderResult.Fail(
+            fallback.ErrorCode ?? ThumbnailErrorCodes.FfmpegFailed,
+            $"WIC: {result.ErrorMessage} | FFmpeg: {fallback.ErrorMessage}");
     }
 
     private async Task UpsertStatusAsync(

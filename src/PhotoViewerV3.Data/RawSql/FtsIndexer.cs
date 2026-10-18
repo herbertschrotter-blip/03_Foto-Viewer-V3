@@ -13,31 +13,32 @@ public sealed class FtsIndexer
     public sealed record FtsReport(long RowsInserted, TimeSpan Duration);
 
     /// <summary>
-    /// Befüllt FilesFts mit allen aktuell in Files vorhandenen Rows.
-    /// Im Initial-Scan-Modus: FilesFts ist leer, alle Files werden indexiert.
+    /// Baut den FTS-Index vollständig aus Files auf (FTS5-Kommando <c>'rebuild'</c>) und zählt
+    /// danach die indexierten Dokumente. Idempotent: ein zweiter Aufruf erzeugt keine Duplikate.
     /// </summary>
     /// <remarks>
-    /// FTS5-Virtual-Tables liefern für <c>ExecuteNonQuery()</c> systematisch 0 als
-    /// affected-rows-Count (kein "real" Tabellen-Schreibvorgang aus SQLite's Sicht).
-    /// Daher zählen wir nach dem INSERT explizit nach.
+    /// FilesFts ist eine External-Content-Tabelle (content='Files'): jedes SELECT ohne MATCH —
+    /// auch <c>COUNT(*)</c> oder <c>SELECT rowid FROM FilesFts</c> — liest aus der Content-Tabelle
+    /// Files, nie aus dem Index. Das frühere
+    /// <c>INSERT … SELECT … WHERE Id NOT IN (SELECT rowid FROM FilesFts)</c> schloss deshalb alle
+    /// Dateien aus und ließ den Index leer, während die Zählung „voll“ meldete.
+    /// Die Zahl der indexierten Dokumente steht in der Shadow-Tabelle <c>FilesFts_docsize</c>
+    /// (eine Zeile je Dokument; Standard columnsize=1). 'rebuild' indexiert alle Libraries neu —
+    /// für V0.1 (eine Library, Fresh-Scan) der einfachste konsistente Weg.
     /// </remarks>
     public FtsReport PopulateAll(SqliteConnection connection)
     {
         var sw = Stopwatch.StartNew();
-        using (var insertCmd = connection.CreateCommand())
+        using (var rebuildCmd = connection.CreateCommand())
         {
-            insertCmd.CommandText = """
-                INSERT INTO FilesFts(rowid, Name, Extension)
-                SELECT Id, Name, Extension FROM Files
-                WHERE Id NOT IN (SELECT rowid FROM FilesFts);
-                """;
-            insertCmd.ExecuteNonQuery();
+            rebuildCmd.CommandText = "INSERT INTO FilesFts(FilesFts) VALUES('rebuild');";
+            rebuildCmd.ExecuteNonQuery();
         }
 
         long count;
         using (var countCmd = connection.CreateCommand())
         {
-            countCmd.CommandText = "SELECT COUNT(*) FROM FilesFts;";
+            countCmd.CommandText = "SELECT COUNT(*) FROM FilesFts_docsize;";
             count = (long)(countCmd.ExecuteScalar() ?? 0L);
         }
 

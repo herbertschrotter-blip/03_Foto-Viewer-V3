@@ -9,14 +9,15 @@ using Microsoft.Extensions.Logging;
 namespace PhotoViewerV3.Services.Thumbnails;
 
 /// <summary>
-/// Erzeugt Video-Thumbnails durch Frame-Extraktion via FFmpeg. Eigener
-/// ProcessStartInfo-Wrapper gemäß ADR-0006 (kein FFMpegCore-NuGet). Timeout via
-/// <see cref="CancellationTokenSource.CancelAfter(TimeSpan)"/> + harter
-/// <c>Process.Kill(entireProcessTree)</c> — Pattern aus Spike #5, gegen Hänger bei
-/// kaputten Videos. Schreibt atomar (.tmp + Move), sodass nie ein halbfertiges
-/// Thumbnail sichtbar wird.
+/// FFmpeg-Wrapper für Thumbnails: Frame-Extraktion aus Videos (<see cref="IVideoThumbnailRenderer"/>)
+/// und Bild-Fallback für Formate ohne WIC-Codec (<see cref="IFallbackImageThumbnailRenderer"/>:
+/// WebP/HEIC/AVIF/Kamera-RAW). Eigener ProcessStartInfo-Wrapper gemäß ADR-0006 (kein
+/// FFMpegCore-NuGet). Timeout via <see cref="CancellationTokenSource.CancelAfter(TimeSpan)"/>
+/// + harter <c>Process.Kill(entireProcessTree)</c> — Pattern aus Spike #5, gegen Hänger bei
+/// kaputten Dateien. Schreibt atomar (.tmp + Move), sodass nie ein halbfertiges Thumbnail
+/// sichtbar wird.
 /// </summary>
-public sealed class FfmpegVideoThumbnailer : IVideoThumbnailRenderer
+public sealed class FfmpegVideoThumbnailer : IVideoThumbnailRenderer, IFallbackImageThumbnailRenderer
 {
     private const int StdErrTailLines = 6;
     private static readonly TimeSpan FrameTimeout = TimeSpan.FromSeconds(8);
@@ -33,35 +34,65 @@ public sealed class FfmpegVideoThumbnailer : IVideoThumbnailRenderer
 
     public bool IsAvailable => _ffmpegPath.Value is not null;
 
-    public async Task<ThumbnailRenderResult> RenderAsync(
+    /// <summary>Video: Frame bei 1 s (vermeidet schwarze Intro-Frames).</summary>
+    public Task<ThumbnailRenderResult> RenderAsync(
         string sourcePath,
         string targetThumbPath,
         int targetWidth,
+        CancellationToken cancellationToken)
+        => RunAsync(sourcePath, targetThumbPath, targetWidth, seekIntoStream: true, cancellationToken);
+
+    /// <summary>
+    /// Bild-Fallback: erstes (einziges) Frame ohne <c>-ss</c> — ein Standbild hat bei 1 s nichts
+    /// mehr zu liefern. Gleiche Timeout-/Kill-Mechanik und atomares Schreiben wie beim Video.
+    /// </summary>
+    public Task<ThumbnailRenderResult> RenderImageAsync(
+        string sourcePath,
+        string targetThumbPath,
+        int targetWidth,
+        CancellationToken cancellationToken)
+        => RunAsync(sourcePath, targetThumbPath, targetWidth, seekIntoStream: false, cancellationToken);
+
+    Task<ThumbnailRenderResult> IFallbackImageThumbnailRenderer.RenderAsync(
+        string sourcePath,
+        string targetThumbPath,
+        int targetWidth,
+        CancellationToken cancellationToken)
+        => RenderImageAsync(sourcePath, targetThumbPath, targetWidth, cancellationToken);
+
+    private async Task<ThumbnailRenderResult> RunAsync(
+        string sourcePath,
+        string targetThumbPath,
+        int targetWidth,
+        bool seekIntoStream,
         CancellationToken cancellationToken)
     {
         var ffmpeg = _ffmpegPath.Value;
         if (ffmpeg is null)
         {
             return ThumbnailRenderResult.Fail(
-                "ffmpeg_not_found",
+                ThumbnailErrorCodes.FfmpegNotFound,
                 "FFmpeg wurde nicht gefunden (weder im PATH noch unter winget-Links).");
         }
 
         if (!File.Exists(sourcePath))
         {
-            return ThumbnailRenderResult.Fail("source_missing", $"Quelldatei fehlt: {sourcePath}");
+            return ThumbnailRenderResult.Fail(ThumbnailErrorCodes.SourceMissing, $"Quelldatei fehlt: {sourcePath}");
         }
 
         var tempPath = targetThumbPath + ".tmp";
         Directory.CreateDirectory(Path.GetDirectoryName(targetThumbPath)!);
         TryDelete(tempPath);
 
-        // -ss 1     : 1 s in das Video springen (vermeidet schwarzes Intro-Frame)
-        // -frames:v 1: genau ein Frame greifen
-        // scale=w:-1: Breite auf targetWidth begrenzen, Höhe proportional
-        // -q:v 4    : JPG-Qualität (niedriger = besser, 2–5 typisch)
-        var args = $"-hide_banner -loglevel error -y -ss 1 -i \"{sourcePath}\" " +
-                   $"-frames:v 1 -vf scale={targetWidth}:-1 -q:v 4 \"{tempPath}\"";
+        // -ss 1              : (nur Video) 1 s in den Stream springen (vermeidet schwarzes Intro-Frame)
+        // -frames:v 1        : genau ein Frame greifen
+        // scale=w:-1         : Breite auf targetWidth begrenzen, Höhe proportional
+        // -f image2 -update 1: Einzelbild-Muxer explizit — die .tmp-Endung lässt FFmpeg sonst
+        //                      keinen Ausgabeformat-Rückschluss zu ("Unable to choose an output format")
+        // -c:v mjpeg -q:v 4  : JPG-Encoder + Qualität (niedriger = besser, 2–5 typisch)
+        var seek = seekIntoStream ? "-ss 1 " : string.Empty;
+        var args = $"-hide_banner -loglevel error -y {seek}-i \"{sourcePath}\" " +
+                   $"-frames:v 1 -vf scale={targetWidth}:-1 -f image2 -update 1 -c:v mjpeg -q:v 4 \"{tempPath}\"";
 
         var psi = new ProcessStartInfo(ffmpeg, args)
         {
@@ -93,7 +124,7 @@ public sealed class FfmpegVideoThumbnailer : IVideoThumbnailRenderer
         {
             if (!proc.Start())
             {
-                return ThumbnailRenderResult.Fail("ffmpeg_start_failed", "Process.Start lieferte false.");
+                return ThumbnailRenderResult.Fail(ThumbnailErrorCodes.FfmpegStartFailed, "Process.Start lieferte false.");
             }
 
             proc.BeginErrorReadLine();
@@ -138,7 +169,7 @@ public sealed class FfmpegVideoThumbnailer : IVideoThumbnailRenderer
         catch (Exception ex)
         {
             TryDelete(tempPath);
-            return ThumbnailRenderResult.Fail("ffmpeg_exception", ex.Message);
+            return ThumbnailRenderResult.Fail(ThumbnailErrorCodes.FfmpegException, ex.Message);
         }
 
         sw.Stop();
@@ -150,20 +181,20 @@ public sealed class FfmpegVideoThumbnailer : IVideoThumbnailRenderer
             var reason = cancellationToken.IsCancellationRequested
                 ? "abgebrochen"
                 : $"Timeout nach {FrameTimeout.TotalSeconds:N0} s";
-            return ThumbnailRenderResult.Fail("ffmpeg_cancelled", $"{reason}. {tail}");
+            return ThumbnailRenderResult.Fail(ThumbnailErrorCodes.FfmpegCancelled, $"{reason}. {tail}");
         }
 
         if (proc.ExitCode != 0 || !File.Exists(tempPath))
         {
             TryDelete(tempPath);
-            return ThumbnailRenderResult.Fail("ffmpeg_failed", $"ExitCode={proc.ExitCode}. {tail}");
+            return ThumbnailRenderResult.Fail(ThumbnailErrorCodes.FfmpegFailed, $"ExitCode={proc.ExitCode}. {tail}");
         }
 
         File.Move(tempPath, targetThumbPath, overwrite: true);
         var info = new FileInfo(targetThumbPath);
         _logger.LogDebug(
-            "Video-Thumb erzeugt: {Path} ({Bytes} B) in {Ms:N0} ms",
-            targetThumbPath, info.Length, sw.Elapsed.TotalMilliseconds);
+            "{Kind}-Thumb via FFmpeg erzeugt: {Path} ({Bytes} B) in {Ms:N0} ms",
+            seekIntoStream ? "Video" : "Bild", targetThumbPath, info.Length, sw.Elapsed.TotalMilliseconds);
 
         // Pixelmaße werden ohne Re-Decode nicht ermittelt → 0/0; ByteSize ist gesetzt.
         return ThumbnailRenderResult.Ok(0, 0, info.Length);

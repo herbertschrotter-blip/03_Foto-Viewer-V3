@@ -1,9 +1,11 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using PhotoViewerV3.Data.RawSql;
+using PhotoViewerV3.Services.Catalog;
 using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Infrastructure;
 using PhotoViewerV3.Services.Media;
+using PhotoViewerV3.Services.Operations;
 using PhotoViewerV3.Services.Scanning;
 using PhotoViewerV3.Services.Thumbnails;
 
@@ -34,10 +36,17 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<FolderEnumerator>();
         services.TryAddSingleton<IScanService, ScanService>();
 
-        // Thumbnails — Video-Renderer (FFmpeg) ist WPF-frei und lebt hier.
+        // Thumbnails — Video-Renderer (FFmpeg) ist WPF-frei und lebt hier; derselbe FFmpeg-Wrapper
+        // dient als Fallback für Bildformate ohne WIC-Codec (WebP/HEIC/AVIF/RAW).
         // Der Bild-Renderer (WIC/IImageThumbnailRenderer) wird vom Wpf-Projekt registriert.
-        services.TryAddSingleton<IVideoThumbnailRenderer, FfmpegVideoThumbnailer>();
+        services.TryAddSingleton<FfmpegVideoThumbnailer>();
+        services.TryAddSingleton<IVideoThumbnailRenderer>(sp => sp.GetRequiredService<FfmpegVideoThumbnailer>());
+        services.TryAddSingleton<IFallbackImageThumbnailRenderer>(sp => sp.GetRequiredService<FfmpegVideoThumbnailer>());
         services.TryAddSingleton<IThumbnailService, ThumbnailService>();
+
+        // Datei-Operationen (Papierkorb/Move/Rename/Undo) + Katalog-Metadaten (Favorit/Bewertung)
+        services.AddOperations();
+        services.AddCatalog();
 
         return services;
     }
