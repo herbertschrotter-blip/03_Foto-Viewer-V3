@@ -1,7 +1,7 @@
 using System;
 using PhotoViewerV3.Services.Library;
 
-namespace PhotoViewerV3.Library;
+namespace PhotoViewerV3.Libraries;
 
 /// <summary>Zeile der Bibliotheksliste (unveränderlich; die Liste wird bei jedem Laden neu aufgebaut).</summary>
 public sealed class LibraryListItem

@@ -1,6 +1,6 @@
 using System.Windows.Controls;
 
-namespace PhotoViewerV3.Library;
+namespace PhotoViewerV3.Libraries;
 
 /// <summary>Seite „Bibliothek“: Liste, Anlegen, Scannen. Lädt die Liste bei jedem Anzeigen neu.</summary>
 public partial class LibraryPage : UserControl

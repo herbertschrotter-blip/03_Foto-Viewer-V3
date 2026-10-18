@@ -1,6 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using PhotoViewerV3.Folders;
-using PhotoViewerV3.Library;
+using PhotoViewerV3.Libraries;
 using PhotoViewerV3.Settings;
 using Wpf.Ui.Abstractions;
 

@@ -2,7 +2,7 @@ using System;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using PhotoViewerV3.Library;
+using PhotoViewerV3.Libraries;
 
 namespace PhotoViewerV3.Shell;
 

@@ -3,7 +3,7 @@
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  xmlns:shell="clr-namespace:PhotoViewerV3.Shell"
-                 xmlns:library="clr-namespace:PhotoViewerV3.Library"
+                 xmlns:library="clr-namespace:PhotoViewerV3.Libraries"
                  xmlns:folders="clr-namespace:PhotoViewerV3.Folders"
                  xmlns:settings="clr-namespace:PhotoViewerV3.Settings"
                  xmlns:gallery="clr-namespace:PhotoViewerV3.Spike02.Views"

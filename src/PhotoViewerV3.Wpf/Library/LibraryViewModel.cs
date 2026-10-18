@@ -14,7 +14,7 @@ using PhotoViewerV3.Services.Library;
 using PhotoViewerV3.Services.Scanning;
 using PhotoViewerV3.Shell;
 
-namespace PhotoViewerV3.Library;
+namespace PhotoViewerV3.Libraries;
 
 /// <summary>
 /// Bibliotheksverwaltung: Liste aller Bibliotheken, Anlegen (Ordnerdialog), Scannen (Fresh bzw. ClearAndRescan

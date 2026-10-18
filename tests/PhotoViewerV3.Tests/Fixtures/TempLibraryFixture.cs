@@ -6,6 +6,7 @@ using PhotoViewerV3.Data.RawSql;
 using PhotoViewerV3.Domain.Entities;
 using PhotoViewerV3.Services.Catalog;
 using PhotoViewerV3.Services.Database;
+using PhotoViewerV3.Services.Library;
 using PhotoViewerV3.Services.Media;
 using PhotoViewerV3.Services.Operations;
 using PhotoViewerV3.Services.Scanning;
@@ -104,6 +105,7 @@ public sealed class TempLibraryFixture : IDisposable
             new FolderEnumerator(Formats, NullLogger<FolderEnumerator>.Instance),
             new BulkScanWriter(),
             new FtsIndexer(),
+            new LibraryService(ContextFactory, Paths, NullLogger<LibraryService>.Instance),
             NullLogger<ScanService>.Instance);
         return scanner.ScanAsync(libraryId, ScanMode.Fresh, null, CancellationToken.None);
     }
