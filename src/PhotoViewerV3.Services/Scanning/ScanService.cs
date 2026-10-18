@@ -14,24 +14,40 @@ namespace PhotoViewerV3.Services.Scanning;
 
 public interface IScanService
 {
+    /// <summary>Scan mit Standardoptionen (<see cref="ScanOptions.Default"/>).</summary>
     Task<ScanResult> ScanAsync(
         int libraryId,
         ScanMode mode,
         IProgress<ScanProgress>? progress,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Scan mit Optionen — z. B. <see cref="ScanOptions.ConfirmMassMissing"/>, wenn der Benutzer nach
+    /// <see cref="ScanOutcome.MassMissingBlocked"/> „Als fehlend markieren“ gewählt hat.
+    /// </summary>
+    Task<ScanResult> ScanAsync(
+        int libraryId,
+        ScanMode mode,
+        ScanOptions options,
+        IProgress<ScanProgress>? progress,
+        CancellationToken cancellationToken);
 }
 
 /// <summary>
-/// Orchestriert einen Scan: Library laden, Root prüfen, (optional) Katalog leeren, Filesystem traversieren,
-/// Folders + Files via Raw-SQLite Bulk-Insert persistieren, FTS5 indexieren.
-/// Fortschritt geht an das optionale IProgress und gedrosselt als ScanProgressMessage an den Messenger,
-/// am Ende ScanCompletedMessage bzw. ScanAbortedMessage. Fresh und ClearAndRescan; Incremental folgt in Welle 2.
+/// Orchestriert einen Scan: Library laden, Root mit Timeout prüfen (PLAN Kap. 12), dann je nach Modus
+/// <list type="bullet">
+/// <item>Fresh/ClearAndRescan: (optional Katalog leeren,) Filesystem traversieren, Folders + Files via Raw-SQLite
+/// Bulk-Insert persistieren, FTS5 komplett aufbauen;</item>
+/// <item>Incremental: Diff gegen den Katalog mit stabilen FileIds, gezielte FTS-Pflege, Missing-Markierungen nur
+/// bei erreichbarem Root und unterhalb des Mass-Missing-Schwellwerts (<see cref="IncrementalScanRunner"/>).</item>
+/// </list>
+/// Fortschritt geht an das optionale IProgress und gedrosselt als ScanProgressMessage an den Messenger. Am Ende
+/// ScanCompletedMessage (Completed, MassMissingBlocked) bzw. ScanAbortedMessage (LibraryOffline, Abbruch, Fehler);
+/// der Incremental-Scan sendet zusätzlich FilesChangedMessages (Added/Metadata/Removed) für Galerie und Ordnerbaum.
+/// Ein nicht erreichbarer Root führt in allen Modi zu <see cref="ScanOutcome.LibraryOffline"/> ohne Katalogänderung.
 /// </summary>
 public sealed class ScanService : IScanService
 {
-    /// <summary>Fortschrittsmeldungen höchstens alle 250 ms oder alle 2000 Dateien (ADR-0013: gedrosselt).</summary>
-    private const int ProgressFileInterval = 2_000;
-    private static readonly TimeSpan ProgressTimeInterval = TimeSpan.FromMilliseconds(250);
     private const int InsertProgressEvery = 25_000;
 
     private readonly ILibraryContextFactory _contextFactory;
@@ -40,15 +56,17 @@ public sealed class ScanService : IScanService
     private readonly FtsIndexer _ftsIndexer;
     private readonly ILibraryService _libraryService;
     private readonly ILogger<ScanService> _logger;
-    private readonly IMessenger _messenger = WeakReferenceMessenger.Default;
+    private readonly IMessenger _messenger;
 
+    /// <param name="messenger">Optional (Tests); produktiv WeakReferenceMessenger.Default.</param>
     public ScanService(
         ILibraryContextFactory contextFactory,
         FolderEnumerator enumerator,
         BulkScanWriter bulkWriter,
         FtsIndexer ftsIndexer,
         ILibraryService libraryService,
-        ILogger<ScanService> logger)
+        ILogger<ScanService> logger,
+        IMessenger? messenger = null)
     {
         _contextFactory = contextFactory;
         _enumerator = enumerator;
@@ -56,37 +74,55 @@ public sealed class ScanService : IScanService
         _ftsIndexer = ftsIndexer;
         _libraryService = libraryService;
         _logger = logger;
+        _messenger = messenger ?? WeakReferenceMessenger.Default;
     }
 
-    public async Task<ScanResult> ScanAsync(
+    public Task<ScanResult> ScanAsync(
         int libraryId,
         ScanMode mode,
         IProgress<ScanProgress>? progress,
         CancellationToken cancellationToken)
+        => ScanAsync(libraryId, mode, ScanOptions.Default, progress, cancellationToken);
+
+    public async Task<ScanResult> ScanAsync(
+        int libraryId,
+        ScanMode mode,
+        ScanOptions options,
+        IProgress<ScanProgress>? progress,
+        CancellationToken cancellationToken)
     {
-        if (mode == ScanMode.Incremental)
-        {
-            throw new NotSupportedException(
-                "ScanMode.Incremental (Diff-Rescan mit Offline-vs-Missing-Guard) kommt in Welle 2. " +
-                "Bitte Fresh oder ClearAndRescan verwenden.");
-        }
+        ArgumentNullException.ThrowIfNull(options);
 
         // Enumeration und Raw-SQLite-Persistenz sind synchrone I/O-Arbeit → nie auf dem UI-Thread laufen lassen.
-        return await Task.Run(() => ScanCoreAsync(libraryId, mode, progress, cancellationToken), cancellationToken)
+        // Das Token geht nur in den Kern (nicht an Task.Run), damit auch ein bereits abgebrochener Aufruf die
+        // ScanAbortedMessage sendet und Statusleiste/Seiten den Scan-Zustand sauber beenden.
+        return await Task.Run(() => ScanCoreAsync(libraryId, mode, options, progress, cancellationToken))
             .ConfigureAwait(false);
     }
 
     private async Task<ScanResult> ScanCoreAsync(
         int libraryId,
         ScanMode mode,
+        ScanOptions options,
         IProgress<ScanProgress>? progress,
         CancellationToken ct)
     {
-        var reporter = new ProgressReporter(libraryId, progress, _messenger);
+        var reporter = new ScanProgressReporter(libraryId, progress, _messenger);
         try
         {
-            var result = await RunScanAsync(libraryId, mode, reporter, ct).ConfigureAwait(false);
-            _messenger.Send(new ScanCompletedMessage(libraryId, result));
+            var result = mode == ScanMode.Incremental
+                ? await RunIncrementalScanAsync(libraryId, options, reporter, ct).ConfigureAwait(false)
+                : await RunFullScanAsync(libraryId, mode, reporter, ct).ConfigureAwait(false);
+
+            if (result.Outcome == ScanOutcome.LibraryOffline)
+            {
+                _messenger.Send(new ScanAbortedMessage(libraryId, Canceled: false, LibraryOfflineException.Describe(result.RootPath)));
+            }
+            else
+            {
+                _messenger.Send(new ScanCompletedMessage(libraryId, result));
+            }
+
             return result;
         }
         catch (OperationCanceledException)
@@ -103,7 +139,57 @@ public sealed class ScanService : IScanService
         }
     }
 
-    private async Task<ScanResult> RunScanAsync(int libraryId, ScanMode mode, ProgressReporter reporter, CancellationToken ct)
+    // ---- Incremental ----------------------------------------------------------------------------
+
+    private async Task<ScanResult> RunIncrementalScanAsync(int libraryId, ScanOptions options, ScanProgressReporter reporter, CancellationToken ct)
+    {
+        var sw = Stopwatch.StartNew();
+        var rootPath = await LoadRootPathAsync(libraryId, ct).ConfigureAwait(false);
+
+        // Vorbedingung: Root erreichbar (Timeout lokal 1 s, UNC 3 s) — sonst keine Katalogänderung
+        if (!await RootAvailabilityProbe.IsAvailableAsync(rootPath, ct).ConfigureAwait(false))
+        {
+            _logger.LogWarning("Incremental-Scan nicht gestartet, Bibliothek offline: {Root}", rootPath);
+            return OfflineResult(libraryId, rootPath, ScanMode.Incremental, sw.Elapsed);
+        }
+
+        var (nextFolderId, nextFileId) = ReadNextIds();
+        var runner = new IncrementalScanRunner(_contextFactory, _enumerator, _bulkWriter, _logger);
+        var outcome = await runner.RunAsync(libraryId, rootPath, options, nextFolderId, nextFileId, reporter, ct).ConfigureAwait(false);
+        var result = outcome.Result;
+
+        _logger.LogInformation(
+            "Incremental-Scan fertig ({Outcome}): {Added} neu, {Modified} geändert, {Missing} fehlend markiert ({Detected} erkannt), {Reappeared} wieder da, {Folders} neue Ordner, {Fts} FTS-Zeilen in {Sec:N2} s",
+            result.Outcome, result.Added, result.Modified, result.MarkedMissing, result.MissingDetected, result.Reappeared, result.FoldersAdded, result.FtsRowsInserted, result.TotalDuration.TotalSeconds);
+
+        // Galerie, Ordnerbaum und Lightbox nachziehen — nur für tatsächlich geschriebene Zeilen
+        SendFilesChanged(libraryId, FilesChangeKind.Added, outcome.AddedIds);
+        SendFilesChanged(libraryId, FilesChangeKind.Metadata, outcome.ModifiedIds);
+        SendFilesChanged(libraryId, FilesChangeKind.Removed, outcome.RemovedIds);
+
+        return result;
+    }
+
+    private void SendFilesChanged(int libraryId, FilesChangeKind kind, IReadOnlyList<int> fileIds)
+    {
+        if (fileIds.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            _messenger.Send(new FilesChangedMessage(libraryId, kind, fileIds));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Empfänger der FilesChangedMessage ({Kind}) warf eine Ausnahme", kind);
+        }
+    }
+
+    // ---- Fresh / ClearAndRescan ------------------------------------------------------------------
+
+    private async Task<ScanResult> RunFullScanAsync(int libraryId, ScanMode mode, ScanProgressReporter reporter, CancellationToken ct)
     {
         var totalSw = Stopwatch.StartNew();
 
@@ -111,11 +197,10 @@ public sealed class ScanService : IScanService
         var rootPath = await LoadRootPathAsync(libraryId, ct).ConfigureAwait(false);
 
         // 2) Root erreichbar? — VOR dem Leeren prüfen, damit ein Offline-Laufwerk nie den Katalog löscht (PLAN Kap. 12)
-        if (!Directory.Exists(rootPath))
+        if (!await RootAvailabilityProbe.IsAvailableAsync(rootPath, ct).ConfigureAwait(false))
         {
-            throw new DirectoryNotFoundException(
-                $"Der Bibliotheksordner „{rootPath}“ ist nicht erreichbar. " +
-                "Bitte Laufwerk anschließen oder Netzwerkverbindung prüfen.");
+            _logger.LogWarning("Scan nicht gestartet, Bibliothek offline: {Root} (Mode={Mode})", rootPath, mode);
+            return OfflineResult(libraryId, rootPath, mode, totalSw.Elapsed);
         }
 
         // 3) ClearAndRescan: bestehende Katalogdaten dieser Library löschen (FileIds werden neu vergeben)
@@ -279,8 +364,20 @@ public sealed class ScanService : IScanService
             TotalDuration: totalSw.Elapsed,
             EnumerationDuration: enumSw.Elapsed,
             PersistenceDuration: persistSw.Elapsed - ftsReport.Duration,
-            FtsDuration: ftsReport.Duration);
+            FtsDuration: ftsReport.Duration)
+        {
+            Mode = mode,
+        };
     }
+
+    // ---- Gemeinsame Helfer ----------------------------------------------------------------------
+
+    private static ScanResult OfflineResult(int libraryId, string rootPath, ScanMode mode, TimeSpan elapsed) =>
+        new(libraryId, rootPath, 0, 0, 0, 0, elapsed, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero)
+        {
+            Mode = mode,
+            Outcome = ScanOutcome.LibraryOffline,
+        };
 
     private async Task<string> LoadRootPathAsync(int libraryId, CancellationToken ct)
     {
@@ -302,13 +399,14 @@ public sealed class ScanService : IScanService
         {
             throw new InvalidOperationException(
                 $"ScanMode.Fresh: Library {libraryId} ist nicht leer ({existingFolders} Folders, {existingFiles} Files). " +
-                "Für einen Neuaufbau ScanMode.ClearAndRescan verwenden.");
+                "Für einen Neuaufbau ScanMode.ClearAndRescan, für ein Update ScanMode.Incremental verwenden.");
         }
     }
 
     /// <summary>
     /// Nächste freie Id je Tabelle: Maximum aus MAX(Id) und dem AUTOINCREMENT-Zähler (sqlite_sequence),
     /// damit nach ClearAsync keine Ids wiederverwendet werden (Thumbnail-Dedupe und Cache-Dateien sind FileId-basiert).
+    /// Der Incremental-Scan setzt die Vergabe damit lückenlos hinter dem bisherigen Maximum fort.
     /// </summary>
     private (int NextFolderId, int NextFileId) ReadNextIds()
     {
@@ -364,36 +462,4 @@ public sealed class ScanService : IScanService
 
     private static long ToUnix(DateTime utc) =>
         new DateTimeOffset(DateTime.SpecifyKind(utc, DateTimeKind.Utc)).ToUnixTimeSeconds();
-
-    /// <summary>Drosselt Fortschrittsmeldungen und verteilt sie an IProgress und Messenger.</summary>
-    private sealed class ProgressReporter
-    {
-        private readonly int _libraryId;
-        private readonly IProgress<ScanProgress>? _progress;
-        private readonly IMessenger _messenger;
-        private readonly Stopwatch _sinceLast = Stopwatch.StartNew();
-        private int _filesAtLast = -ProgressFileInterval; // erste Meldung sofort
-
-        public ProgressReporter(int libraryId, IProgress<ScanProgress>? progress, IMessenger messenger)
-        {
-            _libraryId = libraryId;
-            _progress = progress;
-            _messenger = messenger;
-        }
-
-        public void Report(ScanProgress p, bool force = false)
-        {
-            if (!force
-                && p.FilesDiscovered - _filesAtLast < ProgressFileInterval
-                && _sinceLast.Elapsed < ProgressTimeInterval)
-            {
-                return;
-            }
-
-            _filesAtLast = p.FilesDiscovered;
-            _sinceLast.Restart();
-            _progress?.Report(p);
-            _messenger.Send(new ScanProgressMessage(_libraryId, p));
-        }
-    }
 }

@@ -55,7 +55,52 @@ public sealed record ScanProgress(
 }
 
 /// <summary>
-/// Ergebnis eines abgeschlossenen Scans, inkl. Zähler und Timing.
+/// Wie ein Scan geendet hat (PLAN Kap. 12: Offline-vs-Missing-Guard).
+/// </summary>
+public enum ScanOutcome
+{
+    /// <summary>Scan vollständig durchgelaufen, Katalog ist aktuell.</summary>
+    Completed = 0,
+
+    /// <summary>
+    /// Der Bibliotheksordner war nicht erreichbar (vor dem Scan oder währenddessen). Es wurden keine
+    /// Dateien als fehlend markiert; bereits geschriebene neue/geänderte Dateien bleiben im Katalog.
+    /// </summary>
+    LibraryOffline = 1,
+
+    /// <summary>
+    /// Incremental: ungewöhnlich viele Dateien fehlen (&gt; 10.000 oder &gt; 20 % der Bibliothek).
+    /// Neue und geänderte Dateien wurden übernommen, fehlende NICHT markiert — der Aufrufer fragt nach
+    /// und wiederholt den Scan mit <see cref="ScanOptions.ConfirmMassMissing"/>.
+    /// </summary>
+    MassMissingBlocked = 2,
+
+    /// <summary>
+    /// Reserviert für einen abgebrochenen Scan. Aktuell signalisiert <c>ScanAsync</c> den Abbruch wie bisher
+    /// durch <see cref="OperationCanceledException"/>; dieser Wert wird nicht geliefert.
+    /// </summary>
+    Canceled = 3,
+}
+
+/// <summary>
+/// Optionen für <see cref="IScanService.ScanAsync(int, ScanMode, ScanOptions, IProgress{ScanProgress}?, CancellationToken)"/>.
+/// </summary>
+public sealed record ScanOptions
+{
+    public static ScanOptions Default { get; } = new();
+
+    /// <summary>
+    /// Incremental: fehlende Dateien auch dann als Missing markieren, wenn der Mass-Missing-Schwellwert
+    /// überschritten ist (Benutzer hat „Als fehlend markieren“ bestätigt, PLAN Kap. 12).
+    /// </summary>
+    public bool ConfirmMassMissing { get; init; }
+}
+
+/// <summary>
+/// Ergebnis eines abgeschlossenen Scans, inkl. Zähler und Timing. Die positionalen Felder stammen aus dem
+/// Fresh-Scan und bleiben erhalten; die Diff-Zähler (Added, Modified, MarkedMissing, Reappeared, FoldersAdded)
+/// und <see cref="Outcome"/> kamen mit dem Incremental-Scan dazu. Bei Fresh/ClearAndRescan gilt
+/// Added = FilesInserted und FoldersAdded = FoldersInserted.
 /// </summary>
 public sealed record ScanResult(
     int LibraryId,
@@ -67,7 +112,39 @@ public sealed record ScanResult(
     TimeSpan TotalDuration,
     TimeSpan EnumerationDuration,
     TimeSpan PersistenceDuration,
-    TimeSpan FtsDuration);
+    TimeSpan FtsDuration)
+{
+    /// <summary>Modus, mit dem gescannt wurde.</summary>
+    public ScanMode Mode { get; init; } = ScanMode.Fresh;
+
+    /// <summary>Wie der Scan geendet hat; bei Fresh/ClearAndRescan immer Completed oder LibraryOffline.</summary>
+    public ScanOutcome Outcome { get; init; } = ScanOutcome.Completed;
+
+    /// <summary>Neu in den Katalog aufgenommene Dateien.</summary>
+    public int Added { get; init; } = FilesInserted;
+
+    /// <summary>Neu angelegte Ordner (inkl. Zwischenordner der Kette).</summary>
+    public int FoldersAdded { get; init; } = FoldersInserted;
+
+    /// <summary>Dateien, deren Größe oder Änderungszeit sich geändert hat (Zeile aktualisiert, Id bleibt).</summary>
+    public int Modified { get; init; }
+
+    /// <summary>Dateien, die in diesem Scan als fehlend markiert wurden (Zeile, Favorit und Bewertung bleiben).</summary>
+    public int MarkedMissing { get; init; }
+
+    /// <summary>Zuvor fehlende Dateien, die wieder auf der Platte liegen (Missing zurückgesetzt).</summary>
+    public int Reappeared { get; init; }
+
+    /// <summary>
+    /// Beim Abgleich erkannte, bisher vorhandene Dateien, die nicht mehr auf der Platte liegen — unabhängig
+    /// davon, ob sie markiert wurden. Bei <see cref="ScanOutcome.MassMissingBlocked"/> ist MarkedMissing 0
+    /// und dieser Zähler nennt die Zahl für den Rückfrage-Dialog.
+    /// </summary>
+    public int MissingDetected { get; init; }
+
+    /// <summary>true, wenn der Scan irgendetwas am Katalog verändert hat.</summary>
+    public bool HasChanges => Added > 0 || Modified > 0 || MarkedMissing > 0 || Reappeared > 0 || FoldersAdded > 0;
+}
 
 /// <summary>
 /// Modus für ScanService.ScanAsync.

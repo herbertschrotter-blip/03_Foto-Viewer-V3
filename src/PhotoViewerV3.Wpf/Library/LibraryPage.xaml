@@ -34,11 +34,11 @@
                 <ui:TextBlock FontTypography="Title" Text="Bibliotheken" />
                 <ui:TextBlock FontTypography="Caption"
                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                              Text="Jede Bibliothek entspricht einem Foto-Ordner. Galerie und Ordnerbaum zeigen die aktive Bibliothek." />
+                              Text="Jede Bibliothek entspricht einem Foto-Ordner. Galerie und Ordnerbaum zeigen die aktive Bibliothek. „Aktualisieren“ übernimmt Änderungen auf der Platte, „Neu aufbauen“ erstellt den Katalog komplett neu." />
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                <ui:Button Content="Aktualisieren"
-                           Icon="{ui:SymbolIcon ArrowSync24}"
+                <ui:Button Content="Liste neu laden"
+                           Icon="{ui:SymbolIcon ArrowClockwise24}"
                            Command="{Binding LoadCommand}"
                            Margin="0,0,8,0" />
                 <ui:Button Content="Neue Bibliothek…"
@@ -79,7 +79,7 @@
                                      VerticalAlignment="Top"
                                      Margin="0,2,16,0" />
                     <StackPanel Grid.Column="1">
-                        <TextBlock FontWeight="SemiBold"><Run Text="Scanne „" /><Run Text="{Binding ScanLibraryName, Mode=OneWay}" /><Run Text="“ — " /><Run Text="{Binding ScanPhaseText, Mode=OneWay}" /></TextBlock>
+                        <TextBlock FontWeight="SemiBold"><Run Text="{Binding ScanActionText, Mode=OneWay}" /><Run Text=" „" /><Run Text="{Binding ScanLibraryName, Mode=OneWay}" /><Run Text="“ — " /><Run Text="{Binding ScanPhaseText, Mode=OneWay}" /></TextBlock>
                         <TextBlock Margin="0,4,0,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}"><Run Text="{Binding ScanFolders, Mode=OneWay, StringFormat=N0}" /><Run Text=" Ordner · " /><Run Text="{Binding ScanFiles, Mode=OneWay, StringFormat=N0}" /><Run Text=" Dateien · " /><Run Text="{Binding ScanSizeText, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding ScanElapsedText, Mode=OneWay}" /></TextBlock>
                         <TextBlock Text="{Binding ScanCurrentPath}"
                                    TextTrimming="CharacterEllipsis"
@@ -219,11 +219,22 @@
                                     </StackPanel>
 
                                     <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
+                                        <!-- Primär: „Scannen“ (Fresh) bei leerem Katalog, sonst „Aktualisieren“ (Incremental).
+                                             Bewusst auch bei nicht erreichbarem Ordner aktiv: der Scan meldet dann „Bibliothek offline“
+                                             mit [Erneut prüfen] [Andere Bibliothek wählen] (PLAN Kap. 12). -->
                                         <ui:Button Content="{Binding ScanButtonText}"
-                                                   Icon="{ui:SymbolIcon Scan24}"
+                                                   Icon="{ui:SymbolIcon ArrowSync24}"
                                                    Appearance="Primary"
-                                                   IsEnabled="{Binding IsRootAvailable}"
+                                                   ToolTip="{Binding ScanButtonToolTip}"
                                                    Command="{Binding DataContext.ScanCommand, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}"
+                                                   CommandParameter="{Binding}"
+                                                   Margin="0,0,8,0" />
+                                        <!-- Sekundär: „Neu aufbauen“ (ClearAndRescan nach Bestätigung), nur bei vorhandenem Katalog -->
+                                        <ui:Button Content="Neu aufbauen"
+                                                   Icon="{ui:SymbolIcon ArrowReset24}"
+                                                   ToolTip="Katalog dieser Bibliothek löschen und komplett neu aufbauen — Favoriten und Bewertungen gehen verloren"
+                                                   Visibility="{Binding CanRebuild, Converter={StaticResource BoolToVis}}"
+                                                   Command="{Binding DataContext.RebuildCommand, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}"
                                                    CommandParameter="{Binding}"
                                                    Margin="0,0,8,0" />
                                         <ui:Button Content="Aktiv setzen"

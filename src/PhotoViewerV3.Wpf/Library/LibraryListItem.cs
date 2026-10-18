@@ -37,8 +37,11 @@ public sealed class LibraryListItem
 
     public bool IsActive { get; }
 
-    /// <summary>Noch keine Scan-Daten → Fresh-Scan, sonst ClearAndRescan.</summary>
+    /// <summary>Noch keine Scan-Daten → Fresh-Scan; sonst „Aktualisieren“ (Incremental) als Primär- und „Neu aufbauen“ (ClearAndRescan) als Sekundäraktion.</summary>
     public bool IsEmpty => FolderCount == 0 && FileCount == 0;
+
+    /// <summary>„Neu aufbauen“ nur anbieten, wenn es etwas neu aufzubauen gibt.</summary>
+    public bool CanRebuild => !IsEmpty;
 
     public string CountsText => IsEmpty
         ? "Noch nicht gescannt"
@@ -48,5 +51,9 @@ public sealed class LibraryListItem
         ? $"zuletzt geöffnet {opened.ToLocalTime():g}"
         : $"angelegt {CreatedAt.ToLocalTime():g}";
 
-    public string ScanButtonText => IsEmpty ? "Scannen" : "Neu scannen";
+    public string ScanButtonText => IsEmpty ? "Scannen" : "Aktualisieren";
+
+    public string ScanButtonToolTip => IsEmpty
+        ? "Ordner durchsuchen und Katalog aufbauen"
+        : "Änderungen übernehmen: neue Dateien aufnehmen, fehlende markieren, geänderte aktualisieren — Favoriten und Bewertungen bleiben erhalten";
 }

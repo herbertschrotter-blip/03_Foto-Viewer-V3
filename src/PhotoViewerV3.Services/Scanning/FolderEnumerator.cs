@@ -32,7 +32,12 @@ public sealed class FolderEnumerator
     /// Yield-Stream über alle gefundenen MediaFiles unterhalb von rootPath.
     /// Berücksichtigt Cancellation pro Folder.
     /// </summary>
-    public IEnumerable<DiscoveredFile> Enumerate(string rootPath, CancellationToken ct = default)
+    /// <param name="onIoError">
+    /// Optionaler Hook für IO-Fehler (nicht für fehlende Berechtigungen): wird mit Pfad und Ausnahme aufgerufen,
+    /// bevor der Ordner bzw. die Datei übersprungen wird. Der Incremental-Scan prüft darin den Root erneut
+    /// (PLAN Kap. 12: IOException → Root-Recheck) und darf den Scan durch eine Ausnahme beenden.
+    /// </param>
+    public IEnumerable<DiscoveredFile> Enumerate(string rootPath, CancellationToken ct = default, Action<string, Exception>? onIoError = null)
     {
         if (!Directory.Exists(rootPath))
         {
@@ -62,6 +67,7 @@ public sealed class FolderEnumerator
             catch (IOException ex)
             {
                 _logger.LogWarning(ex, "IO-Fehler auf Folder: {Path}", folder);
+                onIoError?.Invoke(folder, ex);
                 continue;
             }
 
@@ -91,6 +97,10 @@ public sealed class FolderEnumerator
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
                     _logger.LogDebug(ex, "Skip File: {Path}", filePath);
+                    if (ex is IOException)
+                    {
+                        onIoError?.Invoke(filePath, ex);
+                    }
                 }
 
                 if (df is not null)
@@ -114,6 +124,7 @@ public sealed class FolderEnumerator
             catch (IOException ex)
             {
                 _logger.LogWarning(ex, "IO-Fehler auf Subfolder-Listing: {Path}", folder);
+                onIoError?.Invoke(folder, ex);
             }
         }
     }

@@ -6,6 +6,7 @@ using PhotoViewerV3.Data;
 using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Infrastructure;
 using PhotoViewerV3.Services.Messaging;
+using PhotoViewerV3.Services.Scanning;
 using LibraryEntity = PhotoViewerV3.Domain.Entities.Library;
 
 namespace PhotoViewerV3.Services.Library;
@@ -17,10 +18,6 @@ namespace PhotoViewerV3.Services.Library;
 /// </summary>
 public sealed class LibraryService : ILibraryService
 {
-    /// <summary>Timeouts für die Erreichbarkeitsprüfung des Root-Ordners (PLAN Kap. 12: lokal kurz, UNC länger).</summary>
-    private static readonly TimeSpan LocalRootCheckTimeout = TimeSpan.FromSeconds(2);
-    private static readonly TimeSpan UncRootCheckTimeout = TimeSpan.FromSeconds(3);
-
     private readonly ILibraryContextFactory _factory;
     private readonly IAppDataPaths _paths;
     private readonly ILogger<LibraryService> _logger;
@@ -263,26 +260,12 @@ public sealed class LibraryService : ILibraryService
 
     private static bool PathEquals(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 
-    private static bool IsUncPath(string path) => path.StartsWith(@"\\", StringComparison.Ordinal);
-
-    /// <summary>Directory.Exists mit Timeout (lokal 2 s, UNC 3 s); Timeout zählt als „nicht erreichbar“.</summary>
-    private static async Task<bool> IsRootAvailableAsync(string rootPath, CancellationToken ct)
-    {
-        if (string.IsNullOrWhiteSpace(rootPath))
-        {
-            return false;
-        }
-
-        var timeout = IsUncPath(rootPath) ? UncRootCheckTimeout : LocalRootCheckTimeout;
-        try
-        {
-            return await Task.Run(() => Directory.Exists(rootPath), ct).WaitAsync(timeout, ct).ConfigureAwait(false);
-        }
-        catch (TimeoutException)
-        {
-            return false;
-        }
-    }
+    /// <summary>
+    /// Erreichbarkeit mit Timeout (lokal 1 s, UNC 3 s; Timeout zählt als „nicht erreichbar“) — dieselbe Mechanik
+    /// wie die Vorbedingung und der Root-Recheck des Scans (PLAN Kap. 12).
+    /// </summary>
+    private static Task<bool> IsRootAvailableAsync(string rootPath, CancellationToken ct) =>
+        RootAvailabilityProbe.IsAvailableAsync(rootPath, ct);
 
     // ---- Query-Helfer ----------------------------------------------------------------------
 

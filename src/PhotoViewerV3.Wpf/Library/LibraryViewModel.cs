@@ -1,7 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
-using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -17,9 +16,13 @@ using PhotoViewerV3.Shell;
 namespace PhotoViewerV3.Libraries;
 
 /// <summary>
-/// Bibliotheksverwaltung: Liste aller Bibliotheken, Anlegen (Ordnerdialog), Scannen (Fresh bzw. ClearAndRescan
-/// nach Bestätigung) mit Fortschrittspanel und Abbruch, Aktivieren, Umbenennen, Entfernen.
-/// Nach erfolgreichem Scan wird automatisch zur Galerie gewechselt.
+/// Bibliotheksverwaltung: Liste aller Bibliotheken, Anlegen (Ordnerdialog), Scannen mit Fortschrittspanel und
+/// Abbruch, Aktivieren, Umbenennen, Entfernen. Primäraktion je Bibliothek: „Scannen“ (Fresh) bei leerem Katalog,
+/// sonst „Aktualisieren“ (Incremental, Favoriten/Bewertungen bleiben); Sekundäraktion „Neu aufbauen“
+/// (ClearAndRescan nach Bestätigung). Offline-vs-Missing-Guard (PLAN Kap. 12): bei
+/// <see cref="ScanOutcome.MassMissingBlocked"/> Rückfrage [Erneut prüfen] [Als fehlend markieren] [Abbrechen],
+/// bei <see cref="ScanOutcome.LibraryOffline"/> [Erneut prüfen] [Andere Bibliothek wählen].
+/// Nach einem Scan mit Änderungen wird automatisch zur Galerie gewechselt.
 /// </summary>
 public sealed partial class LibraryViewModel : ObservableObject
 {
@@ -28,24 +31,31 @@ public sealed partial class LibraryViewModel : ObservableObject
     private readonly ILibraryService _libraries;
     private readonly IScanService _scanner;
     private readonly IDialogService _dialogs;
+    private readonly ILibraryDialogService _scanDialogs;
     private readonly INavigationService _navigation;
     private readonly ILogger<LibraryViewModel> _logger;
     private readonly DispatcherTimer _elapsedTimer;
     private readonly Stopwatch _scanStopwatch = new();
     private CancellationTokenSource? _scanCts;
 
+    /// <param name="scanDialogs">
+    /// Drei-Knopf-Dialog für den Mass-Missing-Guard; optional, damit die Shell-Registrierung unverändert bleibt
+    /// (ohne Registrierung wird <see cref="LibraryDialogService"/> direkt verwendet).
+    /// </param>
     public LibraryViewModel(
         ILibraryService libraries,
         IScanService scanner,
         IDialogService dialogs,
         INavigationService navigation,
-        ILogger<LibraryViewModel> logger)
+        ILogger<LibraryViewModel> logger,
+        ILibraryDialogService? scanDialogs = null)
     {
         _libraries = libraries;
         _scanner = scanner;
         _dialogs = dialogs;
         _navigation = navigation;
         _logger = logger;
+        _scanDialogs = scanDialogs ?? new LibraryDialogService();
 
         var dispatcher = Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
         _elapsedTimer = new DispatcherTimer(ElapsedTickInterval, DispatcherPriority.Background, OnElapsedTick, dispatcher);
@@ -67,11 +77,15 @@ public sealed partial class LibraryViewModel : ObservableObject
     // ---- Scan-Panel ----
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsScanPanelVisible))]
-    [NotifyCanExecuteChangedFor(nameof(ScanCommand), nameof(RemoveCommand), nameof(CreateLibraryCommand), nameof(SetActiveCommand), nameof(RenameCommand), nameof(CancelScanCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ScanCommand), nameof(RebuildCommand), nameof(RemoveCommand), nameof(CreateLibraryCommand), nameof(SetActiveCommand), nameof(RenameCommand), nameof(CancelScanCommand))]
     private bool _isScanning;
 
     [ObservableProperty]
     private string? _scanLibraryName;
+
+    /// <summary>Verb der laufenden Aktion: „Scanne“, „Aktualisiere“ oder „Baue neu auf“.</summary>
+    [ObservableProperty]
+    private string _scanActionText = "Scanne";
 
     [ObservableProperty]
     private string _scanPhaseText = string.Empty;
@@ -200,6 +214,7 @@ public sealed partial class LibraryViewModel : ObservableObject
         }
     }
 
+    /// <summary>Primäraktion: leerer Katalog → Fresh, sonst Incremental (Änderungen übernehmen, Ids/Favoriten bleiben).</summary>
     [RelayCommand(CanExecute = nameof(CanModifyItem))]
     private async Task ScanAsync(LibraryListItem? item)
     {
@@ -208,22 +223,37 @@ public sealed partial class LibraryViewModel : ObservableObject
             return;
         }
 
-        var mode = item.IsEmpty ? ScanMode.Fresh : ScanMode.ClearAndRescan;
-        if (mode == ScanMode.ClearAndRescan)
+        await StartScanAsync(item, item.IsEmpty ? ScanMode.Fresh : ScanMode.Incremental).ConfigureAwait(true);
+    }
+
+    /// <summary>Sekundäraktion: Katalog löschen und neu aufbauen (ClearAndRescan) — nach Bestätigung, FileIds werden neu vergeben.</summary>
+    [RelayCommand(CanExecute = nameof(CanModifyItem))]
+    private async Task RebuildAsync(LibraryListItem? item)
+    {
+        if (item is null)
         {
-            var ok = await _dialogs.ConfirmAsync(
-                "Bibliothek neu scannen?",
-                "Alle Katalogdaten dieser Bibliothek werden neu aufgebaut; Favoriten und Bewertungen gehen dabei verloren.\n\n" +
-                "Hinweis: Der echte Diff-Rescan, der nur Änderungen übernimmt und Favoriten behält, kommt in Welle 2.",
-                "Neu aufbauen",
-                isDestructive: true).ConfigureAwait(true);
-            if (!ok)
-            {
-                return;
-            }
+            return;
         }
 
-        await StartScanAsync(item, mode).ConfigureAwait(true);
+        if (item.IsEmpty)
+        {
+            await StartScanAsync(item, ScanMode.Fresh).ConfigureAwait(true);
+            return;
+        }
+
+        var ok = await _dialogs.ConfirmAsync(
+            "Bibliothek neu aufbauen?",
+            "Alle Katalogdaten dieser Bibliothek werden gelöscht und neu aufgebaut; Favoriten, Bewertungen und " +
+            "Vorschaubilder gehen dabei verloren.\n\n" +
+            "Tipp: „Aktualisieren“ übernimmt nur Änderungen und behält Favoriten und Bewertungen.",
+            "Neu aufbauen",
+            isDestructive: true).ConfigureAwait(true);
+        if (!ok)
+        {
+            return;
+        }
+
+        await StartScanAsync(item, ScanMode.ClearAndRescan).ConfigureAwait(true);
     }
 
     [RelayCommand(CanExecute = nameof(IsScanning))]
@@ -318,7 +348,10 @@ public sealed partial class LibraryViewModel : ObservableObject
     [RelayCommand]
     private void DismissScanSummary() => IsScanSummaryOpen = false;
 
-    /// <summary>Scan ohne Rückfragen starten (Aufrufer hat bestätigt). Aktiviert die Bibliothek vorher, falls nötig.</summary>
+    /// <summary>
+    /// Scan ohne weitere Rückfragen starten (Aufrufer hat bestätigt). Aktiviert die Bibliothek vorher, falls nötig.
+    /// Führt die Dialoge des Offline-vs-Missing-Guards (PLAN Kap. 12) und wiederholt den Scan je nach Antwort.
+    /// </summary>
     internal async Task StartScanAsync(LibraryListItem item, ScanMode mode)
     {
         if (IsScanning)
@@ -332,9 +365,103 @@ public sealed partial class LibraryViewModel : ObservableObject
             await _libraries.SetActiveAsync(item.Id).ConfigureAwait(true);
         }
 
+        var options = ScanOptions.Default;
+        while (true)
+        {
+            var result = await RunScanOnceAsync(item, mode, options).ConfigureAwait(true);
+            if (result is null)
+            {
+                return; // abgebrochen oder fehlgeschlagen — bereits gemeldet
+            }
+
+            switch (result.Outcome)
+            {
+                case ScanOutcome.MassMissingBlocked:
+                {
+                    var choice = await _scanDialogs.ShowChoiceAsync(
+                        "Ungewöhnlich viele Dateien fehlen",
+                        $"Beim Scan wurden {result.MissingDetected:N0} fehlende Dateien erkannt. " +
+                        "Das kann passieren, wenn ein Laufwerk nicht vollständig verfügbar ist.",
+                        "Erneut prüfen",
+                        "Als fehlend markieren",
+                        "Abbrechen",
+                        secondaryIsDestructive: true).ConfigureAwait(true);
+
+                    if (choice == LibraryDialogChoice.Primary)
+                    {
+                        mode = ScanMode.Incremental;
+                        options = ScanOptions.Default;
+                        continue;
+                    }
+
+                    if (choice == LibraryDialogChoice.Secondary)
+                    {
+                        _logger.LogInformation("Mass-Missing bestätigt: {Count} Dateien werden als fehlend markiert", result.MissingDetected);
+                        mode = ScanMode.Incremental;
+                        options = new ScanOptions { ConfirmMassMissing = true };
+                        continue;
+                    }
+
+                    ShowSummary(
+                        "Scan abgebrochen",
+                        $"„{item.Name}“: {result.MissingDetected:N0} fehlende Dateien wurden nicht markiert. " +
+                        $"Übernommen wurden {ChangesText(result)}",
+                        warning: true);
+                    return;
+                }
+
+                case ScanOutcome.LibraryOffline:
+                {
+                    var retry = await _dialogs.ConfirmAsync(
+                        "Bibliothek offline",
+                        $"{result.RootPath} ist nicht erreichbar.\nBitte Laufwerk anschließen oder Netzwerkverbindung prüfen.",
+                        "Erneut prüfen",
+                        cancelText: "Andere Bibliothek wählen").ConfigureAwait(true);
+                    if (retry)
+                    {
+                        continue;
+                    }
+
+                    ShowSummary(
+                        "Bibliothek offline",
+                        $"„{item.Name}“: {result.RootPath} ist nicht erreichbar. " +
+                        (result.HasChanges
+                            ? $"Bis zum Abbruch übernommen: {ChangesText(result)} Es wurde nichts als fehlend markiert."
+                            : "Der Katalog wurde nicht verändert."),
+                        warning: true);
+                    _navigation.NavigateTo(NavigationTags.Library);
+                    return;
+                }
+
+                default:
+                {
+                    ShowSummary(
+                        result.Mode == ScanMode.Incremental ? "Aktualisierung abgeschlossen" : "Scan abgeschlossen",
+                        CompletedSummary(item, result),
+                        warning: false);
+                    if (result.Mode != ScanMode.Incremental || result.HasChanges)
+                    {
+                        _navigation.NavigateTo(NavigationTags.Gallery);
+                    }
+
+                    return;
+                }
+            }
+        }
+    }
+
+    /// <summary>Ein Scan-Durchlauf mit Fortschrittspanel; null bei Abbruch oder Fehler (beides bereits gemeldet).</summary>
+    private async Task<ScanResult?> RunScanOnceAsync(LibraryListItem item, ScanMode mode, ScanOptions options)
+    {
         ErrorMessage = null;
         IsScanSummaryOpen = false;
         ScanLibraryName = item.Name;
+        ScanActionText = mode switch
+        {
+            ScanMode.Incremental => "Aktualisiere",
+            ScanMode.ClearAndRescan => "Baue neu auf:",
+            _ => "Scanne",
+        };
         ScanPhaseText = Formatting.ScanPhase(ScanPhase.Enumerating);
         ScanFolders = 0;
         ScanFiles = 0;
@@ -349,33 +476,33 @@ public sealed partial class LibraryViewModel : ObservableObject
 
         // Progress<T> stellt die Callbacks auf den UI-Thread (SynchronizationContext beim Erzeugen)
         var progress = new Progress<ScanProgress>(ApplyProgress);
-        _logger.LogInformation("Scan gestartet: {Name} (Id={Id}) Modus={Mode}", item.Name, item.Id, mode);
+        _logger.LogInformation(
+            "Scan gestartet: {Name} (Id={Id}) Modus={Mode} ConfirmMassMissing={Confirm}",
+            item.Name, item.Id, mode, options.ConfirmMassMissing);
 
         try
         {
-            var result = await _scanner.ScanAsync(item.Id, mode, progress, _scanCts.Token).ConfigureAwait(true);
-            ShowSummary(
-                "Scan abgeschlossen",
-                $"„{item.Name}“: {result.FilesInserted:N0} Dateien in {result.FoldersInserted:N0} Ordnern " +
-                $"({Formatting.Bytes(result.TotalBytes)}) in {Formatting.Duration(result.TotalDuration)} katalogisiert.",
-                warning: false);
+            var result = await _scanner.ScanAsync(item.Id, mode, options, progress, _scanCts.Token).ConfigureAwait(true);
             _logger.LogInformation(
-                "Scan fertig: {Name} — {Files} Dateien, {Folders} Ordner, {Fts} FTS-Zeilen in {Sec:N1} s",
-                item.Name, result.FilesInserted, result.FoldersInserted, result.FtsRowsInserted, result.TotalDuration.TotalSeconds);
-
-            await LoadAsync().ConfigureAwait(true);
-            _navigation.NavigateTo(NavigationTags.Gallery);
+                "Scan beendet: {Name} — {Outcome}: {Added} neu, {Modified} geändert, {Missing} fehlend ({Detected} erkannt), {Reappeared} wieder da, {Folders} neue Ordner in {Sec:N1} s",
+                item.Name, result.Outcome, result.Added, result.Modified, result.MarkedMissing, result.MissingDetected, result.Reappeared, result.FoldersAdded, result.TotalDuration.TotalSeconds);
+            return result;
         }
         catch (OperationCanceledException)
         {
-            ShowSummary("Scan abgebrochen", "Der Scan wurde abgebrochen; unvollständige Daten wurden verworfen.", warning: true);
-            await LoadAsync().ConfigureAwait(true);
+            ShowSummary(
+                "Scan abgebrochen",
+                mode == ScanMode.Incremental
+                    ? "Die Aktualisierung wurde abgebrochen. Bereits übernommene Änderungen bleiben erhalten; es wurde nichts als fehlend markiert."
+                    : "Der Scan wurde abgebrochen; unvollständige Daten wurden verworfen.",
+                warning: true);
+            return null;
         }
         catch (Exception ex)
         {
             ErrorMessage = $"Scan fehlgeschlagen: {ex.Message}";
             _logger.LogError(ex, "Scan fehlgeschlagen: {Name} (Id={Id})", item.Name, item.Id);
-            await LoadAsync().ConfigureAwait(true);
+            return null;
         }
         finally
         {
@@ -384,24 +511,21 @@ public sealed partial class LibraryViewModel : ObservableObject
             IsScanning = false;
             _scanCts.Dispose();
             _scanCts = null;
+            await LoadAsync().ConfigureAwait(true);
         }
     }
 
-    /// <summary>Rauchtest-Pfad (SmokeTestRunner): Bibliothek auf rootPath anlegen, falls nötig, und scannen.</summary>
+    /// <summary>Rauchtest-Pfad (SmokeTestRunner): Bibliothek auf rootPath anlegen, falls nötig, und wie per Primärknopf scannen (Fresh bzw. Incremental).</summary>
     internal async Task RunSmokeScanAsync(string rootPath)
     {
-        await LoadAsync().ConfigureAwait(true);
+        var item = await EnsureSmokeLibraryAsync(rootPath).ConfigureAwait(true);
+        await StartScanAsync(item, item.IsEmpty ? ScanMode.Fresh : ScanMode.Incremental).ConfigureAwait(true);
+    }
 
-        var normalized = LibraryService.NormalizeRootPath(rootPath);
-        var item = Libraries.FirstOrDefault(l =>
-            string.Equals(LibraryService.NormalizeRootPath(l.RootPath), normalized, StringComparison.OrdinalIgnoreCase));
-        if (item is null)
-        {
-            var info = await _libraries.CreateAsync(LibraryService.SuggestName(normalized), normalized).ConfigureAwait(true);
-            await LoadAsync().ConfigureAwait(true);
-            item = Libraries.First(l => l.Id == info.Id);
-        }
-
+    /// <summary>Rauchtest-Pfad: Katalog der Bibliothek auf rootPath neu aufbauen (ClearAndRescan ohne Rückfrage).</summary>
+    internal async Task RunSmokeRebuildAsync(string rootPath)
+    {
+        var item = await EnsureSmokeLibraryAsync(rootPath).ConfigureAwait(true);
         await StartScanAsync(item, item.IsEmpty ? ScanMode.Fresh : ScanMode.ClearAndRescan).ConfigureAwait(true);
     }
 
@@ -410,9 +534,7 @@ public sealed partial class LibraryViewModel : ObservableObject
     {
         await LoadAsync().ConfigureAwait(true);
 
-        var normalized = LibraryService.NormalizeRootPath(rootPath);
-        var item = Libraries.FirstOrDefault(l =>
-            string.Equals(LibraryService.NormalizeRootPath(l.RootPath), normalized, StringComparison.OrdinalIgnoreCase));
+        var item = FindByRoot(rootPath);
         if (item is null)
         {
             return;
@@ -420,6 +542,29 @@ public sealed partial class LibraryViewModel : ObservableObject
 
         await _libraries.DeleteAsync(item.Id).ConfigureAwait(true);
         await LoadAsync().ConfigureAwait(true);
+    }
+
+    private async Task<LibraryListItem> EnsureSmokeLibraryAsync(string rootPath)
+    {
+        await LoadAsync().ConfigureAwait(true);
+
+        var item = FindByRoot(rootPath);
+        if (item is not null)
+        {
+            return item;
+        }
+
+        var normalized = LibraryService.NormalizeRootPath(rootPath);
+        var info = await _libraries.CreateAsync(LibraryService.SuggestName(normalized), normalized).ConfigureAwait(true);
+        await LoadAsync().ConfigureAwait(true);
+        return Libraries.First(l => l.Id == info.Id);
+    }
+
+    private LibraryListItem? FindByRoot(string rootPath)
+    {
+        var normalized = LibraryService.NormalizeRootPath(rootPath);
+        return Libraries.FirstOrDefault(l =>
+            string.Equals(LibraryService.NormalizeRootPath(l.RootPath), normalized, StringComparison.OrdinalIgnoreCase));
     }
 
     private void ApplyProgress(ScanProgress p)
@@ -438,6 +583,27 @@ public sealed partial class LibraryViewModel : ObservableObject
         ScanSummaryIsWarning = warning;
         IsScanSummaryOpen = true;
     }
+
+    private static string CompletedSummary(LibraryListItem item, ScanResult result)
+    {
+        if (result.Mode != ScanMode.Incremental)
+        {
+            return $"„{item.Name}“: {result.FilesInserted:N0} Dateien in {result.FoldersInserted:N0} Ordnern " +
+                   $"({Formatting.Bytes(result.TotalBytes)}) in {Formatting.Duration(result.TotalDuration)} katalogisiert.";
+        }
+
+        if (!result.HasChanges)
+        {
+            return $"„{item.Name}“ ist aktuell — keine Änderungen gefunden ({Formatting.Duration(result.TotalDuration)}).";
+        }
+
+        return $"„{item.Name}“ in {Formatting.Duration(result.TotalDuration)} aktualisiert: {ChangesText(result)}";
+    }
+
+    /// <summary>Zähler des Incremental-Scans als Satzende, z. B. „3 neu, 1 geändert, 2 fehlend, 0 wieder vorhanden, 1 neuer Ordner.“</summary>
+    private static string ChangesText(ScanResult r) =>
+        $"{r.Added:N0} neu, {r.Modified:N0} geändert, {r.MarkedMissing:N0} fehlend, {r.Reappeared:N0} wieder vorhanden, " +
+        (r.FoldersAdded == 1 ? "1 neuer Ordner." : $"{r.FoldersAdded:N0} neue Ordner.");
 
     private void OnElapsedTick(object? sender, EventArgs e) =>
         ScanElapsedText = Formatting.Duration(_scanStopwatch.Elapsed);
