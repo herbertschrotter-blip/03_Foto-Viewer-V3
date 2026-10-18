@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.Messaging;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using PhotoViewerV3.Data;
@@ -16,20 +17,32 @@ namespace PhotoViewerV3.Services.Operations;
 /// Datei-Operationen (Papierkorb, Verschieben, Umbenennen, Undo) mit Protokoll in
 /// OperationBatches/FileOperations gemäß ADR-0012.
 /// Ablauf pro Batch: Batch + alle Items als Pending persistieren → Applying → je Datei erst
-/// Dateisystem, dann Katalog (Files, Folders, Thumbnails, FTS) in einer kurzen Transaktion →
-/// Applied/Failed mit CompletedAtUtc. Fehler einzelner Dateien brechen den Batch nicht ab;
-/// der Batch ist nur Failed, wenn kein Item gelingt.
-/// Status-Regel: der Item-Status beschreibt immer den Dateisystem-Zustand. Scheitert nur das
-/// Katalog-Update nach erfolgreichem Dateisystem-Schritt, bleibt Applied/Undone stehen und
-/// <c>Error</c> trägt den Grund (der nächste Scan heilt den Katalog).
+/// Item auf Applying, dann Dateisystem, dann Katalog (Files, Folders, Thumbnails, FTS) in einer
+/// kurzen Transaktion → Applied/Failed mit CompletedAtUtc. Fehler einzelner Dateien brechen den
+/// Batch nicht ab; der Batch ist nur Failed, wenn kein Item gelingt.
+/// Status-Regel: der Item-Status beschreibt immer den Dateisystem-Zustand. Sobald der
+/// Dateisystem-Schritt erfolgt ist, läuft die Katalog-Buchung ohne CancellationToken zu Ende;
+/// scheitert nur das Katalog-Update, bleibt Applied/Undone stehen und <c>Error</c> trägt den Grund
+/// (der nächste Scan heilt den Katalog). Ein Item im Status Applying nach einem Absturz heißt:
+/// Dateisystem-Schritt begonnen, Ausgang unbekannt (Recovery-Matrix ADR-0012).
 /// Single-Writer: alle Aufrufe laufen nacheinander durch ein SemaphoreSlim; gegenüber anderen
-/// Schreibern (ThumbnailService) fängt busy_timeout=5000 SQLITE_BUSY ab.
-/// Nachrichten: <see cref="FilesChangedMessage"/> (Moved/Removed/Added) je Library nach Batch-Ende.
+/// Schreibern (ThumbnailService) fängt busy_timeout=5000 SQLITE_BUSY ab (Transaktionen sind
+/// BEGIN IMMEDIATE, Microsoft.Data.Sqlite-Standard).
+/// Nachrichten: <see cref="FilesChangedMessage"/> (Moved/Removed/Added) je Library nach Batch-Ende —
+/// auch nach einem Abbruch für die bereits verarbeiteten Dateien.
 /// </summary>
 public sealed class FileOperationService : IFileOperationService, IDisposable
 {
     private const int QueryChunkSize = 500;
     private const int ErrorMaxLen = 500;
+
+    /// <summary>Windows-Gerätenamen: als Dateistamm (auch mit Endung, „CON.jpg“) unter Windows 10 und im Explorer unbrauchbar.</summary>
+    private static readonly HashSet<string> ReservedDeviceNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "CON", "PRN", "AUX", "NUL",
+        "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+        "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    };
 
     private readonly ILibraryContextFactory _factory;
     private readonly IAppDataPaths _paths;
@@ -38,6 +51,9 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
     private readonly ILogger<FileOperationService> _logger;
     private readonly IMessenger _messenger;
     private readonly SemaphoreSlim _writeLock = new(1, 1);
+
+    /// <summary>Ein FTS-'delete' ist gescheitert; nach dem nächsten SaveChanges wird der Index neu aufgebaut (nur unter _writeLock).</summary>
+    private bool _ftsRebuildPending;
 
     public FileOperationService(
         ILibraryContextFactory factory,
@@ -260,11 +276,11 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
             }
             catch (Exception ex)
             {
-                await FinalizeAfterAbortAsync(run.Batch.Id, ex).ConfigureAwait(false);
+                await FinalizeAfterAbortAsync(run, ex).ConfigureAwait(false);
                 throw;
             }
 
-            return await FinishBatchAsync(ctx, run, unknown, ct).ConfigureAwait(false);
+            return await FinishBatchAsync(ctx, run, unknown).ConfigureAwait(false);
         }
         finally
         {
@@ -319,16 +335,16 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
         return new BatchRun { Batch = batch, Items = list };
     }
 
+    /// <summary>Batch-Abschluss ohne CancellationToken: die Dateisystem-Schritte sind erfolgt, die Buchung muss zu Ende laufen.</summary>
     private async Task<FileOperationBatchResult> FinishBatchAsync(
         LibraryContext ctx,
         BatchRun run,
-        IReadOnlyList<FileOperationItemResult> unknown,
-        CancellationToken ct)
+        IReadOnlyList<FileOperationItemResult> unknown)
     {
         var succeeded = run.Results.Count(r => r.Success);
         run.Batch.Status = succeeded > 0 ? BatchStatus.Applied : BatchStatus.Failed;
         run.Batch.CompletedAtUtc = DateTime.UtcNow;
-        await ctx.SaveChangesAsync(ct).ConfigureAwait(false);
+        await ctx.SaveChangesAsync(CancellationToken.None).ConfigureAwait(false);
 
         Publish(run.Changes);
 
@@ -342,12 +358,22 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
     }
 
     /// <summary>
-    /// Nach einer Ausnahme (inkl. Abbruch) mitten im Batch: offene Items als Failed markieren
-    /// und den Batch-Status festschreiben — mit frischem Context, best-effort.
+    /// Nach einer Ausnahme (inkl. Abbruch) mitten im Batch: offene Items als Failed markieren,
+    /// den Batch-Status festschreiben (frischer Context, best-effort) und die Nachrichten für die
+    /// bereits verarbeiteten Dateien senden — deren Dateisystem-Zustand hat sich ja geändert.
     /// </summary>
-    private async Task FinalizeAfterAbortAsync(int batchId, Exception ex)
+    private async Task FinalizeAfterAbortAsync(BatchRun run, Exception ex)
     {
-        _logger.LogError(ex, "Batch {BatchId} abgebrochen", batchId);
+        var batchId = run.Batch.Id;
+        if (ex is OperationCanceledException)
+        {
+            _logger.LogWarning("Batch {BatchId} abgebrochen", batchId);
+        }
+        else
+        {
+            _logger.LogError(ex, "Batch {BatchId} mit Ausnahme abgebrochen", batchId);
+        }
+
         try
         {
             await using var ctx = _factory.Create();
@@ -379,6 +405,8 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
         {
             _logger.LogError(inner, "Batch {BatchId}: Status nach Abbruch konnte nicht gesichert werden", batchId);
         }
+
+        Publish(run.Changes);
     }
 
     // ------------------------------------------------------------------ Item-Ausführung
@@ -388,12 +416,15 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
         string? hint = null;
         if (File.Exists(op.SourcePath))
         {
+            await MarkApplyingAsync(ctx, op, ct).ConfigureAwait(false);
             try
             {
                 _recycleBin.MoveToRecycleBin(op.SourcePath);
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex)
             {
+                // Auch OperationCanceledException: die kommt hier von der Shell (Benutzer-Abbruch im
+                // Fehlerdialog), nicht vom CancellationToken — nur dieses Item scheitert.
                 await FailItemAsync(ctx, run, cf, op, $"Papierkorb: {ex.Message}", ct).ConfigureAwait(false);
                 return;
             }
@@ -403,8 +434,8 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
             hint = "Quelldatei war nicht mehr vorhanden; Katalogeintrag wurde bereinigt.";
         }
 
-        var error = await CommitItemAsync(ctx, op, undo: false, hint, ct,
-            () => RemoveCatalogEntryAsync(ctx, cf.File, ct)).ConfigureAwait(false);
+        var error = await CommitItemAsync(ctx, op, undo: false, hint,
+            token => RemoveCatalogEntryAsync(ctx, cf.File, token)).ConfigureAwait(false);
 
         if (error is null)
         {
@@ -483,6 +514,7 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
             }
         }
 
+        await MarkApplyingAsync(ctx, op, ct).ConfigureAwait(false);
         try
         {
             File.Move(op.SourcePath, dest);
@@ -493,7 +525,7 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
             return;
         }
 
-        var error = await CommitItemAsync(ctx, op, undo: false, null, ct, async () =>
+        var error = await CommitItemAsync(ctx, op, undo: false, null, async token =>
         {
             if (targetFolder is not null)
             {
@@ -501,7 +533,7 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
             }
             else
             {
-                await RemoveCatalogEntryAsync(ctx, cf.File, ct).ConfigureAwait(false);
+                await RemoveCatalogEntryAsync(ctx, cf.File, token).ConfigureAwait(false);
             }
         }).ConfigureAwait(false);
 
@@ -563,6 +595,7 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
             }
         }
 
+        await MarkApplyingAsync(ctx, op, ct).ConfigureAwait(false);
         try
         {
             File.Move(op.SourcePath, dest);
@@ -576,13 +609,13 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
         var newExt = Path.GetExtension(name).ToLowerInvariant();
         var mediaType = _formats.TryClassify(newExt, out var classified) ? classified : cf.File.MediaType;
 
-        var error = await CommitItemAsync(ctx, op, undo: false, null, ct, async () =>
+        var error = await CommitItemAsync(ctx, op, undo: false, null, async token =>
         {
-            await FtsDeleteAsync(ctx, cf.File.Id, oldName, oldExt, ct).ConfigureAwait(false);
+            await FtsDeleteAsync(ctx, cf.File.Id, oldName, oldExt, token).ConfigureAwait(false);
             cf.File.Name = name;
             cf.File.Extension = newExt;
             cf.File.MediaType = mediaType;
-            await FtsInsertAsync(ctx, cf.File.Id, name, newExt, ct).ConfigureAwait(false);
+            await FtsInsertAsync(ctx, cf.File.Id, name, newExt, token).ConfigureAwait(false);
         }).ConfigureAwait(false);
 
         if (error is null)
@@ -642,6 +675,7 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
         catch (Exception ex)
         {
             await RestoreBatchStatusAfterUndoAbortAsync(batch.Id, ex).ConfigureAwait(false);
+            Publish(changes);
             throw;
         }
 
@@ -649,7 +683,7 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
         // gar nichts zurückgenommen → Applied, erneuter Versuch möglich.
         var undone = results.Count(r => r.Success);
         batch.Status = undone > 0 ? BatchStatus.Undone : BatchStatus.Applied;
-        await ctx.SaveChangesAsync(ct).ConfigureAwait(false);
+        await ctx.SaveChangesAsync(CancellationToken.None).ConfigureAwait(false);
 
         Publish(changes);
         _logger.LogInformation(
@@ -680,24 +714,16 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
             return await UndoFailAsync(ctx, op, "Ursprungsort ist inzwischen belegt.", ct).ConfigureAwait(false);
         }
 
-        try
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(source)!);
-            File.Move(dest, source);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            return await UndoFailAsync(ctx, op, $"Zurückverschieben fehlgeschlagen: {ex.Message}", ct).ConfigureAwait(false);
-        }
-
-        // Katalog: Zeile existiert noch (Move innerhalb / Rename) → FolderId/Name zurück;
-        // Zeile fehlt (Move nach außen) → neu anlegen mit Daten aus FileInfo.
+        // Katalogzeile der Datei am Zielort: zuerst über den aktuellen Pfad — nach einem Rescan sind
+        // FileIds neu vergeben, und die protokollierte FileId könnte auf eine fremde Datei zeigen.
+        // Die FileId zählt nur, wenn ihre Zeile noch auf DestPath (oder, bei gescheiterter
+        // Katalog-Buchung, noch auf SourcePath) zeigt.
         var sourceDir = Path.GetDirectoryName(source)!;
         var sourceName = Path.GetFileName(source);
 
-        var row = op.FileId is int fileId
-            ? await ctx.Files.FirstOrDefaultAsync(f => f.Id == fileId, ct).ConfigureAwait(false)
-            : null;
+        var row = await FindCatalogRowByPathAsync(ctx, dest, ct).ConfigureAwait(false)
+                  ?? await FindCatalogRowByIdAsync(ctx, op.FileId, dest, source, ct).ConfigureAwait(false);
+
         var library = row is not null
             ? await ctx.Libraries.FirstOrDefaultAsync(l => l.Id == row.LibraryId, ct).ConfigureAwait(false)
             : await FindLibraryContainingAsync(ctx, sourceDir, ct).ConfigureAwait(false);
@@ -708,12 +734,23 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
             folder = await EnsureFolderChainAsync(ctx, library, sourceDir, ct).ConfigureAwait(false);
         }
 
+        try
+        {
+            Directory.CreateDirectory(sourceDir);
+            File.Move(dest, source);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return await UndoFailAsync(ctx, op, $"Zurückverschieben fehlgeschlagen: {ex.Message}", ct).ConfigureAwait(false);
+        }
+
         var resultFileId = op.FileId ?? 0;
         int? movedId = null;
         int? addedId = null;
+        MediaFile? created = null;
         string? hint = null;
 
-        var error = await CommitItemAsync(ctx, op, undo: true, null, ct, async () =>
+        var error = await CommitItemAsync(ctx, op, undo: true, null, async token =>
         {
             if (row is not null)
             {
@@ -725,18 +762,18 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
                 if (!string.Equals(row.Name, sourceName, StringComparison.Ordinal))
                 {
                     var ext = Path.GetExtension(sourceName).ToLowerInvariant();
-                    await FtsDeleteAsync(ctx, row.Id, row.Name, row.Extension, ct).ConfigureAwait(false);
+                    await FtsDeleteAsync(ctx, row.Id, row.Name, row.Extension, token).ConfigureAwait(false);
                     row.Name = sourceName;
                     row.Extension = ext;
                     row.MediaType = _formats.TryClassify(ext, out var mt) ? mt : row.MediaType;
-                    await FtsInsertAsync(ctx, row.Id, row.Name, row.Extension, ct).ConfigureAwait(false);
+                    await FtsInsertAsync(ctx, row.Id, row.Name, row.Extension, token).ConfigureAwait(false);
                 }
 
                 movedId = row.Id;
             }
             else if (library is not null && folder is not null)
             {
-                var created = await InsertCatalogRowAsync(ctx, library, folder, source, ct).ConfigureAwait(false);
+                created = await InsertCatalogRowAsync(ctx, library, folder, source, token).ConfigureAwait(false);
                 if (created is not null)
                 {
                     addedId = created.Id;
@@ -764,6 +801,12 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
                 changes.Add(library!.Id, FilesChangeKind.Added, a);
                 resultFileId = a;
             }
+        }
+        else if (created is not null)
+        {
+            // Die Zeile wurde innerhalb der zurückgerollten Transaktion angelegt: aus dem Tracker nehmen,
+            // sonst kollidiert ihre (von SQLite wiederverwendete) Id mit dem nächsten Insert.
+            ctx.Entry(created).State = EntityState.Detached;
         }
 
         return new FileOperationItemResult(resultFileId, source, dest, error is null, error ?? hint);
@@ -801,36 +844,53 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
 
     // ------------------------------------------------------------------ Item-Helfer
 
+    /// <summary>Item auf Applying setzen — unmittelbar vor dem Dateisystem-Schritt (Crash-Marker, ADR-0012).</summary>
+    private static Task MarkApplyingAsync(LibraryContext ctx, FileOperation op, CancellationToken ct)
+    {
+        op.Status = FileOperationStatus.Applying;
+        return ctx.SaveChangesAsync(ct);
+    }
+
     /// <summary>
     /// Katalog-Teil eines Items in einer kurzen Transaktion; danach Item-Status Applied bzw. Undone.
-    /// Scheitert der Katalog-Teil, wird der Tracker zurückgesetzt, der Status trotzdem gesetzt
-    /// (Dateisystem-Schritt ist ja erfolgt) und der Fehler als Text zurückgegeben.
+    /// Läuft bewusst ohne CancellationToken: der Dateisystem-Schritt ist bereits erfolgt, ein Abbruch
+    /// hier würde Dateisystem und Katalog auseinanderlaufen lassen. Scheitert der Katalog-Teil, wird
+    /// der Tracker zurückgesetzt, der Status trotzdem gesetzt und der Fehler als Text zurückgegeben.
     /// </summary>
     private async Task<string?> CommitItemAsync(
         LibraryContext ctx,
         FileOperation op,
         bool undo,
         string? hint,
-        CancellationToken ct,
-        Func<Task> catalogWork)
+        Func<CancellationToken, Task> catalogWork)
     {
+        var none = CancellationToken.None;
         try
         {
-            await using var tx = await ctx.Database.BeginTransactionAsync(ct).ConfigureAwait(false);
-            await catalogWork().ConfigureAwait(false);
+            await using var tx = await ctx.Database.BeginTransactionAsync(none).ConfigureAwait(false);
+            await catalogWork(none).ConfigureAwait(false);
             MarkDone(op, undo, hint);
-            await ctx.SaveChangesAsync(ct).ConfigureAwait(false);
-            await tx.CommitAsync(ct).ConfigureAwait(false);
+            await ctx.SaveChangesAsync(none).ConfigureAwait(false);
+            if (_ftsRebuildPending)
+            {
+                // Erst nach dem SaveChanges, damit der Neuaufbau den aktuellen Files-Stand indexiert.
+                await ctx.Database.ExecuteSqlRawAsync("INSERT INTO FilesFts(FilesFts) VALUES('rebuild');", none).ConfigureAwait(false);
+                _ftsRebuildPending = false;
+                _logger.LogWarning("FTS-Index nach fehlgeschlagenem 'delete' neu aufgebaut (Op {OpId})", op.Id);
+            }
+
+            await tx.CommitAsync(none).ConfigureAwait(false);
             return null;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
+            _ftsRebuildPending = false;
             DiscardTrackedChanges(ctx);
             var message = Truncate(
                 $"Katalog-Update fehlgeschlagen (Datei wurde bereits {(undo ? "zurückverschoben" : "verarbeitet")}): {ex.Message}");
-            _logger.LogWarning(ex, "Katalog-Update fehlgeschlagen: Op {OpId} {Source}", op.Id, op.SourcePath);
+            _logger.LogError(ex, "Katalog-Update fehlgeschlagen: Op {OpId} {Source} — Katalog ist bis zum nächsten Scan inkonsistent", op.Id, op.SourcePath);
             MarkDone(op, undo, message);
-            await ctx.SaveChangesAsync(CancellationToken.None).ConfigureAwait(false);
+            await ctx.SaveChangesAsync(none).ConfigureAwait(false);
             return message;
         }
     }
@@ -923,8 +983,60 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
         return (known, unknown);
     }
 
+    /// <summary>Files-Zeile zu einem vollständigen Dateipfad (Ordner über Folders.Path, Name case-insensitiv wie NTFS); null, wenn unbekannt.</summary>
+    private static async Task<MediaFile?> FindCatalogRowByPathAsync(LibraryContext ctx, string fullPath, CancellationToken ct)
+    {
+        var dir = Path.GetDirectoryName(fullPath);
+        var name = Path.GetFileName(fullPath);
+        if (string.IsNullOrEmpty(dir) || string.IsNullOrEmpty(name))
+        {
+            return null;
+        }
+
+        var normalizedDir = NormalizeDirectoryPath(dir);
+        var candidates = new[] { AsciiLower(normalizedDir), AsciiLower(normalizedDir + Path.DirectorySeparatorChar) };
+        var folderIds = await ctx.Folders
+            .Where(f => candidates.Contains(f.Path.ToLower()))
+            .Select(f => f.Id)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        if (folderIds.Count == 0)
+        {
+            return null;
+        }
+
+        var lowerName = AsciiLower(name);
+        return await ctx.Files
+            .Where(f => folderIds.Contains(f.FolderId) && f.Name.ToLower() == lowerName)
+            .OrderBy(f => f.Id)
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>Files-Zeile zur protokollierten FileId — nur, wenn sie noch auf einen der erwarteten Pfade zeigt.</summary>
+    private static async Task<MediaFile?> FindCatalogRowByIdAsync(LibraryContext ctx, int? fileId, string dest, string source, CancellationToken ct)
+    {
+        if (fileId is not int id)
+        {
+            return null;
+        }
+
+        var hit = await ctx.Files
+            .Where(f => f.Id == id)
+            .Join(ctx.Folders, f => f.FolderId, d => d.Id, (f, d) => new { File = f, Folder = d })
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
+        if (hit is null)
+        {
+            return null;
+        }
+
+        var currentPath = Path.Combine(hit.Folder.Path, hit.File.Name);
+        return FilePathEquals(currentPath, dest) || FilePathEquals(currentPath, source) ? hit.File : null;
+    }
+
     /// <summary>FTS-Eintrag (alte Werte), Thumbnails-Zeilen und Files-Zeile entfernen — innerhalb der laufenden Transaktion.</summary>
-    private static async Task RemoveCatalogEntryAsync(LibraryContext ctx, MediaFile file, CancellationToken ct)
+    private async Task RemoveCatalogEntryAsync(LibraryContext ctx, MediaFile file, CancellationToken ct)
     {
         await FtsDeleteAsync(ctx, file.Id, file.Name, file.Extension, ct).ConfigureAwait(false);
         var fileId = file.Id;
@@ -970,9 +1082,26 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
         return row;
     }
 
-    private static Task FtsDeleteAsync(LibraryContext ctx, int id, string name, string extension, CancellationToken ct)
-        => ctx.Database.ExecuteSqlAsync(
-            $"INSERT INTO FilesFts(FilesFts, rowid, Name, Extension) VALUES('delete', {id}, {name}, {extension})", ct);
+    /// <summary>
+    /// FTS5-'delete' mit den ALTEN Werten (Repo-Regel). Scheitert das Kommando (z. B. beschädigter
+    /// Index), wird nach dem nächsten SaveChanges der ganze Index per 'rebuild' neu aufgebaut — ein
+    /// vorheriges <c>SELECT rowid FROM FilesFts WHERE rowid=?</c> ist bei External-Content nicht möglich
+    /// (liest aus Files, nicht aus dem Index).
+    /// </summary>
+    private async Task FtsDeleteAsync(LibraryContext ctx, int id, string name, string extension, CancellationToken ct)
+    {
+        try
+        {
+            await ctx.Database.ExecuteSqlAsync(
+                $"INSERT INTO FilesFts(FilesFts, rowid, Name, Extension) VALUES('delete', {id}, {name}, {extension})", ct)
+                .ConfigureAwait(false);
+        }
+        catch (SqliteException ex)
+        {
+            _logger.LogWarning(ex, "FTS-'delete' für rowid {Id} fehlgeschlagen — Index wird nach dem Commit neu aufgebaut", id);
+            _ftsRebuildPending = true;
+        }
+    }
 
     private static Task FtsInsertAsync(LibraryContext ctx, int id, string name, string extension, CancellationToken ct)
         => ctx.Database.ExecuteSqlAsync(
@@ -982,6 +1111,9 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
     /// Stellt die Folders-Kette von der Library-Root bis <paramref name="folderPath"/> sicher
     /// (Path, ParentId-Kette, Name, ScannedAt) und liefert die Zeile des Zielordners.
     /// Vergleich ASCII-case-insensitiv (wie SQLite <c>lower()</c>); erwartet eine normalisierte Library-Root.
+    /// Der Scanner legt nur Ordner MIT Dateien an, deren ParentId bleibt leer, wenn der Elternordner
+    /// keine Dateien hat — wird so ein Elternordner hier nachgetragen, werden diese verwaisten
+    /// direkten Kinder an ihn gehängt (gemischte Bäume bleiben konsistent).
     /// </summary>
     private static async Task<Folder> EnsureFolderChainAsync(LibraryContext ctx, LibraryEntity library, string folderPath, CancellationToken ct)
     {
@@ -1030,12 +1162,53 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
                 ctx.Folders.Add(row);
                 await ctx.SaveChangesAsync(ct).ConfigureAwait(false); // Id für die ParentId-Kette
                 existing.Add(row);
+                await AttachOrphanChildrenAsync(ctx, row, existing, ct).ConfigureAwait(false);
             }
 
             parent = row;
         }
 
         return parent!;
+    }
+
+    /// <summary>Verwaiste direkte Kindordner (ParentId NULL, Pfad = neuer Ordner + ein Segment) an die neue Zeile hängen.</summary>
+    private static async Task AttachOrphanChildrenAsync(LibraryContext ctx, Folder created, List<Folder> tracked, CancellationToken ct)
+    {
+        var prefix = AsciiLower(NormalizeDirectoryPath(created.Path)) + Path.DirectorySeparatorChar;
+        var prefixLength = prefix.Length;
+        var separator = Path.DirectorySeparatorChar.ToString();
+        var libraryId = created.LibraryId;
+        var createdId = created.Id;
+
+        var attached = await ctx.Folders
+            .Where(f => f.LibraryId == libraryId
+                        && f.ParentId == null
+                        && f.Id != createdId
+                        && f.Path.ToLower().StartsWith(prefix)
+                        && !f.Path.Substring(prefixLength).Contains(separator))
+            .ExecuteUpdateAsync(s => s.SetProperty(f => f.ParentId, createdId), ct)
+            .ConfigureAwait(false);
+
+        if (attached == 0)
+        {
+            return;
+        }
+
+        // Bereits geladene Zeilen (Teil der Kette) nachziehen, damit der Tracker den DB-Stand spiegelt.
+        foreach (var f in tracked)
+        {
+            if (f.Id != createdId && f.ParentId is null && IsDirectChild(f.Path, prefix))
+            {
+                f.ParentId = createdId;
+            }
+        }
+    }
+
+    private static bool IsDirectChild(string path, string lowerPrefix)
+    {
+        var lower = AsciiLower(path);
+        return lower.StartsWith(lowerPrefix, StringComparison.Ordinal)
+               && !lower[lowerPrefix.Length..].Contains(Path.DirectorySeparatorChar);
     }
 
     private static async Task<LibraryEntity?> FindLibraryContainingAsync(LibraryContext ctx, string directory, CancellationToken ct)
@@ -1123,6 +1296,12 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
             throw new ArgumentException("Der Dateiname ist ungültig.", nameof(newName));
         }
 
+        var stem = name.Split('.', 2)[0].TrimEnd();
+        if (ReservedDeviceNames.Contains(stem))
+        {
+            throw new ArgumentException($"„{stem}“ ist ein reservierter Windows-Gerätename.", nameof(newName));
+        }
+
         return name;
     }
 
@@ -1156,6 +1335,10 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
     }
 
     private static bool PathEquals(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Vollständige Dateipfade vergleichen (voll aufgelöst, case-insensitiv wie NTFS).</summary>
+    private static bool FilePathEquals(string a, string b)
+        => string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), StringComparison.OrdinalIgnoreCase);
 
     private static string FolderNameOf(string path)
     {

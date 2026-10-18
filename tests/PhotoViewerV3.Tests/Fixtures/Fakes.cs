@@ -1,4 +1,7 @@
 using CommunityToolkit.Mvvm.Messaging;
+using Microsoft.Data.Sqlite;
+using PhotoViewerV3.Data;
+using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Messaging;
 using PhotoViewerV3.Services.Operations;
 using PhotoViewerV3.Services.Thumbnails;
@@ -14,6 +17,9 @@ public sealed class FakeRecycleBin : IRecycleBin
     public bool DeleteFiles { get; set; } = true;
 
     public Exception? ThrowOnRecycle { get; set; }
+
+    /// <summary>Wird vor dem Löschen aufgerufen — z. B. um mitten im Dateisystem-Schritt abzubrechen oder den DB-Stand zu prüfen.</summary>
+    public Action<string>? OnRecycle { get; set; }
 
     public IReadOnlyList<string> Recycled
     {
@@ -32,6 +38,8 @@ public sealed class FakeRecycleBin : IRecycleBin
         {
             throw ThrowOnRecycle;
         }
+
+        OnRecycle?.Invoke(filePath);
 
         lock (_gate)
         {
@@ -122,6 +130,41 @@ internal static class FakeRenderHelper
         File.Move(tmp, targetThumbPath, overwrite: true);
         return ThumbnailRenderResult.Ok(targetWidth, targetWidth * 3 / 4, new FileInfo(targetThumbPath).Length);
     }
+}
+
+/// <summary>Context-Factory-Dekorator: der n-te <see cref="Create"/>-Aufruf wirft (simulierter DB-Ausfall), alle anderen laufen durch.</summary>
+public sealed class FailingContextFactory : ILibraryContextFactory
+{
+    private readonly ILibraryContextFactory _inner;
+    private int _creates;
+
+    public FailingContextFactory(ILibraryContextFactory inner, int failOnCreate)
+    {
+        _inner = inner;
+        FailOnCreate = failOnCreate;
+    }
+
+    /// <summary>1-basierte Nummer des Create-Aufrufs, der wirft; 0 = nie.</summary>
+    public int FailOnCreate { get; set; }
+
+    public int Creates => Volatile.Read(ref _creates);
+
+    public string DatabasePath => _inner.DatabasePath;
+
+    public string ConnectionString => _inner.ConnectionString;
+
+    public LibraryContext Create()
+    {
+        var n = Interlocked.Increment(ref _creates);
+        if (FailOnCreate > 0 && n == FailOnCreate)
+        {
+            throw new InvalidOperationException($"Simulierter DB-Ausfall bei Create #{n}");
+        }
+
+        return _inner.Create();
+    }
+
+    public SqliteConnection OpenSqliteConnection() => _inner.OpenSqliteConnection();
 }
 
 /// <summary>Sammelt <see cref="FilesChangedMessage"/>s eines Messengers (thread-sicher).</summary>

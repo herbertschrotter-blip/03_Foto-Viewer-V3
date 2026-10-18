@@ -50,4 +50,13 @@ public interface IThumbnailService
     Task RequestThumbnailsAsync(
         IReadOnlyList<ThumbnailRequest> requests,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Verwirft den In-Memory-Zustand (erledigt/fehlgeschlagen) für diese Dateien, sodass der nächste
+    /// Request wieder gegen DB und Cache prüft — z. B. nach Papierkorb, Rescan oder wenn der Benutzer
+    /// einen erneuten Versuch wünscht. Laufende Aufträge bleiben unberührt. Standard: keine Wirkung.
+    /// </summary>
+    void Invalidate(IReadOnlyList<int> fileIds)
+    {
+    }
 }

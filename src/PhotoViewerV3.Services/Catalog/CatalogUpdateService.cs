@@ -12,7 +12,9 @@ namespace PhotoViewerV3.Services.Catalog;
 /// Schreibpfad für Benutzer-Metadaten (Favorit, Bewertung). Set-basiertes
 /// <c>ExecuteUpdateAsync</c> in Chunks zu je <see cref="ChunkSize"/> Ids (SQLite-Parameterlimit,
 /// kurze Schreibläufe), eigener Single-Writer-Lock. Nach dem Update eine
-/// <see cref="FilesChangedMessage"/> (Kind = Metadata) je betroffener Library.
+/// <see cref="FilesChangedMessage"/> (Kind = Metadata) je betroffener Library — auch für die
+/// bereits geschriebenen Chunks, wenn ein späterer Chunk scheitert oder abgebrochen wird
+/// (die UI soll nie hinter der DB zurückbleiben). Ausnahmen von Empfängern werden geloggt.
 /// </summary>
 public sealed class CatalogUpdateService : ICatalogUpdateService, IDisposable
 {
@@ -96,12 +98,23 @@ public sealed class CatalogUpdateService : ICatalogUpdateService, IDisposable
         finally
         {
             _writeLock.Release();
+            Publish(byLibrary);
         }
+    }
 
+    private void Publish(Dictionary<int, List<int>> byLibrary)
+    {
         foreach (var (libraryId, list) in byLibrary)
         {
             _logger.LogDebug("Metadaten aktualisiert: Library={LibraryId} Files={Count}", libraryId, list.Count);
-            _messenger.Send(new FilesChangedMessage(libraryId, FilesChangeKind.Metadata, list));
+            try
+            {
+                _messenger.Send(new FilesChangedMessage(libraryId, FilesChangeKind.Metadata, list));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Empfänger der FilesChangedMessage (Metadata) warf eine Ausnahme");
+            }
         }
     }
 

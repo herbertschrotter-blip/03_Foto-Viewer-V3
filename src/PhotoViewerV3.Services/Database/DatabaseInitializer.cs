@@ -1,11 +1,14 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using PhotoViewerV3.Domain.Enums;
 
 namespace PhotoViewerV3.Services.Database;
 
 /// <summary>
 /// Initialisiert die Library-DB beim App-Start: ggf. Migrations anwenden, Crash-Recovery
-/// für Thumbnail-Status (Pending → Stale gemäß ADR-0007).
+/// für Thumbnail-Status (Pending → Stale gemäß ADR-0007) und Bestandsaufnahme unfertiger
+/// Operations-Batches (Applying/Undoing, ADR-0012) — die werden nur gezählt und geloggt, nicht
+/// verändert: ihr Zustand ist die Grundlage für den späteren Recovery-Dialog.
 /// V0.1-Strategie laut ADR-0005: bis erste produktive Nutzung darf DB neu erzeugt werden,
 /// ab V0.2 strict Migrations + versioniertes Backup.
 /// </summary>
@@ -46,21 +49,34 @@ public sealed class DatabaseInitializer
                 applied.Length);
         }
 
-        // Crash-Recovery: Thumbnails im Status 'Pending' (1) sind nach Abstürzen unklar.
-        // → Auf 'Stale' (4) setzen, damit sie beim nächsten Queue-Run regeneriert werden.
-        var staleRecovered = await ctx.Database.ExecuteSqlRawAsync(
-            "UPDATE Thumbnails SET Status = 4 WHERE Status = 1;",
-            ct).ConfigureAwait(false);
+        // Crash-Recovery: Thumbnails im Status 'Pending' sind nach Abstürzen unklar.
+        // → Auf 'Stale' setzen; der ThumbnailService rendert Stale-Zeilen beim nächsten Request neu.
+        var staleRecovered = await ctx.Thumbnails
+            .Where(t => t.Status == ThumbnailStatus.Pending)
+            .ExecuteUpdateAsync(s => s.SetProperty(t => t.Status, ThumbnailStatus.Stale), ct)
+            .ConfigureAwait(false);
         if (staleRecovered > 0)
         {
             _logger.LogInformation("Crash-Recovery: {Count} Pending-Thumbnails → Stale.", staleRecovered);
+        }
+
+        // Unfertige Datei-Operationen (ADR-0012): nur melden — Recovery-UI folgt.
+        var unfinishedBatches = await ctx.OperationBatches
+            .CountAsync(b => b.Status == BatchStatus.Applying || b.Status == BatchStatus.Undoing, ct)
+            .ConfigureAwait(false);
+        if (unfinishedBatches > 0)
+        {
+            _logger.LogWarning(
+                "{Count} Datei-Operation(en) wurden nicht abgeschlossen (Status Applying/Undoing) — Dateisystem und Katalog können abweichen; nächster Scan gleicht ab.",
+                unfinishedBatches);
         }
 
         return new DatabaseInitResult(
             DatabasePath: _factory.DatabasePath,
             AppliedMigrations: (applied.Length + (migrated ? pending.Length : 0)),
             NewlyMigrated: migrated ? pending.Length : 0,
-            StaleThumbnailsRecovered: staleRecovered);
+            StaleThumbnailsRecovered: staleRecovered,
+            UnfinishedBatches: unfinishedBatches);
     }
 }
 
@@ -68,4 +84,5 @@ public sealed record DatabaseInitResult(
     string DatabasePath,
     int AppliedMigrations,
     int NewlyMigrated,
-    int StaleThumbnailsRecovered);
+    int StaleThumbnailsRecovered,
+    int UnfinishedBatches = 0);

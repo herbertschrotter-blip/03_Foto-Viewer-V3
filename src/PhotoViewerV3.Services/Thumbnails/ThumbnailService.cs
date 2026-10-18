@@ -23,6 +23,12 @@ namespace PhotoViewerV3.Services.Thumbnails;
 /// .tmp+Move liegt in den Renderern. Siehe ADR-0007.
 /// Bilder, die WIC nicht decodieren kann (ErrorCode <c>wic_decode_failed</c>), bekommen einen
 /// zweiten Versuch über den optionalen <see cref="IFallbackImageThumbnailRenderer"/> (FFmpeg).
+/// In-Memory-State: je FileId Ergebnis + <c>SourceModifiedAtUtc</c> der gerenderten Version. Ein
+/// Request mit anderem Zeitstempel (Datei geändert, FileId nach Papierkorb/Rescan wiederverwendet)
+/// verwirft den Eintrag und prüft neu; ein Done-Eintrag ohne Cache-Datei ebenso. Fehlschläge
+/// bleiben für die Session gesperrt (kein Hämmern), außer bei „äußeren“ Ursachen
+/// (<see cref="ThumbnailErrorCodes.SourceMissing"/>, <see cref="ThumbnailErrorCodes.FfmpegNotFound"/>):
+/// die verbrauchen keinen <c>AttemptCount</c> und werden nach <see cref="RetryCooldown"/> erneut versucht.
 /// </summary>
 public sealed class ThumbnailService : IThumbnailService, IDisposable
 {
@@ -30,6 +36,12 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
 
     /// <summary>Nach so vielen gescheiterten Versuchen wird eine Datei nicht mehr eingereiht.</summary>
     public const int MaxAttempts = 3;
+
+    /// <summary>Nach dieser Zeit wird ein Fehlschlag mit äußerer Ursache (Quelle fehlt, FFmpeg fehlt) erneut versucht.</summary>
+    public static readonly TimeSpan RetryCooldown = TimeSpan.FromMinutes(5);
+
+    /// <summary>.tmp-Leichen, die älter sind, gehören keinem laufenden Job mehr und werden beim Start entfernt.</summary>
+    public static readonly TimeSpan TempFileMaxAge = TimeSpan.FromMinutes(2);
 
     private const int ErrorMessageMaxLen = 500;
 
@@ -45,14 +57,19 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
     private readonly Channel<ThumbnailRequest> _videoChannel =
         Channel.CreateUnbounded<ThumbnailRequest>(new UnboundedChannelOptions { SingleReader = false, SingleWriter = false });
 
-    private readonly ConcurrentDictionary<int, JobOutcome> _states = new();
+    private readonly ConcurrentDictionary<int, JobState> _states = new();
     private readonly SemaphoreSlim _dbWriteLock = new(1, 1);
     private readonly CancellationTokenSource _cts = new();
     private readonly List<Task> _workers = new();
     private int _started;
     private int _pending;
+    private int _disposed;
+    private int _ffmpegMissingLogged;
 
     private enum JobOutcome { Queued, Done, Failed }
+
+    /// <summary>Zustand je FileId; <c>Retryable</c>-Fehlschläge dürfen nach <see cref="RetryCooldown"/> erneut laufen.</summary>
+    private readonly record struct JobState(JobOutcome Outcome, DateTime SourceModifiedAtUtc, DateTime AtUtc, bool Retryable);
 
     public ThumbnailService(
         ILibraryContextFactory factory,
@@ -76,11 +93,24 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
 
     public event Action<ThumbnailReadyEventArgs>? ThumbnailReady;
 
+    public void Invalidate(IReadOnlyList<int> fileIds)
+    {
+        ArgumentNullException.ThrowIfNull(fileIds);
+        foreach (var id in fileIds)
+        {
+            // Laufende Jobs behalten ihren Eintrag (Dedupe); der nächste Request validiert ihn ohnehin.
+            if (_states.TryGetValue(id, out var state) && state.Outcome != JobOutcome.Queued)
+            {
+                _states.TryRemove(new KeyValuePair<int, JobState>(id, state));
+            }
+        }
+    }
+
     public async Task RequestThumbnailsAsync(
         IReadOnlyList<ThumbnailRequest> requests,
         CancellationToken cancellationToken = default)
     {
-        if (requests.Count == 0)
+        if (requests.Count == 0 || Volatile.Read(ref _disposed) != 0)
         {
             return;
         }
@@ -91,18 +121,8 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
         var toCheck = new List<ThumbnailRequest>(requests.Count);
         foreach (var req in requests)
         {
-            if (_states.TryGetValue(req.FileId, out var outcome))
+            if (TryHandleKnown(req))
             {
-                if (outcome == JobOutcome.Done)
-                {
-                    var path = BuildCachePath(req.LibraryId, req.FileId);
-                    if (File.Exists(path))
-                    {
-                        ThumbnailReady?.Invoke(new ThumbnailReadyEventArgs(req.LibraryId, req.FileId, path));
-                    }
-                }
-
-                // Queued → in Arbeit, Failed → nicht erneut versuchen (diese Session)
                 continue;
             }
 
@@ -115,7 +135,7 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
         }
 
         // 2) Batch-DB-Check: existierende Thumbnail-Einträge für diese FileIds (ein Query).
-        var ids = toCheck.Select(r => r.FileId).ToList();
+        var ids = toCheck.Select(r => r.FileId).Distinct().ToList();
         Dictionary<int, Thumbnail> existing;
         try
         {
@@ -136,7 +156,7 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
             existing = new Dictionary<int, Thumbnail>();
         }
 
-        // 3) Pro Request entscheiden: cache-hit, skip (zu oft gescheitert) oder enqueue.
+        // 3) Pro Request entscheiden: cache-hit, skip (zu oft gescheitert / kein FFmpeg) oder enqueue.
         foreach (var req in toCheck)
         {
             existing.TryGetValue(req.FileId, out var row);
@@ -146,18 +166,29 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
                 && File.Exists(row.CachePath);
             if (cacheHit)
             {
-                _states[req.FileId] = JobOutcome.Done;
-                ThumbnailReady?.Invoke(new ThumbnailReadyEventArgs(req.LibraryId, req.FileId, row!.CachePath));
+                SetState(req, JobOutcome.Done);
+                RaiseReady(new ThumbnailReadyEventArgs(req.LibraryId, req.FileId, row!.CachePath));
                 continue;
             }
 
             if (row is { Status: ThumbnailStatus.Failed } && row.AttemptCount >= MaxAttempts)
             {
-                _states[req.FileId] = JobOutcome.Failed;
+                SetState(req, JobOutcome.Failed);
                 continue;
             }
 
-            if (_states.TryAdd(req.FileId, JobOutcome.Queued))
+            if (req.MediaType == MediaType.Video && !_videoRenderer.IsAvailable)
+            {
+                if (Interlocked.Exchange(ref _ffmpegMissingLogged, 1) == 0)
+                {
+                    _logger.LogWarning("FFmpeg nicht gefunden — Video-Thumbnails werden in dieser Sitzung übersprungen");
+                }
+
+                SetState(req, JobOutcome.Failed);
+                continue;
+            }
+
+            if (_states.TryAdd(req.FileId, new JobState(JobOutcome.Queued, req.SourceModifiedAtUtc, DateTime.UtcNow, false)))
             {
                 var channel = req.MediaType == MediaType.Video ? _videoChannel : _imageChannel;
                 if (channel.Writer.TryWrite(req))
@@ -171,6 +202,56 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
             }
         }
     }
+
+    /// <summary>
+    /// Behandelt einen Request über den In-Memory-State. True = erledigt (Event gefeuert, läuft schon
+    /// oder bewusst übersprungen); false = Eintrag fehlt/ungültig → DB-Prüfung nötig.
+    /// </summary>
+    private bool TryHandleKnown(ThumbnailRequest req)
+    {
+        if (!_states.TryGetValue(req.FileId, out var state))
+        {
+            return false;
+        }
+
+        if (state.Outcome == JobOutcome.Queued)
+        {
+            return true; // in Arbeit — auch für eine andere Version: der nächste Request validiert neu
+        }
+
+        if (state.SourceModifiedAtUtc != req.SourceModifiedAtUtc)
+        {
+            // Datei geändert oder FileId wiederverwendet (Papierkorb/Rescan) → Zustand verwerfen.
+            _states.TryRemove(new KeyValuePair<int, JobState>(req.FileId, state));
+            return false;
+        }
+
+        if (state.Outcome == JobOutcome.Done)
+        {
+            var path = BuildCachePath(req.LibraryId, req.FileId);
+            if (File.Exists(path))
+            {
+                RaiseReady(new ThumbnailReadyEventArgs(req.LibraryId, req.FileId, path));
+                return true;
+            }
+
+            // Cache-Datei fehlt (gelöscht, Cache geleert) → neu rendern.
+            _states.TryRemove(new KeyValuePair<int, JobState>(req.FileId, state));
+            return false;
+        }
+
+        // Failed: für die Session gesperrt — außer äußere Ursache und Cooldown abgelaufen.
+        if (state.Retryable && DateTime.UtcNow - state.AtUtc >= RetryCooldown)
+        {
+            _states.TryRemove(new KeyValuePair<int, JobState>(req.FileId, state));
+            return false;
+        }
+
+        return true;
+    }
+
+    private void SetState(ThumbnailRequest req, JobOutcome outcome, bool retryable = false)
+        => _states[req.FileId] = new JobState(outcome, req.SourceModifiedAtUtc, DateTime.UtcNow, retryable);
 
     private void EnsureStarted()
     {
@@ -188,30 +269,42 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
         // Video: max. 1 Worker (FFmpeg ist teuer, ADR-0007).
         _workers.Add(Task.Run(() => WorkerLoopAsync(_videoChannel.Reader)));
 
+        // .tmp-Leichen aus abgestürzten Sitzungen entfernen (nur alte, damit laufende Jobs unberührt bleiben).
+        _ = Task.Run(CleanupTempFiles);
+
         _logger.LogInformation(
             "ThumbnailService gestartet: {ImageWorkers} Bild-Worker + 1 Video-Worker (FFmpeg verfügbar: {Ffmpeg})",
             imageWorkers, _videoRenderer.IsAvailable);
     }
 
+    /// <summary>Worker-Schleife: Ausnahmen werden geloggt, der Worker läuft weiter (Pool schrumpft nicht); Ende nur bei Shutdown.</summary>
     private async Task WorkerLoopAsync(ChannelReader<ThumbnailRequest> reader)
     {
-        try
+        var token = _cts.Token;
+        while (!token.IsCancellationRequested)
         {
-            while (await reader.WaitToReadAsync(_cts.Token).ConfigureAwait(false))
+            ThumbnailRequest? current = null;
+            try
             {
+                if (!await reader.WaitToReadAsync(token).ConfigureAwait(false))
+                {
+                    return; // Channel abgeschlossen
+                }
+
                 while (reader.TryRead(out var req))
                 {
+                    current = req;
                     await ProcessJobAsync(req).ConfigureAwait(false);
                 }
             }
-        }
-        catch (OperationCanceledException)
-        {
-            // Shutdown
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Thumbnail-Worker abgestürzt");
+            catch (OperationCanceledException)
+            {
+                return; // Shutdown
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Thumbnail-Worker: unerwartete Ausnahme (File={FileId}) — Worker läuft weiter", current?.FileId);
+            }
         }
     }
 
@@ -220,7 +313,16 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
         var cachePath = BuildCachePath(req.LibraryId, req.FileId);
         try
         {
-            await UpsertStatusAsync(req, ThumbnailStatus.Pending, cachePath, null).ConfigureAwait(false);
+            if (!File.Exists(req.SourcePath))
+            {
+                // Quelle fehlt (Offline-Root, gelöscht): kein Renderer, kein Versuch verbraucht.
+                var missing = ThumbnailRenderResult.Fail(ThumbnailErrorCodes.SourceMissing, $"Quelldatei fehlt: {req.SourcePath}");
+                await UpsertStatusAsync(req, ThumbnailStatus.Failed, cachePath, missing, attemptDelta: 0).ConfigureAwait(false);
+                SetState(req, JobOutcome.Failed, retryable: true);
+                return;
+            }
+
+            await UpsertStatusAsync(req, ThumbnailStatus.Pending, cachePath, null, attemptDelta: +1).ConfigureAwait(false);
 
             ThumbnailRenderResult result = req.MediaType == MediaType.Video
                 ? await _videoRenderer.RenderAsync(req.SourcePath, cachePath, Size, _cts.Token).ConfigureAwait(false)
@@ -228,14 +330,25 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
 
             if (result.Success)
             {
-                await UpsertStatusAsync(req, ThumbnailStatus.Generated, cachePath, result).ConfigureAwait(false);
-                _states[req.FileId] = JobOutcome.Done;
-                ThumbnailReady?.Invoke(new ThumbnailReadyEventArgs(req.LibraryId, req.FileId, cachePath));
+                // Das Thumbnail existiert — ein Fehler beim Status-Schreiben darf es nicht verstecken
+                // (die Zeile bleibt Pending → beim nächsten Start Stale → erneut gerendert).
+                try
+                {
+                    await UpsertStatusAsync(req, ThumbnailStatus.Generated, cachePath, result, attemptDelta: 0).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    _logger.LogWarning(ex, "Thumb erzeugt, aber DB-Status konnte nicht geschrieben werden: File={FileId}", req.FileId);
+                }
+
+                SetState(req, JobOutcome.Done);
+                RaiseReady(new ThumbnailReadyEventArgs(req.LibraryId, req.FileId, cachePath));
             }
             else
             {
-                await UpsertStatusAsync(req, ThumbnailStatus.Failed, cachePath, result).ConfigureAwait(false);
-                _states[req.FileId] = JobOutcome.Failed;
+                var retryable = IsRetryable(result.ErrorCode);
+                await UpsertStatusAsync(req, ThumbnailStatus.Failed, cachePath, result, attemptDelta: retryable ? -1 : 0).ConfigureAwait(false);
+                SetState(req, JobOutcome.Failed, retryable);
                 _logger.LogDebug(
                     "Thumb fehlgeschlagen: File={FileId} {Code}: {Msg}",
                     req.FileId, result.ErrorCode, result.ErrorMessage);
@@ -247,7 +360,7 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
         }
         catch (Exception ex)
         {
-            _states[req.FileId] = JobOutcome.Failed;
+            SetState(req, JobOutcome.Failed);
             _logger.LogWarning(ex, "Thumb-Job-Ausnahme: File={FileId}", req.FileId);
         }
         finally
@@ -255,6 +368,10 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
             Interlocked.Decrement(ref _pending);
         }
     }
+
+    /// <summary>Fehlschläge mit äußerer Ursache: die Datei selbst ist nicht „kaputt“, ein späterer Versuch kann gelingen.</summary>
+    private static bool IsRetryable(string? errorCode)
+        => errorCode is ThumbnailErrorCodes.SourceMissing or ThumbnailErrorCodes.FfmpegNotFound;
 
     /// <summary>
     /// Bild via WIC; scheitert WIC am Decoding (<see cref="ThumbnailErrorCodes.WicDecodeFailed"/>)
@@ -283,11 +400,26 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
             $"WIC: {result.ErrorMessage} | FFmpeg: {fallback.ErrorMessage}");
     }
 
+    /// <summary>Abonnenten laufen auf dem Worker-Thread; ihre Ausnahmen dürfen weder Job-Zustand noch Worker beschädigen.</summary>
+    private void RaiseReady(ThumbnailReadyEventArgs args)
+    {
+        try
+        {
+            ThumbnailReady?.Invoke(args);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "ThumbnailReady-Abonnent warf eine Ausnahme (File={FileId})", args.FileId);
+        }
+    }
+
+    /// <param name="attemptDelta">+1 beim Start eines Versuchs (Pending), −1 wenn ein Fehlschlag mit äußerer Ursache den Versuch nicht zählen soll.</param>
     private async Task UpsertStatusAsync(
         ThumbnailRequest req,
         ThumbnailStatus status,
         string cachePath,
-        ThumbnailRenderResult? result)
+        ThumbnailRenderResult? result,
+        int attemptDelta)
     {
         await _dbWriteLock.WaitAsync(_cts.Token).ConfigureAwait(false);
         try
@@ -318,11 +450,12 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
                 entity.Status = status;
             }
 
+            entity.AttemptCount = Math.Max(0, entity.AttemptCount + attemptDelta);
+
             switch (status)
             {
                 case ThumbnailStatus.Pending:
                     entity.LastAttemptAtUtc = DateTime.UtcNow;
-                    entity.AttemptCount += 1;
                     break;
                 case ThumbnailStatus.Generated when result is not null:
                     entity.GeneratedAtUtc = DateTime.UtcNow;
@@ -331,6 +464,7 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
                     entity.ErrorMessage = null;
                     break;
                 case ThumbnailStatus.Failed when result is not null:
+                    entity.LastAttemptAtUtc ??= DateTime.UtcNow;
                     entity.ErrorCode = result.ErrorCode;
                     entity.ErrorMessage = Truncate(result.ErrorMessage, ErrorMessageMaxLen);
                     break;
@@ -344,6 +478,49 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
         }
     }
 
+    /// <summary>Entfernt alte <c>.tmp</c>-Dateien unter <c>thumbs\{libraryId}\</c> — Reste abgestürzter Renderer-Läufe.</summary>
+    private void CleanupTempFiles()
+    {
+        try
+        {
+            var root = _paths.ThumbnailsRoot;
+            if (!Directory.Exists(root))
+            {
+                return;
+            }
+
+            var cutoff = DateTime.UtcNow - TempFileMaxAge;
+            var removed = 0;
+            foreach (var dir in Directory.EnumerateDirectories(root))
+            {
+                foreach (var tmp in Directory.EnumerateFiles(dir, "*.tmp"))
+                {
+                    try
+                    {
+                        if (File.GetLastWriteTimeUtc(tmp) <= cutoff)
+                        {
+                            File.Delete(tmp);
+                            removed++;
+                        }
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        _logger.LogDebug(ex, "Thumbnail-.tmp konnte nicht entfernt werden: {Path}", tmp);
+                    }
+                }
+            }
+
+            if (removed > 0)
+            {
+                _logger.LogInformation("Thumbnail-Cache: {Count} verwaiste .tmp-Dateien entfernt", removed);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Thumbnail-.tmp-Bereinigung übersprungen");
+        }
+    }
+
     private string BuildCachePath(int libraryId, int fileId)
         => Path.Combine(_paths.GetLibraryThumbnailsPath(libraryId), $"{fileId}_{Size}_still.jpg");
 
@@ -352,6 +529,11 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
 
     public void Dispose()
     {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        {
+            return;
+        }
+
         _cts.Cancel();
         _imageChannel.Writer.TryComplete();
         _videoChannel.Writer.TryComplete();

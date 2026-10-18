@@ -1,3 +1,4 @@
+using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.EntityFrameworkCore;
 using PhotoViewerV3.Domain.Entities;
 using PhotoViewerV3.Domain.Enums;
@@ -119,6 +120,39 @@ public sealed class CatalogUpdateServiceTests
 
         var message = fx.Messages.FilesChanged.Should().ContainSingle().Subject;
         message.FileIds.Should().HaveCount(1200).And.NotContain(999_999);
+    }
+
+    [Fact]
+    public async Task Empfaenger_Ausnahme_bricht_das_Update_nicht_ab()
+    {
+        using var fx = await TempLibraryFixture.CreateAsync();
+        var (_, alphaId, _) = await ArrangeScannedLibraryAsync(fx);
+        using var svc = fx.CreateCatalogUpdateService();
+        var recipient = new object();
+        IMessenger messenger = fx.Messenger;
+        messenger.Register<object, FilesChangedMessage>(recipient, static (_, _) => throw new InvalidOperationException("Empfänger kaputt"));
+
+        var act = () => svc.SetFavoriteAsync(new[] { alphaId }, true);
+
+        await act.Should().NotThrowAsync();
+        (await fx.FindFileByIdAsync(alphaId))!.IsFavorite.Should().BeTrue();
+        fx.Messages.OfKind(FilesChangeKind.Metadata).Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task Vorab_abgebrochenes_Token_aendert_nichts_und_sendet_keine_Nachricht()
+    {
+        using var fx = await TempLibraryFixture.CreateAsync();
+        var (_, alphaId, _) = await ArrangeScannedLibraryAsync(fx);
+        using var svc = fx.CreateCatalogUpdateService();
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var act = () => svc.SetFavoriteAsync(new[] { alphaId }, true, cts.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        (await fx.FindFileByIdAsync(alphaId))!.IsFavorite.Should().BeFalse();
+        fx.Messages.FilesChanged.Should().BeEmpty();
     }
 
     [Fact]
