@@ -4,6 +4,7 @@ using PhotoViewerV3.Data.RawSql;
 using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Infrastructure;
 using PhotoViewerV3.Services.Scanning;
+using PhotoViewerV3.Services.Thumbnails;
 
 namespace PhotoViewerV3.Services;
 
@@ -28,6 +29,11 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<FtsIndexer>();
         services.TryAddSingleton<FolderEnumerator>();
         services.TryAddSingleton<IScanService, ScanService>();
+
+        // Thumbnails — Video-Renderer (FFmpeg) ist WPF-frei und lebt hier.
+        // Der Bild-Renderer (WIC/IImageThumbnailRenderer) wird vom Wpf-Projekt registriert.
+        services.TryAddSingleton<IVideoThumbnailRenderer, FfmpegVideoThumbnailer>();
+        services.TryAddSingleton<IThumbnailService, ThumbnailService>();
 
         return services;
     }

@@ -5,6 +5,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:data="clr-namespace:PhotoViewerV3.Spike02.Data"
+             xmlns:vm="clr-namespace:PhotoViewerV3.Spike02.ViewModels"
              mc:Ignorable="d"
              d:DesignWidth="900"
              d:DesignHeight="600">
@@ -87,7 +88,7 @@
                         </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
-                        <DataTemplate DataType="{x:Type data:GalleryFileDto}">
+                        <DataTemplate DataType="{x:Type vm:GalleryItem}">
                             <Border Margin="6"
                                     CornerRadius="6"
                                     Background="{DynamicResource ControlFillColorDefaultBrush}"
@@ -99,8 +100,8 @@
                                         <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
 
-                                    <!-- Placeholder media area -->
-                                    <Grid Grid.Row="0">
+                                    <!-- Media area: Thumbnail überlagert die Platzhalter-Icons, sobald geladen -->
+                                    <Grid Grid.Row="0" ClipToBounds="True">
                                         <ui:SymbolIcon Symbol="Image24"
                                                        FontSize="48"
                                                        Foreground="{DynamicResource TextFillColorTertiaryBrush}"
@@ -114,6 +115,13 @@
                                                            HorizontalAlignment="Center"
                                                            VerticalAlignment="Center" />
                                         </Grid>
+
+                                        <!-- Echtes Vorschaubild (null → Icons bleiben sichtbar) -->
+                                        <Image Source="{Binding Thumbnail}"
+                                               Stretch="UniformToFill"
+                                               HorizontalAlignment="Stretch"
+                                               VerticalAlignment="Stretch"
+                                               RenderOptions.BitmapScalingMode="HighQuality" />
                                         <!-- Favorite badge top right -->
                                         <TextBlock Text="&#x2665;"
                                                    FontSize="16"

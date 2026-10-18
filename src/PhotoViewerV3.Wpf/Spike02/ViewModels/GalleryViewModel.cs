@@ -2,24 +2,32 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using PhotoViewerV3.Services.Database;
+using PhotoViewerV3.Services.Thumbnails;
 using PhotoViewerV3.Spike02.Data;
 
 namespace PhotoViewerV3.Spike02.ViewModels;
 
 public sealed partial class GalleryViewModel : ObservableObject
 {
+    private const int TileImageWidth = 180;
+
     private readonly ILibraryContextFactory _contextFactory;
     private readonly GalleryPageSource _source;
+    private readonly IThumbnailService _thumbnails;
     private readonly ILogger<GalleryViewModel> _logger;
+    private readonly Dictionary<int, GalleryItem> _currentItems = new();
 
     private CancellationTokenSource? _activeLoadCts;
     private bool _isInitialized;
@@ -29,15 +37,18 @@ public sealed partial class GalleryViewModel : ObservableObject
     public GalleryViewModel(
         ILibraryContextFactory contextFactory,
         GalleryPageSource source,
+        IThumbnailService thumbnails,
         ILogger<GalleryViewModel> logger)
     {
         _contextFactory = contextFactory;
         _source = source;
+        _thumbnails = thumbnails;
         _logger = logger;
-        CurrentPage = new ObservableCollection<GalleryFileDto>();
+        CurrentPage = new ObservableCollection<GalleryItem>();
+        _thumbnails.ThumbnailReady += OnThumbnailReady;
     }
 
-    public ObservableCollection<GalleryFileDto> CurrentPage { get; }
+    public ObservableCollection<GalleryItem> CurrentPage { get; }
 
     [ObservableProperty] private int _pageIndex;
     [ObservableProperty] private int _pageSize = 500;
@@ -268,27 +279,110 @@ public sealed partial class GalleryViewModel : ObservableObject
         return new GalleryQuery(_libraryId, Filter, term);
     }
 
-    private Task ReplaceItemsAsync(IReadOnlyList<GalleryFileDto> rows)
+    private async Task ReplaceItemsAsync(IReadOnlyList<GalleryFileDto> rows)
+    {
+        var items = new List<GalleryItem>(rows.Count);
+        foreach (var r in rows)
+        {
+            items.Add(new GalleryItem(r));
+        }
+
+        await DispatchAsync(() =>
+        {
+            CurrentPage.Clear();
+            _currentItems.Clear();
+            foreach (var it in items)
+            {
+                CurrentPage.Add(it);
+                _currentItems[it.Id] = it;
+            }
+        }).ConfigureAwait(false);
+
+        // Thumbnails für die jetzt sichtbare Page anfordern (Service dedupliziert + cached).
+        var requests = new List<ThumbnailRequest>(items.Count);
+        foreach (var it in items)
+        {
+            requests.Add(new ThumbnailRequest(_libraryId, it.Id, it.SourcePath, it.MediaType, it.SourceModifiedAtUtc));
+        }
+
+        try
+        {
+            await _thumbnails.RequestThumbnailsAsync(requests).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Thumbnail-Anforderung fehlgeschlagen");
+        }
+    }
+
+    private void OnThumbnailReady(ThumbnailReadyEventArgs args)
+    {
+        if (args.LibraryId != _libraryId)
+        {
+            return;
+        }
+
+        // Bitmap auf dem Worker-Thread laden + freezen (hält den Decode vom UI-Thread fern),
+        // dann nur das Property-Setzen auf den UI-Thread dispatchen.
+        var image = TryLoadThumbnail(args.ThumbnailPath);
+        if (image is null)
+        {
+            return;
+        }
+
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher is null)
+        {
+            return;
+        }
+
+        dispatcher.InvokeAsync(() =>
+        {
+            if (_currentItems.TryGetValue(args.FileId, out var item))
+            {
+                item.Thumbnail = image;
+            }
+        });
+    }
+
+    private static ImageSource? TryLoadThumbnail(string path)
+    {
+        try
+        {
+            if (!File.Exists(path))
+            {
+                return null;
+            }
+
+            var bmp = new BitmapImage();
+            bmp.BeginInit();
+            bmp.CacheOption = BitmapCacheOption.OnLoad;
+            bmp.CreateOptions = BitmapCreateOptions.IgnoreColorProfile;
+            bmp.DecodePixelWidth = TileImageWidth;
+            using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+            {
+                bmp.StreamSource = fs;
+                bmp.EndInit();
+            }
+
+            bmp.Freeze();
+            return bmp;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static Task DispatchAsync(Action action)
     {
         var dispatcher = Application.Current?.Dispatcher;
         if (dispatcher is null || dispatcher.CheckAccess())
         {
-            CurrentPage.Clear();
-            foreach (var r in rows)
-            {
-                CurrentPage.Add(r);
-            }
-
+            action();
             return Task.CompletedTask;
         }
 
-        return dispatcher.InvokeAsync(() =>
-        {
-            CurrentPage.Clear();
-            foreach (var r in rows)
-            {
-                CurrentPage.Add(r);
-            }
-        }).Task;
+        return dispatcher.InvokeAsync(action).Task;
     }
 }

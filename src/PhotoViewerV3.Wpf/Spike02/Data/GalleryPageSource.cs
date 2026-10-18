@@ -70,7 +70,8 @@ public sealed class GalleryPageSource : IDisposable
                 Size: reader.GetInt64(4),
                 ModifiedAtUnix: reader.GetInt64(5),
                 MediaType: reader.GetInt32(6),
-                IsFavorite: reader.GetInt32(7) == 1));
+                IsFavorite: reader.GetInt32(7) == 1,
+                FolderPath: reader.GetString(8)));
         }
 
         return rows;
@@ -81,9 +82,10 @@ public sealed class GalleryPageSource : IDisposable
         if (query.HasSearch)
         {
             return $"""
-                SELECT f.Id, f.FolderId, f.Name, f.Extension, f.Size, f.ModifiedAtUtc, f.MediaType, f.IsFavorite
+                SELECT f.Id, f.FolderId, f.Name, f.Extension, f.Size, f.ModifiedAtUtc, f.MediaType, f.IsFavorite, fo.Path
                 FROM FilesFts ft
                 JOIN Files f ON f.Id = ft.rowid
+                JOIN Folders fo ON fo.Id = f.FolderId
                 WHERE FilesFts MATCH $term
                   AND f.LibraryId = $libId
                   {BuildFilterClause(query.Filter, "f.")}
@@ -93,11 +95,12 @@ public sealed class GalleryPageSource : IDisposable
         }
 
         return $"""
-            SELECT Id, FolderId, Name, Extension, Size, ModifiedAtUtc, MediaType, IsFavorite
-            FROM Files
-            WHERE LibraryId = $libId
-              {BuildFilterClause(query.Filter, "")}
-            ORDER BY ModifiedAtUtc DESC, Id DESC
+            SELECT f.Id, f.FolderId, f.Name, f.Extension, f.Size, f.ModifiedAtUtc, f.MediaType, f.IsFavorite, fo.Path
+            FROM Files f
+            JOIN Folders fo ON fo.Id = f.FolderId
+            WHERE f.LibraryId = $libId
+              {BuildFilterClause(query.Filter, "f.")}
+            ORDER BY f.ModifiedAtUtc DESC, f.Id DESC
             LIMIT $pageSize OFFSET $offset;
             """;
     }

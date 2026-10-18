@@ -1,0 +1,50 @@
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+using PhotoViewerV3.Domain.Enums;
+
+namespace PhotoViewerV3.Services.Thumbnails;
+
+/// <summary>
+/// Auftrag zur Thumbnail-Erzeugung für eine einzelne Datei. Die aufrufende Schicht
+/// (Gallery) liefert alle nötigen Quell-Infos mit, sodass der Worker ohne weiteren
+/// DB-Roundtrip rendern kann.
+/// </summary>
+public sealed record ThumbnailRequest(
+    int LibraryId,
+    int FileId,
+    string SourcePath,
+    MediaType MediaType,
+    DateTime SourceModifiedAtUtc);
+
+/// <summary>Meldung, dass ein Thumbnail bereitsteht (neu erzeugt oder bereits im Cache gültig).</summary>
+public sealed record ThumbnailReadyEventArgs(int LibraryId, int FileId, string ThumbnailPath);
+
+/// <summary>
+/// Hintergrund-Pipeline für Thumbnail-Erzeugung gemäß ADR-0007 / PLAN Kap. 13.
+/// V0.1: eine Größe (320px), getrennte Worker-Pools für Bild (WIC) und Video (FFmpeg),
+/// In-Memory-Dedupe, DB-Status-Lifecycle + atomic Write in den Renderern.
+/// Die volle 4-Prio-Multi-Channel-Queue (Background-Batching für 500k) folgt in einem
+/// Folge-Slice — dieses Interface trägt sie ohne Bruch.
+/// </summary>
+public interface IThumbnailService
+{
+    /// <summary>Kantenlänge (px) der V0.1-Thumbnails.</summary>
+    int ThumbnailSize { get; }
+
+    /// <summary>
+    /// Wird gefeuert, sobald ein Thumbnail bereitsteht. Achtung: läuft auf einem
+    /// Worker-Thread — Abonnenten müssen selbst auf den UI-Thread dispatchen.
+    /// </summary>
+    event Action<ThumbnailReadyEventArgs>? ThumbnailReady;
+
+    /// <summary>
+    /// Reiht eine Batch von Aufträgen ein (typischerweise die sichtbare Grid-Page).
+    /// Bereits gültig vorhandene Thumbnails werden sofort via <see cref="ThumbnailReady"/>
+    /// gemeldet, der Rest wird dedupliziert in die Worker-Queues geschrieben.
+    /// </summary>
+    Task RequestThumbnailsAsync(
+        IReadOnlyList<ThumbnailRequest> requests,
+        CancellationToken cancellationToken = default);
+}

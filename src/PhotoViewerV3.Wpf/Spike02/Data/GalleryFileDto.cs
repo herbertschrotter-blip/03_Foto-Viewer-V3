@@ -16,7 +16,8 @@ public sealed record GalleryFileDto(
     long Size,
     long ModifiedAtUnix,
     int MediaType,
-    bool IsFavorite)
+    bool IsFavorite,
+    string FolderPath)
 {
     public bool IsVideo => MediaType == 1;
     public string SizeDisplay => Size switch
