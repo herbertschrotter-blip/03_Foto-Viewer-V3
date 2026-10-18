@@ -2,6 +2,11 @@
                  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 xmlns:shell="clr-namespace:PhotoViewerV3.Shell"
+                 xmlns:library="clr-namespace:PhotoViewerV3.Library"
+                 xmlns:folders="clr-namespace:PhotoViewerV3.Folders"
+                 xmlns:settings="clr-namespace:PhotoViewerV3.Settings"
+                 xmlns:gallery="clr-namespace:PhotoViewerV3.Spike02.Views"
                  Title="PhotoViewer V3"
                  Height="800"
                  Width="1280"
@@ -13,67 +18,55 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <ui:TitleBar Grid.Row="0" Title="PhotoViewer V3" />
 
+        <!-- Seiten werden über TargetPageType + INavigationViewPageProvider (DI, gecacht) aufgelöst;
+             SelectionChanged feuert damit zuverlässig (WPF-UI navigiert nur bei gesetztem TargetPageType). -->
         <ui:NavigationView x:Name="MainNav"
                            Grid.Row="1"
                            PaneDisplayMode="Left"
-                           OpenPaneLength="260"
+                           OpenPaneLength="220"
                            IsBackButtonVisible="Collapsed">
 
             <ui:NavigationView.MenuItems>
-                <ui:NavigationViewItem Content="Alle Fotos" Tag="placeholder">
+                <ui:NavigationViewItem Content="Bibliothek"
+                                       TargetPageTag="library"
+                                       TargetPageType="{x:Type library:LibraryPage}">
+                    <ui:NavigationViewItem.Icon>
+                        <ui:SymbolIcon Symbol="Library24" />
+                    </ui:NavigationViewItem.Icon>
+                </ui:NavigationViewItem>
+                <ui:NavigationViewItem Content="Galerie"
+                                       TargetPageTag="gallery"
+                                       TargetPageType="{x:Type gallery:GalleryView}">
                     <ui:NavigationViewItem.Icon>
                         <ui:SymbolIcon Symbol="Image24" />
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
-                <ui:NavigationViewItem Content="Videos" Tag="placeholder">
-                    <ui:NavigationViewItem.Icon>
-                        <ui:SymbolIcon Symbol="Video24" />
-                    </ui:NavigationViewItem.Icon>
-                </ui:NavigationViewItem>
-                <ui:NavigationViewItem Content="Favoriten" Tag="placeholder">
-                    <ui:NavigationViewItem.Icon>
-                        <ui:SymbolIcon Symbol="Heart24" />
-                    </ui:NavigationViewItem.Icon>
-                </ui:NavigationViewItem>
-                <ui:NavigationViewItem Content="Ordner" Tag="placeholder">
+                <ui:NavigationViewItem Content="Ordner"
+                                       TargetPageTag="folders"
+                                       TargetPageType="{x:Type folders:FolderTreePage}">
                     <ui:NavigationViewItem.Icon>
                         <ui:SymbolIcon Symbol="Folder24" />
-                    </ui:NavigationViewItem.Icon>
-                </ui:NavigationViewItem>
-                <ui:NavigationViewItem x:Name="SpikeGalleryItem"
-                                       Content="Gallery"
-                                       Tag="spike-gallery"
-                                       PreviewMouseLeftButtonDown="SpikeGalleryItem_OnPreviewMouseLeftButtonDown">
-                    <ui:NavigationViewItem.Icon>
-                        <ui:SymbolIcon Symbol="Beaker24" />
-                    </ui:NavigationViewItem.Icon>
-                </ui:NavigationViewItem>
-                <ui:NavigationViewItem x:Name="SpikeLightboxItem"
-                                       Content="Spike: Lightbox"
-                                       Tag="spike-lightbox"
-                                       PreviewMouseLeftButtonDown="SpikeLightboxItem_OnPreviewMouseLeftButtonDown">
-                    <ui:NavigationViewItem.Icon>
-                        <ui:SymbolIcon Symbol="Play24" />
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
             </ui:NavigationView.MenuItems>
 
             <ui:NavigationView.FooterMenuItems>
-                <ui:NavigationViewItem Content="Einstellungen" Tag="placeholder">
+                <ui:NavigationViewItem Content="Einstellungen"
+                                       TargetPageTag="settings"
+                                       TargetPageType="{x:Type settings:SettingsPage}">
                     <ui:NavigationViewItem.Icon>
                         <ui:SymbolIcon Symbol="Settings24" />
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
             </ui:NavigationView.FooterMenuItems>
-
-            <ui:NavigationView.ContentOverlay>
-                <ContentControl x:Name="ContentArea" />
-            </ui:NavigationView.ContentOverlay>
-
         </ui:NavigationView>
+
+        <!-- Statusleiste (ADR-0013): Scan · Vorschaubilder · Hintergrund · Hinweise -->
+        <shell:StatusBar Grid.Row="2" DataContext="{Binding StatusBar}" />
     </Grid>
 </ui:FluentWindow>

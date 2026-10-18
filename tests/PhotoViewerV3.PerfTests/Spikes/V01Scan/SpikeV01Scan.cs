@@ -10,6 +10,7 @@ using PhotoViewerV3.Data.RawSql;
 using PhotoViewerV3.Domain.Entities;
 using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Infrastructure;
+using PhotoViewerV3.Services.Library;
 using PhotoViewerV3.Services.Media;
 using PhotoViewerV3.Services.Scanning;
 
@@ -103,7 +104,8 @@ internal static class SpikeV01Scan
         var enumerator = new FolderEnumerator(new MediaFormatRegistry(), NullLogger<FolderEnumerator>.Instance);
         var writer = new BulkScanWriter();
         var ftsIndexer = new FtsIndexer();
-        var service = new ScanService(factory, enumerator, writer, ftsIndexer, NullLogger<ScanService>.Instance);
+        var libraryService = new LibraryService(factory, paths, NullLogger<LibraryService>.Instance);
+        var service = new ScanService(factory, enumerator, writer, ftsIndexer, libraryService, NullLogger<ScanService>.Instance);
 
         var progress = new Progress<ScanProgress>(p =>
         {

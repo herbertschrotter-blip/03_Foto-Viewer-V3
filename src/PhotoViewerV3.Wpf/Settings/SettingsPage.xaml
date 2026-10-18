@@ -1,0 +1,178 @@
+<UserControl x:Class="PhotoViewerV3.Settings.SettingsPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:shell="clr-namespace:PhotoViewerV3.Shell"
+             xmlns:local="clr-namespace:PhotoViewerV3.Settings"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance local:SettingsViewModel}"
+             d:DesignWidth="1000"
+             d:DesignHeight="800">
+    <UserControl.Resources>
+        <shell:BoolToVisibilityConverter x:Key="BoolToVis" />
+        <shell:BoolToVisibilityConverter x:Key="InvBoolToVis" Invert="True" />
+
+        <Style x:Key="SectionCard" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="16,12" />
+            <Setter Property="Margin" Value="0,0,0,12" />
+        </Style>
+        <Style x:Key="SectionTitle" TargetType="ui:TextBlock">
+            <Setter Property="FontTypography" Value="BodyStrong" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+        </Style>
+        <Style x:Key="Label" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,0,12,0" />
+        </Style>
+        <Style x:Key="ValueText" TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+            <Setter Property="TextWrapping" Value="NoWrap" />
+        </Style>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="24,12,24,16" MaxWidth="960" HorizontalAlignment="Left">
+            <ui:TextBlock FontTypography="Title" Text="Einstellungen" Margin="0,0,0,12" />
+
+            <ui:InfoBar Title="Fehler" Severity="Error" Message="{Binding ErrorMessage}"
+                        IsOpen="{Binding IsErrorOpen, Mode=TwoWay}" Margin="0,0,0,12" />
+            <ui:InfoBar Severity="Success" Message="{Binding InfoMessage}"
+                        IsOpen="{Binding IsInfoOpen, Mode=TwoWay}" Margin="0,0,0,12" />
+
+            <!-- Darstellung -->
+            <Border Style="{StaticResource SectionCard}">
+                <StackPanel>
+                    <ui:TextBlock Style="{StaticResource SectionTitle}" Text="Darstellung" />
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource Label}" Text="Farbschema" />
+                        <RadioButton Content="Hell" GroupName="Theme" IsChecked="{Binding IsThemeLight, Mode=TwoWay}" Margin="0,0,16,0" />
+                        <RadioButton Content="Dunkel" GroupName="Theme" IsChecked="{Binding IsThemeDark, Mode=TwoWay}" Margin="0,0,16,0" />
+                        <RadioButton Content="System" GroupName="Theme" IsChecked="{Binding IsThemeSystem, Mode=TwoWay}" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Speicherorte -->
+            <Border Style="{StaticResource SectionCard}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <ui:TextBlock Grid.Row="0" Grid.ColumnSpan="3" Style="{StaticResource SectionTitle}" Text="Speicherorte" />
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource Label}" Text="Datenbank" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource ValueText}" ToolTip="{Binding DatabasePath}"><Run Text="{Binding DatabasePath, Mode=OneWay}" /><Run Text=" · " Foreground="{DynamicResource TextFillColorTertiaryBrush}" /><Run Text="{Binding DatabaseSizeText, Mode=OneWay}" Foreground="{DynamicResource TextFillColorTertiaryBrush}" /></TextBlock>
+                    <ui:Button Grid.Row="1" Grid.Column="2" Content="Ordner öffnen" Icon="{ui:SymbolIcon FolderOpen24}"
+                               Command="{Binding OpenDatabaseFolderCommand}" Margin="12,2" />
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" Style="{StaticResource Label}" Text="Protokolle" />
+                    <TextBlock Grid.Row="2" Grid.Column="1" Style="{StaticResource ValueText}" Text="{Binding LogsPath}" ToolTip="{Binding LogsPath}" />
+                    <ui:Button Grid.Row="2" Grid.Column="2" Content="Öffnen" Icon="{ui:SymbolIcon FolderOpen24}"
+                               Command="{Binding OpenLogsFolderCommand}" Margin="12,2" />
+                </Grid>
+            </Border>
+
+            <!-- Vorschaubilder -->
+            <Border Style="{StaticResource SectionCard}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <ui:TextBlock Grid.Row="0" Grid.ColumnSpan="3" Style="{StaticResource SectionTitle}" Text="Vorschaubilder (Thumbnail-Cache)" />
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource Label}" Text="Ordner" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource ValueText}" Text="{Binding ThumbnailsPath}" ToolTip="{Binding ThumbnailsPath}" />
+                    <ui:Button Grid.Row="1" Grid.Column="2" Content="Öffnen" Icon="{ui:SymbolIcon FolderOpen24}"
+                               Command="{Binding OpenThumbnailsFolderCommand}" Margin="12,2" />
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" Style="{StaticResource Label}" Text="Belegt" />
+                    <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal">
+                        <ui:ProgressRing IsIndeterminate="True" Width="14" Height="14" Margin="0,0,8,0"
+                                         Visibility="{Binding IsCacheBusy, Converter={StaticResource BoolToVis}}" />
+                        <TextBlock Style="{StaticResource ValueText}" Text="{Binding ThumbnailCacheText}" />
+                    </StackPanel>
+                    <ui:Button Grid.Row="2" Grid.Column="2" Content="Cache leeren" Icon="{ui:SymbolIcon Broom24}"
+                               Command="{Binding ClearThumbnailCacheCommand}" Margin="12,2" />
+                </Grid>
+            </Border>
+
+            <!-- FFmpeg -->
+            <Border Style="{StaticResource SectionCard}">
+                <StackPanel>
+                    <ui:TextBlock Style="{StaticResource SectionTitle}" Text="Video-Vorschau (FFmpeg)" />
+                    <StackPanel Orientation="Horizontal">
+                        <ui:SymbolIcon Symbol="CheckmarkCircle24" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource SystemFillColorSuccessBrush}"
+                                       Visibility="{Binding IsFfmpegAvailable, Converter={StaticResource BoolToVis}}" />
+                        <ui:SymbolIcon Symbol="Warning24" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                       Visibility="{Binding IsFfmpegAvailable, Converter={StaticResource InvBoolToVis}}" />
+                        <TextBlock Text="{Binding FfmpegText}" TextWrapping="Wrap" VerticalAlignment="Center" MaxWidth="760" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="26,8,0,0"
+                                Visibility="{Binding IsFfmpegAvailable, Converter={StaticResource InvBoolToVis}}">
+                        <Border Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                BorderThickness="1" CornerRadius="4" Padding="10,4" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding FfmpegCommandText}" FontFamily="Consolas" />
+                        </Border>
+                        <ui:Button Content="Kopieren" Icon="{ui:SymbolIcon Copy24}" Command="{Binding CopyFfmpegCommandCommand}" Margin="8,0,0,0" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Formate -->
+            <Border Style="{StaticResource SectionCard}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <ui:TextBlock Grid.Row="0" Grid.ColumnSpan="2" Style="{StaticResource SectionTitle}" Text="Unterstützte Formate" />
+                    <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource Label}" Text="Bilder" VerticalAlignment="Top" Margin="0,2,12,6" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding ImageFormatsText}" TextWrapping="Wrap" Margin="0,0,0,6" />
+                    <TextBlock Grid.Row="2" Grid.Column="0" Style="{StaticResource Label}" Text="Videos" VerticalAlignment="Top" Margin="0,2,12,0" />
+                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding VideoFormatsText}" TextWrapping="Wrap" />
+                </Grid>
+            </Border>
+
+            <!-- Über -->
+            <Border Style="{StaticResource SectionCard}">
+                <StackPanel>
+                    <ui:TextBlock Style="{StaticResource SectionTitle}" Text="Über" />
+                    <TextBlock Text="{Binding AppVersionText}" />
+                    <TextBlock Margin="0,4,0,0" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Text="Native Windows-Desktop-App (.NET 10, WPF, WPF-UI, SQLite) für große Foto- und Videobibliotheken." />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

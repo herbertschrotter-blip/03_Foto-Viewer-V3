@@ -4,6 +4,7 @@ using PhotoViewerV3.Data.RawSql;
 using PhotoViewerV3.Services.Catalog;
 using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Infrastructure;
+using PhotoViewerV3.Services.Library;
 using PhotoViewerV3.Services.Media;
 using PhotoViewerV3.Services.Operations;
 using PhotoViewerV3.Services.Scanning;
@@ -27,8 +28,12 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<ILibraryContextFactory, LibraryContextFactory>();
         services.TryAddSingleton<DatabaseInitializer>();
 
-        // Medienformate (Scanner, Renderer, Settings)
-        services.TryAddSingleton<IMediaFormatRegistry, MediaFormatRegistry>();
+        // Medienformate (Scanner, Renderer, Settings) — Factory, weil Microsoft.DI sonst den Konstruktor
+        // (IEnumerable<string>, IEnumerable<string>) mit zwei LEEREN Listen wählt und kein Format erkannt wird.
+        services.TryAddSingleton<IMediaFormatRegistry>(_ => new MediaFormatRegistry());
+
+        // Bibliotheken (Services/Library)
+        services.AddLibrary();
 
         // Scanning (Data/RawSql + Services/Scanning)
         services.TryAddSingleton<BulkScanWriter>();

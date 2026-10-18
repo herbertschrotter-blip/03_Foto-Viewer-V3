@@ -56,7 +56,7 @@ public sealed class FolderEnumerator
             }
             catch (UnauthorizedAccessException ex)
             {
-                _logger.LogDebug(ex, "Keine Berechtigung auf Folder: {Path}", folder);
+                _logger.LogWarning(ex, "Keine Berechtigung auf Folder (übersprungen): {Path}", folder);
                 continue;
             }
             catch (IOException ex)
@@ -109,7 +109,7 @@ public sealed class FolderEnumerator
             }
             catch (UnauthorizedAccessException ex)
             {
-                _logger.LogDebug(ex, "Keine Berechtigung auf Subfolder-Listing: {Path}", folder);
+                _logger.LogWarning(ex, "Keine Berechtigung auf Subfolder-Listing (übersprungen): {Path}", folder);
             }
             catch (IOException ex)
             {

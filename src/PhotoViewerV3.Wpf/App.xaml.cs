@@ -7,6 +7,8 @@ using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Infrastructure;
 using PhotoViewerV3.Services.Thumbnails;
 using PhotoViewerV3.Lightbox;
+using PhotoViewerV3.Settings;
+using PhotoViewerV3.Shell;
 using PhotoViewerV3.Thumbnails;
 using PhotoViewerV3.Spike02.Data;
 using PhotoViewerV3.Spike02.ViewModels;
@@ -29,7 +31,8 @@ public partial class App : Application
 
     public App()
     {
-        var paths = new AppDataPaths();
+        // Produktiv %LocalAppData%\PhotoViewerV3; per PHOTOVIEWERV3_APPDATA umlenkbar (Rauchtests mit frischer DB)
+        var paths = AppDataRootOverride.Resolve();
         paths.EnsureDirectoriesExist();
 
         Log.Logger = new LoggerConfiguration()
@@ -65,6 +68,9 @@ public partial class App : Application
         // definierten IImageThumbnailRenderer-Interfaces.
         services.AddSingleton<IImageThumbnailRenderer, WicImageThumbnailRenderer>();
         services.AddLightbox();
+
+        // Shell: Navigation, Statusleiste, Theme, Seiten Bibliothek/Ordner/Einstellungen (Wpf/Shell)
+        services.AddShell();
 
         // Spike #2 — Virtual Grid
         services.AddSingleton<GalleryPageSource>();
@@ -105,6 +111,16 @@ public partial class App : Application
                 MessageBoxImage.Error);
             Shutdown(1);
             return;
+        }
+
+        // Theme (Hell/Dunkel/System) aus der Settings-Tabelle anwenden, bevor das Hauptfenster entsteht
+        try
+        {
+            await _host.Services.GetRequiredService<IThemeService>().InitializeAsync().ConfigureAwait(true);
+        }
+        catch (Exception themeEx)
+        {
+            Log.Warning(themeEx, "Theme konnte nicht angewendet werden — Standard-Theme bleibt aktiv");
         }
 
         var mainWindow = _host.Services.GetRequiredService<MainWindow>();

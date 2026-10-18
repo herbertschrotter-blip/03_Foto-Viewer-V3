@@ -24,13 +24,35 @@ public sealed record DiscoveredFolder(
     string Name);
 
 /// <summary>
+/// Phase eines laufenden Scans (für Statusleiste und Scan-Panel).
+/// </summary>
+public enum ScanPhase
+{
+    /// <summary>Filesystem wird durchsucht (CurrentPath = aktueller Ordner).</summary>
+    Enumerating = 0,
+
+    /// <summary>ClearAndRescan: alte Katalogdaten werden entfernt.</summary>
+    Clearing = 1,
+
+    /// <summary>Folders/Files werden in die DB geschrieben (FilesDiscovered = bereits geschriebene Zeilen).</summary>
+    Persisting = 2,
+
+    /// <summary>FTS5-Suchindex wird befüllt.</summary>
+    Indexing = 3,
+}
+
+/// <summary>
 /// Progress-Event für UI-Feedback während eines Scans.
 /// </summary>
 public sealed record ScanProgress(
     int FoldersDiscovered,
     int FilesDiscovered,
     long TotalBytesDiscovered,
-    string? CurrentPath);
+    string? CurrentPath)
+{
+    /// <summary>Aktuelle Phase; Default Enumerating, damit bestehende Aufrufer unverändert bleiben.</summary>
+    public ScanPhase Phase { get; init; } = ScanPhase.Enumerating;
+}
 
 /// <summary>
 /// Ergebnis eines abgeschlossenen Scans, inkl. Zähler und Timing.

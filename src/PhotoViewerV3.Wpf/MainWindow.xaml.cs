@@ -1,95 +1,104 @@
 using System;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Input;
-using Microsoft.Extensions.DependencyInjection;
-using PhotoViewerV3.Spike02.Views;
-using PhotoViewerV3.Spike03.Views;
-using Serilog;
+using Microsoft.Extensions.Logging;
+using PhotoViewerV3.Settings;
+using PhotoViewerV3.Shell;
+using Wpf.Ui.Abstractions;
+using Wpf.Ui.Appearance;
 using Wpf.Ui.Controls;
-using WpfTextBlock = System.Windows.Controls.TextBlock;
 
 namespace PhotoViewerV3;
 
+/// <summary>
+/// Hauptfenster: NavigationView (Bibliothek, Galerie, Ordner, Einstellungen) + Statusleiste.
+/// Seiten kommen über den NavigationPageProvider aus DI; Navigation läuft über NavigationView.Navigate(tag),
+/// Klicks werden per SelectionChanged an den NavigationService zurückgemeldet.
+/// </summary>
 public partial class MainWindow : FluentWindow
 {
+    private readonly ShellViewModel _shell;
+    private readonly NavigationService _navigation;
+    private readonly IThemeService _theme;
     private readonly IServiceProvider _services;
-    private FrameworkElement? _placeholder;
-    private GalleryView? _galleryView;
-    private SpikeLightboxView? _lightboxView;
+    private readonly ILogger<MainWindow> _logger;
+    private bool _watchingSystemTheme;
 
-    public MainWindow(IServiceProvider services)
+    public MainWindow(
+        ShellViewModel shell,
+        NavigationService navigation,
+        INavigationViewPageProvider pageProvider,
+        IThemeService theme,
+        IServiceProvider services,
+        ILogger<MainWindow> logger)
     {
+        _shell = shell;
+        _navigation = navigation;
+        _theme = theme;
         _services = services;
+        _logger = logger;
+
         InitializeComponent();
-        ContentArea.Content = BuildPlaceholder(
-            "Wähle einen Bereich links.\n\n'Gallery' zeigt das paged virtualisierte Grid auf der aktiven Library.");
+        DataContext = shell;
 
-        Loaded += MainWindow_OnLoaded;
+        MainNav.SetPageProviderService(pageProvider);
+        MainNav.SelectionChanged += OnNavSelectionChanged;
+        navigation.Attach(tag => MainNav.Navigate(tag));
+        theme.ModeChanged += OnThemeModeChanged;
+
+        Loaded += OnLoaded;
     }
 
-    private void MainWindow_OnLoaded(object sender, RoutedEventArgs e)
+    private async void OnLoaded(object sender, RoutedEventArgs e)
     {
-        Log.Information("MainWindow geladen, NavigationView vorhanden: {HasNav}", MainNav is not null);
-        if (MainNav is not null)
+        Loaded -= OnLoaded;
+        try
         {
-            MainNav.SelectionChanged += OnNavSelectionChanged;
+            _logger.LogInformation("MainWindow geladen — Theme-Modus {Mode}", _theme.Mode);
+            UpdateSystemThemeWatcher(_theme.Mode);
+
+            await _shell.StatusBar.InitializeAsync();
+
+            // Startseite: Galerie, wenn eine aktive Bibliothek existiert, sonst Bibliothek
+            var startTag = await _shell.ResolveStartPageAsync();
+            _logger.LogInformation("Startseite: {Tag}", startTag);
+            _navigation.NavigateTo(startTag);
+
+            await SmokeTestRunner.RunIfRequestedAsync(_services, _navigation, _logger);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Fehler beim Initialisieren des Hauptfensters");
         }
     }
 
-    private void OnNavSelectionChanged(NavigationView sender, RoutedEventArgs e)
+    private void OnNavSelectionChanged(NavigationView sender, RoutedEventArgs args)
     {
-        var item = sender.SelectedItem as NavigationViewItem;
-        Log.Information("NavigationView SelectionChanged: SelectedItem={Item} Tag={Tag}",
-            item?.Content, item?.Tag);
-        ApplySelection(item?.Tag as string, item?.Content?.ToString());
-    }
-
-    private void SpikeGalleryItem_OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-    {
-        Log.Information("Spike-Gallery NavItem Click (PreviewMouseLeftButtonDown)");
-        ApplySelection("spike-gallery", "Spike: Gallery");
-    }
-
-    private void SpikeLightboxItem_OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-    {
-        Log.Information("Spike-Lightbox NavItem Click (PreviewMouseLeftButtonDown)");
-        ApplySelection("spike-lightbox", "Spike: Lightbox");
-    }
-
-    private void ApplySelection(string? tag, string? label)
-    {
-        switch (tag)
+        var item = sender.SelectedItem;
+        var tag = item?.TargetPageTag;
+        _logger.LogInformation("NavigationView SelectionChanged: Tag={Tag} Seite={Page}", tag, item?.TargetPageType?.Name);
+        if (!string.IsNullOrEmpty(tag))
         {
-            case "spike-gallery":
-                ContentArea.Content = _galleryView ??= _services.GetRequiredService<GalleryView>();
-                return;
-            case "spike-lightbox":
-                ContentArea.Content = _lightboxView ??= _services.GetRequiredService<SpikeLightboxView>();
-                return;
-            default:
-                ContentArea.Content = BuildPlaceholder($"'{label ?? "?"}' ist im V0.1-Backlog — noch nicht implementiert.");
-                return;
+            _navigation.NotifyNavigated(tag);
         }
     }
 
-    private FrameworkElement BuildPlaceholder(string message)
+    private void OnThemeModeChanged(object? sender, AppThemeMode mode) => UpdateSystemThemeWatcher(mode);
+
+    /// <summary>Im Modus „System“ dem Windows-Farbschema live folgen, sonst den Watcher abhängen.</summary>
+    private void UpdateSystemThemeWatcher(AppThemeMode mode)
     {
-        if (_placeholder is null)
+        if (mode == AppThemeMode.System)
         {
-            _placeholder = new WpfTextBlock
+            if (!_watchingSystemTheme)
             {
-                FontSize = 14,
-                Foreground = (System.Windows.Media.Brush)FindResource("TextFillColorSecondaryBrush"),
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-                TextAlignment = TextAlignment.Center,
-                TextWrapping = TextWrapping.Wrap,
-                MaxWidth = 480,
-            };
+                SystemThemeWatcher.Watch(this, WindowBackdropType.Mica, updateAccents: true);
+                _watchingSystemTheme = true;
+            }
         }
-
-        ((WpfTextBlock)_placeholder).Text = message;
-        return _placeholder;
+        else if (_watchingSystemTheme)
+        {
+            SystemThemeWatcher.UnWatch(this);
+            _watchingSystemTheme = false;
+        }
     }
 }

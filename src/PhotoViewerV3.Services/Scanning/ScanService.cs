@@ -1,12 +1,14 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using PhotoViewerV3.Data.RawSql;
-using PhotoViewerV3.Domain.Entities;
 using PhotoViewerV3.Services.Database;
+using PhotoViewerV3.Services.Library;
+using PhotoViewerV3.Services.Messaging;
 
 namespace PhotoViewerV3.Services.Scanning;
 
@@ -20,31 +22,39 @@ public interface IScanService
 }
 
 /// <summary>
-/// Orchestriert einen Initial-Scan: Library laden, Filesystem traversieren,
+/// Orchestriert einen Scan: Library laden, Root prüfen, (optional) Katalog leeren, Filesystem traversieren,
 /// Folders + Files via Raw-SQLite Bulk-Insert persistieren, FTS5 indexieren.
-/// V0.1: nur ScanMode.Fresh — DB muss für die Library leer sein.
+/// Fortschritt geht an das optionale IProgress und gedrosselt als ScanProgressMessage an den Messenger,
+/// am Ende ScanCompletedMessage bzw. ScanAbortedMessage. Fresh und ClearAndRescan; Incremental folgt in Welle 2.
 /// </summary>
 public sealed class ScanService : IScanService
 {
-    private const int ProgressInterval = 5_000;
+    /// <summary>Fortschrittsmeldungen höchstens alle 250 ms oder alle 2000 Dateien (ADR-0013: gedrosselt).</summary>
+    private const int ProgressFileInterval = 2_000;
+    private static readonly TimeSpan ProgressTimeInterval = TimeSpan.FromMilliseconds(250);
+    private const int InsertProgressEvery = 25_000;
 
     private readonly ILibraryContextFactory _contextFactory;
     private readonly FolderEnumerator _enumerator;
     private readonly BulkScanWriter _bulkWriter;
     private readonly FtsIndexer _ftsIndexer;
+    private readonly ILibraryService _libraryService;
     private readonly ILogger<ScanService> _logger;
+    private readonly IMessenger _messenger = WeakReferenceMessenger.Default;
 
     public ScanService(
         ILibraryContextFactory contextFactory,
         FolderEnumerator enumerator,
         BulkScanWriter bulkWriter,
         FtsIndexer ftsIndexer,
+        ILibraryService libraryService,
         ILogger<ScanService> logger)
     {
         _contextFactory = contextFactory;
         _enumerator = enumerator;
         _bulkWriter = bulkWriter;
         _ftsIndexer = ftsIndexer;
+        _libraryService = libraryService;
         _logger = logger;
     }
 
@@ -54,65 +64,121 @@ public sealed class ScanService : IScanService
         IProgress<ScanProgress>? progress,
         CancellationToken cancellationToken)
     {
-        if (mode != ScanMode.Fresh)
+        if (mode == ScanMode.Incremental)
         {
-            throw new NotSupportedException("V0.1 unterstützt nur ScanMode.Fresh.");
+            throw new NotSupportedException(
+                "ScanMode.Incremental (Diff-Rescan mit Offline-vs-Missing-Guard) kommt in Welle 2. " +
+                "Bitte Fresh oder ClearAndRescan verwenden.");
         }
 
+        // Enumeration und Raw-SQLite-Persistenz sind synchrone I/O-Arbeit → nie auf dem UI-Thread laufen lassen.
+        return await Task.Run(() => ScanCoreAsync(libraryId, mode, progress, cancellationToken), cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private async Task<ScanResult> ScanCoreAsync(
+        int libraryId,
+        ScanMode mode,
+        IProgress<ScanProgress>? progress,
+        CancellationToken ct)
+    {
+        var reporter = new ProgressReporter(libraryId, progress, _messenger);
+        try
+        {
+            var result = await RunScanAsync(libraryId, mode, reporter, ct).ConfigureAwait(false);
+            _messenger.Send(new ScanCompletedMessage(libraryId, result));
+            return result;
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogInformation("Scan abgebrochen: Library={LibraryId}", libraryId);
+            _messenger.Send(new ScanAbortedMessage(libraryId, Canceled: true, "Scan abgebrochen."));
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Scan fehlgeschlagen: Library={LibraryId}", libraryId);
+            _messenger.Send(new ScanAbortedMessage(libraryId, Canceled: false, ex.Message));
+            throw;
+        }
+    }
+
+    private async Task<ScanResult> RunScanAsync(int libraryId, ScanMode mode, ProgressReporter reporter, CancellationToken ct)
+    {
         var totalSw = Stopwatch.StartNew();
 
         // 1) Library laden, RootPath holen
-        string rootPath;
-        await using (var ctx = _contextFactory.Create())
-        {
-            var library = await ctx.Libraries.FirstOrDefaultAsync(l => l.Id == libraryId, cancellationToken)
-                .ConfigureAwait(false);
-            if (library is null)
-            {
-                throw new InvalidOperationException($"Library Id={libraryId} nicht gefunden.");
-            }
+        var rootPath = await LoadRootPathAsync(libraryId, ct).ConfigureAwait(false);
 
-            rootPath = library.RootPath;
-
-            // Fresh-Scan-Check: keine bestehenden Folders/Files für diese Library
-            var existingFolders = await ctx.Folders.CountAsync(f => f.LibraryId == libraryId, cancellationToken)
-                .ConfigureAwait(false);
-            var existingFiles = await ctx.Files.CountAsync(f => f.LibraryId == libraryId, cancellationToken)
-                .ConfigureAwait(false);
-            if (existingFolders > 0 || existingFiles > 0)
-            {
-                throw new InvalidOperationException(
-                    $"ScanMode.Fresh: Library {libraryId} ist nicht leer ({existingFolders} Folders, {existingFiles} Files). " +
-                    "Re-Scan ist V0.2+.");
-            }
-        }
-
+        // 2) Root erreichbar? — VOR dem Leeren prüfen, damit ein Offline-Laufwerk nie den Katalog löscht (PLAN Kap. 12)
         if (!Directory.Exists(rootPath))
         {
-            throw new DirectoryNotFoundException($"Library-RootPath nicht erreichbar: {rootPath}");
+            throw new DirectoryNotFoundException(
+                $"Der Bibliotheksordner „{rootPath}“ ist nicht erreichbar. " +
+                "Bitte Laufwerk anschließen oder Netzwerkverbindung prüfen.");
         }
 
-        _logger.LogInformation("Scan startet: Library={LibraryId} Root={Root}", libraryId, rootPath);
+        // 3) ClearAndRescan: bestehende Katalogdaten dieser Library löschen (FileIds werden neu vergeben)
+        if (mode == ScanMode.ClearAndRescan)
+        {
+            reporter.Report(new ScanProgress(0, 0, 0, null) { Phase = ScanPhase.Clearing }, force: true);
+            await _libraryService.ClearAsync(libraryId, ct).ConfigureAwait(false);
+        }
 
-        // 2) Enumeration + In-Memory-Aggregation
+        // 4) Fresh-Check: keine bestehenden Folders/Files für diese Library
+        await EnsureLibraryIsEmptyAsync(libraryId, ct).ConfigureAwait(false);
+
+        // 5) Start-Ids: fortlaufend über alle Libraries und nie wiederverwendet (sqlite_sequence) —
+        //    sonst kollidieren die Ids einer zweiten Library und INSERT OR IGNORE verwirft Zeilen still.
+        var (nextFolderId, nextFileId) = ReadNextIds();
+
+        _logger.LogInformation(
+            "Scan startet: Library={LibraryId} Root={Root} Mode={Mode} StartIds Folder={FolderId} File={FileId}",
+            libraryId, rootPath, mode, nextFolderId, nextFileId);
+
+        // 6) Enumeration + In-Memory-Aggregation
         var enumSw = Stopwatch.StartNew();
         var folderMap = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var folderRows = new List<BulkScanWriter.FolderRow>();
         var fileRows = new List<BulkScanWriter.FileRow>();
         long totalBytes = 0;
-        var nextFolderId = 1;
-        var nextFileId = 1;
         var scannedAtUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var lastReport = 0;
+        var rootKey = TrimSeparators(rootPath);
 
-        foreach (var df in _enumerator.Enumerate(rootPath, cancellationToken))
+        // Legt den Ordner und alle fehlenden Zwischenordner bis zum Root an, damit die ParentId-Kette
+        // vollständig ist (Ordnerbaum + Container-Kacheln brauchen auch Ordner ohne direkte Medien).
+        int GetOrCreateFolderId(string folderPath)
         {
-            if (!folderMap.TryGetValue(df.FolderPath, out var folderId))
+            var isRoot = string.Equals(TrimSeparators(folderPath), rootKey, StringComparison.OrdinalIgnoreCase);
+            if (isRoot)
             {
-                folderId = nextFolderId++;
-                folderMap[df.FolderPath] = folderId;
-                folderRows.Add(BuildFolderRow(folderId, libraryId, df.FolderPath, folderMap, scannedAtUnix));
+                folderPath = rootPath; // kanonische Schreibweise des Roots
             }
+
+            if (folderMap.TryGetValue(folderPath, out var existingId))
+            {
+                return existingId;
+            }
+
+            int? parentId = null;
+            if (!isRoot)
+            {
+                var parentPath = Path.GetDirectoryName(folderPath);
+                if (!string.IsNullOrEmpty(parentPath) && TrimSeparators(parentPath).Length >= rootKey.Length)
+                {
+                    parentId = GetOrCreateFolderId(parentPath);
+                }
+            }
+
+            var id = nextFolderId++;
+            folderMap[folderPath] = id;
+            folderRows.Add(new BulkScanWriter.FolderRow(id, libraryId, folderPath, parentId, FolderDisplayName(folderPath), scannedAtUnix));
+            return id;
+        }
+
+        foreach (var df in _enumerator.Enumerate(rootPath, ct))
+        {
+            var folderId = GetOrCreateFolderId(df.FolderPath);
 
             fileRows.Add(new BulkScanWriter.FileRow(
                 Id: nextFileId++,
@@ -133,50 +199,71 @@ public sealed class ScanService : IScanService
                 Missing: false));
 
             totalBytes += df.Size;
-
-            if (fileRows.Count - lastReport >= ProgressInterval)
-            {
-                lastReport = fileRows.Count;
-                progress?.Report(new ScanProgress(folderRows.Count, fileRows.Count, totalBytes, df.FolderPath));
-            }
+            reporter.Report(new ScanProgress(folderRows.Count, fileRows.Count, totalBytes, df.FolderPath));
         }
+
         enumSw.Stop();
-        progress?.Report(new ScanProgress(folderRows.Count, fileRows.Count, totalBytes, null));
+        reporter.Report(new ScanProgress(folderRows.Count, fileRows.Count, totalBytes, null), force: true);
         _logger.LogInformation(
             "Enumeration fertig: {Folders} Folders, {Files} Files, {Bytes:N0} bytes in {Sec:N2} s",
             folderRows.Count, fileRows.Count, totalBytes, enumSw.Elapsed.TotalSeconds);
+        if (fileRows.Count == 0)
+        {
+            _logger.LogWarning(
+                "Keine Mediendateien unter {Root} gefunden — Ordner leer, nur nicht unterstützte Formate oder fehlende Leserechte.",
+                rootPath);
+        }
 
-        // 3) Persistenz via Raw-SQLite
+        // Abbruch vor der Persistenz: nichts schreiben
+        ct.ThrowIfCancellationRequested();
+
+        // 7) Persistenz via Raw-SQLite
         var persistSw = Stopwatch.StartNew();
         BulkScanWriter.InsertReport folderReport;
         BulkScanWriter.InsertReport fileReport;
         FtsIndexer.FtsReport ftsReport;
-        TimeSpan ftsDuration;
+        var ftsPopulated = false;
 
         using (var connection = _contextFactory.OpenSqliteConnection())
         {
-            folderReport = _bulkWriter.InsertFolders(connection, folderRows);
-            _logger.LogInformation(
-                "Folders insert: {In}/{At} in {Ms:N0} ms",
-                folderReport.Inserted, folderReport.Attempted, folderReport.Duration.TotalMilliseconds);
+            try
+            {
+                reporter.Report(new ScanProgress(folderRows.Count, 0, totalBytes, null) { Phase = ScanPhase.Persisting }, force: true);
+                folderReport = _bulkWriter.InsertFolders(connection, folderRows);
+                _logger.LogInformation(
+                    "Folders insert: {In}/{At} in {Ms:N0} ms",
+                    folderReport.Inserted, folderReport.Attempted, folderReport.Duration.TotalMilliseconds);
 
-            fileReport = _bulkWriter.InsertFiles(
-                connection,
-                fileRows,
-                onProgress: (count, elapsed) =>
-                    _logger.LogInformation(
-                        "Files insert progress: {Count}/{Total} ({Pct:N1} %) in {Sec:N1} s",
-                        count, fileRows.Count, 100.0 * count / Math.Max(1, fileRows.Count), elapsed.TotalSeconds),
-                progressEvery: 25_000,
-                ct: cancellationToken);
-            _logger.LogInformation(
-                "Files insert: {In}/{At} in {Sec:N2} s",
-                fileReport.Inserted, fileReport.Attempted, fileReport.Duration.TotalSeconds);
+                fileReport = _bulkWriter.InsertFiles(
+                    connection,
+                    fileRows,
+                    onProgress: (count, elapsed) =>
+                    {
+                        _logger.LogInformation(
+                            "Files insert progress: {Count}/{Total} ({Pct:N1} %) in {Sec:N1} s",
+                            count, fileRows.Count, 100.0 * count / Math.Max(1, fileRows.Count), elapsed.TotalSeconds);
+                        reporter.Report(new ScanProgress(folderRows.Count, count, totalBytes, null) { Phase = ScanPhase.Persisting }, force: true);
+                    },
+                    progressEvery: InsertProgressEvery,
+                    ct: ct);
+                _logger.LogInformation(
+                    "Files insert: {In}/{At} in {Sec:N2} s",
+                    fileReport.Inserted, fileReport.Attempted, fileReport.Duration.TotalSeconds);
 
-            ftsReport = _ftsIndexer.PopulateAll(connection);
-            _logger.LogInformation("FTS5 populated: {Rows} rows in {Ms:N0} ms",
-                ftsReport.RowsInserted, ftsReport.Duration.TotalMilliseconds);
-            ftsDuration = ftsReport.Duration;
+                reporter.Report(new ScanProgress(folderRows.Count, fileRows.Count, totalBytes, null) { Phase = ScanPhase.Indexing }, force: true);
+                ftsReport = _ftsIndexer.PopulateAll(connection);
+                ftsPopulated = true;
+                _logger.LogInformation(
+                    "FTS5 populated: {Rows} rows in {Ms:N0} ms",
+                    ftsReport.RowsInserted, ftsReport.Duration.TotalMilliseconds);
+            }
+            catch
+            {
+                // Keine halben Zustände: alles, was dieser Scan bereits geschrieben hat, wieder entfernen.
+                // Die Library war vor dem Scan leer, daher ist "alles dieser Library löschen" exakt der Vorzustand.
+                RollbackPartialScan(connection, libraryId, ftsPopulated);
+                throw;
+            }
         }
 
         persistSw.Stop();
@@ -191,16 +278,72 @@ public sealed class ScanService : IScanService
             TotalBytes: totalBytes,
             TotalDuration: totalSw.Elapsed,
             EnumerationDuration: enumSw.Elapsed,
-            PersistenceDuration: persistSw.Elapsed - ftsDuration,
-            FtsDuration: ftsDuration);
+            PersistenceDuration: persistSw.Elapsed - ftsReport.Duration,
+            FtsDuration: ftsReport.Duration);
     }
 
-    private static BulkScanWriter.FolderRow BuildFolderRow(
-        int id,
-        int libraryId,
-        string fullPath,
-        Dictionary<string, int> folderMap,
-        long scannedAtUnix)
+    private async Task<string> LoadRootPathAsync(int libraryId, CancellationToken ct)
+    {
+        await using var ctx = _contextFactory.Create();
+        var rootPath = await ctx.Libraries.AsNoTracking()
+            .Where(l => l.Id == libraryId)
+            .Select(l => l.RootPath)
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
+        return rootPath ?? throw new InvalidOperationException($"Library Id={libraryId} nicht gefunden.");
+    }
+
+    private async Task EnsureLibraryIsEmptyAsync(int libraryId, CancellationToken ct)
+    {
+        await using var ctx = _contextFactory.Create();
+        var existingFolders = await ctx.Folders.CountAsync(f => f.LibraryId == libraryId, ct).ConfigureAwait(false);
+        var existingFiles = await ctx.Files.CountAsync(f => f.LibraryId == libraryId, ct).ConfigureAwait(false);
+        if (existingFolders > 0 || existingFiles > 0)
+        {
+            throw new InvalidOperationException(
+                $"ScanMode.Fresh: Library {libraryId} ist nicht leer ({existingFolders} Folders, {existingFiles} Files). " +
+                "Für einen Neuaufbau ScanMode.ClearAndRescan verwenden.");
+        }
+    }
+
+    /// <summary>
+    /// Nächste freie Id je Tabelle: Maximum aus MAX(Id) und dem AUTOINCREMENT-Zähler (sqlite_sequence),
+    /// damit nach ClearAsync keine Ids wiederverwendet werden (Thumbnail-Dedupe und Cache-Dateien sind FileId-basiert).
+    /// </summary>
+    private (int NextFolderId, int NextFileId) ReadNextIds()
+    {
+        using var connection = _contextFactory.OpenSqliteConnection();
+        return (ReadNextId(connection, "Folders"), ReadNextId(connection, "Files"));
+    }
+
+    private static int ReadNextId(SqliteConnection connection, string table)
+    {
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = $"""
+            SELECT MAX(
+                (SELECT COALESCE(MAX(Id), 0) FROM {table}),
+                (SELECT COALESCE(MAX(seq), 0) FROM sqlite_sequence WHERE name = $table)) + 1;
+            """;
+        cmd.Parameters.AddWithValue("$table", table);
+        return Convert.ToInt32(cmd.ExecuteScalar());
+    }
+
+    private void RollbackPartialScan(SqliteConnection connection, int libraryId, bool ftsPopulated)
+    {
+        try
+        {
+            var result = LibraryCatalogCleanup.DeleteLibraryRows(connection, libraryId, _logger, ftsEntriesExpected: ftsPopulated);
+            _logger.LogWarning(
+                "Unvollständiger Scan zurückgerollt: Library={LibraryId} ({Files} Files, {Folders} Folders entfernt, FTS-Rebuild: {Rebuilt})",
+                libraryId, result.Files, result.Folders, result.FtsRebuilt);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Rollback des unvollständigen Scans fehlgeschlagen: Library={LibraryId}", libraryId);
+        }
+    }
+
+    private static string FolderDisplayName(string fullPath)
     {
         var name = Path.GetFileName(fullPath);
         if (string.IsNullOrEmpty(name))
@@ -209,20 +352,48 @@ public sealed class ScanService : IScanService
             name = Path.GetFileName(Path.GetDirectoryName(fullPath) ?? fullPath);
             if (string.IsNullOrEmpty(name))
             {
-                name = fullPath; // Last resort
+                name = fullPath; // Laufwerkswurzel
             }
         }
 
-        var parent = Path.GetDirectoryName(fullPath);
-        int? parentId = null;
-        if (!string.IsNullOrEmpty(parent) && folderMap.TryGetValue(parent, out var p))
-        {
-            parentId = p;
-        }
-
-        return new BulkScanWriter.FolderRow(id, libraryId, fullPath, parentId, name, scannedAtUnix);
+        return name;
     }
+
+    private static string TrimSeparators(string path) =>
+        path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
     private static long ToUnix(DateTime utc) =>
         new DateTimeOffset(DateTime.SpecifyKind(utc, DateTimeKind.Utc)).ToUnixTimeSeconds();
+
+    /// <summary>Drosselt Fortschrittsmeldungen und verteilt sie an IProgress und Messenger.</summary>
+    private sealed class ProgressReporter
+    {
+        private readonly int _libraryId;
+        private readonly IProgress<ScanProgress>? _progress;
+        private readonly IMessenger _messenger;
+        private readonly Stopwatch _sinceLast = Stopwatch.StartNew();
+        private int _filesAtLast = -ProgressFileInterval; // erste Meldung sofort
+
+        public ProgressReporter(int libraryId, IProgress<ScanProgress>? progress, IMessenger messenger)
+        {
+            _libraryId = libraryId;
+            _progress = progress;
+            _messenger = messenger;
+        }
+
+        public void Report(ScanProgress p, bool force = false)
+        {
+            if (!force
+                && p.FilesDiscovered - _filesAtLast < ProgressFileInterval
+                && _sinceLast.Elapsed < ProgressTimeInterval)
+            {
+                return;
+            }
+
+            _filesAtLast = p.FilesDiscovered;
+            _sinceLast.Restart();
+            _progress?.Report(p);
+            _messenger.Send(new ScanProgressMessage(_libraryId, p));
+        }
+    }
 }
