@@ -1,27 +1,17 @@
 using System.Collections.Generic;
 using System.IO;
 using Microsoft.Extensions.Logging;
-using PhotoViewerV3.Domain.Enums;
+using PhotoViewerV3.Services.Media;
 
 namespace PhotoViewerV3.Services.Scanning;
 
 /// <summary>
 /// Durchläuft das Filesystem rekursiv unterhalb eines RootPath und liefert DiscoveredFile-Einträge
-/// für JPG/PNG/MP4. Permission-/IO-Fehler werden geloggt und übersprungen (kein Abbruch des Scans).
-/// V0.1-Filter: .jpg/.jpeg/.png/.mp4 (siehe PLAN Constraints).
+/// für alle Endungen aus dem <see cref="IMediaFormatRegistry"/>. Permission-/IO-Fehler werden
+/// geloggt und übersprungen (kein Abbruch des Scans).
 /// </summary>
 public sealed class FolderEnumerator
 {
-    private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".jpg", ".jpeg", ".png",
-    };
-
-    private static readonly HashSet<string> VideoExtensions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".mp4",
-    };
-
     private static readonly EnumerationOptions Options = new()
     {
         RecurseSubdirectories = false, // wir machen den Rekurs manuell, um Permission-Fehler pro Folder zu behandeln
@@ -29,10 +19,12 @@ public sealed class FolderEnumerator
         AttributesToSkip = FileAttributes.ReparsePoint | FileAttributes.System,
     };
 
+    private readonly IMediaFormatRegistry _formats;
     private readonly ILogger<FolderEnumerator> _logger;
 
-    public FolderEnumerator(ILogger<FolderEnumerator> logger)
+    public FolderEnumerator(IMediaFormatRegistry formats, ILogger<FolderEnumerator> logger)
     {
+        _formats = formats;
         _logger = logger;
     }
 
@@ -80,7 +72,7 @@ public sealed class FolderEnumerator
                 try
                 {
                     var ext = Path.GetExtension(filePath);
-                    if (!TryClassify(ext, out var mediaType))
+                    if (!_formats.TryClassify(ext, out var mediaType))
                     {
                         continue;
                     }
@@ -124,23 +116,5 @@ public sealed class FolderEnumerator
                 _logger.LogWarning(ex, "IO-Fehler auf Subfolder-Listing: {Path}", folder);
             }
         }
-    }
-
-    private static bool TryClassify(string extension, out MediaType mediaType)
-    {
-        if (ImageExtensions.Contains(extension))
-        {
-            mediaType = MediaType.Image;
-            return true;
-        }
-
-        if (VideoExtensions.Contains(extension))
-        {
-            mediaType = MediaType.Video;
-            return true;
-        }
-
-        mediaType = default;
-        return false;
     }
 }

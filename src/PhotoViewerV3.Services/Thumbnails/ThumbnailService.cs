@@ -44,6 +44,7 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
     private readonly CancellationTokenSource _cts = new();
     private readonly List<Task> _workers = new();
     private int _started;
+    private int _pending;
 
     private enum JobOutcome { Queued, Done, Failed }
 
@@ -62,6 +63,8 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
     }
 
     public int ThumbnailSize => Size;
+
+    public int PendingCount => Volatile.Read(ref _pending);
 
     public event Action<ThumbnailReadyEventArgs>? ThumbnailReady;
 
@@ -149,7 +152,14 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
             if (_states.TryAdd(req.FileId, JobOutcome.Queued))
             {
                 var channel = req.MediaType == MediaType.Video ? _videoChannel : _imageChannel;
-                channel.Writer.TryWrite(req);
+                if (channel.Writer.TryWrite(req))
+                {
+                    Interlocked.Increment(ref _pending);
+                }
+                else
+                {
+                    _states.TryRemove(req.FileId, out _);
+                }
             }
         }
     }
@@ -231,6 +241,10 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
         {
             _states[req.FileId] = JobOutcome.Failed;
             _logger.LogWarning(ex, "Thumb-Job-Ausnahme: File={FileId}", req.FileId);
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _pending);
         }
     }
 

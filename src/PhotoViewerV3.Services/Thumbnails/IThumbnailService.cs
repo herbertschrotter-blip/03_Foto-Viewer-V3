@@ -33,6 +33,9 @@ public interface IThumbnailService
     /// <summary>Kantenlänge (px) der V0.1-Thumbnails.</summary>
     int ThumbnailSize { get; }
 
+    /// <summary>Anzahl der eingereihten oder gerade laufenden Aufträge (Statusleiste, ADR-0013). Thread-sicher lesbar.</summary>
+    int PendingCount { get; }
+
     /// <summary>
     /// Wird gefeuert, sobald ein Thumbnail bereitsteht. Achtung: läuft auf einem
     /// Worker-Thread — Abonnenten müssen selbst auf den UI-Thread dispatchen.

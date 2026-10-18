@@ -52,10 +52,18 @@ public sealed record ScanResult(
 /// </summary>
 public enum ScanMode
 {
-    /// <summary>
-    /// Erst-Scan: erwartet leere Folders/Files in der DB für diese Library.
-    /// Wenn nicht leer, Fehler oder optional Clear.
-    /// </summary>
+    /// <summary>Erst-Scan: erwartet leere Folders/Files in der DB für diese Library, sonst Fehler.</summary>
     Fresh = 0,
-    // Incremental kommt ab V0.2.
+
+    /// <summary>
+    /// Bestehende Scan-Daten der Library (Files, Folders, Thumbnails, FTS) löschen und danach wie Fresh scannen.
+    /// FileIds werden dabei neu vergeben.
+    /// </summary>
+    ClearAndRescan = 1,
+
+    /// <summary>
+    /// Diff-Scan: neue Dateien anlegen, nicht mehr vorhandene als Missing markieren, geänderte
+    /// (Size/ModifiedAt) aktualisieren. FileIds bleiben stabil. Mit Offline-vs-Missing-Guard (PLAN Kap. 12).
+    /// </summary>
+    Incremental = 2,
 }

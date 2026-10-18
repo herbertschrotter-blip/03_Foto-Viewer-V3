@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using PhotoViewerV3.Data.RawSql;
 using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Infrastructure;
+using PhotoViewerV3.Services.Media;
 using PhotoViewerV3.Services.Scanning;
 using PhotoViewerV3.Services.Thumbnails;
 
@@ -23,6 +24,9 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<SqlitePragmaInterceptor>();
         services.TryAddSingleton<ILibraryContextFactory, LibraryContextFactory>();
         services.TryAddSingleton<DatabaseInitializer>();
+
+        // Medienformate (Scanner, Renderer, Settings)
+        services.TryAddSingleton<IMediaFormatRegistry, MediaFormatRegistry>();
 
         // Scanning (Data/RawSql + Services/Scanning)
         services.TryAddSingleton<BulkScanWriter>();
