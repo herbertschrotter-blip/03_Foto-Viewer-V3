@@ -27,6 +27,24 @@ public sealed class BoolToVisibilityConverter : IValueConverter
         throw new NotSupportedException();
 }
 
+/// <summary>
+/// null bzw. leerer String → false, sonst true (Invert="True" dreht das um). Für bool-Ziele wie
+/// <c>InfoBar.IsOpen</c>; ein Visibility-Converter liefert dort keinen gültigen Wert (Binding-Fehler).
+/// </summary>
+public sealed class NullToBoolConverter : IValueConverter
+{
+    public bool Invert { get; set; }
+
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        var hasValue = value is string s ? !string.IsNullOrEmpty(s) : value is not null;
+        return Invert ? !hasValue : hasValue;
+    }
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
 /// <summary>null bzw. leerer String → Collapsed, sonst Visible (Invert="True" dreht das um).</summary>
 public sealed class NullToVisibilityConverter : IValueConverter
 {

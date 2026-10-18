@@ -80,7 +80,10 @@ public sealed class LightboxService : ILightboxService, IDisposable
 
     private LightboxWindow CreateWindow(Window? owner)
     {
-        var viewModel = _services.GetRequiredService<LightboxViewModel>();
+        // Bewusst ActivatorUtilities statt GetRequiredService: ein transientes IDisposable, das aus dem
+        // Root-Provider aufgelöst wird, hält der DI-Container bis zum App-Ende fest (Leak pro Lightbox-Öffnung).
+        // Das Fenster besitzt das ViewModel und disposed es beim Schließen selbst.
+        var viewModel = ActivatorUtilities.CreateInstance<LightboxViewModel>(_services);
         var logger = _services.GetRequiredService<ILogger<LightboxWindow>>();
         var window = new LightboxWindow(viewModel, logger);
 

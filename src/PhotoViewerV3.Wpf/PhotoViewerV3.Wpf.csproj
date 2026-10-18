@@ -8,7 +8,14 @@
     <UseWPF>true</UseWPF>
     <RootNamespace>PhotoViewerV3</RootNamespace>
     <AssemblyName>PhotoViewerV3</AssemblyName>
+    <!-- App-Version (Einstellungen → „Über“); ohne Git-Revisions-Suffix, damit die Anzeige „0.2.0“ bleibt -->
+    <Version>0.2.0</Version>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PhotoViewerV3.Wpf.Tests" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\PhotoViewerV3.Domain\PhotoViewerV3.Domain.csproj" />

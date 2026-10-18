@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -19,11 +20,14 @@ namespace PhotoViewerV3.Folders;
 /// Ordnerbaum der aktiven Bibliothek. Lädt alle Folder-Zeilen (eine Query) und die Dateianzahl je Ordner
 /// (eine GroupBy-Query), baut daraus einen In-Memory-Index und materialisiert Knoten lazy beim Aufklappen.
 /// Auswahl → FolderSelectedMessage; „Gesamte Bibliothek“ → FolderId null.
-/// Lädt neu bei ActiveLibraryChangedMessage und ScanCompletedMessage.
+/// Lädt neu bei ActiveLibraryChangedMessage, ScanCompletedMessage und (gebündelt) nach Datei-Operationen
+/// (FilesChangedMessage Moved/Removed/Added: Zähler und neue Ordner); aufgeklappte Knoten und die Auswahl
+/// werden dabei über den Pfad wiederhergestellt.
 /// </summary>
 public sealed partial class FolderTreeViewModel : ObservableObject
 {
     private const string WholeLibraryText = "Gesamte Bibliothek";
+    private const int ReloadDebounceMs = 300;
 
     private sealed record FolderRow(int Id, int? ParentId, string Name, string Path);
 
@@ -39,6 +43,8 @@ public sealed partial class FolderTreeViewModel : ObservableObject
     private FolderNode? _selectedNode;
     private int _libraryId;
     private int? _loadedLibraryId;
+    private bool _reloadPending;
+    private CancellationTokenSource? _reloadDebounce;
 
     [ObservableProperty]
     private bool _isLoading;
@@ -66,6 +72,7 @@ public sealed partial class FolderTreeViewModel : ObservableObject
 
         _messenger.Register<FolderTreeViewModel, ActiveLibraryChangedMessage>(this, static (r, m) => UiThread.Post(() => { _ = r.ReloadAsync(); }));
         _messenger.Register<FolderTreeViewModel, ScanCompletedMessage>(this, static (r, m) => UiThread.Post(() => { _ = r.ReloadAsync(); }));
+        _messenger.Register<FolderTreeViewModel, FilesChangedMessage>(this, static (r, m) => UiThread.Post(() => r.OnFilesChanged(m)));
     }
 
     public ObservableCollection<FolderNode> Roots { get; } = new();
@@ -113,10 +120,39 @@ public sealed partial class FolderTreeViewModel : ObservableObject
             ? rows.Select(CreateNode).ToList()
             : Array.Empty<FolderNode>();
 
+    /// <summary>Datei-Operationen (Papierkorb, Verschieben, Undo) ändern Zähler und legen Ordner an → gebündelt neu laden.</summary>
+    private void OnFilesChanged(FilesChangedMessage message)
+    {
+        if (message.Kind == FilesChangeKind.Metadata || _loadedLibraryId is null || message.LibraryId != _loadedLibraryId)
+        {
+            return;
+        }
+
+        _reloadDebounce?.Cancel();
+        var cts = new CancellationTokenSource();
+        _reloadDebounce = cts;
+        _ = ReloadDebouncedAsync(cts.Token);
+    }
+
+    private async Task ReloadDebouncedAsync(CancellationToken ct)
+    {
+        try
+        {
+            await Task.Delay(ReloadDebounceMs, ct).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        await ReloadAsync().ConfigureAwait(true);
+    }
+
     private async Task ReloadAsync()
     {
         if (IsLoading)
         {
+            _reloadPending = true; // nach dem laufenden Ladevorgang noch einmal (kein Update darf verloren gehen)
             return;
         }
 
@@ -159,6 +195,10 @@ public sealed partial class FolderTreeViewModel : ObservableObject
 
             BuildIndex(rows, counts);
 
+            // Zustand über Pfade merken: aufgeklappte Knoten und Auswahl überleben den Neuaufbau
+            var expandedPaths = CollectExpandedPaths();
+            var selectedPath = _selectedNode?.Path;
+
             Roots.Clear();
             ResetSelection();
             foreach (var root in _rootRows)
@@ -166,9 +206,18 @@ public sealed partial class FolderTreeViewModel : ObservableObject
                 Roots.Add(CreateNode(root));
             }
 
-            if (Roots.Count == 1)
+            if (expandedPaths.Count > 0)
+            {
+                RestoreExpansion(Roots, expandedPaths);
+            }
+            else if (Roots.Count == 1)
             {
                 Roots[0].IsExpanded = true;
+            }
+
+            if (selectedPath is not null)
+            {
+                RestoreSelection(selectedPath);
             }
 
             _loadedLibraryId = active.Id;
@@ -185,6 +234,86 @@ public sealed partial class FolderTreeViewModel : ObservableObject
         {
             IsLoading = false;
         }
+
+        if (_reloadPending)
+        {
+            _reloadPending = false;
+            await ReloadAsync().ConfigureAwait(true);
+        }
+    }
+
+    private HashSet<string> CollectExpandedPaths()
+    {
+        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        void Visit(IEnumerable<FolderNode> nodes)
+        {
+            foreach (var node in nodes)
+            {
+                if (node.IsPlaceholder)
+                {
+                    continue;
+                }
+
+                if (node.IsExpanded)
+                {
+                    result.Add(node.Path);
+                    Visit(node.Children);
+                }
+            }
+        }
+
+        Visit(Roots);
+        return result;
+    }
+
+    private static void RestoreExpansion(IEnumerable<FolderNode> nodes, HashSet<string> expandedPaths)
+    {
+        foreach (var node in nodes)
+        {
+            if (node.IsPlaceholder || !expandedPaths.Contains(node.Path))
+            {
+                continue;
+            }
+
+            node.IsExpanded = true; // lädt die Kinder
+            RestoreExpansion(node.Children, expandedPaths);
+        }
+    }
+
+    /// <summary>Auswahl per Pfad wiederherstellen; der Knoten sendet dabei erneut FolderSelectedMessage (Galerie ignoriert unveränderte Filter).</summary>
+    private void RestoreSelection(string path)
+    {
+        var node = FindLoadedNode(Roots, path);
+        if (node is null)
+        {
+            _logger.LogInformation("Ordnerbaum: zuvor gewählter Ordner existiert nicht mehr: {Path}", path);
+            return;
+        }
+
+        node.IsSelected = true;
+    }
+
+    private static FolderNode? FindLoadedNode(IEnumerable<FolderNode> nodes, string path)
+    {
+        foreach (var node in nodes)
+        {
+            if (node.IsPlaceholder)
+            {
+                continue;
+            }
+
+            if (string.Equals(node.Path, path, StringComparison.OrdinalIgnoreCase))
+            {
+                return node;
+            }
+
+            if (node.IsExpanded && FindLoadedNode(node.Children, path) is { } found)
+            {
+                return found;
+            }
+        }
+
+        return null;
     }
 
     private void BuildIndex(List<FolderRow> rows, Dictionary<int, int> counts)

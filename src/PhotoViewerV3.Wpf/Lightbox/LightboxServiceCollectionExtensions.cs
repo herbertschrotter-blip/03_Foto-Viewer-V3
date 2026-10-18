@@ -15,7 +15,8 @@ public static class LightboxServiceCollectionExtensions
     {
         services.TryAddSingleton<LibVlcHost>();
         services.TryAddSingleton<ILightboxService, LightboxService>();
-        services.AddTransient<LightboxViewModel>();
+        // LightboxViewModel wird NICHT registriert: der LightboxService erzeugt es per ActivatorUtilities
+        // (transientes IDisposable aus dem Root-Provider würde sonst bis zum App-Ende im Container hängen).
         return services;
     }
 }

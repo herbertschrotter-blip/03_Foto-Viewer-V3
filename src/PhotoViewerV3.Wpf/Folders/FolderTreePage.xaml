@@ -14,6 +14,7 @@
         <shell:BoolToVisibilityConverter x:Key="BoolToVis" />
         <shell:BoolToVisibilityConverter x:Key="InvBoolToVis" Invert="True" />
         <shell:NullToVisibilityConverter x:Key="NullToVis" />
+        <shell:NullToBoolConverter x:Key="NullToBool" />
     </UserControl.Resources>
 
     <Grid>
@@ -71,7 +72,7 @@
                             Message="{Binding HintText}"
                             Severity="Warning"
                             IsClosable="False"
-                            IsOpen="{Binding HintText, Converter={StaticResource NullToVis}, Mode=OneWay}"
+                            IsOpen="{Binding HintText, Converter={StaticResource NullToBool}, Mode=OneWay}"
                             Visibility="{Binding HintText, Converter={StaticResource NullToVis}}"
                             Margin="0,0,0,6" />
 

@@ -429,7 +429,7 @@ public sealed class GalleryPageSource : IDisposable
         cmd.Parameters.AddWithValue("$libId", query.LibraryId);
         if (query.HasSearch)
         {
-            cmd.Parameters.AddWithValue("$term", query.SearchTerm!);
+            cmd.Parameters.AddWithValue("$term", BuildFtsMatchExpression(query.SearchTerm!));
         }
 
         if (folder.FolderId is { } folderId)
@@ -444,6 +444,33 @@ public sealed class GalleryPageSource : IDisposable
                 cmd.Parameters.AddWithValue("$folderPrefix", folder.Prefix!);
             }
         }
+    }
+
+    /// <summary>
+    /// FTS5-MATCH-Ausdruck aus freiem Suchtext: jedes Wort als Phrase in Anführungszeichen mit Präfix-Stern
+    /// (<c>"img"* "2024"*</c>, implizites AND). Roher Benutzertext würde bei <c>-</c>, <c>:</c>, Klammern oder
+    /// Anführungszeichen einen FTS5-Syntaxfehler auslösen (Galerie zeigt dann nur „fts5: syntax error“).
+    /// Ein leerer Rest (nur Sonderzeichen) ergibt die leere Phrase <c>""</c>, die nichts trifft.
+    /// </summary>
+    internal static string BuildFtsMatchExpression(string term)
+    {
+        var sb = new StringBuilder();
+        foreach (var word in term.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (!word.Any(char.IsLetterOrDigit))
+            {
+                continue; // reine Sonderzeichen tokenisiert FTS5 ohnehin zu nichts
+            }
+
+            if (sb.Length > 0)
+            {
+                sb.Append(' ');
+            }
+
+            sb.Append('"').Append(word.Replace("\"", "\"\"")).Append("\"*");
+        }
+
+        return sb.Length == 0 ? "\"\"" : sb.ToString();
     }
 
     private static GalleryFileDto ReadRow(SqliteDataReader reader) => new(

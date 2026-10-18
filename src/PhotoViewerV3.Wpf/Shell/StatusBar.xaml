@@ -81,8 +81,18 @@
                 </StackPanel>
             </StackPanel>
 
-            <!-- Rechts: Hinweise · Hintergrund-Aktivität -->
+            <!-- Rechts: Recovery-Hinweis (ADR-0013 Nr. 4) · Hinweise · Hintergrund-Aktivität -->
             <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <StackPanel Orientation="Horizontal"
+                            ToolTip="{Binding RecoveryDetails}"
+                            Visibility="{Binding RecoveryText, Converter={StaticResource NullToVis}}">
+                    <ui:SymbolIcon Symbol="ErrorCircle16"
+                                   Style="{StaticResource StatusIcon}"
+                                   Foreground="{DynamicResource SystemFillColorCriticalBrush}" />
+                    <TextBlock Style="{StaticResource StatusText}" Text="{Binding RecoveryText}" />
+                    <Border Style="{StaticResource StatusSeparator}" />
+                </StackPanel>
+
                 <StackPanel Orientation="Horizontal"
                             Visibility="{Binding HintText, Converter={StaticResource NullToVis}}">
                     <ui:SymbolIcon Symbol="Warning16"

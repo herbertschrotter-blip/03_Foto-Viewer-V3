@@ -42,6 +42,9 @@ public sealed partial class GalleryViewModel : ObservableObject
     private const int TileImageWidth = 180;
     private const int ReloadDebounceMs = 300;
 
+    /// <summary>So lange bleibt eine Ergebnis-Meldung (Verschieben, Papierkorb, Favorit …) stehen, bevor der Lade-Status sie ersetzt.</summary>
+    private static readonly TimeSpan ResultStatusHold = TimeSpan.FromSeconds(8);
+
     private static readonly GallerySortOption[] s_sortOptions =
     [
         new(GallerySort.ModifiedDesc, "Datum neu → alt"),
@@ -68,8 +71,16 @@ public sealed partial class GalleryViewModel : ObservableObject
     private readonly Dictionary<int, GalleryItem> _currentItems = new();
     private readonly HashSet<int> _selectedIds = new();
 
+    /// <summary>
+    /// Unveränderlicher Schnappschuss der Ids in <see cref="_currentItems"/> für den Thumbnail-Callback,
+    /// der auf Worker-Threads läuft: <see cref="_currentItems"/> wird nur auf dem UI-Thread verändert und darf
+    /// dort nicht nebenläufig gelesen werden. Wird nach jeder Änderung durch eine neue Instanz ersetzt.
+    /// </summary>
+    private volatile HashSet<int> _currentIdsSnapshot = new();
+
     private CancellationTokenSource? _activeLoadCts;
     private CancellationTokenSource? _reloadDebounceCts;
+    private DateTime _resultStatusUntil;
     private bool _isInitialized;
     private bool _suppressReload;
     private bool _suppressSelectionEvents;
@@ -114,7 +125,10 @@ public sealed partial class GalleryViewModel : ObservableObject
     public IReadOnlyList<GallerySortOption> SortOptions => s_sortOptions;
     public IReadOnlyList<int> PageSizeOptions => s_pageSizeOptions;
 
-    /// <summary>Liefert das Owner-Window für die Lightbox; wird von der View gesetzt.</summary>
+    /// <summary>
+    /// Liefert das Owner-Window für die Lightbox; wird von der gerade geladenen View gesetzt (Galerie-Seite
+    /// und Ordner-Seite teilen dieses ViewModel). Fällt auf das Hauptfenster zurück, wenn keine View geladen ist.
+    /// </summary>
     public Func<Window?>? OwnerWindowResolver { get; set; }
 
     [ObservableProperty]
@@ -445,7 +459,11 @@ public sealed partial class GalleryViewModel : ObservableObject
             ScheduleReload();
         }
 
-        await RefreshCanUndoAsync();
+        // Favorit/Bewertung ändern nichts an den OperationBatches — Undo-Status nur bei Datei-Operationen prüfen.
+        if (m.Kind != FilesChangeKind.Metadata)
+        {
+            await RefreshCanUndoAsync();
+        }
     }
 
     private async Task RefreshMetadataAsync(IReadOnlyList<int> fileIds)
@@ -551,7 +569,7 @@ public sealed partial class GalleryViewModel : ObservableObject
                     }
 
                     ShowSubfolders = true;
-                    StatusText = $"Ordner „{FolderName}“ enthält keine Dateien, aber {subfolders.Count} Unterordner.";
+                    SetLoadStatus($"Ordner „{FolderName}“ enthält keine Dateien, aber {subfolders.Count} Unterordner.");
                     _logger.LogInformation("Container-State: FolderId={FolderId} Unterordner={Count}", query.FolderId, subfolders.Count);
                     return;
                 }
@@ -635,7 +653,7 @@ public sealed partial class GalleryViewModel : ObservableObject
         List<GalleryItem> newItems = [];
         await DispatchAsync(() => newItems = ApplyRows(rows, restoreSelection));
 
-        StatusText = $"{TotalCount:N0} Treffer · Seite {DisplayPageIndex} von {PageCount:N0} · {LastPageLoadMs:N1} ms";
+        SetLoadStatus($"{TotalCount:N0} Treffer · Seite {DisplayPageIndex} von {PageCount:N0} · {LastPageLoadMs:N1} ms");
         _logger.LogInformation(
             "Page geladen: Idx={Idx} Size={Size} Rows={Rows} Time={Ms:N1}ms Filter={Filter} Sort={Sort} Folder={Folder} Rekursiv={Rek} Search={Search}",
             PageIndex, PageSize, rows.Count, LastPageLoadMs, Filter, SelectedSort.Sort,
@@ -742,6 +760,8 @@ public sealed partial class GalleryViewModel : ObservableObject
                 _currentItems[item.Id] = item;
             }
 
+            PublishCurrentIds();
+
             // 3) Auswahl: nach Ids wiederherstellen oder verwerfen
             if (restoreSelection)
             {
@@ -788,7 +808,10 @@ public sealed partial class GalleryViewModel : ObservableObject
 
         CurrentPage.Clear();
         _currentItems.Clear();
+        PublishCurrentIds();
     }
+
+    private void PublishCurrentIds() => _currentIdsSnapshot = new HashSet<int>(_currentItems.Keys);
 
     private async Task RequestThumbnailsAsync(IReadOnlyList<GalleryItem> items)
     {
@@ -814,9 +837,10 @@ public sealed partial class GalleryViewModel : ObservableObject
         }
     }
 
+    /// <summary>Läuft auf einem Worker-Thread des ThumbnailService — nur den unveränderlichen Id-Schnappschuss lesen.</summary>
     private void OnThumbnailReady(ThumbnailReadyEventArgs args)
     {
-        if (args.LibraryId != _libraryId || !_currentItems.ContainsKey(args.FileId))
+        if (args.LibraryId != _libraryId || !_currentIdsSnapshot.Contains(args.FileId))
         {
             return;
         }
@@ -1161,9 +1185,9 @@ public sealed partial class GalleryViewModel : ObservableObject
                 }
             }
 
-            StatusText = isFavorite
+            SetResultStatus(isFavorite
                 ? $"{ids.Count:N0} Datei(en) als Favorit markiert."
-                : $"Favorit bei {ids.Count:N0} Datei(en) entfernt.";
+                : $"Favorit bei {ids.Count:N0} Datei(en) entfernt.");
         });
     }
 
@@ -1193,9 +1217,9 @@ public sealed partial class GalleryViewModel : ObservableObject
             }
 
             UpdateSelectionSummary();
-            StatusText = rating is { } r
+            SetResultStatus(rating is { } r
                 ? $"{ids.Count:N0} Datei(en) mit {r} Stern(en) bewertet."
-                : $"Bewertung bei {ids.Count:N0} Datei(en) entfernt.";
+                : $"Bewertung bei {ids.Count:N0} Datei(en) entfernt.");
         });
     }
 
@@ -1257,7 +1281,7 @@ public sealed partial class GalleryViewModel : ObservableObject
             var result = await _fileOps.UndoLastAsync();
             if (result is null)
             {
-                StatusText = "Nichts rückgängig zu machen.";
+                SetResultStatus("Nichts rückgängig zu machen.");
                 return;
             }
 
@@ -1268,9 +1292,9 @@ public sealed partial class GalleryViewModel : ObservableObject
     private async Task ReportBatchResultAsync(string verb, FileOperationBatchResult result)
     {
         var total = result.Succeeded + result.Failed;
-        StatusText = result.Failed == 0
+        SetResultStatus(result.Failed == 0
             ? $"{verb}: {result.Succeeded:N0} Datei(en) erfolgreich."
-            : $"{verb}: {result.Succeeded:N0} erfolgreich, {result.Failed:N0} fehlgeschlagen.";
+            : $"{verb}: {result.Succeeded:N0} erfolgreich, {result.Failed:N0} fehlgeschlagen.");
         _logger.LogInformation(
             "{Verb}: Batch={BatchId} Typ={Type} OK={Succeeded} Fehler={Failed}",
             verb, result.BatchId, result.Type, result.Succeeded, result.Failed);
@@ -1378,7 +1402,8 @@ public sealed partial class GalleryViewModel : ObservableObject
 
         try
         {
-            _lightbox.Open(entries, startIndex, OwnerWindowResolver?.Invoke());
+            var owner = OwnerWindowResolver?.Invoke() ?? Application.Current?.MainWindow;
+            _lightbox.Open(entries, startIndex, owner);
         }
         catch (Exception ex)
         {
@@ -1386,6 +1411,26 @@ public sealed partial class GalleryViewModel : ObservableObject
             ErrorMessage = $"Lightbox konnte nicht geöffnet werden: {ex.Message}";
             _logger.LogError(ex, "Lightbox-Open fehlgeschlagen für File={FileId}", item.Id);
         }
+    }
+
+    // ---- Statuszeile ---------------------------------------------------------------------------
+
+    /// <summary>Ergebnis einer Aktion; bleibt <see cref="ResultStatusHold"/> stehen, auch wenn der Reload danach den Lade-Status setzen will.</summary>
+    private void SetResultStatus(string text)
+    {
+        StatusText = text;
+        _resultStatusUntil = DateTime.UtcNow + ResultStatusHold;
+    }
+
+    /// <summary>Lade-Status („n Treffer · Seite x von y“); überschreibt eine frische Ergebnis-Meldung nicht.</summary>
+    private void SetLoadStatus(string text)
+    {
+        if (DateTime.UtcNow < _resultStatusUntil)
+        {
+            return;
+        }
+
+        StatusText = text;
     }
 
     // ---- Threading-Helfer ----------------------------------------------------------------------

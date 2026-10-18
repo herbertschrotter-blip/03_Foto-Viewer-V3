@@ -1,34 +1,50 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Logging;
+using PhotoViewerV3.Domain.Enums;
 using PhotoViewerV3.Services.Library;
 using PhotoViewerV3.Services.Messaging;
+using PhotoViewerV3.Services.Operations;
 using PhotoViewerV3.Services.Scanning;
 using PhotoViewerV3.Services.Thumbnails;
 
 namespace PhotoViewerV3.Shell;
 
 /// <summary>
-/// Statusleiste gemäß ADR-0013: Scan-Fortschritt (ScanProgress-/ScanCompleted-/ScanAbortedMessage),
-/// Thumbnail-Warteschlange (IThumbnailService.PendingCount, alle 500 ms), Hintergrund-Aktivität und Hinweise
-/// (aktive Bibliothek offline). Alle Messenger-Nachrichten werden auf den UI-Thread dispatcht.
+/// Statusleiste gemäß ADR-0013 mit den vier Indikatoren: (1) Scan-Fortschritt (ScanProgress-/ScanCompleted-/
+/// ScanAbortedMessage), (2) Thumbnail-Warteschlange (IThumbnailService.PendingCount, alle 500 ms),
+/// (3) Hintergrund-Aktivität und (4) Recovery-Hinweise: unvollständige oder fehlgeschlagene OperationBatches
+/// (IFileOperationService.GetRecentBatchesAsync — nur Anzeige) sowie „Bibliothek offline“.
+/// Alle Messenger-Nachrichten werden auf den UI-Thread dispatcht.
 /// </summary>
 public sealed partial class StatusBarViewModel : ObservableObject, IDisposable
 {
     private static readonly TimeSpan ThumbnailPollInterval = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan ResultDisplayDuration = TimeSpan.FromSeconds(12);
 
+    /// <summary>
+    /// Batch-Status zusätzlich periodisch prüfen: ein komplett fehlgeschlagener Batch ändert keine Datei und
+    /// sendet deshalb keine FilesChangedMessage — ohne Poll bliebe der Hinweis aus (eine 50-Zeilen-Query).
+    /// </summary>
+    private static readonly TimeSpan RecoveryPollInterval = TimeSpan.FromSeconds(10);
+    private const int RecoveryBatchWindow = 50;
+    private const int RecoveryDetailLines = 8;
+
     private readonly IThumbnailService _thumbnails;
     private readonly ILibraryService _libraries;
+    private readonly IFileOperationService _fileOperations;
     private readonly ILogger<StatusBarViewModel> _logger;
     private readonly IMessenger _messenger = WeakReferenceMessenger.Default;
     private readonly DispatcherTimer _thumbnailTimer;
     private readonly DispatcherTimer _resultTimer;
+    private readonly DispatcherTimer _recoveryTimer;
+    private bool _recoveryRefreshRunning;
 
     [ObservableProperty] private string? _activeLibraryName;
     [ObservableProperty] private bool _isScanning;
@@ -41,25 +57,43 @@ public sealed partial class StatusBarViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string? _backgroundActivityText;
     [ObservableProperty] private bool _isBackgroundActive;
 
-    public StatusBarViewModel(IThumbnailService thumbnails, ILibraryService libraries, ILogger<StatusBarViewModel> logger)
+    /// <summary>Recovery-Hinweis (ADR-0013 Nr. 4): unvollständige/fehlgeschlagene Dateivorgänge; null = keine.</summary>
+    [ObservableProperty] private string? _recoveryText;
+
+    /// <summary>Tooltip zum Recovery-Hinweis: die betroffenen Batches.</summary>
+    [ObservableProperty] private string? _recoveryDetails;
+
+    public StatusBarViewModel(
+        IThumbnailService thumbnails,
+        ILibraryService libraries,
+        IFileOperationService fileOperations,
+        ILogger<StatusBarViewModel> logger)
     {
         _thumbnails = thumbnails;
         _libraries = libraries;
+        _fileOperations = fileOperations;
         _logger = logger;
 
         var dispatcher = Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
         _thumbnailTimer = new DispatcherTimer(ThumbnailPollInterval, DispatcherPriority.Background, OnThumbnailTick, dispatcher);
         _resultTimer = new DispatcherTimer(ResultDisplayDuration, DispatcherPriority.Background, OnResultTick, dispatcher);
         _resultTimer.Stop();
+        _recoveryTimer = new DispatcherTimer(RecoveryPollInterval, DispatcherPriority.Background, (_, _) => _ = RefreshRecoveryAsync(), dispatcher);
 
         _messenger.Register<StatusBarViewModel, ScanProgressMessage>(this, static (r, m) => UiThread.Post(() => r.OnScanProgress(m)));
         _messenger.Register<StatusBarViewModel, ScanCompletedMessage>(this, static (r, m) => UiThread.Post(() => r.OnScanCompleted(m)));
         _messenger.Register<StatusBarViewModel, ScanAbortedMessage>(this, static (r, m) => UiThread.Post(() => r.OnScanAborted(m)));
         _messenger.Register<StatusBarViewModel, ActiveLibraryChangedMessage>(this, static (r, m) => UiThread.Post(() => { _ = r.RefreshLibraryAsync(); }));
+        // Jede Datei-Operation endet mit einer FilesChangedMessage → Batch-Status neu prüfen (billig: 50 Zeilen).
+        _messenger.Register<StatusBarViewModel, FilesChangedMessage>(this, static (r, m) => UiThread.Post(() => { _ = r.RefreshRecoveryAsync(); }));
     }
 
-    /// <summary>Einmal nach dem Laden des Hauptfensters: aktive Bibliothek + Offline-Hinweis ermitteln.</summary>
-    public Task InitializeAsync() => RefreshLibraryAsync();
+    /// <summary>Einmal nach dem Laden des Hauptfensters: aktive Bibliothek, Offline-Hinweis und Batch-Status ermitteln.</summary>
+    public async Task InitializeAsync()
+    {
+        await RefreshLibraryAsync().ConfigureAwait(true);
+        await RefreshRecoveryAsync().ConfigureAwait(true);
+    }
 
     private async Task RefreshLibraryAsync()
     {
@@ -74,6 +108,67 @@ public sealed partial class StatusBarViewModel : ObservableObject, IDisposable
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Statusleiste: aktive Bibliothek konnte nicht ermittelt werden");
+        }
+    }
+
+    /// <summary>
+    /// Recovery-Hinweis: Batches, die nicht sauber abgeschlossen wurden (Pending/Applying/Undoing = Abbruch oder
+    /// Absturz mitten im Vorgang) oder bei denen keine Datei gelang (Failed). Nur Anzeige — der nächste Scan
+    /// bzw. Undo heilt den Katalog.
+    /// </summary>
+    private async Task RefreshRecoveryAsync()
+    {
+        if (_recoveryRefreshRunning)
+        {
+            return;
+        }
+
+        _recoveryRefreshRunning = true;
+        try
+        {
+            var batches = await _fileOperations.GetRecentBatchesAsync(RecoveryBatchWindow).ConfigureAwait(true);
+            var incomplete = batches.Where(b => b.Status is BatchStatus.Pending or BatchStatus.Applying or BatchStatus.Undoing).ToList();
+            var failed = batches.Where(b => b.Status == BatchStatus.Failed).ToList();
+            if (incomplete.Count == 0 && failed.Count == 0)
+            {
+                RecoveryText = null;
+                RecoveryDetails = null;
+                return;
+            }
+
+            var parts = new List<string>(2);
+            if (incomplete.Count > 0)
+            {
+                parts.Add(incomplete.Count == 1 ? "1 Dateivorgang unvollständig" : $"{incomplete.Count} Dateivorgänge unvollständig");
+            }
+
+            if (failed.Count > 0)
+            {
+                parts.Add(failed.Count == 1 ? "1 Dateivorgang fehlgeschlagen" : $"{failed.Count} Dateivorgänge fehlgeschlagen");
+            }
+
+            var text = string.Join(" · ", parts);
+            var details = string.Join(
+                Environment.NewLine,
+                incomplete.Concat(failed)
+                    .Take(RecoveryDetailLines)
+                    .Select(b => $"#{b.Id} {b.Type} {b.Status} · {b.ItemCount} Datei(en) · {b.CreatedAtUtc.ToLocalTime():g}: {b.Description}"));
+
+            if (text != RecoveryText)
+            {
+                _logger.LogWarning("Statusleiste: {Text}", text);
+            }
+
+            RecoveryText = text;
+            RecoveryDetails = details;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Statusleiste: Status der Dateivorgänge konnte nicht ermittelt werden");
+        }
+        finally
+        {
+            _recoveryRefreshRunning = false;
         }
     }
 
@@ -149,6 +244,7 @@ public sealed partial class StatusBarViewModel : ObservableObject, IDisposable
     {
         _thumbnailTimer.Stop();
         _resultTimer.Stop();
+        _recoveryTimer.Stop();
         _messenger.UnregisterAll(this);
     }
 }

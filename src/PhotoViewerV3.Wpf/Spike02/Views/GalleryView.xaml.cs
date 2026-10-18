@@ -1,8 +1,10 @@
+using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using Microsoft.Extensions.Logging;
 using PhotoViewerV3.Spike02.ViewModels;
 
 namespace PhotoViewerV3.Spike02.Views;
@@ -10,19 +12,47 @@ namespace PhotoViewerV3.Spike02.Views;
 /// <summary>
 /// Galerie-View. Code-Behind enthält nur UI-Glue (Owner-Window, Enter/Doppelklick auf den
 /// fokussierten Container); alle Fachlogik liegt im <see cref="GalleryViewModel"/>.
+/// Die View existiert zweimal (Galerie-Seite und rechte Hälfte der Ordner-Seite) auf demselben
+/// Singleton-ViewModel; den Lightbox-Owner liefert deshalb immer die zuletzt geladene Instanz.
 /// </summary>
 public partial class GalleryView : UserControl
 {
     private readonly GalleryViewModel _viewModel;
+    private readonly ILogger<GalleryView> _logger;
 
-    public GalleryView(GalleryViewModel viewModel)
+    public GalleryView(GalleryViewModel viewModel, ILogger<GalleryView> logger)
     {
         _viewModel = viewModel;
+        _logger = logger;
         InitializeComponent();
         DataContext = viewModel;
-        viewModel.OwnerWindowResolver = () => Window.GetWindow(this);
-        Loaded += async (_, _) => await viewModel.EnsureInitializedAsync().ConfigureAwait(true);
+        Loaded += OnLoaded;
+        Unloaded += OnUnloaded;
     }
+
+    private async void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        _viewModel.OwnerWindowResolver = ResolveOwnerWindow;
+        try
+        {
+            await _viewModel.EnsureInitializedAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Galerie konnte nicht initialisiert werden");
+        }
+    }
+
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        // Nur den eigenen Resolver abhängen — die andere Instanz kann inzwischen geladen worden sein.
+        if (_viewModel.OwnerWindowResolver == (Func<Window?>)ResolveOwnerWindow)
+        {
+            _viewModel.OwnerWindowResolver = null;
+        }
+    }
+
+    private Window? ResolveOwnerWindow() => Window.GetWindow(this);
 
     /// <summary>Doppelklick auf eine Kachel öffnet die Lightbox (nicht bei Klick auf Herz/Sterne).</summary>
     private void OnItemDoubleClick(object sender, MouseButtonEventArgs e)
