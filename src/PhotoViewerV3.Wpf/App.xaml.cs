@@ -5,6 +5,7 @@ using PhotoViewerV3.Services;
 using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Infrastructure;
 using PhotoViewerV3.Services.Thumbnails;
+using PhotoViewerV3.Lightbox;
 using PhotoViewerV3.Thumbnails;
 using PhotoViewerV3.Spike02.Data;
 using PhotoViewerV3.Spike02.ViewModels;
@@ -62,6 +63,7 @@ public partial class App : Application
         // WIC-Bild-Renderer (WPF-Framework) — Implementierung des in Services
         // definierten IImageThumbnailRenderer-Interfaces.
         services.AddSingleton<IImageThumbnailRenderer, WicImageThumbnailRenderer>();
+        services.AddLightbox();
 
         // Spike #2 — Virtual Grid
         services.AddSingleton<GalleryPageSource>();
