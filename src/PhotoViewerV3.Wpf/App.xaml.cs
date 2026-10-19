@@ -13,12 +13,6 @@ using PhotoViewerV3.Settings;
 using PhotoViewerV3.Shell;
 using PhotoViewerV3.Sorter;
 using PhotoViewerV3.Thumbnails;
-using PhotoViewerV3.Spike02.Data;
-using PhotoViewerV3.Spike02.ViewModels;
-using PhotoViewerV3.Spike02.Views;
-using PhotoViewerV3.Spike03.Services;
-using PhotoViewerV3.Spike03.ViewModels;
-using PhotoViewerV3.Spike03.Views;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Serilog;
@@ -93,17 +87,9 @@ public partial class App : Application
         // Rauchtest (nur mit PHOTOVIEWERV3_SMOKE_ROOT): Dialog- und Ordnerauswahl-Fakes vor AddGallery (TryAdd)
         SmokeTestRunner.ConfigureServices(services);
 
-        // Spike #2 — Virtual Grid
-        services.AddSingleton<GalleryPageSource>();
-        services.AddSingleton<GalleryViewModel>();
-        services.AddTransient<GalleryView>();
+        // Galerie (Wpf/Gallery: PageSource, ViewModel, View, Dialog-/Ordnerauswahl-Dienste) und Sortieren (Wpf/Sorter)
         services.AddGallery();
         services.AddSorterUi();
-
-        // Spike #3 — LibVLCSharp Lightbox
-        services.AddSingleton<SpikeMediaDownloader>();
-        services.AddSingleton<SpikeLightboxViewModel>();
-        services.AddTransient<SpikeLightboxView>();
 
         services.AddSingleton<MainWindow>();
     }
@@ -162,7 +148,7 @@ public partial class App : Application
         Log.Information("PhotoViewer V3 wird beendet (ExitCode {Code})", e.ApplicationExitCode);
         try
         {
-            // IDisposable-Singletons (GalleryPageSource, ThumbnailService, LightboxService → LibVlcHost, Spike03 …)
+            // IDisposable-Singletons (GalleryPageSource, ThumbnailService, LightboxService → LibVlcHost …)
             // räumt der Container in umgekehrter Erzeugungsreihenfolge auf — nur die, die wirklich erzeugt wurden.
             _host.StopAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
             _host.Dispose();

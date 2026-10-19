@@ -109,3 +109,4 @@ Empfehlung: Fortsetzen
 
 - [chatgpt-review/runde-2-chatgpt-response.md](../../chatgpt-review/runde-2-chatgpt-response.md) "OperationBatches"
 - [chatgpt-review/runde-2-chatgpt-response.md](../../chatgpt-review/runde-2-chatgpt-response.md) "Crash-Recovery-UX" mit 7-Felder-Matrix
+- Erweitert durch [ADR-0018](0018-datei-operationen-nur-ueber-service.md) (alle Schreiber gehen durch IFileOperationService; Recovery-UI weiterhin offen)

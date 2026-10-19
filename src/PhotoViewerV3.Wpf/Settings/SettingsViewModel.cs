@@ -27,6 +27,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     private readonly ILibraryContextFactory _factory;
     private readonly IAppDataPaths _paths;
     private readonly IVideoThumbnailRenderer _videoRenderer;
+    private readonly IThumbnailService _thumbnails;
     private readonly IMediaFormatRegistry _formats;
     private readonly IThemeService _theme;
     private readonly IDialogService _dialogs;
@@ -36,6 +37,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         ILibraryContextFactory factory,
         IAppDataPaths paths,
         IVideoThumbnailRenderer videoRenderer,
+        IThumbnailService thumbnails,
         IMediaFormatRegistry formats,
         IThemeService theme,
         IDialogService dialogs,
@@ -44,6 +46,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         _factory = factory;
         _paths = paths;
         _videoRenderer = videoRenderer;
+        _thumbnails = thumbnails;
         _formats = formats;
         _theme = theme;
         _dialogs = dialogs;
@@ -142,8 +145,10 @@ public sealed partial class SettingsViewModel : ObservableObject
     {
         var ok = await _dialogs.ConfirmAsync(
             "Vorschaubild-Cache leeren?",
-            "Alle erzeugten Vorschaubilder werden gelöscht und bei Bedarf neu erzeugt. Für in dieser Sitzung bereits " +
-            "angezeigte Bilder greift das erst nach dem nächsten App-Start.\n\nFotos und Videos selbst sind nicht betroffen.",
+            "Alle erzeugten Vorschaubilder werden gelöscht und bei Bedarf neu erzeugt; bisher fehlgeschlagene werden " +
+            "erneut versucht (z. B. nach Installation eines Codec-Pakets). Bereits angezeigte Kacheln behalten ihr Bild, " +
+            "bis die Galerie sie neu aufbaut (Seiten-, Ordner- oder Bibliothekswechsel).\n\n" +
+            "Fotos und Videos selbst sind nicht betroffen.",
             "Cache leeren",
             isDestructive: true).ConfigureAwait(true);
         if (!ok)
@@ -155,6 +160,9 @@ public sealed partial class SettingsViewModel : ObservableObject
         try
         {
             var (deleted, skipped, rows) = await Task.Run(ClearCache).ConfigureAwait(true);
+            // In-Memory-Zustand des ThumbnailService verwerfen: als fehlgeschlagen gemerkte Dateien (Codec fehlte, kaputte
+            // Datei) werden mit frischem AttemptCount erneut versucht; erledigte ohne Cache-Datei prüft der Service ohnehin neu.
+            _thumbnails.InvalidateAll();
             InfoMessage = $"{deleted:N0} Dateien und {rows:N0} Datenbankeinträge entfernt"
                           + (skipped > 0 ? $" ({skipped:N0} Dateien in Benutzung übersprungen)." : ".");
             _logger.LogInformation("Thumbnail-Cache geleert: {Deleted} Dateien, {Rows} Zeilen, {Skipped} übersprungen", deleted, rows, skipped);

@@ -1,5 +1,7 @@
 # Spike #02 — Virtual Grid mit 500k Items
 
+> **Stand v0.2.0:** Der Spike-Ordner `Spike02/` ist aufgelöst — der Code wurde zur produktiven Galerie weiterentwickelt und liegt jetzt unter `src/PhotoViewerV3.Wpf/Gallery/` (Data, ViewModels, Views; Namespace `PhotoViewerV3.Gallery.*`). Die Code-Links unten zeigen auf die heutigen Pfade; die Messwerte beschreiben den Stand des Spikes.
+
 - **Status:** ✅ Grün — Architektur bestätigt, freigegeben für V0.1-Implementierung der Gallery-UI
 - **Datum gestartet:** 2026-05-10
 - **Datum abgeschlossen:** 2026-05-10
@@ -152,9 +154,11 @@ dotnet run --project src\PhotoViewerV3.Wpf -c Debug
 
 ## Code
 
-- [src/PhotoViewerV3.Wpf/Spike02/Data/GalleryFileDto.cs](../../src/PhotoViewerV3.Wpf/Spike02/Data/GalleryFileDto.cs)
-- [src/PhotoViewerV3.Wpf/Spike02/Data/GalleryPageSource.cs](../../src/PhotoViewerV3.Wpf/Spike02/Data/GalleryPageSource.cs)
-- [src/PhotoViewerV3.Wpf/Spike02/ViewModels/GalleryViewModel.cs](../../src/PhotoViewerV3.Wpf/Spike02/ViewModels/GalleryViewModel.cs)
-- [src/PhotoViewerV3.Wpf/Spike02/Views/GalleryView.xaml](../../src/PhotoViewerV3.Wpf/Spike02/Views/GalleryView.xaml)
-- [src/PhotoViewerV3.Wpf/MainWindow.xaml](../../src/PhotoViewerV3.Wpf/MainWindow.xaml) (NavigationView-Eintrag + ContentArea)
-- [src/PhotoViewerV3.Wpf/App.xaml.cs](../../src/PhotoViewerV3.Wpf/App.xaml.cs) (DI-Registrierung)
+Heutige Pfade (seit v0.2.0 produktive Galerie unter `Wpf/Gallery`, Namespace `PhotoViewerV3.Gallery.*`):
+
+- [src/PhotoViewerV3.Wpf/Gallery/Data/GalleryFileDto.cs](../../src/PhotoViewerV3.Wpf/Gallery/Data/GalleryFileDto.cs)
+- [src/PhotoViewerV3.Wpf/Gallery/Data/GalleryPageSource.cs](../../src/PhotoViewerV3.Wpf/Gallery/Data/GalleryPageSource.cs)
+- [src/PhotoViewerV3.Wpf/Gallery/ViewModels/GalleryViewModel.cs](../../src/PhotoViewerV3.Wpf/Gallery/ViewModels/GalleryViewModel.cs)
+- [src/PhotoViewerV3.Wpf/Gallery/Views/GalleryView.xaml](../../src/PhotoViewerV3.Wpf/Gallery/Views/GalleryView.xaml)
+- [src/PhotoViewerV3.Wpf/Gallery/GalleryServiceCollectionExtensions.cs](../../src/PhotoViewerV3.Wpf/Gallery/GalleryServiceCollectionExtensions.cs) (DI-Registrierung `AddGallery()`)
+- [src/PhotoViewerV3.Wpf/MainWindow.xaml](../../src/PhotoViewerV3.Wpf/MainWindow.xaml) (NavigationView-Eintrag „Galerie“)

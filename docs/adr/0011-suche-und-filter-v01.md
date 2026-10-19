@@ -67,3 +67,4 @@ CREATE VIRTUAL TABLE FilesFts USING fts5(
 ## Referenzen
 
 - [chatgpt-review/runde-2-chatgpt-response.md](../../chatgpt-review/runde-2-chatgpt-response.md) "MVP-Schnitt für 50k-500k"
+- Erweitert durch [ADR-0019](0019-incremental-scan.md) (FTS-Pflege je Insert/Update im Incremental-Scan statt Rebuild) und [ADR-0018](0018-datei-operationen-nur-ueber-service.md) (FTS-Bereinigung bei Papierkorb/Move/Rename)

@@ -187,11 +187,32 @@ public sealed partial class StatusBarViewModel : ObservableObject, IDisposable
         var r = message.Result;
         IsScanning = false;
         ScanText = null;
-        ScanResultIsError = false;
-        ScanResultText = $"Scan abgeschlossen: {r.FilesInserted:N0} Dateien in {Formatting.Duration(r.TotalDuration)}";
+        ScanResultIsError = r.Outcome == ScanOutcome.MassMissingBlocked;
+        ScanResultText = ScanResultSummary(r);
         _resultTimer.Start();
         UpdateActivity();
         _ = RefreshLibraryAsync();
+    }
+
+    /// <summary>
+    /// Kurzfassung des Scan-Ergebnisses. Beim Mass-Missing-Guard (PLAN Kap. 12) wurde nichts markiert — die
+    /// Bestätigung holt die Bibliotheksseite ein; der Incremental-Scan zeigt seine Diff-Zähler statt „N Dateien“.
+    /// </summary>
+    private static string ScanResultSummary(ScanResult r)
+    {
+        if (r.Outcome == ScanOutcome.MassMissingBlocked)
+        {
+            return $"Scan: {r.MissingDetected:N0} fehlende Dateien, Bestätigung nötig";
+        }
+
+        if (r.Mode != ScanMode.Incremental)
+        {
+            return $"Scan abgeschlossen: {r.FilesInserted:N0} Dateien in {Formatting.Duration(r.TotalDuration)}";
+        }
+
+        return r.HasChanges
+            ? $"Aktualisiert: {r.Added:N0} neu · {r.Modified:N0} geändert · {r.MarkedMissing:N0} fehlend · {r.Reappeared:N0} wieder da ({Formatting.Duration(r.TotalDuration)})"
+            : $"Aktualisiert: keine Änderungen ({Formatting.Duration(r.TotalDuration)})";
     }
 
     private void OnScanAborted(ScanAbortedMessage message)
@@ -199,9 +220,18 @@ public sealed partial class StatusBarViewModel : ObservableObject, IDisposable
         IsScanning = false;
         ScanText = null;
         ScanResultIsError = !message.Canceled;
-        ScanResultText = message.Canceled ? "Scan abgebrochen" : $"Scan fehlgeschlagen: {message.Reason}";
+        ScanResultText = message switch
+        {
+            { Canceled: true } => "Scan abgebrochen",
+            { LibraryOffline: true } => "Bibliothek offline — Scan beendet, nichts als fehlend markiert",
+            _ => $"Scan fehlgeschlagen: {message.Reason}",
+        };
         _resultTimer.Start();
         UpdateActivity();
+        if (message.LibraryOffline)
+        {
+            _ = RefreshLibraryAsync(); // Offline-Hinweis (HintText) sofort nachziehen
+        }
     }
 
     private void OnResultTick(object? sender, EventArgs e)

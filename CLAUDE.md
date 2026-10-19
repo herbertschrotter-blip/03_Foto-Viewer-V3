@@ -43,6 +43,7 @@ Branch-Policy: current
 ## Regeln für Arbeit im Repo
 - Kein `git push` ohne ausdrücklichen Auftrag.
 - Keine WPF-Referenz in Domain/Data/Services (WIC-Renderer lebt deshalb im Wpf-Projekt hinter einem Services-Interface).
+- Seiten-Namespaces dürfen keine Entitätsnamen verdecken (deshalb `PhotoViewerV3.Libraries`, nicht `.Library`).
 - Thumbnail-Dateien sind FileId-basiert (`thumbs\{libraryId}\{fileId}_{size}_still.jpg`). FileIds bleiben stabil; wer Files-Zeilen löscht, entfernt auch Thumbnails-Zeile, Cache-Datei und FTS-Eintrag.
 - `FilesFts` ist eine FTS5-External-Content-Tabelle (`content='Files'`, `rowid = Files.Id`) ohne Trigger. Nach INSERT: `INSERT INTO FilesFts(rowid, Name, Extension) …`. Vor DELETE/UPDATE: `INSERT INTO FilesFts(FilesFts, rowid, Name, Extension) VALUES('delete', …)` mit den ALTEN Werten. Notnagel: `INSERT INTO FilesFts(FilesFts) VALUES('rebuild')`.
 - SQLite: WAL, `busy_timeout` 5000; lange Schreibläufe in einer Transaktion; nur eine schreibende Verbindung zur Zeit (Single-Writer, z. B. `SemaphoreSlim`).

@@ -15,13 +15,15 @@ using PhotoViewerV3.Gallery.Controls;
 using PhotoViewerV3.Libraries;
 using PhotoViewerV3.Lightbox;
 using PhotoViewerV3.Services.Database;
+using PhotoViewerV3.Services.Infrastructure;
 using PhotoViewerV3.Services.Library;
 using PhotoViewerV3.Services.Media;
 using PhotoViewerV3.Services.Messaging;
+using PhotoViewerV3.Services.Scanning;
 using PhotoViewerV3.Services.Thumbnails;
 using PhotoViewerV3.Settings;
-using PhotoViewerV3.Spike02.Data;
-using PhotoViewerV3.Spike02.ViewModels;
+using PhotoViewerV3.Gallery.Data;
+using PhotoViewerV3.Gallery.ViewModels;
 using Wpf.Ui.Appearance;
 
 namespace PhotoViewerV3.Shell.Smoke;
@@ -35,17 +37,31 @@ internal sealed class SmokeCheckException : Exception
 }
 
 /// <summary>
-/// Integrations-Rauchtest der gesamten App (Welle 2): Bibliothek anlegen und scannen, Galerie (Thumbnails,
+/// Integrations-Rauchtest der gesamten App (Stand 0.2.0): Bibliothek anlegen und Fresh-Scan, Galerie (Thumbnails,
 /// Sortierung, Seitengröße, FTS-Suche, Filter, Ordnerfilter mit Container-State, Favorit/Bewertung,
-/// Verschieben/Rückgängig, Papierkorb), Lightbox (Bild + Video), Ordnerbaum, Einstellungen (Cache, Theme),
-/// ClearAndRescan. Läuft auf dem UI-Thread (alle awaits bleiben im Dispatcher-Kontext) und steuert ausschließlich
-/// ViewModels, Commands und Messenger — keine Maus-/Tastatureingaben. Jeder Schritt prüft Dateisystem und DB.
+/// Verschieben/Rückgängig, Papierkorb), Lightbox (Bild + Video), Ordnerbaum, Einstellungen (Cache, Theme), zum
+/// Schluss der zweite Scan: „Aktualisieren“ = Incremental mit stabilen FileIds (ohne Änderung, mit neuer und
+/// fehlender Datei, wieder vorhanden) und „Neu aufbauen“ = ClearAndRescan über
+/// <see cref="LibraryViewModel.RunSmokeRebuildAsync"/> (neue FileIds, Favoriten weg, Thumbnails neu).
+/// Läuft auf dem UI-Thread (alle awaits bleiben im Dispatcher-Kontext) und steuert ausschließlich ViewModels,
+/// Commands und Messenger — keine Maus-/Tastatureingaben. Jeder Schritt prüft Dateisystem und DB; Dialoge und
+/// Ordnerauswahl sind Fakes (<see cref="SmokeTestRunner.ConfigureServices"/>), das Scan-Ergebnis kommt als
+/// <see cref="ScanCompletedMessage"/> vom Messenger.
 /// </summary>
 internal sealed class SmokeScenario
 {
     private static readonly TimeSpan ShortWait = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan LongWait = TimeSpan.FromSeconds(120);
     private static readonly Regex TokenSplit = new("[^\\p{L}\\p{N}]+", RegexOptions.Compiled);
+
+    /// <summary>Datei, die der Incremental-Schritt in „Unsortiert“ anlegt (bleibt in der Testbibliothek; vor dem nächsten Lauf entfernt).</summary>
+    private const string AddedFileName = "smoke-neu.jpg";
+
+    /// <summary>
+    /// Mindestzahl Mediendateien: der Mass-Missing-Guard (&gt; 20 %) darf bei einer geparkten Datei nicht greifen,
+    /// sonst öffnete LibraryViewModel den echten Drei-Knopf-Dialog und der unbeaufsichtigte Lauf bliebe stehen.
+    /// </summary>
+    private const int MinMediaFilesForRescan = 6;
 
     private readonly INavigationService _navigation;
     private readonly ILogger _logger;
@@ -67,10 +83,14 @@ internal sealed class SmokeScenario
     private readonly IThumbnailService _thumbnails;
     private readonly StatusBarViewModel _statusBar;
     private readonly SmokeFolderPickerService _picker;
+    private readonly IAppDataPaths _paths;
 
     private int _libraryId;
     private int _mediaCount;
     private readonly HashSet<int> _movedIds = new();
+
+    /// <summary>Ergebnis des zuletzt abgeschlossenen Scans (ScanCompletedMessage kommt vom Scan-Thread).</summary>
+    private volatile ScanResult? _lastScan;
 
     public SmokeScenario(IServiceProvider services, INavigationService navigation, ILogger logger, string root, string? shotsDir, bool cleanup)
     {
@@ -92,14 +112,20 @@ internal sealed class SmokeScenario
         _thumbnails = services.GetRequiredService<IThumbnailService>();
         _statusBar = services.GetRequiredService<StatusBarViewModel>();
         _picker = services.GetRequiredService<SmokeFolderPickerService>();
+        _paths = services.GetRequiredService<IAppDataPaths>();
+        _messenger.Register<SmokeScenario, ScanCompletedMessage>(this, static (r, m) => r._lastScan = m.Result);
     }
 
     public int Failed { get; private set; }
 
     public IReadOnlyList<string> Results => _results;
 
+    /// <summary>Ablage für die im Incremental-Schritt vorübergehend geparkte Datei — im isolierten AppData, nie neben der Bibliothek.</summary>
+    private string ParkingDir => Path.Combine(_paths.AppDataRoot, "smoke-geparkt");
+
     public async Task RunAsync()
     {
+        RemoveLeftovers();
         await StepAsync("Start → Startseite", StartPageAsync).ConfigureAwait(true);
         await StepAsync("Bibliothek anlegen + Fresh-Scan", FreshScanAsync).ConfigureAwait(true);
         await StepAsync("Thumbnails JPG/PNG/MP4/MOV", ThumbnailsAsync).ConfigureAwait(true);
@@ -114,10 +140,37 @@ internal sealed class SmokeScenario
         await StepAsync("Lightbox Bild + Video", LightboxAsync).ConfigureAwait(true);
         await StepAsync("Ordnerbaum-Seite", FolderPageAsync).ConfigureAwait(true);
         await StepAsync("Einstellungen + Theme", SettingsAsync).ConfigureAwait(true);
-        await StepAsync("ClearAndRescan", RescanAsync).ConfigureAwait(true);
+        await StepAsync("Aktualisieren (Incremental) + Neu aufbauen (ClearAndRescan)", RescanAsync).ConfigureAwait(true);
         if (_cleanup)
         {
             await StepAsync("Cleanup", CleanupAsync).ConfigureAwait(true);
+        }
+    }
+
+    /// <summary>
+    /// Rückstände eines früheren Laufs gegen dieselbe Bibliothek entfernen: die angelegte Datei (sonst meldet der
+    /// Incremental-Schritt Added = 0) und eine noch geparkte Datei zurückstellen (abgebrochener Lauf).
+    /// </summary>
+    private void RemoveLeftovers()
+    {
+        var unsorted = Path.Combine(_root, "Unsortiert");
+        var leftover = Path.Combine(unsorted, AddedFileName);
+        if (File.Exists(leftover))
+        {
+            File.Delete(leftover);
+            _logger.LogInformation("Rauchtest   Rückstand entfernt: {Path}", leftover);
+        }
+
+        if (Directory.Exists(ParkingDir))
+        {
+            foreach (var parked in Directory.EnumerateFiles(ParkingDir))
+            {
+                var back = Path.Combine(unsorted, Path.GetFileName(parked));
+                File.Move(parked, back, overwrite: true);
+                _logger.LogInformation("Rauchtest   Geparkte Datei zurückgestellt: {Path}", back);
+            }
+
+            Directory.Delete(ParkingDir);
         }
     }
 
@@ -253,10 +306,13 @@ internal sealed class SmokeScenario
         await WaitForGalleryAsync("Suche mit Sonderzeichen").ConfigureAwait(true);
         Check(_gallery.ErrorMessage is null, $"Sonderzeichen-Suche ohne FTS-Syntaxfehler ({_gallery.TotalCount} Treffer)");
 
+        // Nur Sonderzeichen = kein suchbarer Inhalt (FtsQueryBuilder liefert null) → keine Einschränkung, kein FTS-Fehler
         _gallery.SearchTerm = "---";
         await _gallery.SearchCommand.ExecuteAsync(null).ConfigureAwait(true);
         await WaitForGalleryAsync("Suche nur Sonderzeichen").ConfigureAwait(true);
-        Check(_gallery.ErrorMessage is null && _gallery.TotalCount == 0, "Suche „---“ → 0 Treffer, kein Fehler");
+        Check(
+            _gallery.ErrorMessage is null && _gallery.SearchTerm is null && _gallery.TotalCount == _mediaCount,
+            $"Suche „---“ → kein suchbarer Inhalt: Feld geleert, Hinweis „{_gallery.StatusText}“, alle {_gallery.TotalCount} Dateien");
 
         await _gallery.ClearSearchCommand.ExecuteAsync(null).ConfigureAwait(true);
         await WaitForGalleryAsync("Suche geleert").ConfigureAwait(true);
@@ -600,15 +656,97 @@ internal sealed class SmokeScenario
         Check(_settings.ErrorMessage is null, "Einstellungen ohne Fehler");
     }
 
+    /// <summary>
+    /// Zweiter Scan einer bestehenden Bibliothek ist „Aktualisieren“ (Incremental, stabile FileIds): (1) ohne Änderung
+    /// auf der Platte, (2) mit einer neuen und einer vorübergehend entfernten Datei (Added + MarkedMissing, „fehlt“-Badge,
+    /// Favoriten bleiben), (3) Datei wieder da (Reappeared). Danach „Neu aufbauen“ (ClearAndRescan über
+    /// <see cref="LibraryViewModel.RunSmokeRebuildAsync"/>): neue FileIds, Favoriten weg, Thumbnails neu.
+    /// </summary>
     private async Task RescanAsync()
     {
+        Check(_mediaCount >= MinMediaFilesForRescan, $"Testbibliothek hat {_mediaCount} Mediendateien (mindestens {MinMediaFilesForRescan}, sonst greift der Mass-Missing-Guard)");
+        _navigation.NavigateTo(NavigationTags.Library);
+        await WaitUntilAsync(() => _navigation.CurrentTag == NavigationTags.Library, ShortWait, "Bibliotheksseite").ConfigureAwait(true);
+        var maxIdBefore = await DbScalarAsync<int>("SELECT COALESCE(MAX(Id), 0) FROM Files").ConfigureAwait(true);
+        var favoritesBefore = await DbScalarAsync<int>("SELECT COUNT(*) FROM Files WHERE IsFavorite = 1").ConfigureAwait(true);
+
+        // (1) Aktualisieren ohne Änderung: Incremental, nichts neu/geändert/fehlend, Ids unverändert
+        _lastScan = null;
+        await _library.RunSmokeScanAsync(_root).ConfigureAwait(true);
+        Check(_library.ErrorMessage is null && _library.IsScanSummaryOpen && !_library.ScanSummaryIsWarning, $"Aktualisieren ohne Änderung: {_library.ScanSummary}");
+        Check(
+            _lastScan is { Mode: ScanMode.Incremental, Outcome: ScanOutcome.Completed, HasChanges: false },
+            $"Incremental ohne Änderungen (Added={_lastScan?.Added}, Modified={_lastScan?.Modified}, Missing={_lastScan?.MarkedMissing}, Ordner={_lastScan?.FoldersAdded})");
+        var maxIdAfterNoop = await DbScalarAsync<int>("SELECT COALESCE(MAX(Id), 0) FROM Files").ConfigureAwait(true);
+        Check(maxIdAfterNoop == maxIdBefore, $"FileIds stabil (MAX(Id) = {maxIdAfterNoop})");
+
+        // (2) Neue Datei + eine Datei vorübergehend außerhalb der Bibliothek geparkt → Added 1, MarkedMissing 1
+        var unsorted = Path.Combine(_root, "Unsortiert");
+        var unsortedId = await FolderIdAsync(unsorted).ConfigureAwait(true);
+        var jpgs = Directory.EnumerateFiles(unsorted, "*.jpg").OrderBy(f => f, StringComparer.OrdinalIgnoreCase).ToList();
+        Check(jpgs.Count >= 2, $"„Unsortiert“ hat {jpgs.Count} JPGs (mindestens 2 für Kopie + Parken nötig)");
+        var added = Path.Combine(unsorted, AddedFileName);
+        File.Copy(jpgs[0], added, overwrite: true);
+        var parkedSource = jpgs[^1];
+        var parkedId = await DbScalarAsync<int>(
+            "SELECT Id FROM Files WHERE FolderId = $f AND Name = $n", ("$f", unsortedId), ("$n", Path.GetFileName(parkedSource))).ConfigureAwait(true);
+        Directory.CreateDirectory(ParkingDir);
+        var parked = Path.Combine(ParkingDir, Path.GetFileName(parkedSource));
+        File.Move(parkedSource, parked, overwrite: true);
+        try
+        {
+            _lastScan = null;
+            await _library.RunSmokeScanAsync(_root).ConfigureAwait(true);
+            Check(_library.ErrorMessage is null && !_library.ScanSummaryIsWarning, $"Aktualisieren mit Änderungen: {_library.ScanSummary}");
+            Check(
+                _lastScan is { Mode: ScanMode.Incremental, Outcome: ScanOutcome.Completed, Added: 1, MarkedMissing: 1, Reappeared: 0 },
+                $"Incremental: Added={_lastScan?.Added}, MarkedMissing={_lastScan?.MarkedMissing}, Reappeared={_lastScan?.Reappeared}");
+            _mediaCount++;
+            await WaitUntilAsync(
+                () => _navigation.CurrentTag == NavigationTags.Gallery && !_gallery.IsLoading && _gallery.TotalCount == _mediaCount
+                      && _gallery.CurrentPage.Any(i => i.Id == parkedId && i.Missing),
+                ShortWait,
+                $"Galerie nach Aktualisieren: {_mediaCount} Dateien inkl. fehlender").ConfigureAwait(true);
+            var addedItem = _gallery.CurrentPage.FirstOrDefault(i => i.Name == "smoke-neu.jpg");
+            Check(addedItem is not null && addedItem.Id > maxIdBefore, $"neue Datei mit neuer Id ({addedItem?.Id} > {maxIdBefore})");
+            Check(_gallery.CurrentPage.Any(i => i.Id == parkedId && i.Missing), $"Kachel „{Path.GetFileName(parkedSource)}“ zeigt „fehlt“ (Id {parkedId} bleibt)");
+            var favoritesAfterUpdate = await DbScalarAsync<int>("SELECT COUNT(*) FROM Files WHERE IsFavorite = 1").ConfigureAwait(true);
+            Check(favoritesAfterUpdate == favoritesBefore, $"Favoriten bleiben erhalten ({favoritesAfterUpdate})");
+            await SnapshotAsync("10-galerie-fehlt-badge").ConfigureAwait(true);
+        }
+        finally
+        {
+            File.Move(parked, parkedSource, overwrite: true);
+            try
+            {
+                Directory.Delete(ParkingDir); // nur, wenn leer — nie rekursiv
+            }
+            catch (IOException ex)
+            {
+                _logger.LogDebug(ex, "Rauchtest   Park-Ordner nicht entfernt: {Path}", ParkingDir);
+            }
+        }
+
+        // (3) Datei wieder da → Reappeared 1, Badge weg
+        _lastScan = null;
+        await _library.RunSmokeScanAsync(_root).ConfigureAwait(true);
+        Check(
+            _lastScan is { Mode: ScanMode.Incremental, Outcome: ScanOutcome.Completed, Reappeared: 1, Added: 0, MarkedMissing: 0 },
+            $"Incremental: Reappeared={_lastScan?.Reappeared}, Added={_lastScan?.Added}, MarkedMissing={_lastScan?.MarkedMissing}");
+        await WaitUntilAsync(
+            () => !_gallery.IsLoading && _gallery.CurrentPage.Any(i => i.Id == parkedId && !i.Missing),
+            ShortWait,
+            "„fehlt“-Badge nach Rückkehr der Datei weg").ConfigureAwait(true);
+
+        // (4) Neu aufbauen: ClearAndRescan vergibt neue FileIds (sqlite_sequence) — erst wenn die Galerie die neuen Ids zeigt, ist sie umgestellt.
         var previousMaxId = await DbScalarAsync<int>("SELECT COALESCE(MAX(Id), 0) FROM Files").ConfigureAwait(true);
         _navigation.NavigateTo(NavigationTags.Library);
         await WaitUntilAsync(() => _navigation.CurrentTag == NavigationTags.Library, ShortWait, "Bibliotheksseite").ConfigureAwait(true);
-        await _library.RunSmokeScanAsync(_root).ConfigureAwait(true);
+        _lastScan = null;
+        await _library.RunSmokeRebuildAsync(_root).ConfigureAwait(true);
         Check(_library.ErrorMessage is null && _library.IsScanSummaryOpen && !_library.ScanSummaryIsWarning, $"ClearAndRescan: {_library.ScanSummary}");
+        Check(_lastScan is { Mode: ScanMode.ClearAndRescan, Outcome: ScanOutcome.Completed }, $"ClearAndRescan-Ergebnis: Modus {_lastScan?.Mode}, {_lastScan?.Outcome}");
 
-        // ClearAndRescan vergibt neue FileIds (sqlite_sequence) — erst wenn die Galerie die neuen Ids zeigt, ist sie umgestellt.
         await WaitUntilAsync(
             () => _navigation.CurrentTag == NavigationTags.Gallery && !_gallery.IsLoading && _gallery.TotalCount == _mediaCount
                   && _gallery.CurrentPage.Count == _mediaCount && _gallery.CurrentPage.All(i => i.Id > previousMaxId),
@@ -618,7 +756,7 @@ internal sealed class SmokeScenario
         var fts = await DbScalarAsync<int>("SELECT COUNT(*) FROM FilesFts").ConfigureAwait(true);
         var favorites = await DbScalarAsync<int>("SELECT COUNT(*) FROM Files WHERE IsFavorite = 1").ConfigureAwait(true);
         Check(files == _mediaCount && fts == files, $"DB nach ClearAndRescan: {files} Files, {fts} FTS-Zeilen");
-        Check(favorites == 0, "ClearAndRescan hat Favoriten verworfen (erwartet in Welle 2)");
+        Check(favorites == 0, "ClearAndRescan hat Favoriten verworfen (Katalog komplett neu — „Aktualisieren“ behält sie)");
 
         await WaitUntilAsync(
             () => _gallery.CurrentPage.Count > 0 && _gallery.CurrentPage.All(i => i.Thumbnail is not null),

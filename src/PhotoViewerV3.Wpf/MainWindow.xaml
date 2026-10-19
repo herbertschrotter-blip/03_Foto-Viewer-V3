@@ -6,7 +6,7 @@
                  xmlns:library="clr-namespace:PhotoViewerV3.Libraries"
                  xmlns:folders="clr-namespace:PhotoViewerV3.Folders"
                  xmlns:settings="clr-namespace:PhotoViewerV3.Settings"
-                 xmlns:gallery="clr-namespace:PhotoViewerV3.Spike02.Views"
+                 xmlns:gallery="clr-namespace:PhotoViewerV3.Gallery.Views"
                  xmlns:sorter="clr-namespace:PhotoViewerV3.Sorter"
                  Title="PhotoViewer V3"
                  Height="800"

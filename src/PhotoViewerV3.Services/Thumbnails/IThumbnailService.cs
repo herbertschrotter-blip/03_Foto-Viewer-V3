@@ -59,4 +59,12 @@ public interface IThumbnailService
     void Invalidate(IReadOnlyList<int> fileIds)
     {
     }
+
+    /// <summary>
+    /// Verwirft den gesamten In-Memory-Zustand (alle erledigten/fehlgeschlagenen Dateien) — z. B. nachdem der
+    /// Thumbnail-Cache in den Einstellungen geleert wurde. Laufende Aufträge bleiben unberührt. Standard: keine Wirkung.
+    /// </summary>
+    void InvalidateAll()
+    {
+    }
 }

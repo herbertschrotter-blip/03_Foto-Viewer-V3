@@ -1,5 +1,7 @@
 # Spike #03 — LibVLCSharp WPF Lightbox
 
+> **Stand v0.2.0:** Spike-Code in v0.2.0 entfernt (`Spike03/` mit `SpikeMediaDownloader`, `SpikeLightboxViewModel`, `SpikeLightboxView`, Spike-`LightboxWindow`); produktive Umsetzung: `src/PhotoViewerV3.Wpf/Lightbox` (`LibVlcHost`, `LightboxService`, `LightboxViewModel`, `LightboxWindow`). Die Code-Links unten zeigen auf die produktiven Dateien.
+
 - **Status:** ✅ Grün — Cutline gerettet, MP4-Lightbox bleibt in V0.1
 - **Datum gestartet:** 2026-05-11
 - **Datum abgeschlossen:** 2026-05-11
@@ -122,7 +124,9 @@ Oder F5 in VS. Dann links auf "Spike: Lightbox" → "Sample laden (Sintel, ~4 MB
 
 ## Code
 
-- [src/PhotoViewerV3.Wpf/Spike03/Services/SpikeMediaDownloader.cs](../../src/PhotoViewerV3.Wpf/Spike03/Services/SpikeMediaDownloader.cs)
-- [src/PhotoViewerV3.Wpf/Spike03/ViewModels/SpikeLightboxViewModel.cs](../../src/PhotoViewerV3.Wpf/Spike03/ViewModels/SpikeLightboxViewModel.cs)
-- [src/PhotoViewerV3.Wpf/Spike03/Views/SpikeLightboxView.xaml](../../src/PhotoViewerV3.Wpf/Spike03/Views/SpikeLightboxView.xaml)
-- [src/PhotoViewerV3.Wpf/Spike03/Views/LightboxWindow.xaml](../../src/PhotoViewerV3.Wpf/Spike03/Views/LightboxWindow.xaml)
+Der Spike-Code (`Spike03/`) wurde in v0.2.0 entfernt; die Erkenntnisse leben in der produktiven Lightbox weiter:
+
+- [src/PhotoViewerV3.Wpf/Lightbox/LibVlcHost.cs](../../src/PhotoViewerV3.Wpf/Lightbox/LibVlcHost.cs) (`Core.Initialize()` einmal, LibVLC-Singleton)
+- [src/PhotoViewerV3.Wpf/Lightbox/LightboxViewModel.cs](../../src/PhotoViewerV3.Wpf/Lightbox/LightboxViewModel.cs) (MediaPlayer pro Fenster, Media pro Datei)
+- [src/PhotoViewerV3.Wpf/Lightbox/LightboxWindow.xaml](../../src/PhotoViewerV3.Wpf/Lightbox/LightboxWindow.xaml) (FluentWindow, VideoView-Host, F/F11 Vollbild, Esc)
+- [src/PhotoViewerV3.Wpf/Lightbox/LightboxService.cs](../../src/PhotoViewerV3.Wpf/Lightbox/LightboxService.cs) (ein Fenster pro Sitzung)

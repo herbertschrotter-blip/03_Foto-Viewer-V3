@@ -29,6 +29,30 @@ public sealed class DialogService : IDialogService
         return result == UiMessageBoxResult.Primary;
     }
 
+    public async Task<DialogChoice> ChooseAsync(
+        string title,
+        string message,
+        string primaryText,
+        string secondaryText,
+        string closeText = "Abbrechen",
+        bool secondaryIsDestructive = false)
+    {
+        var box = new UiMessageBox();
+        Configure(box, title, BuildMessage(message), closeText);
+        box.PrimaryButtonText = primaryText;
+        box.PrimaryButtonAppearance = ControlAppearance.Primary;
+        box.SecondaryButtonText = secondaryText;
+        box.SecondaryButtonAppearance = secondaryIsDestructive ? ControlAppearance.Danger : ControlAppearance.Secondary;
+
+        var result = await box.ShowDialogAsync().ConfigureAwait(true);
+        return result switch
+        {
+            UiMessageBoxResult.Primary => DialogChoice.Primary,
+            UiMessageBoxResult.Secondary => DialogChoice.Secondary,
+            _ => DialogChoice.None,
+        };
+    }
+
     public async Task<string?> PromptTextAsync(string title, string message, string initialValue, string confirmText = "OK")
     {
         var input = new UiTextBox { Text = initialValue, Margin = new Thickness(0, 12, 0, 0) };

@@ -72,3 +72,4 @@ LibVLC-Spike rot (>5 PT oder instabil):
 
 - [chatgpt-review/runde-2-chatgpt-response.md](../../chatgpt-review/runde-2-chatgpt-response.md) "WIC vs ImageSharp"
 - [chatgpt-review/runde-3-chatgpt-response.md](../../chatgpt-review/runde-3-chatgpt-response.md) "Aufwand-Reality-Check"
+- Erweitert durch [ADR-0016](0016-formatregister.md) (Formatregister statt JPG/PNG/MP4, FFmpeg-Fallback für Bilder ohne WIC-Codec)

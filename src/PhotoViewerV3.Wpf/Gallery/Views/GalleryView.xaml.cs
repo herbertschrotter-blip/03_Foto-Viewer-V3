@@ -5,9 +5,9 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using Microsoft.Extensions.Logging;
-using PhotoViewerV3.Spike02.ViewModels;
+using PhotoViewerV3.Gallery.ViewModels;
 
-namespace PhotoViewerV3.Spike02.Views;
+namespace PhotoViewerV3.Gallery.Views;
 
 /// <summary>
 /// Galerie-View. Code-Behind enthält nur UI-Glue (Owner-Window, Enter/Doppelklick auf den

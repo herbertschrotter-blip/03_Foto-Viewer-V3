@@ -106,6 +106,18 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
         }
     }
 
+    public void InvalidateAll()
+    {
+        // ConcurrentDictionary erlaubt Entfernen während der Enumeration; laufende Jobs bleiben (Dedupe).
+        foreach (var (id, state) in _states)
+        {
+            if (state.Outcome != JobOutcome.Queued)
+            {
+                _states.TryRemove(new KeyValuePair<int, JobState>(id, state));
+            }
+        }
+    }
+
     public async Task RequestThumbnailsAsync(
         IReadOnlyList<ThumbnailRequest> requests,
         CancellationToken cancellationToken = default)

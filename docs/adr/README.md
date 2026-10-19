@@ -34,10 +34,15 @@ Wenn eine ADR-Entscheidung revidiert wird: **neues ADR anlegen** + altes auf "Su
 | [0013](0013-status-ui.md) | Status-UI mit 4 Indikatoren | Accepted |
 | [0014](0014-animated-hover-not-v01.md) | Animated Hover NICHT in V0.1 | Accepted |
 | [0015](0015-face-recognition-not-v01-schema.md) | Face Recognition NICHT im V0.1-Schema | Accepted |
+| [0016](0016-formatregister.md) | Formatregister statt fester Formatliste | Accepted |
+| [0017](0017-modul-entkopplung-messenger.md) | Modul-Entkopplung über WeakReferenceMessenger und Modul-Registrierungen | Accepted |
+| [0018](0018-datei-operationen-nur-ueber-service.md) | Datei-Operationen ausschließlich über IFileOperationService | Accepted |
+| [0019](0019-incremental-scan.md) | Incremental-Scan: Identität Ordner+Name, Missing statt Löschen, Mass-Missing-Guard | Accepted |
 
 ## Quellen der Entscheidungen
 
-Die ADRs wurden in 3 ChatGPT-Review-Runden mit GPT-5 validiert. Siehe [`chatgpt-review/`](../../chatgpt-review/) für Original-Diskussion.
+ADR-0001 bis ADR-0015 wurden in 3 ChatGPT-Review-Runden mit GPT-5 validiert. Siehe [`chatgpt-review/`](../../chatgpt-review/) für Original-Diskussion.
+ADR-0016 bis ADR-0019 dokumentieren die Entscheidungen der Umsetzung bis Release 0.2.0 (siehe [CHANGELOG.md](../../CHANGELOG.md)).
 
 ## Template für neue ADRs
 

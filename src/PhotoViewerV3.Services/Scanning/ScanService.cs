@@ -116,7 +116,7 @@ public sealed class ScanService : IScanService
 
             if (result.Outcome == ScanOutcome.LibraryOffline)
             {
-                _messenger.Send(new ScanAbortedMessage(libraryId, Canceled: false, LibraryOfflineException.Describe(result.RootPath)));
+                _messenger.Send(new ScanAbortedMessage(libraryId, Canceled: false, LibraryOfflineException.Describe(result.RootPath), LibraryOffline: true));
             }
             else
             {

@@ -31,31 +31,24 @@ public sealed partial class LibraryViewModel : ObservableObject
     private readonly ILibraryService _libraries;
     private readonly IScanService _scanner;
     private readonly IDialogService _dialogs;
-    private readonly ILibraryDialogService _scanDialogs;
     private readonly INavigationService _navigation;
     private readonly ILogger<LibraryViewModel> _logger;
     private readonly DispatcherTimer _elapsedTimer;
     private readonly Stopwatch _scanStopwatch = new();
     private CancellationTokenSource? _scanCts;
 
-    /// <param name="scanDialogs">
-    /// Drei-Knopf-Dialog für den Mass-Missing-Guard; optional, damit die Shell-Registrierung unverändert bleibt
-    /// (ohne Registrierung wird <see cref="LibraryDialogService"/> direkt verwendet).
-    /// </param>
     public LibraryViewModel(
         ILibraryService libraries,
         IScanService scanner,
         IDialogService dialogs,
         INavigationService navigation,
-        ILogger<LibraryViewModel> logger,
-        ILibraryDialogService? scanDialogs = null)
+        ILogger<LibraryViewModel> logger)
     {
         _libraries = libraries;
         _scanner = scanner;
         _dialogs = dialogs;
         _navigation = navigation;
         _logger = logger;
-        _scanDialogs = scanDialogs ?? new LibraryDialogService();
 
         var dispatcher = Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
         _elapsedTimer = new DispatcherTimer(ElapsedTickInterval, DispatcherPriority.Background, OnElapsedTick, dispatcher);
@@ -378,7 +371,7 @@ public sealed partial class LibraryViewModel : ObservableObject
             {
                 case ScanOutcome.MassMissingBlocked:
                 {
-                    var choice = await _scanDialogs.ShowChoiceAsync(
+                    var choice = await _dialogs.ChooseAsync(
                         "Ungewöhnlich viele Dateien fehlen",
                         $"Beim Scan wurden {result.MissingDetected:N0} fehlende Dateien erkannt. " +
                         "Das kann passieren, wenn ein Laufwerk nicht vollständig verfügbar ist.",
@@ -387,14 +380,14 @@ public sealed partial class LibraryViewModel : ObservableObject
                         "Abbrechen",
                         secondaryIsDestructive: true).ConfigureAwait(true);
 
-                    if (choice == LibraryDialogChoice.Primary)
+                    if (choice == DialogChoice.Primary)
                     {
                         mode = ScanMode.Incremental;
                         options = ScanOptions.Default;
                         continue;
                     }
 
-                    if (choice == LibraryDialogChoice.Secondary)
+                    if (choice == DialogChoice.Secondary)
                     {
                         _logger.LogInformation("Mass-Missing bestätigt: {Count} Dateien werden als fehlend markiert", result.MissingDetected);
                         mode = ScanMode.Incremental;

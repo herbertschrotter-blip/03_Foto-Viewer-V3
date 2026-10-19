@@ -1,8 +1,10 @@
 # PhotoViewer V3 — Implementation-Plan (C# Port)
 
-> **Stand:** 2026-05-10
+> **Stand:** 2026-10-19 (Release 0.2.0)
 > **Quelle:** Konsolidiert aus 3 ChatGPT-Review-Runden mit GPT-5 (siehe `chatgpt-review/`)
-> **Status:** ✅ Plan finalisiert, bereit für Implementation
+> **Status:** ✅ V0.1 und V0.2 umgesetzt, Teile von V0.3/V0.4 vorgezogen (File Sorter, Flatten & Move, Rating,
+> Formatregister) — Stand je Punkt in Kap. 6 und 7 (✅ umgesetzt · 🟡 teilweise · ⬜ offen); Änderungen je Version in
+> [CHANGELOG.md](CHANGELOG.md), Entscheidungen seit dem Plan in [ADR-0016 … 0019](docs/adr/README.md)
 
 ---
 
@@ -39,7 +41,7 @@ Native Windows-Desktop-Anwendung zum Ansehen, Sortieren und Verschieben von Foto
 | **User** | Single-User, lokal, keine Auth |
 | **Bibliotheks-Größe** | 50.000–500.000 Dateien |
 | **Storage** | gemischt — wandert zwischen lokaler SSD, externer HDD, NAS |
-| **Formate** | nur JPG / PNG / MP4 (kein HEIC, kein RAW) |
+| **Formate** | Formatregister `IMediaFormatRegistry` ([ADR-0016](docs/adr/0016-formatregister.md)): gängige Foto-Formate (JPG, PNG, GIF, BMP, TIFF, WebP, HEIC/HEIF, AVIF, Kamera-RAW) und Video-Container (MP4, MOV, MKV, AVI, WMV, MTS, …); WIC + Windows-Codec-Pakete, FFmpeg als Fallback — ursprünglich nur JPG / PNG / MP4 |
 | **Plan-Apply-Modus** | nur Move im MVP, Copy später |
 | **Distribution** | Portable Ordner via `dotnet publish` |
 | **V0.1-Aufwand** | 8–10 Wochen, robust release-fähig |
@@ -87,43 +89,49 @@ Native Windows-Desktop-Anwendung zum Ansehen, Sortieren und Verschieben von Foto
 
 ## 3. Solution-Layout
 
-**Multi-Project ab Tag 1** (nicht Single-Project):
+**Multi-Project ab Tag 1** (nicht Single-Project). Reales Layout seit 0.2.0 — Module statt technischer Ordner
+(`Views/`, `ViewModels/`), jedes Modul mit eigener DI-Registrierung `AddXyz()` ([ADR-0017](docs/adr/0017-modul-entkopplung-messenger.md)):
 
 ```
-PhotoViewerV3.sln
+PhotoViewerV3.slnx                       # Solution (.slnx), Directory.Packages.props = Central Package Management
 src/
   PhotoViewerV3.Domain/                  # net10.0 — keine externen Deps
-    Entities/                         # Library, File, Folder, Tag, Plan, ...
-    ValueObjects/
-    Enums/
-    Abstractions/                     # Interfaces für Services
+    Entities/                         # Library, MediaFile, Folder, Thumbnail, OperationBatch, FileOperation, Setting
+    Enums/                            # MediaType, ThumbnailStatus/Kind, BatchStatus, FileOperationStatus, OperationType
   PhotoViewerV3.Data/                    # → Domain
-    LibraryContext.cs                 # DbContext
-    EntitiesMapping/                  # EF Core Configurations
-    Repositories/                     # CRUD via EF
-    RawSql/                           # Bulk-Insert, FTS5, Performance-Queries
-    Migrations/                       # EF Core auto-generated
-  PhotoViewerV3.Services/                # → Domain + Data
-    Scanning/                         # ScanService, FileEnumerator, BatchWriter
-    Thumbnails/                       # ThumbnailQueueService, WIC-/FFmpeg-Generators
-    Storage/                          # StorageProfileService, AvailabilityChecker
-    Operations/                       # OperationBatch, RecycleBin, Move/Rename
-    Search/                           # FTS5-Indexer, QueryService
-    Settings/                         # Config-Persistenz
-    Media/                            # Codec-Detection, EXIF
-  PhotoViewerV3.Wpf/                     # net10.0-windows → alle
-    App.xaml / App.xaml.cs            # HostBuilder-Setup
-    MainWindow.xaml
-    Views/                            # GalleryView, LightboxWindow, ...
-    ViewModels/                       # CommunityToolkit.Mvvm
-    Controls/                         # PagedThumbnailGrid, ZoomImage
-    Services/                         # UI-Services (Notification, Dialog)
-    Themes/                           # WPF-UI Theme-Resources
-  PhotoViewerV3.Tools/                   # optional ab später (CLI für migrate, rebuild-fts, verify-db)
+    LibraryContext.cs                 # DbContext (+ DesignTimeLibraryContextFactory)
+    EntitiesMapping/                  # EF Core Configurations, ValueConverters
+    RawSql/                           # BulkScanWriter, FtsIndexer, FtsQueryBuilder
+    Migrations/                       # EF Core (InitialV01)
+  PhotoViewerV3.Services/                # → Domain + Data, WPF-frei; AddPhotoViewerServices()
+    Catalog/                          # CatalogUpdateService (Favorit/Bewertung)
+    Database/                         # LibraryContextFactory, DatabaseInitializer, SqlitePragmaInterceptor
+    Infrastructure/                   # AppDataPaths
+    Library/                          # LibraryService, LibraryCatalogCleanup
+    Media/                            # MediaFormatRegistry (ADR-0016)
+    Messaging/                        # Nachrichten-Records für WeakReferenceMessenger (ADR-0017)
+    Operations/                       # FileOperationService, WindowsRecycleBin (ADR-0012/0018)
+    Scanning/                         # ScanService, FolderEnumerator, IncrementalScanRunner, RootAvailabilityProbe, MassMissingGuard (ADR-0019)
+    Sorter/                           # FileSorterService, FlattenService, SorterPatternEngine, SorterProfileStore
+    Thumbnails/                       # ThumbnailService, FfmpegVideoThumbnailer, Renderer-Interfaces
+  PhotoViewerV3.Wpf/                     # net10.0-windows → alle; App.xaml.cs = Host + DI, MainWindow = NavigationView
+    Folders/                          # Ordnerbaum-Seite
+    Gallery/                          # Galerie: Data (GalleryPageSource), ViewModels, Views, Controls, Converters, Services
+    Library/                          # Bibliotheks-Seite (Namespace PhotoViewerV3.Libraries)
+    Lightbox/                         # LightboxWindow/-ViewModel/-Service, ZoomPanControl, LibVlcHost, Imaging
+    Settings/                         # Einstellungen, ThemeService
+    Shell/                            # Navigation, DialogService, StatusBar, Converters, Smoke/ (Rauchtest)
+    Sorter/                           # Sortieren-Seite (File Sorter, Flatten & Move)
+    Thumbnails/                       # WicImageThumbnailRenderer (WIC lebt im Wpf-Projekt, Interface in Services)
 tests/
-  PhotoViewerV3.Tests/                   # xUnit
-  PhotoViewerV3.PerfTests/               # optional, Benchmark/Console-Harness
+  PhotoViewerV3.Tests/                   # xUnit: Services + Data
+  PhotoViewerV3.Wpf.Tests/               # xUnit: WPF-gebundener Code (WIC, GalleryQuery, Converter)
+  PhotoViewerV3.PerfTests/               # Benchmark/Console-Harness der Spikes
 ```
+
+Noch nicht angelegt (Plan bleibt): `Services/Storage/` (StorageProfileService, ADR-0008), `Services/Settings/`,
+`Domain/ValueObjects/`, `Domain/Abstractions/`, `Data/Repositories/`, `PhotoViewerV3.Tools/` — Settings laufen heute
+über die `Settings`-Tabelle direkt im jeweiligen Service, Interfaces liegen in `Services`.
 
 **Referenz-Regeln:**
 - Domain: keine Projekt-Abhängigkeiten
@@ -219,48 +227,56 @@ PRAGMA temp_store=MEMORY;
 
 ## 6. V0.1-Scope
 
+Status (Stand 0.2.0): ✅ umgesetzt · 🟡 teilweise · ⬜ offen
+
 ### Pflicht (nicht streichbar)
-- Multi-Project Solution
-- SQLite-Bulk-Scan (Raw SQLite Prepared INSERT in Transaktion)
-- FTS5 minimal (Files.Name + Extension)
-- Paged virtualisiertes Grid (200–1000 Items pro Page, keine 500k ObservableCollection)
-- WIC-Thumbnails JPG/PNG mit `.tmp`-Write + atomic Move
-- MP4-statisches Thumbnail via FFmpeg + Codec-Badge
-- Suche + Filter (Alle/Bilder/Videos/Favoriten) + Favorit
-- Offline-vs-Missing-Guard mit 20%-Threshold
-- Statusbar mit 4 Indikatoren (technisch-look OK, Hauptsache zuverlässig)
-- Image-Lightbox mit Zoom + Pfeiltasten + Buttons
-- Delete-to-Recycle mit Confirm + OperationBatches-Eintrag
-- Container-State (Subfolder-Kacheln wenn keine direkten Medien)
+| Status | Punkt |
+|---|---|
+| ✅ | Multi-Project Solution |
+| ✅ | SQLite-Bulk-Scan (Raw SQLite Prepared INSERT in Transaktion) |
+| ✅ | FTS5 minimal (Files.Name + Extension) — mit `FtsQueryBuilder` für sichere Benutzereingaben |
+| ✅ | Paged virtualisiertes Grid (200–1000 Items pro Page, keine 500k ObservableCollection) |
+| ✅ | WIC-Thumbnails JPG/PNG mit `.tmp`-Write + atomic Move — plus EXIF-Orientierung, weitere Formate (ADR-0016) |
+| 🟡 | MP4-statisches Thumbnail via FFmpeg + Codec-Badge — Thumbnail ✅, Codec-Badge nur im Lightbox-Info-Panel |
+| ✅ | Suche + Filter (Alle/Bilder/Videos/Favoriten) + Favorit |
+| ✅ | Offline-vs-Missing-Guard mit 20%-Threshold (ADR-0019) |
+| ✅ | Statusbar mit 4 Indikatoren (technisch-look OK, Hauptsache zuverlässig) |
+| ✅ | Image-Lightbox mit Zoom + Pfeiltasten + Buttons |
+| ✅ | Delete-to-Recycle mit Confirm + OperationBatches-Eintrag |
+| ✅ | Container-State (Subfolder-Kacheln wenn keine direkten Medien) |
 
 ### V0.1 nur wenn Spike grün (Cutline ~5 PT)
-- **LibVLCSharp Video-Lightbox** — fällt zurück auf "Extern öffnen" bei rotem Spike
-- **FPS-basiertes Adaptive Throttling** — fällt zurück auf StorageProfile-feste Budgets
+| Status | Punkt |
+|---|---|
+| ✅ | **LibVLCSharp Video-Lightbox** — Spike grün, produktiv in `Wpf/Lightbox` |
+| ⬜ | **FPS-basiertes Adaptive Throttling** — fällt zurück auf StorageProfile-feste Budgets (beides offen, feste Worker-Zahl) |
 
 ### Aus V0.1 raus
-- Animated Hover-Thumbs
-- Move / Rename
-- Plan-Ordner
-- Tags / Albums
-- Rating
-- Face Recognition
-- Full-Recovery-Repair-UI
-- File-Sorter
-- Archive Auto-Extract
-- pHash Duplikat-Erkennung
+| Status | Punkt |
+|---|---|
+| ⬜ | Animated Hover-Thumbs |
+| ✅ | Move / Rename (0.2.0 über `IFileOperationService`, ADR-0018) |
+| ⬜ | Plan-Ordner |
+| ⬜ | Tags / Albums |
+| ✅ | Rating (0.2.0: 1–5 Sterne in Galerie und Lightbox) |
+| ⬜ | Face Recognition |
+| 🟡 | Full-Recovery-Repair-UI — Hinweis in der Statusleiste + Undo, kein Reparatur-Dialog |
+| ✅ | File-Sorter (0.2.0 aus V2 portiert, Pattern-Engine + Multi-Level) |
+| ⬜ | Archive Auto-Extract |
+| ⬜ | pHash Duplikat-Erkennung |
 
 ---
 
 ## 7. Phasen-Roadmap
 
-| Phase | Inhalt | Aufwand |
-|---|---|---|
-| **Spikes (vor V0.1)** | 6 Pflicht-Spikes (3 blockierend) | 10–18 PT |
-| **V0.1** | Produktiver Viewer + Indexer (siehe Pflicht-Liste) | 60–90 PT |
-| **V0.2** | LibVLC-Lightbox produktiv, Move/Rename, OperationBatches voll, Recovery-UI, Thumbnail-Priorities komplett | 25–40 PT |
-| **V0.3** | Plan-Ordner: Plans/PlanFolders/PlanAssignments + Drag&Drop + Preflight + Apply Move-only + Block-Undo | 25–40 PT |
-| **V0.4 / Phase 8** | FTS5 erweitert (Tags), Tags/Albums-UI, Rating, Animated Hover, File-Sorter (Token-Profile + Drag&Drop-Editor), Archive Auto-Extract, pHash Duplikate, Flatten & Move | 40–60 PT |
-| **V0.5 / Phase 9** | Face Recognition (RetinaFace + ArcFace via ONNX), Auto-Clustering, Personen benennen | 30–50 PT |
+| Status | Phase | Inhalt | Aufwand |
+|---|---|---|---|
+| ✅ | **Spikes (vor V0.1)** | 6 Pflicht-Spikes (3 blockierend) — alle grün, siehe `docs/spikes/` | 10–18 PT |
+| ✅ | **V0.1** | Produktiver Viewer + Indexer (siehe Pflicht-Liste) | 60–90 PT |
+| 🟡 | **V0.2** | LibVLC-Lightbox produktiv ✅, Move/Rename ✅, OperationBatches voll ✅ (ADR-0018), Recovery-UI 🟡 (Statusleisten-Hinweis + Undo), Thumbnail-Priorities komplett ⬜ (zwei Worker-Pools, keine 4-Prio-Queue); dazu Incremental-Scan ✅ (ADR-0019), Bibliotheksverwaltung ✅, Ordnerbaum ✅, Einstellungen ✅ | 25–40 PT |
+| ⬜ | **V0.3** | Plan-Ordner: Plans/PlanFolders/PlanAssignments + Drag&Drop + Preflight + Apply Move-only + Block-Undo | 25–40 PT |
+| 🟡 | **V0.4 / Phase 8** | FTS5 erweitert (Tags) ⬜, Tags/Albums-UI ⬜, Rating ✅ (vorgezogen), Animated Hover ⬜, File-Sorter ✅ (vorgezogen: Regex-Profile, Multi-Level, Import/Export; Drag&Drop-Editor ⬜), Archive Auto-Extract ⬜, pHash Duplikate ⬜, Flatten & Move ✅ (vorgezogen) | 40–60 PT |
+| ⬜ | **V0.5 / Phase 9** | Face Recognition (RetinaFace + ArcFace via ONNX), Auto-Clustering, Personen benennen | 30–50 PT |
 
 **Gesamt-V0.1 brutto:** 70–108 PT = **8–10 Wochen** für 1 erfahrenen Entwickler bei 5 PT/Woche.
 

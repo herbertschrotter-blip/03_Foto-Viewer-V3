@@ -15,6 +15,7 @@ using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using PhotoViewerV3.Data.RawSql;
 using PhotoViewerV3.Domain.Entities;
 using PhotoViewerV3.Gallery.Controls;
 using PhotoViewerV3.Gallery.Services;
@@ -24,9 +25,9 @@ using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Messaging;
 using PhotoViewerV3.Services.Operations;
 using PhotoViewerV3.Services.Thumbnails;
-using PhotoViewerV3.Spike02.Data;
+using PhotoViewerV3.Gallery.Data;
 
-namespace PhotoViewerV3.Spike02.ViewModels;
+namespace PhotoViewerV3.Gallery.ViewModels;
 
 /// <summary>Eintrag der Sortier-Auswahl in der Toolbar.</summary>
 public sealed record GallerySortOption(GallerySort Sort, string Label);
@@ -414,15 +415,26 @@ public sealed partial class GalleryViewModel : ObservableObject
 
     private Task HandleScanCompletedAsync(ScanCompletedMessage m)
     {
-        _logger.LogInformation("ScanCompletedMessage: LibraryId={LibraryId} Files={Files}", m.LibraryId, m.Result.FilesInserted);
+        var r = m.Result;
+        _logger.LogInformation(
+            "ScanCompletedMessage: LibraryId={LibraryId} Modus={Mode} Ergebnis={Outcome} Neu={Added} Geändert={Modified} Fehlend={Missing} Wieder={Reappeared}",
+            m.LibraryId, r.Mode, r.Outcome, r.Added, r.Modified, r.MarkedMissing, r.Reappeared);
         if (!HasLibrary)
         {
             return ReloadLibraryAsync(m.LibraryId);
         }
 
-        return m.LibraryId == _libraryId
-            ? ReloadTotalAndPageAsync(restoreSelection: true)
-            : Task.CompletedTask;
+        if (m.LibraryId != _libraryId)
+        {
+            return Task.CompletedTask;
+        }
+
+        // ClearAndRescan vergibt FileIds neu (ggf. wiederverwendet), Incremental ändert Dateien oder bringt sie zurück —
+        // auch auf anderen Pages (z. B. Failed „Quelle fehlt“, solange das Laufwerk weg war). Deshalb den gesamten
+        // In-Memory-Zustand des ThumbnailService verwerfen: der nächste Request prüft wieder gegen DB und Cache;
+        // Wiederholungen bleiben über Thumbnails.AttemptCount begrenzt.
+        _thumbnails.InvalidateAll();
+        return ReloadTotalAndPageAsync(restoreSelection: true);
     }
 
     private Task HandleFolderSelectedAsync(FolderSelectedMessage m)
@@ -455,6 +467,13 @@ public sealed partial class GalleryViewModel : ObservableObject
         }
         else
         {
+            // Removed: Thumbnails-Zeile und Cache-Datei sind weg, die FileId kann der Scanner neu vergeben;
+            // Added: Undo/Incremental bringt Dateien (zurück), deren alter In-Memory-Zustand nicht mehr gilt.
+            if (m.Kind is FilesChangeKind.Removed or FilesChangeKind.Added)
+            {
+                _thumbnails.Invalidate(m.FileIds);
+            }
+
             // Moved/Removed/Added (oder Favoriten-Filter aktiv): Page neu laden, gebündelt.
             ScheduleReload();
         }
@@ -1016,7 +1035,19 @@ public sealed partial class GalleryViewModel : ObservableObject
     private Task LastPageAsync() => NavigateToPageAsync(PageCount - 1);
 
     [RelayCommand]
-    private Task SearchAsync() => ChangeQueryAsync();
+    private Task SearchAsync()
+    {
+        // Nur Sonderzeichen (z. B. „---“, „***“) ergeben keinen FTS-Ausdruck (FtsQueryBuilder → null): Feld leeren und
+        // sagen warum, statt den Text stehen zu lassen und still die ganze Bibliothek zu zeigen.
+        if (!string.IsNullOrWhiteSpace(SearchTerm) && FtsQueryBuilder.FromUserInput(SearchTerm) is null)
+        {
+            var ignored = SearchTerm.Trim();
+            SearchTerm = null;
+            SetResultStatus($"Suche nach „{ignored}“ ignoriert — der Text enthält keine Buchstaben oder Ziffern.");
+        }
+
+        return ChangeQueryAsync();
+    }
 
     [RelayCommand]
     private Task ClearSearchAsync()

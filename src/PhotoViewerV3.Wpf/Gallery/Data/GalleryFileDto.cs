@@ -1,4 +1,4 @@
-namespace PhotoViewerV3.Spike02.Data;
+namespace PhotoViewerV3.Gallery.Data;
 
 public enum GalleryFilter
 {

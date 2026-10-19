@@ -3,9 +3,9 @@ using System.IO;
 using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using PhotoViewerV3.Domain.Enums;
-using PhotoViewerV3.Spike02.Data;
+using PhotoViewerV3.Gallery.Data;
 
-namespace PhotoViewerV3.Spike02.ViewModels;
+namespace PhotoViewerV3.Gallery.ViewModels;
 
 /// <summary>
 /// Beobachtbares Grid-Item. Kapselt die unveränderlichen Datei-Daten aus

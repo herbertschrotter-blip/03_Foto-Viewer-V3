@@ -14,9 +14,15 @@
     <!-- Storage-Profile-Detection (Spike #6) -->
     <PackageVersion Include="System.Management" Version="9.0.0" />
 
-    <!-- Transitive Security-Pin: GHSA-37gx-xxp4-5rgx + GHSA-w3x6-4m5h-cxqf in 9.0.0 (NU1903).
-         Greift transitiv dank CentralPackageTransitivePinningEnabled=true. -->
-    <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.7" />
+    <!-- Transitive Security-Pins (NU1902/NU1903), greifen dank CentralPackageTransitivePinningEnabled=true:
+         System.Security.Cryptography.Xml/Pkcs (GHSA-37gx-xxp4-5rgx u. a. in 9.0.0, GHSA-23rf-6693-g89p u. a. in 10.0.7)
+         und SQLitePCLRaw 2.1.11 (GHSA-2m69-gcr7-jv3q). Stand 2026-10-19: jeweils neueste 10.0.x bzw. 2.1.x. -->
+    <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.13" />
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
+    <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.14" />
+    <PackageVersion Include="SQLitePCLRaw.core" Version="2.1.14" />
+    <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.14" />
+    <PackageVersion Include="SQLitePCLRaw.provider.e_sqlite3" Version="2.1.14" />
 
     <!-- Hosting + DI + Logging -->
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.0" />

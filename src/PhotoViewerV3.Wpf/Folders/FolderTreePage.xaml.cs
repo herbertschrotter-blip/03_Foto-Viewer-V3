@@ -1,5 +1,5 @@
 using System.Windows.Controls;
-using PhotoViewerV3.Spike02.Views;
+using PhotoViewerV3.Gallery.Views;
 
 namespace PhotoViewerV3.Folders;
 
