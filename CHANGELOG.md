@@ -3,7 +3,13 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
-## [0.2.3] — 2026-10-19
+## [0.2.5] — 2026-10-19
+
+### Tests
+- WPF-Testfenster (`AppDialogWindowTests`, `GalleryGridHost`) liegen bei −5000/−5000 und werden nicht aktiviert — sie
+  erschienen sonst während der Testläufe auf dem Desktop (Dialog „Ungewöhnlich viele Dateien fehlen … 142.381“).
+
+## [0.2.4] — 2026-10-19
 
 ### Geändert
 - **Galerie-Grid UI-virtualisiert** (`Gallery/Controls/VirtualizingTilePanel`, Folgearbeit aus 0.2.1): eigenes
@@ -40,6 +46,9 @@ Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`,
 ### Offen
 - Seitenwechsel bei 1000 Kacheln ≈ 200 ms durch Einzel-Remove/-Insert in `ApplyRows` (ObservableCollection); Bündelung wäre
   der nächste Schritt, falls spürbar.
+
+## [0.2.3] — 2026-10-19
+
 ### Behoben
 - **Lightbox zeigte von großen Fotos nur die linke obere Ecke in Fit-Größe:** Das Bildelement lag direkt im
   Bühnen-Grid; WPF schnitt ein Element, das größer als die Bühne ist, erst auf den Layout-Platz zu und
@@ -73,8 +82,9 @@ Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`,
 - EF-Core-SQL-Befehle werden nicht mehr auf Information-Niveau protokolliert (vorher tausende Zeilen je Sitzung).
 
 ### Offen
-- Beim Start aus Visual Studio (Debugger) entstanden keine Logzeilen in `%LocalAppData%\PhotoViewerV3\logs`;
-  Ursache noch unklar.
+- Beim Start aus Visual Studio (Debugger) schienen keine Logzeilen in `%LocalAppData%\PhotoViewerV3\logs` zu
+  entstehen — geklärt (0.2.6): die App loggte korrekt; der Prüfprozess lief in einem App-Container, dessen Sicht auf
+  `%LocalAppData%` virtualisiert ist, und sah deshalb nur sein eigenes Verzeichnis.
 - Galerie ohne UI-Virtualisierung: Erstaufbau von 500 Kacheln kostet im Debug-Build einige Sekunden; eine
   virtualisierende Kachelanordnung bleibt Folgearbeit.
 
