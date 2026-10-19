@@ -49,3 +49,5 @@ Branch-Policy: current
 - SQLite: WAL, `busy_timeout` 5000; lange Schreibläufe in einer Transaktion; nur eine schreibende Verbindung zur Zeit (Single-Writer, z. B. `SemaphoreSlim`).
 - Datei-Operationen immer mit `OperationBatch` + `FileOperation` protokollieren (ADR-0012); Papierkorb statt Hard-Delete.
 - Keine externen Sample-Assets im Produktivpfad (nur Spike-Code darf laden).
+- Keine `Wpf.Ui.Controls.MessageBox` verwenden (Layout-Schleife bei umbrechendem Text mit Eingabefeld, v0.2.0-Hänger). Dialoge laufen über `IDialogService` bzw. `Shell/Dialogs/AppDialogWindow`.
+- Galerie-Kacheln bleiben im UI-Automation-Baum Blätter (`GalleryListBox`/`GalleryListBoxItem`); viele Vorschaubilder gebündelt mit Background-Priorität an den UI-Thread geben. Sonst blockiert `AutomationPeer.UpdateSubtree` den UI-Thread, sobald ein Automation-Client lauscht (Visual Studio Live Visual Tree).
