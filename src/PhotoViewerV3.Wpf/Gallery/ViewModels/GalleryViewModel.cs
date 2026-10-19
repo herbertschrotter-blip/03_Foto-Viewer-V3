@@ -83,6 +83,10 @@ public sealed partial class GalleryViewModel : ObservableObject
     private readonly ConcurrentQueue<(int FileId, ImageSource Image)> _readyThumbnails = new();
     private int _thumbnailFlushScheduled;
 
+    /// <summary>Vom Kachel-Panel gemeldeter sichtbarer Index-Bereich in <see cref="CurrentPage"/> (-1 = unbekannt); Thumbnails dafür zuerst.</summary>
+    private int _visibleFirstIndex = -1;
+    private int _visibleLastIndex = -1;
+
     private CancellationTokenSource? _activeLoadCts;
     private CancellationTokenSource? _reloadDebounceCts;
     private DateTime _resultStatusUntil;
@@ -682,9 +686,63 @@ public sealed partial class GalleryViewModel : ObservableObject
             PageIndex, PageSize, rows.Count, LastPageLoadMs, Filter, SelectedSort.Sort,
             FolderId?.ToString() ?? "-", IncludeSubfolders, SearchTerm ?? "-");
 
-        // Thumbnails nur anstoßen (Service dedupliziert, ist thread-sicher). Auf dem Thread-Pool,
-        // damit der synchrone Vorlauf des Services (DB-Batch-Check) den UI-Thread nicht blockiert.
-        FireAndForget(() => Task.Run(() => RequestThumbnailsAsync(newItems)));
+        // Thumbnails nur anstoßen (Service dedupliziert, ist thread-sicher) — sichtbare Kacheln zuerst.
+        FireAndForget(() => RequestThumbnailsVisibleFirstAsync(newItems));
+    }
+
+    /// <summary>
+    /// Die View meldet den sichtbaren Index-Bereich des Kachel-Grids (VirtualizingTilePanel). Die Thumbnail-Queue arbeitet
+    /// FIFO; deshalb werden die Anforderungen einer Seite nach Abstand zu diesem Bereich sortiert eingereiht.
+    /// </summary>
+    public void ReportVisibleRange(int firstIndex, int lastIndex)
+    {
+        _visibleFirstIndex = firstIndex;
+        _visibleLastIndex = lastIndex;
+    }
+
+    /// <summary>
+    /// Wartet den Layoutdurchlauf der neuen Seite ab (Loaded liegt unter Render), damit das Panel den sichtbaren Bereich
+    /// gemeldet hat, und reiht dann sichtbare Kacheln zuerst, den Rest nach Abstand ein. Der synchrone Vorlauf des
+    /// Services (DB-Batch-Check) läuft auf dem Thread-Pool, damit er den UI-Thread nicht blockiert.
+    /// </summary>
+    private async Task RequestThumbnailsVisibleFirstAsync(List<GalleryItem> items)
+    {
+        if (items.Count == 0)
+        {
+            return;
+        }
+
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher is not null && !dispatcher.HasShutdownStarted)
+        {
+            await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Loaded);
+        }
+
+        var ordered = OrderByVisibility(items, CurrentPage, _visibleFirstIndex, _visibleLastIndex);
+        await Task.Run(() => RequestThumbnailsAsync(ordered));
+    }
+
+    /// <summary>Sortiert <paramref name="items"/> nach Abstand ihres Index in <paramref name="page"/> zum sichtbaren Bereich [first, last]; ohne bekannten Bereich unverändert.</summary>
+    internal static List<GalleryItem> OrderByVisibility(List<GalleryItem> items, IList<GalleryItem> page, int first, int last)
+    {
+        if (first < 0 || last < first)
+        {
+            return items;
+        }
+
+        var indexById = new Dictionary<int, int>(page.Count);
+        for (var i = 0; i < page.Count; i++)
+        {
+            indexById[page[i].Id] = i;
+        }
+
+        // OrderBy ist stabil: innerhalb gleicher Distanz bleibt die Seitenreihenfolge.
+        return items
+            .OrderBy(it => indexById.TryGetValue(it.Id, out var i) ? DistanceToRange(i, first, last) : int.MaxValue)
+            .ToList();
+
+        static int DistanceToRange(int index, int first, int last)
+            => index < first ? first - index : index > last ? index - last : 0;
     }
 
     private GalleryQuery BuildQuery()

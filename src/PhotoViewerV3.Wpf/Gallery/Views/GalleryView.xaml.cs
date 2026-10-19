@@ -1,10 +1,15 @@
 using System;
+using System.Collections.Specialized;
+using System.Diagnostics;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Microsoft.Extensions.Logging;
+using PhotoViewerV3.Gallery.Controls;
 using PhotoViewerV3.Gallery.ViewModels;
 
 namespace PhotoViewerV3.Gallery.Views;
@@ -19,6 +24,7 @@ public partial class GalleryView : UserControl
 {
     private readonly GalleryViewModel _viewModel;
     private readonly ILogger<GalleryView> _logger;
+    private Stopwatch? _gridStopwatch;
 
     public GalleryView(GalleryViewModel viewModel, ILogger<GalleryView> logger)
     {
@@ -33,6 +39,7 @@ public partial class GalleryView : UserControl
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         _viewModel.OwnerWindowResolver = ResolveOwnerWindow;
+        _viewModel.CurrentPage.CollectionChanged += OnPageChanged;
         try
         {
             await _viewModel.EnsureInitializedAsync().ConfigureAwait(true);
@@ -45,11 +52,63 @@ public partial class GalleryView : UserControl
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
+        _viewModel.CurrentPage.CollectionChanged -= OnPageChanged;
         // Nur den eigenen Resolver abhängen — die andere Instanz kann inzwischen geladen worden sein.
         if (_viewModel.OwnerWindowResolver == (Func<Window?>)ResolveOwnerWindow)
         {
             _viewModel.OwnerWindowResolver = null;
         }
+    }
+
+    /// <summary>
+    /// Diagnose: Zeit von der ersten Änderung an <see cref="GalleryViewModel.CurrentPage"/> (Seitenwechsel, Reload) bis
+    /// zum Layout danach (Loaded-Priorität liegt unter Render) plus Zahl der realisierten Kachel-Container.
+    /// </summary>
+    private void OnPageChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (_gridStopwatch is not null)
+        {
+            return; // Burst (ApplyRows fügt Item für Item ein) wird gebündelt
+        }
+
+        _gridStopwatch = Stopwatch.StartNew();
+        _ = Dispatcher.InvokeAsync(
+            () =>
+            {
+                var sw = _gridStopwatch;
+                _gridStopwatch = null;
+                if (sw is null || !IsLoaded)
+                {
+                    return;
+                }
+
+                var panel = FindVisualChild<VirtualizingTilePanel>(GalleryList);
+                _logger.LogInformation(
+                    "Kachel-Grid sichtbar: {Items} Kacheln, {Containers} Container realisiert ({Columns} Spalten), {Ms:N0} ms nach Seitenänderung",
+                    _viewModel.CurrentPage.Count, panel?.RealizedCount ?? -1, panel?.Columns ?? 0, sw.Elapsed.TotalMilliseconds);
+            },
+            DispatcherPriority.Loaded);
+    }
+
+    private static T? FindVisualChild<T>(DependencyObject root)
+        where T : DependencyObject
+    {
+        var count = VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < count; i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is T match)
+            {
+                return match;
+            }
+
+            if (FindVisualChild<T>(child) is { } nested)
+            {
+                return nested;
+            }
+        }
+
+        return null;
     }
 
     private Window? ResolveOwnerWindow() => Window.GetWindow(this);
@@ -79,8 +138,9 @@ public partial class GalleryView : UserControl
             return;
         }
 
+        // Maßgeblich ist der Auswahlzustand der Items (bei Virtualisierung kann die ListBox-Liste kurz nachhinken).
         var item = (Keyboard.FocusedElement as ListBoxItem)?.DataContext as GalleryItem
-                   ?? GalleryList.SelectedItem as GalleryItem;
+                   ?? _viewModel.CurrentPage.FirstOrDefault(i => i.IsSelected);
         if (item is null)
         {
             return;
@@ -89,6 +149,10 @@ public partial class GalleryView : UserControl
         e.Handled = true;
         _viewModel.OpenInLightboxCommand.Execute(item);
     }
+
+    /// <summary>Das Kachel-Panel meldet den sichtbaren Index-Bereich — das ViewModel fordert Vorschaubilder dafür zuerst an.</summary>
+    private void OnVisibleRangeChanged(object sender, VisibleRangeChangedEventArgs e)
+        => _viewModel.ReportVisibleRange(e.FirstIndex, e.LastIndex);
 
     private static bool IsInsideButton(DependencyObject? source, DependencyObject container)
     {

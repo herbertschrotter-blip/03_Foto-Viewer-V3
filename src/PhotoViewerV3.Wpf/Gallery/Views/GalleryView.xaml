@@ -424,7 +424,9 @@
                 CornerRadius="6"
                 Background="{DynamicResource LayerFillColorDefaultBrush}">
             <Grid>
-                <!-- Kachel-Grid: eine Page (≤ 1000 Items), Mehrfachauswahl -->
+                <!-- Kachel-Grid: eine Page (≤ 1000 Items), Mehrfachauswahl. UI-virtualisiert (VirtualizingTilePanel):
+                     Container nur für sichtbare Zeilen plus Puffer, pixelbasiertes Scrollen über IScrollInfo
+                     (dafür CanContentScroll=True), Container-Recycling. -->
                 <controls:GalleryListBox x:Name="GalleryList"
                          AutomationProperties.AutomationId="GalleryList"
                          ItemsSource="{Binding CurrentPage}"
@@ -436,13 +438,16 @@
                          Padding="8"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                          ScrollViewer.VerticalScrollBarVisibility="Auto"
-                         ScrollViewer.CanContentScroll="False"
+                         ScrollViewer.CanContentScroll="True"
+                         VirtualizingPanel.IsVirtualizing="True"
+                         VirtualizingPanel.VirtualizationMode="Recycling"
                          KeyboardNavigation.DirectionalNavigation="Contained"
                          KeyDown="OnListKeyDown"
+                         controls:VirtualizingTilePanel.VisibleRangeChanged="OnVisibleRangeChanged"
                          Visibility="{Binding ShowGrid, Converter={StaticResource BoolToVis}}">
                     <controls:GalleryListBox.ItemsPanel>
                         <ItemsPanelTemplate>
-                            <WrapPanel ItemWidth="180" ItemHeight="160" />
+                            <controls:VirtualizingTilePanel ItemWidth="180" ItemHeight="160" />
                         </ItemsPanelTemplate>
                     </controls:GalleryListBox.ItemsPanel>
                     <controls:GalleryListBox.InputBindings>
