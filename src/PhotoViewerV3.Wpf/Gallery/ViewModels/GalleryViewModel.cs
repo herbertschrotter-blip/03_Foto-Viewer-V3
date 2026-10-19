@@ -19,9 +19,12 @@ using PhotoViewerV3.Data.RawSql;
 using PhotoViewerV3.Domain.Entities;
 using PhotoViewerV3.Gallery.Archives;
 using PhotoViewerV3.Gallery.Controls;
+using PhotoViewerV3.Gallery.ListView;
 using PhotoViewerV3.Gallery.Services;
+using PhotoViewerV3.Gallery.Tags;
 using PhotoViewerV3.Lightbox;
 using PhotoViewerV3.Services.Archive;
+using PhotoViewerV3.Services.Tags;
 using PhotoViewerV3.Services.Catalog;
 using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Messaging;
@@ -72,6 +75,9 @@ public sealed partial class GalleryViewModel : ObservableObject
     private readonly IGalleryDialogService _dialogs;
     private readonly IFolderPickerService _folderPicker;
     private readonly IArchiveExtractDialogService _archiveDialog;
+    private readonly ITagService _tags;
+    private readonly ITagPickerService _tagPicker;
+    private readonly IGalleryViewSettingsStore _viewSettings;
     private readonly ILogger<GalleryViewModel> _logger;
     private readonly IMessenger _messenger = WeakReferenceMessenger.Default;
 
@@ -112,6 +118,9 @@ public sealed partial class GalleryViewModel : ObservableObject
         IGalleryDialogService dialogs,
         IFolderPickerService folderPicker,
         IArchiveExtractDialogService archiveDialog,
+        ITagService tags,
+        ITagPickerService tagPicker,
+        IGalleryViewSettingsStore viewSettings,
         ILogger<GalleryViewModel> logger)
     {
         _contextFactory = contextFactory;
@@ -124,10 +133,15 @@ public sealed partial class GalleryViewModel : ObservableObject
         _dialogs = dialogs;
         _folderPicker = folderPicker;
         _archiveDialog = archiveDialog;
+        _tags = tags;
+        _tagPicker = tagPicker;
+        _viewSettings = viewSettings;
         _logger = logger;
 
         CurrentPage = new ObservableCollection<GalleryItem>();
         Subfolders = new ObservableCollection<GallerySubfolderDto>();
+        TagMenuEntries = new ObservableCollection<TagMenuEntry>();
+        TagFilterEntries = new ObservableCollection<TagFilterEntry>();
         _thumbnails.ThumbnailReady += OnThumbnailReady;
         RegisterMessages();
     }
@@ -191,7 +205,7 @@ public sealed partial class GalleryViewModel : ObservableObject
     [ObservableProperty] private string _libraryNameDisplay = string.Empty;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsEmpty), nameof(ShowGrid), nameof(ShowNoLibrary))]
+    [NotifyPropertyChangedFor(nameof(IsEmpty), nameof(ShowGrid), nameof(ShowList), nameof(ShowNoLibrary))]
     private bool _hasLibrary;
 
     [ObservableProperty] private bool _isRootOffline;
@@ -209,7 +223,7 @@ public sealed partial class GalleryViewModel : ObservableObject
     private bool _includeSubfolders = true;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsEmpty), nameof(ShowGrid))]
+    [NotifyPropertyChangedFor(nameof(IsEmpty), nameof(ShowGrid), nameof(ShowList))]
     private bool _showSubfolders;
 
     [ObservableProperty]
@@ -217,7 +231,8 @@ public sealed partial class GalleryViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(
         nameof(FavoriteSelectionCommand), nameof(UnfavoriteSelectionCommand),
         nameof(SetSelectionRatingCommand), nameof(ClearSelectionRatingCommand),
-        nameof(MoveSelectionCommand), nameof(RecycleSelectionCommand), nameof(ArchiveSelectionCommand), nameof(ExtractSelectionCommand))]
+        nameof(MoveSelectionCommand), nameof(RecycleSelectionCommand), nameof(ArchiveSelectionCommand), nameof(ExtractSelectionCommand),
+        nameof(EditSelectionTagsCommand), nameof(ToggleSelectionTagCommand))]
     private int _selectedCount;
 
     /// <summary>Archive in der Auswahl (Aktionsleiste „Entpacken…“, ADR-0022).</summary>
@@ -234,7 +249,8 @@ public sealed partial class GalleryViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(
         nameof(FavoriteSelectionCommand), nameof(UnfavoriteSelectionCommand),
         nameof(SetSelectionRatingCommand), nameof(ClearSelectionRatingCommand),
-        nameof(MoveSelectionCommand), nameof(RecycleSelectionCommand), nameof(ArchiveSelectionCommand), nameof(UndoCommand), nameof(ExtractSelectionCommand))]
+        nameof(MoveSelectionCommand), nameof(RecycleSelectionCommand), nameof(ArchiveSelectionCommand), nameof(UndoCommand), nameof(ExtractSelectionCommand),
+        nameof(EditSelectionTagsCommand), nameof(ToggleSelectionTagCommand))]
     private bool _isOperationRunning;
 
     [ObservableProperty]
@@ -259,7 +275,8 @@ public sealed partial class GalleryViewModel : ObservableObject
     public string SelectionText => SelectedCount == 1 ? "1 ausgewählt" : $"{SelectedCount:N0} ausgewählt";
 
     public bool ShowNoLibrary => !HasLibrary;
-    public bool ShowGrid => HasLibrary && !ShowSubfolders;
+    public bool ShowGrid => HasLibrary && !ShowSubfolders && ViewMode == GalleryViewMode.Grid;
+    public bool ShowList => HasLibrary && !ShowSubfolders && ViewMode == GalleryViewMode.List;
     public bool IsEmpty => HasLibrary && !IsLoading && !ShowSubfolders && TotalCount == 0 && ErrorMessage is null;
 
     public string EmptyMessage
@@ -269,6 +286,13 @@ public sealed partial class GalleryViewModel : ObservableObject
             if (!string.IsNullOrWhiteSpace(SearchTerm))
             {
                 return $"Keine Treffer für „{SearchTerm.Trim()}“.";
+            }
+
+            if (HasTagFilter)
+            {
+                return TagFilterMode == GalleryTagMode.None
+                    ? "Alle Dateien haben mindestens ein Tag."
+                    : "Keine Dateien mit diesem Tag-Filter.";
             }
 
             if (FolderId is not null)
@@ -302,6 +326,8 @@ public sealed partial class GalleryViewModel : ObservableObject
         _startupBegin = DateTime.UtcNow;
         DbPathDisplay = _contextFactory.DatabasePath;
 
+        await LoadViewSettingsAsync();
+        await LoadTagsAsync();
         await ReloadLibraryAsync(null);
 
         FirstPageLoadMs = (DateTime.UtcNow - _startupBegin).TotalMilliseconds;
@@ -357,6 +383,7 @@ public sealed partial class GalleryViewModel : ObservableObject
             Subfolders.Clear();
             ClearItems();
             ClearSelectionState();
+            ResetTagFilter();
         }
         finally
         {
@@ -437,6 +464,8 @@ public sealed partial class GalleryViewModel : ObservableObject
             this, static (r, m) => r.RunOnUi(() => r.HandleLibraryRootsChangedAsync(m)));
         _messenger.Register<GalleryViewModel, FoldersChangedMessage>(
             this, static (r, m) => r.RunOnUi(() => r.HandleFoldersChangedAsync(m)));
+        _messenger.Register<GalleryViewModel, TagsChangedMessage>(
+            this, static (r, m) => r.RunOnUi(() => r.HandleTagsChangedAsync(m)));
     }
 
     /// <summary>Wurzeln geändert (ADR-0020): Archiv-Wurzel bzw. Anzeigepfad kann wechseln, Status-Filter liefert andere Treffer → Library neu laden.</summary>
@@ -559,6 +588,7 @@ public sealed partial class GalleryViewModel : ObservableObject
                 }
             }
 
+            await ApplyTagsToItemsAsync(inPage, CancellationToken.None);
             UpdateSelectionSummary();
         }
         catch (Exception ex)
@@ -727,6 +757,9 @@ public sealed partial class GalleryViewModel : ObservableObject
         List<GalleryItem> newItems = [];
         await DispatchAsync(() => newItems = ApplyRows(rows, restoreSelection));
 
+        // Tags der Page in einem Batch nachladen (ADR-0021) — unabhängig von den Thumbnails.
+        FireAndForget(() => ApplyTagsToItemsAsync(rows.Select(r => r.Id).ToList(), ct));
+
         SetLoadStatus($"{TotalCount:N0} Treffer · Seite {DisplayPageIndex} von {PageCount:N0} · {LastPageLoadMs:N1} ms");
         _logger.LogInformation(
             "Page geladen: Idx={Idx} Size={Size} Rows={Rows} Time={Ms:N1}ms Filter={Filter} Sort={Sort} Folder={Folder} Rekursiv={Rek} Search={Search}",
@@ -795,7 +828,7 @@ public sealed partial class GalleryViewModel : ObservableObject
     private GalleryQuery BuildQuery()
     {
         var term = string.IsNullOrWhiteSpace(SearchTerm) ? null : SearchTerm.Trim();
-        return new GalleryQuery(_libraryId, Filter, term, FolderId, IncludeSubfolders, SelectedSort.Sort);
+        return new GalleryQuery(_libraryId, Filter, term, FolderId, IncludeSubfolders, SelectedSort.Sort, SelectedTagIds(), TagFilterMode);
     }
 
     /// <summary>
@@ -1099,6 +1132,7 @@ public sealed partial class GalleryViewModel : ObservableObject
         }
 
         SelectionRating = uniform ? common : null;
+        UpdateTagMenuStates();
     }
 
     private void ClearSelectionState()
@@ -1712,6 +1746,401 @@ public sealed partial class GalleryViewModel : ObservableObject
             // z. B. DirectoryNotFound bei Library-Root offline: melden, nicht abstürzen.
             ErrorMessage = $"Lightbox konnte nicht geöffnet werden: {ex.Message}";
             _logger.LogError(ex, "Lightbox-Open fehlgeschlagen für File={FileId}", item.Id);
+        }
+    }
+
+    // ---- Tags (ADR-0021) -----------------------------------------------------------------------
+
+    private readonly Dictionary<int, TagInfo> _tagById = new();
+
+    /// <summary>Alle Tags als Menüeinträge mit Zustand bezogen auf die Auswahl (Aktionsleiste „Tags“, Kontextmenü).</summary>
+    public ObservableCollection<TagMenuEntry> TagMenuEntries { get; }
+
+    /// <summary>Tags im Filter-Dropdown (Häkchen + Zähler).</summary>
+    public ObservableCollection<TagFilterEntry> TagFilterEntries { get; }
+
+    public bool HasNoTags => TagMenuEntries.Count == 0;
+
+    /// <summary>Verknüpfung der gewählten Tags im Filter (ODER / UND / ohne Tag).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasTagFilter), nameof(TagFilterText), nameof(EmptyMessage))]
+    private GalleryTagMode _tagFilterMode = GalleryTagMode.Any;
+
+    public bool HasTagFilter => TagFilterMode == GalleryTagMode.None || TagFilterEntries.Any(e => e.IsSelected);
+
+    /// <summary>Beschriftung des Filter-Knopfs: „Tags“ oder „Tags: Urlaub, Familie (UND)“.</summary>
+    public string TagFilterText
+    {
+        get
+        {
+            if (TagFilterMode == GalleryTagMode.None)
+            {
+                return "Tags: ohne Tag";
+            }
+
+            var names = TagFilterEntries.Where(e => e.IsSelected).Select(e => e.Name).ToList();
+            if (names.Count == 0)
+            {
+                return "Tags";
+            }
+
+            var mode = names.Count > 1 ? (TagFilterMode == GalleryTagMode.All ? " (UND)" : " (ODER)") : string.Empty;
+            return $"Tags: {string.Join(", ", names)}{mode}";
+        }
+    }
+
+    partial void OnTagFilterModeChanged(GalleryTagMode value)
+    {
+        if (!_suppressReload && _isInitialized)
+        {
+            FireAndForget(ChangeQueryAsync);
+        }
+    }
+
+    private IReadOnlyList<int>? SelectedTagIds()
+    {
+        var ids = TagFilterEntries.Where(e => e.IsSelected).Select(e => e.Tag.Id).ToList();
+        return ids.Count == 0 ? null : ids;
+    }
+
+    /// <summary>Häkchen im Filter-Dropdown geändert → Filter anwenden.</summary>
+    [RelayCommand]
+    private Task ApplyTagFilterAsync()
+    {
+        NotifyTagFilterChanged();
+        return _suppressReload || !_isInitialized ? Task.CompletedTask : ChangeQueryAsync();
+    }
+
+    [RelayCommand]
+    private Task ClearTagFilterAsync()
+    {
+        if (!HasTagFilter)
+        {
+            return Task.CompletedTask;
+        }
+
+        ResetTagFilter();
+        return ChangeQueryAsync();
+    }
+
+    private void ResetTagFilter()
+    {
+        var suppress = _suppressReload;
+        _suppressReload = true;
+        try
+        {
+            foreach (var entry in TagFilterEntries)
+            {
+                entry.IsSelected = false;
+            }
+
+            TagFilterMode = GalleryTagMode.Any;
+        }
+        finally
+        {
+            _suppressReload = suppress;
+        }
+
+        NotifyTagFilterChanged();
+    }
+
+    private void NotifyTagFilterChanged()
+    {
+        OnPropertyChanged(nameof(HasTagFilter));
+        OnPropertyChanged(nameof(TagFilterText));
+        OnPropertyChanged(nameof(EmptyMessage));
+    }
+
+    /// <summary>Tag-Liste und Zähler laden; Filter-Häkchen bleiben je TagId erhalten.</summary>
+    private async Task LoadTagsAsync()
+    {
+        try
+        {
+            var tags = await _tags.GetAllAsync();
+            var counts = await _tags.GetFileCountsAsync();
+            var selected = TagFilterEntries.Where(e => e.IsSelected).Select(e => e.Tag.Id).ToHashSet();
+
+            _tagById.Clear();
+            TagMenuEntries.Clear();
+            TagFilterEntries.Clear();
+            foreach (var tag in tags)
+            {
+                _tagById[tag.Id] = tag;
+                TagMenuEntries.Add(new TagMenuEntry(tag));
+                TagFilterEntries.Add(new TagFilterEntry(tag, counts.GetValueOrDefault(tag.Id)) { IsSelected = selected.Contains(tag.Id) });
+            }
+
+            OnPropertyChanged(nameof(HasNoTags));
+            NotifyTagFilterChanged();
+            UpdateTagMenuStates();
+            _logger.LogDebug("Tags geladen: {Count}", tags.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Tags konnten nicht geladen werden");
+        }
+    }
+
+    /// <summary>Stammdaten geändert (Einstellungen, Dialog „Neues Tag“): Liste neu laden, Chips der Page neu abbilden.</summary>
+    private async Task HandleTagsChangedAsync(TagsChangedMessage m)
+    {
+        var hadFilter = HasTagFilter;
+        await LoadTagsAsync();
+        foreach (var item in CurrentPage)
+        {
+            if (item.Tags.Count > 0)
+            {
+                item.Tags = MapTags(item.Tags.Select(t => t.Id));
+            }
+        }
+
+        // Gelöschtes Tag war Teil des Filters → Trefferliste ändert sich.
+        if (m.Kind == TagsChangeKind.Deleted && hadFilter && HasLibrary)
+        {
+            NotifyTagFilterChanged();
+            ScheduleReload();
+        }
+    }
+
+    /// <summary>Tags der Dateien (Batch) laden und den Items der Page zuordnen.</summary>
+    private async Task ApplyTagsToItemsAsync(IReadOnlyCollection<int> fileIds, CancellationToken ct)
+    {
+        if (fileIds.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var map = await _tags.GetTagIdsForFilesAsync(fileIds, ct);
+            if (ct.IsCancellationRequested)
+            {
+                return;
+            }
+
+            await DispatchAsync(() =>
+            {
+                foreach (var id in fileIds)
+                {
+                    if (_currentItems.TryGetValue(id, out var item))
+                    {
+                        item.Tags = map.TryGetValue(id, out var tagIds) ? MapTags(tagIds) : Array.Empty<TagInfo>();
+                    }
+                }
+
+                UpdateTagMenuStates();
+            });
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Tags der Seite konnten nicht geladen werden");
+        }
+    }
+
+    private IReadOnlyList<TagInfo> MapTags(IEnumerable<int> tagIds)
+    {
+        var list = new List<TagInfo>();
+        foreach (var id in tagIds)
+        {
+            if (_tagById.TryGetValue(id, out var tag))
+            {
+                list.Add(tag);
+            }
+        }
+
+        list.Sort(CompareTags);
+        return list;
+    }
+
+    private static int CompareTags(TagInfo a, TagInfo b)
+    {
+        var order = a.SortOrder.CompareTo(b.SortOrder);
+        return order != 0 ? order : string.Compare(a.Name, b.Name, StringComparison.CurrentCultureIgnoreCase);
+    }
+
+    /// <summary>Zustand je Tag-Menüeintrag: alle / keine / ein Teil der ausgewählten Dateien hat das Tag.</summary>
+    private void UpdateTagMenuStates()
+    {
+        if (TagMenuEntries.Count == 0)
+        {
+            return;
+        }
+
+        var selected = new List<GalleryItem>(_selectedIds.Count);
+        foreach (var id in _selectedIds)
+        {
+            if (_currentItems.TryGetValue(id, out var item))
+            {
+                selected.Add(item);
+            }
+        }
+
+        foreach (var entry in TagMenuEntries)
+        {
+            if (selected.Count == 0)
+            {
+                entry.State = false;
+                continue;
+            }
+
+            var count = 0;
+            foreach (var item in selected)
+            {
+                if (item.HasTag(entry.Tag.Id))
+                {
+                    count++;
+                }
+            }
+
+            entry.State = count == 0 ? false : count == selected.Count ? true : null;
+        }
+    }
+
+    /// <summary>Menüeintrag geklickt: haben alle ausgewählten Dateien das Tag, wird es entfernt, sonst allen zugewiesen.</summary>
+    [RelayCommand(CanExecute = nameof(CanActOnSelection))]
+    private Task ToggleSelectionTagAsync(TagMenuEntry? entry)
+    {
+        var ids = SelectedIdsSnapshot();
+        if (entry is null || ids.Count == 0)
+        {
+            return Task.CompletedTask;
+        }
+
+        var assign = entry.State != true;
+        var tag = entry.Tag;
+        return RunOperationAsync("Tag", async () =>
+        {
+            var changed = assign
+                ? await _tags.AssignAsync(ids, [tag.Id])
+                : await _tags.RemoveAsync(ids, [tag.Id]);
+            foreach (var id in ids)
+            {
+                if (_currentItems.TryGetValue(id, out var item))
+                {
+                    item.Tags = assign
+                        ? (item.HasTag(tag.Id) ? item.Tags : MapTags(item.Tags.Select(t => t.Id).Append(tag.Id)))
+                        : item.Tags.Where(t => t.Id != tag.Id).ToList();
+                }
+            }
+
+            UpdateTagMenuStates();
+            SetResultStatus(assign
+                ? $"Tag „{tag.Name}“ bei {ids.Count:N0} Datei(en) gesetzt ({changed:N0} neu)."
+                : $"Tag „{tag.Name}“ bei {ids.Count:N0} Datei(en) entfernt.");
+            if (HasTagFilter)
+            {
+                ScheduleReload();
+            }
+        });
+    }
+
+    /// <summary>Strg+T: Tag-Auswahl-Dialog für die Auswahl (dreistufig bei gemischtem Zustand, „Neues Tag“).</summary>
+    [RelayCommand(CanExecute = nameof(CanActOnSelection))]
+    private async Task EditSelectionTagsAsync()
+    {
+        var ids = SelectedIdsSnapshot();
+        if (ids.Count == 0)
+        {
+            return;
+        }
+
+        var counts = new Dictionary<int, int>();
+        foreach (var id in ids)
+        {
+            if (!_currentItems.TryGetValue(id, out var item))
+            {
+                continue;
+            }
+
+            foreach (var tag in item.Tags)
+            {
+                counts[tag.Id] = counts.GetValueOrDefault(tag.Id) + 1;
+            }
+        }
+
+        var request = new TagPickRequest(
+            _tagById.Values.OrderBy(t => t, Comparer<TagInfo>.Create(CompareTags)).ToList(),
+            counts,
+            ids.Count,
+            name => _tags.CreateAsync(name));
+        var owner = OwnerWindowResolver?.Invoke() ?? Application.Current?.MainWindow;
+        var result = await _tagPicker.PickAsync(request, owner);
+        if (result is null || result.IsEmpty)
+        {
+            return;
+        }
+
+        await RunOperationAsync("Tags", async () =>
+        {
+            var assigned = result.AssignTagIds.Count > 0 ? await _tags.AssignAsync(ids, result.AssignTagIds) : 0;
+            var removed = result.RemoveTagIds.Count > 0 ? await _tags.RemoveAsync(ids, result.RemoveTagIds) : 0;
+            await ApplyTagsToItemsAsync(ids.Where(_currentItems.ContainsKey).ToList(), CancellationToken.None);
+            SetResultStatus($"Tags bei {ids.Count:N0} Datei(en) geändert: {assigned:N0} zugewiesen, {removed:N0} entfernt.");
+            if (HasTagFilter)
+            {
+                ScheduleReload();
+            }
+        });
+    }
+
+    // ---- Ansicht: Kachel-Grid / Liste ----------------------------------------------------------
+
+    private bool _suppressViewSettings;
+    private string? _listColumnSettings;
+
+    /// <summary>Kachel-Grid oder Listenansicht; die Wahl wird in der Settings-Tabelle gemerkt.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsGridView), nameof(IsListView), nameof(ShowGrid), nameof(ShowList))]
+    private GalleryViewMode _viewMode = GalleryViewMode.Grid;
+
+    public bool IsGridView => ViewMode == GalleryViewMode.Grid;
+    public bool IsListView => ViewMode == GalleryViewMode.List;
+
+    /// <summary>Sichtbare Spalten der Listenansicht in Reihenfolge (serialisiert, siehe <see cref="GalleryListColumnSettings"/>); null = Standard.</summary>
+    public string? ListColumnSettings
+    {
+        get => _listColumnSettings;
+        set
+        {
+            if (SetProperty(ref _listColumnSettings, value) && _isInitialized && !_suppressViewSettings)
+            {
+                FireAndForget(() => _viewSettings.SetAsync(GalleryViewSettingsStore.ListColumnsKey, value));
+            }
+        }
+    }
+
+    partial void OnViewModeChanged(GalleryViewMode value)
+    {
+        _logger.LogInformation("Galerie-Ansicht: {Mode}", value);
+        if (_isInitialized && !_suppressViewSettings)
+        {
+            FireAndForget(() => _viewSettings.SetAsync(GalleryViewSettingsStore.ViewModeKey, value.ToString()));
+        }
+    }
+
+    private async Task LoadViewSettingsAsync()
+    {
+        _suppressViewSettings = true;
+        try
+        {
+            var mode = await _viewSettings.GetAsync(GalleryViewSettingsStore.ViewModeKey);
+            if (Enum.TryParse<GalleryViewMode>(mode, ignoreCase: true, out var parsed))
+            {
+                ViewMode = parsed;
+            }
+
+            ListColumnSettings = await _viewSettings.GetAsync(GalleryViewSettingsStore.ListColumnsKey);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Ansichts-Einstellungen konnten nicht geladen werden");
+        }
+        finally
+        {
+            _suppressViewSettings = false;
         }
     }
 

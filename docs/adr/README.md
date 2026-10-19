@@ -39,6 +39,7 @@ Wenn eine ADR-Entscheidung revidiert wird: **neues ADR anlegen** + altes auf "Su
 | [0018](0018-datei-operationen-nur-ueber-service.md) | Datei-Operationen ausschließlich über IFileOperationService | Accepted |
 | [0019](0019-incremental-scan.md) | Incremental-Scan: Identität Ordner+Name, Missing statt Löschen, Mass-Missing-Guard | Accepted |
 | [0020](0020-bibliothek-mehrere-wurzeln-rollen.md) | Bibliothek mit mehreren Wurzeln und Rollen (Eingang / Archiv) | Accepted |
+| [0021](0021-tags-eigene-tabellen.md) | Tags als eigene Tabellen mit Katalog-Zuweisung | Accepted |
 | [0022](0022-archive-als-katalog-eintraege.md) | Archive als Katalog-Einträge, Entpacken über SharpCompress | Accepted |
 
 ## Quellen der Entscheidungen

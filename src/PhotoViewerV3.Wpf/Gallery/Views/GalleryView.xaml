@@ -9,6 +9,7 @@
              xmlns:vm="clr-namespace:PhotoViewerV3.Gallery.ViewModels"
              xmlns:conv="clr-namespace:PhotoViewerV3.Gallery.Converters"
              xmlns:gc="clr-namespace:PhotoViewerV3.Gallery.Controls"
+             xmlns:tags="clr-namespace:PhotoViewerV3.Gallery.Tags"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=vm:GalleryViewModel, IsDesignTimeCreatable=False}"
              d:DesignWidth="1000"
@@ -21,6 +22,10 @@
         <conv:StringToVisibilityConverter x:Key="StringToVis" />
         <conv:NullToVisibilityConverter x:Key="NullToVis" />
         <conv:EnumEqualsConverter x:Key="EnumEquals" />
+
+        <!-- Tag-Menü (Kachel-Kontextmenü, Zeilen der Liste, Knopf „Tags“ der Aktionsleiste): Einträge werden beim Öffnen
+             im Code-Behind aus TagMenuEntries gebaut (Häkchen = alle ausgewählten Dateien haben das Tag). -->
+        <ContextMenu x:Key="TagContextMenu" Opened="OnTagMenuOpened" />
 
         <!-- Rahmenloser Overlay-Button auf der Kachel (Herz) — kein Hover-Chrome über dem Bild -->
         <Style x:Key="TileOverlayButton" TargetType="Button">
@@ -53,19 +58,6 @@
             <Setter Property="VerticalContentAlignment" Value="Stretch" />
             <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="SnapsToDevicePixels" Value="True" />
-            <!-- ViewModel für das Kontextmenü (liegt außerhalb des visuellen Baums) -->
-            <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=ListBox}}" />
-            <Setter Property="ContextMenu">
-                <Setter.Value>
-                    <ContextMenu>
-                        <MenuItem Header="Ins Archiv…"
-                                  InputGestureText="Strg+M"
-                                  Icon="{ui:SymbolIcon Archive24}"
-                                  Command="{Binding PlacementTarget.Tag.ArchiveItemCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                  CommandParameter="{Binding}" />
-                    </ContextMenu>
-                </Setter.Value>
-            </Setter>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
@@ -107,28 +99,8 @@
                 </Setter.Value>
             </Setter>
             <EventSetter Event="MouseDoubleClick" Handler="OnItemDoubleClick" />
-            <!-- Kontextmenü (Archive, ADR-0022): Tag trägt das Galerie-ViewModel, DataContext ist die Kachel -->
-            <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=ListBox}}" />
-            <Setter Property="ContextMenu">
-                <Setter.Value>
-                    <ContextMenu>
-                        <MenuItem Header="Inhalt anzeigen"
-                                  Icon="{ui:SymbolIcon DocumentBulletList24}"
-                                  Visibility="{Binding PlacementTarget.DataContext.IsArchive, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVis}}"
-                                  Command="{Binding PlacementTarget.Tag.OpenInLightboxCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                        <MenuItem Header="Entpacken…"
-                                  Icon="{ui:SymbolIcon FolderZip24}"
-                                  Visibility="{Binding PlacementTarget.DataContext.IsArchive, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVis}}"
-                                  Command="{Binding PlacementTarget.Tag.ExtractItemCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                        <MenuItem Header="Im Explorer anzeigen"
-                                  Icon="{ui:SymbolIcon FolderOpen24}"
-                                  Command="{Binding PlacementTarget.Tag.ShowInExplorerCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                    </ContextMenu>
-                </Setter.Value>
-            </Setter>
+            <EventSetter Event="ContextMenuOpening" Handler="OnTileContextMenuOpening" />
+            <Setter Property="ContextMenu" Value="{StaticResource TagContextMenu}" />
         </Style>
 
         <!-- Kachel-Inhalt -->
@@ -272,9 +244,19 @@
                                    ToolTip="{Binding SourcePath}"
                                    TextTrimming="CharacterEllipsis"
                                    FontSize="11" />
-                        <TextBlock Text="{Binding SizeDisplay}"
-                                   FontSize="10"
-                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                        <DockPanel LastChildFill="False">
+                            <TextBlock DockPanel.Dock="Left"
+                                       Text="{Binding SizeDisplay}"
+                                       FontSize="10"
+                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                            <!-- Tag-Punkte (Hover zeigt den Namen) -->
+                            <tags:TagChipsControl DockPanel.Dock="Right"
+                                                  Tags="{Binding Tags}"
+                                                  Compact="True"
+                                                  VerticalAlignment="Center"
+                                                  ToolTip="{Binding TagsText}"
+                                                  Visibility="{Binding HasTags, Converter={StaticResource BoolToVis}}" />
+                        </DockPanel>
                     </StackPanel>
                 </Border>
             </Grid>
@@ -335,6 +317,7 @@
         <KeyBinding Modifiers="Ctrl" Key="End" Command="{Binding LastPageCommand}" />
         <KeyBinding Key="F5" Command="{Binding ReloadCommand}" />
         <KeyBinding Modifiers="Ctrl" Key="M" Command="{Binding ArchiveSelectionCommand}" />
+        <KeyBinding Modifiers="Ctrl" Key="T" Command="{Binding EditSelectionTagsCommand}" />
     </UserControl.InputBindings>
 
     <Grid Margin="16,8,16,12">
@@ -398,6 +381,8 @@
                     <RadioButton Content="Archiviert" GroupName="Filter"
                                  ToolTip="Dateien im Archiv-Ordner"
                                  IsChecked="{Binding Filter, Converter={StaticResource EnumEquals}, ConverterParameter=Archived}" />
+                    <!-- Tag-Filter (ODER/UND/ohne Tag), ADR-0021 -->
+                    <tags:TagFilterDropDown Margin="16,0,0,0" VerticalAlignment="Center" />
                 </StackPanel>
 
                 <!-- Ordner-Chip -->
@@ -479,6 +464,25 @@
                 </StackPanel>
 
                 <StackPanel Grid.Column="3" Orientation="Horizontal">
+                    <!-- Umschalter Kachel-Grid / Liste (Wahl wird gemerkt) -->
+                    <RadioButton GroupName="ViewMode"
+                                 Style="{StaticResource {x:Type ToggleButton}}"
+                                 Padding="8,4"
+                                 Margin="0,0,2,0"
+                                 ToolTip="Kachelansicht"
+                                 AutomationProperties.Name="Kachelansicht"
+                                 IsChecked="{Binding ViewMode, Converter={StaticResource EnumEquals}, ConverterParameter=Grid}">
+                        <ui:SymbolIcon Symbol="Grid24" FontSize="16" />
+                    </RadioButton>
+                    <RadioButton GroupName="ViewMode"
+                                 Style="{StaticResource {x:Type ToggleButton}}"
+                                 Padding="8,4"
+                                 Margin="0,0,12,0"
+                                 ToolTip="Listenansicht"
+                                 AutomationProperties.Name="Listenansicht"
+                                 IsChecked="{Binding ViewMode, Converter={StaticResource EnumEquals}, ConverterParameter=List}">
+                        <ui:SymbolIcon Symbol="AppsListDetail24" FontSize="16" />
+                    </RadioButton>
                     <ui:Button Content="Rückgängig"
                                Icon="{ui:SymbolIcon ArrowUndo24}"
                                ToolTip="Letzte Datei-Operation rückgängig machen"
@@ -531,6 +535,13 @@
                         <KeyBinding Modifiers="Ctrl" Key="A" Command="{Binding SelectAllCommand}" />
                     </controls:GalleryListBox.InputBindings>
                 </controls:GalleryListBox>
+
+                <!-- Listenansicht (0.2.6): DataGrid über dieselbe Page; Spalten/Sortierung in Gallery/ListView.
+                     Wird erst beim ersten Umschalten erzeugt (Code-Behind), damit der Start im Kachel-Modus nichts kostet. -->
+                <ContentControl x:Name="ListViewHost"
+                                Focusable="False"
+                                IsTabStop="False"
+                                Visibility="{Binding ShowList, Converter={StaticResource BoolToVis}}" />
 
                 <!-- Container-State: Unterordner-Kacheln -->
                 <ScrollViewer VerticalScrollBarVisibility="Auto"
@@ -652,6 +663,16 @@
                                    AutomationProperties.Name="Bewertung löschen"
                                    Icon="{ui:SymbolIcon StarOff24}"
                                    Command="{Binding ClearSelectionRatingCommand}" />
+
+                        <Border Width="1" Margin="6,4,6,4" Background="{DynamicResource ControlStrokeColorDefaultBrush}" />
+
+                        <!-- Tags: Menü mit Häkchen je Tag (Zuweisen/Entfernen für die Auswahl) + Dialog (Strg+T) -->
+                        <!-- Flyout = eigene ContextMenu-Instanz aus dem Code-Behind (nicht dieselbe wie auf Kacheln/Zeilen). -->
+                        <ui:DropDownButton x:Name="TagsDropDown"
+                                           Appearance="Transparent" Content="Tags"
+                                           Icon="{ui:SymbolIcon Tag24}"
+                                           ToolTip="Tags der Auswahl setzen oder entfernen (Strg+T öffnet die Tag-Auswahl)"
+                                           AutomationProperties.Name="Tags" />
 
                         <Border Width="1" Margin="6,4,6,4" Background="{DynamicResource ControlStrokeColorDefaultBrush}" />
 

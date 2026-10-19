@@ -1,9 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using PhotoViewerV3.Domain.Enums;
 using PhotoViewerV3.Gallery.Data;
+using PhotoViewerV3.Services.Tags;
 
 namespace PhotoViewerV3.Gallery.ViewModels;
 
@@ -72,7 +75,30 @@ public sealed partial class GalleryItem : ObservableObject
     /// <summary>Vorschaubild — null, solange das Thumbnail noch generiert wird.</summary>
     [ObservableProperty] private ImageSource? _thumbnail;
 
+    /// <summary>Zugewiesene Tags in Anzeigereihenfolge (ADR-0021); die Liste wird als Ganzes ersetzt.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasTags), nameof(TagsText))]
+    private IReadOnlyList<TagInfo> _tags = Array.Empty<TagInfo>();
+
     public bool HasRating => Rating is > 0;
+
+    public bool HasTags => Tags.Count > 0;
+
+    /// <summary>Tag-Namen durch Komma (Tooltip, Spalte „Tags“ und deren Sortierung innerhalb der Page).</summary>
+    public string TagsText => string.Join(", ", Tags.Select(t => t.Name));
+
+    public bool HasTag(int tagId)
+    {
+        foreach (var tag in Tags)
+        {
+            if (tag.Id == tagId)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>True, wenn die unveränderlichen Datei-Daten mit dem DTO übereinstimmen (Instanz wiederverwendbar).</summary>
     public bool CoreMatches(GalleryFileDto dto)

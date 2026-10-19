@@ -207,6 +207,9 @@ public partial class LightboxWindow : FluentWindow
             case Key.D when ctrl:
                 _ = _viewModel.ToggleFavoriteCommand.ExecuteAsync(null);
                 break;
+            case Key.T when ctrl:
+                _ = _viewModel.EditTagsCommand.ExecuteAsync(null);
+                break;
             case Key.D0 when ctrl:
             case Key.NumPad0 when ctrl:
                 _ = _viewModel.SetRatingCommand.ExecuteAsync("0");

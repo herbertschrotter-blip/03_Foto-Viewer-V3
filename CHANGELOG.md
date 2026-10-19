@@ -3,6 +3,59 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.10] — 2026-10-19
+
+### Neu
+- **Tags** (ADR-0021): frei konfigurierbare Schlagworte in eigenen Tabellen `Tags` (Name eindeutig ohne
+  Groß-/Kleinschreibung, Farbe aus fester 12er-Palette, Reihenfolge) und `FileTags` (FileId + TagId, Index auf TagId,
+  beide Fremdschlüssel ON DELETE CASCADE — Papierkorb, „Neu aufbauen“ und Tag löschen räumen die Zuweisungen in der DB
+  mit auf). Migration `AddTags` (strikt, Bestandsdaten unverändert).
+- `Services/Tags`: `ITagService` (anlegen, umbenennen, färben, sortieren, löschen; zuweisen/entfernen für Id-Listen in
+  Chunks zu 500; Tags je Datei als Batch für eine Seite; Zähler je Tag; `RemoveForFilesAsync` als Hilfsmethode),
+  `TagsChangedMessage` für Stammdaten, `FilesChangedMessage(Metadata)` nach Zuweisungen. Registrierung `AddTags()`.
+- Galerie: Knopf **Tags** in der Aktionsleiste und Kontextmenü auf Kacheln/Zeilen (Häkchen = alle ausgewählten Dateien
+  haben das Tag, „(teilweise)“ = ein Teil; Rechtsklick auf eine nicht ausgewählte Kachel wählt nur sie), **Strg+T**
+  öffnet die Tag-Auswahl (`Gallery/Tags/TagPickerDialog`, dreistufige Häkchen, „Neues Tag…“), Tag-Punkte auf der Kachel
+  (Hover = Namen), Dropdown **Tags** neben den Filter-Pills (ODER / UND / „nur Dateien ohne Tag“, mit Zählern). Die
+  Suche findet zusätzlich Dateien, deren Tag-Name den Suchtext enthält (FTS-Treffer UNION Tag-Treffer, per
+  `CROSS JOIN` an Files gebunden — die Treffer treiben die Abfrage wie bisher die FTS-Tabelle; keine FTS-Spalte).
+- Lightbox: Tags der Datei in der Titelleiste, **Strg+T** bearbeitet sie (eigene Datei `LightboxViewModel.Tags.cs`).
+- Seite **Tags** in der Navigation (`Settings/TagManagement`): Liste mit Zählern, Neu, Umbenennen, Farbe aus der
+  Palette, Reihenfolge, Löschen mit Bestätigung und Zahl der betroffenen Dateien.
+- **Listenansicht** (`Gallery/ListView`): Umschalter Kachel-Grid/Liste in der Kopfzeile (gespeichert als
+  `ui.gallery.viewMode`), DataGrid über dieselbe Seite mit den Spalten Name (mit Vorschaubild), Ordner, Geändert,
+  Größe, Typ, Bewertung, Favorit, Tags und Status (Platzhalter, zeigt bislang nur „fehlt“). Spalten über das
+  Kopfzeilen-Kontextmenü ein-/ausblendbar und per Ziehen umsortierbar (`ui.gallery.listColumns`), Klick auf
+  Name/Geändert/Größe sortiert die ganze Trefferliste über die Galerie-Sortierung, die übrigen Spalten nur die geladene
+  Seite. Mehrfachauswahl, Doppelklick/Enter → Lightbox, Entf, Esc, Strg+A, Strg+T und Aktionsleiste wie im Grid;
+  Zeilen-Virtualisierung mit Recycling; im UI-Automation-Baum sind nur realisierte Zeilen sichtbar, als Blätter
+  (`GalleryDataGrid`/`GalleryDataGridRow`, eigene Peers statt `DataGridAutomationPeer`). Die Liste wird erst beim
+  ersten Umschalten erzeugt — der Start im Kachel-Modus bleibt unverändert schnell.
+
+### Integration
+- Zusammengeführt mit 0.2.7–0.2.9. Migration `AddTags` neu erzeugt (`20261019105649_AddTags`, inhaltlich unverändert),
+  damit sie nach `AddLibraryRoots` läuft; ModelSnapshot neu.
+- Ein gemeinsames Kontextmenü für Kachel und Listenzeile (im Code-Behind gebaut): Archiv „Inhalt anzeigen“/„Entpacken…“,
+  „Ins Archiv…“, „Im Explorer anzeigen“, danach das Tag-Menü. Behebt in 0.2.9 das doppelte ContextMenu-Setter-Paar,
+  bei dem das Archiv-Menü „Ins Archiv…“ überdeckte.
+- Rauchtest-Reihenfolge: … → Archiv (ZIP) → Eingang → Archiv → Tags + Listenansicht → Ordnerüberwachung.
+
+### Tests
+- `tests/PhotoViewerV3.Tests`: 256 (+15 `Tags/TagServiceTests` — Anlegen/Validierung, Duplikate ohne
+  Groß-/Kleinschreibung, Nachrichten, Zuweisen > 500 in Chunks, Löschen, ON DELETE CASCADE beim Entfernen der Datei und
+  beim Papierkorb, leere Listen, Empfänger-Ausnahmen, Palette).
+- `tests/PhotoViewerV3.Wpf.Tests`: 97 (+46 — `ListView/GalleryListColumnsTests` Spalten-/Sortier-Logik und Setting,
+  `ListView/GalleryDataGridAutomationTests` Blatt-Peers, `Tags/TagPickerLogicTests`, `Tags/GalleryPageSourceTagTests`
+  Filter ODER/UND/ohne Tag und Tag-Suche gegen eine migrierte DB, `Tags/TagManagementViewModelTests`).
+- Rauchtest-Szenario: neuer Schritt „Tags (Zuweisen, Filter, Suche, Verwaltung) + Listenansicht“ (Tag-Menü, Strg+T
+  über einen Rauchtest-Ersatz des Dialogs, Filter, Suche, Listenansicht mit Setting/Spalte/Sortierung, Lightbox-Tags,
+  Verwaltungsseite, Umbenennen, Löschen); 16/16 OK, 0 WPF-Binding-Fehler.
+
+### Offen
+- Spalte „Status“ der Listenansicht ist ein Platzhalter (TODO in `ListViewConverters.cs`/`GalleryListView.xaml`): den
+  Eingangs-/Archiv-Status liefert das Bibliotheksmodul.
+- Tag-Zuweisungen hängen an FileIds: „Neu aufbauen“ verliert sie wie Favoriten und Bewertungen.
+
 ## [0.2.9] — 2026-10-19
 
 ### Neu

@@ -11,6 +11,7 @@ using PhotoViewerV3.Services.Library;
 using PhotoViewerV3.Services.Media;
 using PhotoViewerV3.Services.Operations;
 using PhotoViewerV3.Services.Scanning;
+using PhotoViewerV3.Services.Tags;
 
 namespace PhotoViewerV3.Tests.Fixtures;
 
@@ -157,6 +158,9 @@ public sealed class TempLibraryFixture : IDisposable
 
     public CatalogUpdateService CreateCatalogUpdateService()
         => new(ContextFactory, NullLogger<CatalogUpdateService>.Instance, Messenger);
+
+    public TagService CreateTagService()
+        => new(ContextFactory, NullLogger<TagService>.Instance, Messenger);
 
     public async Task<MediaFile?> FindFileAsync(string name)
     {

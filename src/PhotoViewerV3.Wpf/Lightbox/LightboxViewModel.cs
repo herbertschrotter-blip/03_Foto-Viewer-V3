@@ -23,6 +23,8 @@ using PhotoViewerV3.Services.Catalog;
 using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Messaging;
 using PhotoViewerV3.Services.Operations;
+using PhotoViewerV3.Gallery.Tags;
+using PhotoViewerV3.Services.Tags;
 
 namespace PhotoViewerV3.Lightbox;
 
@@ -70,7 +72,9 @@ public sealed partial class LightboxViewModel : ObservableObject, IDisposable
         ICatalogUpdateService? catalog = null,
         IFileOperationService? fileOperations = null,
         IArchiveService? archives = null,
-        IArchiveMoveService? archiveMove = null)
+        IArchiveMoveService? archiveMove = null,
+        ITagService? tags = null,
+        ITagPickerService? tagPicker = null)
     {
         _vlc = vlc;
         _contextFactory = contextFactory;
@@ -86,6 +90,7 @@ public sealed partial class LightboxViewModel : ObservableObject, IDisposable
         WeakReferenceMessenger.Default.Register<FilesChangedMessage>(
             this,
             static (recipient, message) => ((LightboxViewModel)recipient).OnFilesChanged(message));
+        InitTags(tags, tagPicker); // Tags anzeigen/bearbeiten (LightboxViewModel.Tags.cs, ADR-0021)
     }
 
     // ----- Anbindung an das Fenster (View-Mechanik) -----
@@ -259,6 +264,7 @@ public sealed partial class LightboxViewModel : ObservableObject, IDisposable
         NextCommand.NotifyCanExecuteChanged();
         PreviousCommand.NotifyCanExecuteChanged();
         UpdateHeader();
+        _ = LoadCurrentTagsAsync();
         _ = ShowCurrentAsync();
     }
 
@@ -1050,6 +1056,11 @@ public sealed partial class LightboxViewModel : ObservableObject, IDisposable
             case FilesChangeKind.Metadata:
             case FilesChangeKind.Moved:
                 _ = RefreshItemsAsync(relevant, message.Kind);
+                if (CurrentItem is { } current && relevant.Contains(current.FileId))
+                {
+                    _ = LoadCurrentTagsAsync(); // Tag-Zuweisungen melden sich als Metadata
+                }
+
                 break;
         }
     }

@@ -29,6 +29,10 @@ using PhotoViewerV3.Services.Watch;
 using PhotoViewerV3.Settings;
 using PhotoViewerV3.Gallery.Data;
 using PhotoViewerV3.Gallery.ViewModels;
+using PhotoViewerV3.Gallery.ListView;
+using PhotoViewerV3.Gallery.Tags;
+using PhotoViewerV3.Services.Tags;
+using PhotoViewerV3.Settings.TagManagement;
 using Wpf.Ui.Appearance;
 
 namespace PhotoViewerV3.Shell.Smoke;
@@ -97,6 +101,9 @@ internal sealed class SmokeScenario
     private const string WatchedFileName = "smoke-watch.jpg";
 
     private readonly IArchiveService _archives;
+    private readonly ITagService _tags;
+    private readonly SmokeTagPickerService? _tagPicker;
+    private readonly TagManagementViewModel _tagManagement;
 
     private int _libraryId;
     private int _mediaCount;
@@ -130,6 +137,9 @@ internal sealed class SmokeScenario
         _paths = services.GetRequiredService<IAppDataPaths>();
         _watch = services.GetRequiredService<ILibraryWatchService>();
         _archives = services.GetRequiredService<IArchiveService>();
+        _tags = services.GetRequiredService<ITagService>();
+        _tagPicker = services.GetService<SmokeTagPickerService>();
+        _tagManagement = services.GetRequiredService<TagManagementViewModel>();
         _messenger.Register<SmokeScenario, ScanCompletedMessage>(this, static (r, m) => r._lastScan = m.Result);
     }
 
@@ -182,6 +192,7 @@ internal sealed class SmokeScenario
         await StepAsync("Aktualisieren (Incremental) + Neu aufbauen (ClearAndRescan)", RescanAsync).ConfigureAwait(true);
         await StepAsync("Archiv: ZIP → Kachel → Inhaltsansicht → Entpacken → Katalog", ArchiveAsync).ConfigureAwait(true);
         await StepAsync("Eingang → Archiv (zweite Wurzel, Status-Filter, Ins Archiv, Rückgängig, Ordner anlegen/umbenennen)", InboxArchiveAsync).ConfigureAwait(true);
+        await StepAsync("Tags (Zuweisen, Filter, Suche, Verwaltung) + Listenansicht", TagsAndListViewAsync).ConfigureAwait(true);
         await StepAsync("Ordnerüberwachung: Datei kopieren → automatischer Diff-Scan → Galerie", WatchAsync).ConfigureAwait(true);
         if (_cleanup)
         {
@@ -1166,6 +1177,211 @@ internal sealed class SmokeScenario
         await SnapshotAsync("13-galerie-nach-entpacken").ConfigureAwait(true);
     }
 
+    /// Tags und Listenansicht (0.2.6, ADR-0021): Tags anlegen, über das Tag-Menü (3 Dateien) und den Strg+T-Dialog
+    /// (Fake, 2 Dateien) zuweisen, Chips/DB prüfen, Tag-Filter ODER/UND/ohne Tag, Suche nach Tag-Namen, Umschalten auf
+    /// die Listenansicht (Setting, Spalte ausblenden, Sortierung, Lightbox mit Tags), Verwaltungsseite, Umbenennen und
+    /// Löschen samt Aufräumen der Zuweisungen. Läuft nach dem Neuaufbau (neue FileIds) und hinterlässt keine Tags.
+    /// </summary>
+    private async Task TagsAndListViewAsync()
+    {
+        _navigation.NavigateTo(NavigationTags.Gallery);
+        await WaitUntilAsync(() => _navigation.CurrentTag == NavigationTags.Gallery, ShortWait, "Galerie aktiv").ConfigureAwait(true);
+        if (_gallery.Filter != GalleryFilter.All)
+        {
+            _gallery.Filter = GalleryFilter.All;
+            await WaitForGalleryAsync("Filter Alle").ConfigureAwait(true);
+        }
+
+        var baseline = _gallery.TotalCount;
+        Check(baseline >= 4 && _gallery.CurrentPage.Count >= 3, $"Ausgangslage: {baseline} Dateien");
+
+        var urlaub = await _tags.CreateAsync("Smoketag Urlaub").ConfigureAwait(true);
+        var familie = await _tags.CreateAsync("Smoketag Familie").ConfigureAwait(true);
+        await WaitUntilAsync(
+            () => _gallery.TagMenuEntries.Any(e => e.Tag.Id == urlaub.Id) && _gallery.TagMenuEntries.Any(e => e.Tag.Id == familie.Id),
+            ShortWait,
+            "Neue Tags im Tag-Menü der Galerie").ConfigureAwait(true);
+
+        // Tag-Menü (Aktionsleiste/Kontextmenü): „Urlaub“ für 3 Dateien
+        _gallery.ClearSelectionCommand.Execute(null);
+        var targets = _gallery.CurrentPage.Take(3).ToList();
+        foreach (var item in targets)
+        {
+            item.IsSelected = true;
+        }
+
+        var entry = _gallery.TagMenuEntries.First(e => e.Tag.Id == urlaub.Id);
+        Check(entry.State == false, "Menüeintrag „Urlaub“ vor der Zuweisung ohne Häkchen");
+        await _gallery.ToggleSelectionTagCommand.ExecuteAsync(entry).ConfigureAwait(true);
+        Check(entry.State == true, "Menüeintrag „Urlaub“ nach der Zuweisung mit Häkchen");
+        var urlaubRows = await DbScalarAsync<int>("SELECT COUNT(*) FROM FileTags WHERE TagId = $t", ("$t", urlaub.Id)).ConfigureAwait(true);
+        Check(urlaubRows == 3, $"DB: {urlaubRows} Zuweisungen „Urlaub“ (erwartet 3)");
+        Check(targets.All(t => t.HasTag(urlaub.Id) && t.HasTags), "Kacheln zeigen den Tag-Punkt „Urlaub“");
+
+        // Strg+T-Dialog (Fake): „Familie“ für die ersten beiden
+        if (_tagPicker is not null)
+        {
+            _gallery.ClearSelectionCommand.Execute(null);
+            targets[0].IsSelected = true;
+            targets[1].IsSelected = true;
+            _tagPicker.NextResult = new TagPickResult(new[] { familie.Id }, Array.Empty<int>());
+            await _gallery.EditSelectionTagsCommand.ExecuteAsync(null).ConfigureAwait(true);
+            var request = _tagPicker.LastRequest;
+            Check(
+                request is { SelectionCount: 2 } && request.CountsInSelection.GetValueOrDefault(urlaub.Id) == 2 && request.Tags.Count >= 2,
+                "Tag-Auswahl (Strg+T): 2 Dateien, „Urlaub“ bei beiden gesetzt");
+        }
+        else
+        {
+            await _tags.AssignAsync(new[] { targets[0].Id, targets[1].Id }, new[] { familie.Id }).ConfigureAwait(true);
+        }
+
+        await WaitUntilAsync(() => targets[0].HasTag(familie.Id) && targets[1].HasTag(familie.Id), ShortWait, "Chips „Familie“ nach Strg+T").ConfigureAwait(true);
+        var familieRows = await DbScalarAsync<int>("SELECT COUNT(*) FROM FileTags WHERE TagId = $t", ("$t", familie.Id)).ConfigureAwait(true);
+        Check(familieRows == 2, $"DB: {familieRows} Zuweisungen „Familie“ (erwartet 2)");
+        Check(targets[0].Tags.Select(t => t.Id).SequenceEqual(new[] { urlaub.Id, familie.Id }), $"Chip-Reihenfolge nach SortOrder: {targets[0].TagsText}");
+        await SnapshotAsync("10-galerie-tags").ConfigureAwait(true);
+        _gallery.ClearSelectionCommand.Execute(null);
+
+        // Tag-Filter: ODER / UND / ohne Tag
+        var filterUrlaub = _gallery.TagFilterEntries.First(e => e.Tag.Id == urlaub.Id);
+        var filterFamilie = _gallery.TagFilterEntries.First(e => e.Tag.Id == familie.Id);
+        filterUrlaub.IsSelected = true;
+        await _gallery.ApplyTagFilterCommand.ExecuteAsync(null).ConfigureAwait(true);
+        await WaitForGalleryAsync("Tag-Filter Urlaub").ConfigureAwait(true);
+        Check(_gallery.TotalCount == 3 && _gallery.HasTagFilter, $"Tag-Filter „Urlaub“: {_gallery.TotalCount} Treffer (erwartet 3), Knopf „{_gallery.TagFilterText}“");
+
+        filterFamilie.IsSelected = true;
+        _gallery.TagFilterMode = GalleryTagMode.All;
+        await WaitForGalleryAsync("Tag-Filter UND").ConfigureAwait(true);
+        Check(_gallery.TotalCount == 2, $"Tag-Filter „Urlaub UND Familie“: {_gallery.TotalCount} Treffer (erwartet 2), „{_gallery.TagFilterText}“");
+
+        _gallery.TagFilterMode = GalleryTagMode.Any;
+        await WaitForGalleryAsync("Tag-Filter ODER").ConfigureAwait(true);
+        Check(_gallery.TotalCount == 3, $"Tag-Filter „Urlaub ODER Familie“: {_gallery.TotalCount} Treffer (erwartet 3)");
+
+        _gallery.TagFilterMode = GalleryTagMode.None;
+        await WaitForGalleryAsync("Tag-Filter ohne Tag").ConfigureAwait(true);
+        Check(_gallery.TotalCount == baseline - 3, $"Tag-Filter „ohne Tag“: {_gallery.TotalCount} Treffer (erwartet {baseline - 3})");
+
+        await _gallery.ClearTagFilterCommand.ExecuteAsync(null).ConfigureAwait(true);
+        await WaitForGalleryAsync("Tag-Filter zurückgesetzt").ConfigureAwait(true);
+        Check(!_gallery.HasTagFilter && _gallery.TotalCount == baseline && _gallery.TagFilterText == "Tags", "Tag-Filter zurückgesetzt → alle Dateien");
+
+        // Suche findet Tag-Namen (kein Dateiname enthält „Smoketag“)
+        _gallery.SearchTerm = "smoketag";
+        await _gallery.SearchCommand.ExecuteAsync(null).ConfigureAwait(true);
+        await WaitForGalleryAsync("Suche nach Tag-Namen").ConfigureAwait(true);
+        Check(_gallery.ErrorMessage is null && _gallery.TotalCount == 3, $"Suche „smoketag“ findet {_gallery.TotalCount} getaggte Dateien (erwartet 3)");
+        await _gallery.ClearSearchCommand.ExecuteAsync(null).ConfigureAwait(true);
+        await WaitForGalleryAsync("Suche geleert").ConfigureAwait(true);
+
+        // Listenansicht
+        _gallery.ViewMode = GalleryViewMode.List;
+        await Task.Delay(400).ConfigureAwait(true);
+        Check(_gallery.ShowList && !_gallery.ShowGrid && _gallery.IsListView, "Umschalter: Listenansicht aktiv");
+        var listView = FindVisualChild<GalleryListView>(Application.Current.MainWindow);
+        Check(listView is not null, "Listenansicht im Fenster");
+        await WaitUntilAsync(
+            () => listView!.DataGrid.Items.Count == _gallery.CurrentPage.Count && FindVisualChild<GalleryDataGridRow>(listView.DataGrid) is not null,
+            ShortWait,
+            "Zeilen der Listenansicht realisiert").ConfigureAwait(true);
+        var columns = listView!.VisibleColumnKeysInOrder();
+        Check(columns.Count == GalleryListColumns.All.Count && columns[0] == GalleryListColumnKey.Name, $"Spalten: {string.Join(", ", columns)}");
+        var storedMode = await DbScalarAsync<string>("SELECT Value FROM Settings WHERE Key = $k", ("$k", GalleryViewSettingsStore.ViewModeKey)).ConfigureAwait(true);
+        Check(storedMode == nameof(GalleryViewMode.List), $"Setting {GalleryViewSettingsStore.ViewModeKey} = {storedMode}");
+
+        _gallery.ListColumnSettings = GalleryListColumnSettings.Parse(_gallery.ListColumnSettings)
+            .WithVisibility(GalleryListColumnKey.Folder, false)
+            .Serialize();
+        await Task.Delay(300).ConfigureAwait(true);
+        Check(!listView.VisibleColumnKeysInOrder().Contains(GalleryListColumnKey.Folder), "Spalte „Ordner“ ausgeblendet");
+        var storedColumns = await DbScalarAsync<string>("SELECT Value FROM Settings WHERE Key = $k", ("$k", GalleryViewSettingsStore.ListColumnsKey)).ConfigureAwait(true);
+        Check(storedColumns is not null && !storedColumns.Contains(nameof(GalleryListColumnKey.Folder), StringComparison.Ordinal), $"Setting {GalleryViewSettingsStore.ListColumnsKey} = {storedColumns}");
+
+        var nameSort = GalleryListColumns.NextSort(GalleryListColumnKey.Name, _gallery.SelectedSort.Sort);
+        Check(nameSort is GallerySort.NameAsc or GallerySort.NameDesc, $"Kopfzeile „Name“ → {nameSort}");
+        await SetSortAsync(nameSort!.Value).ConfigureAwait(true);
+        var names = _gallery.CurrentPage.Select(i => i.Name).ToList();
+        Check(
+            nameSort == GallerySort.NameAsc
+                ? IsSorted(names, (a, b) => string.Compare(a, b, StringComparison.OrdinalIgnoreCase))
+                : IsSorted(names, (a, b) => string.Compare(b, a, StringComparison.OrdinalIgnoreCase)),
+            $"Liste nach Name sortiert ({nameSort})");
+        await SnapshotAsync("11-galerie-liste").ConfigureAwait(true);
+
+        // Lightbox aus der Liste zeigt die Tags
+        var tagged = _gallery.CurrentPage.First(i => i.HasTag(familie.Id));
+        _gallery.OpenInLightboxCommand.Execute(tagged);
+        await WaitUntilAsync(() => _lightbox.IsOpen, ShortWait, "Lightbox aus der Liste").ConfigureAwait(true);
+        var lightbox = Application.Current.Windows.OfType<LightboxWindow>().First().ViewModel;
+        await WaitUntilAsync(() => lightbox.CurrentItem?.FileId == tagged.Id && lightbox.CurrentTags.Count == 2, ShortWait, "Lightbox-Tags geladen").ConfigureAwait(true);
+        Check(lightbox.HasCurrentTags, $"Lightbox: {lightbox.CurrentTagsText}");
+        lightbox.CloseCommand.Execute(null);
+        await WaitUntilAsync(() => !_lightbox.IsOpen, ShortWait, "Lightbox geschlossen").ConfigureAwait(true);
+
+        _gallery.ListColumnSettings = null;
+        _gallery.ViewMode = GalleryViewMode.Grid;
+        await SetSortAsync(GallerySort.ModifiedDesc).ConfigureAwait(true);
+        Check(_gallery.ShowGrid && !_gallery.ShowList, "zurück zur Kachelansicht");
+
+        // Verwaltungsseite „Tags“
+        _navigation.NavigateTo(NavigationTags.Tags);
+        await WaitUntilAsync(
+            () => _navigation.CurrentTag == NavigationTags.Tags && _tagManagement.Tags.Any(t => t.Id == urlaub.Id && t.FileCount == 3),
+            ShortWait,
+            "Tag-Verwaltung geladen").ConfigureAwait(true);
+        Check(_tagManagement.Tags.First(t => t.Id == familie.Id).FileCount == 2, $"Verwaltung: {_tagManagement.SummaryText}");
+        await SnapshotAsync("12-tags-verwaltung").ConfigureAwait(true);
+
+        // Nach Sortier-/Seitenwechseln können die Items neue Instanzen sein → über die Id in der aktuellen Seite suchen.
+        var targetIds = targets.Select(t => t.Id).ToList();
+        GalleryItem? InPage(int id) => _gallery.CurrentPage.FirstOrDefault(i => i.Id == id);
+        await _tags.RenameAsync(urlaub.Id, "Smoketag Reise").ConfigureAwait(true);
+        await WaitUntilAsync(() => InPage(targetIds[0])?.Tags.Any(t => t.Name == "Smoketag Reise") == true, ShortWait, "Umbenennen erreicht die Kachel-Chips").ConfigureAwait(true);
+        await _tagManagement.LoadCommand.ExecuteAsync(null).ConfigureAwait(true);
+        Check(_tagManagement.Tags.Any(t => t.Name == "Smoketag Reise"), "Verwaltung zeigt den neuen Namen");
+
+        var removedFamilie = await _tags.DeleteAsync(familie.Id).ConfigureAwait(true);
+        var removedUrlaub = await _tags.DeleteAsync(urlaub.Id).ConfigureAwait(true);
+        Check(removedFamilie == 2 && removedUrlaub == 3, $"Tags gelöscht: {removedFamilie} + {removedUrlaub} Zuweisungen entfernt");
+        var leftover = await DbScalarAsync<int>("SELECT COUNT(*) FROM FileTags").ConfigureAwait(true);
+        Check(leftover == 0, "DB: keine Zuweisungen übrig");
+        await WaitUntilAsync(
+            () => targetIds.All(id => InPage(id) is { HasTags: false }) && _gallery.TagMenuEntries.Count == 0,
+            ShortWait,
+            "Galerie ohne Tags").ConfigureAwait(true);
+
+        _navigation.NavigateTo(NavigationTags.Gallery);
+        await WaitUntilAsync(() => _navigation.CurrentTag == NavigationTags.Gallery, ShortWait, "zurück zur Galerie").ConfigureAwait(true);
+    }
+
+    private static T? FindVisualChild<T>(DependencyObject? root)
+        where T : DependencyObject
+    {
+        if (root is null)
+        {
+            return null;
+        }
+
+        var count = System.Windows.Media.VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < count; i++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(root, i);
+            if (child is T match)
+            {
+                return match;
+            }
+
+            if (FindVisualChild<T>(child) is { } nested)
+            {
+                return nested;
+            }
+        }
+
+        return null;
+    }
+
     private async Task CleanupAsync()
     {
         _navigation.NavigateTo(NavigationTags.Library);
@@ -1364,5 +1580,25 @@ internal sealed class SmokeScenario
         }
 
         return true;
+    }
+}
+
+/// <summary>
+/// Rauchtest-Ersatz für den Tag-Auswahl-Dialog (Strg+T): merkt sich die Anfrage und liefert das vom Szenario gesetzte
+/// Ergebnis — der modale Dialog würde den unbeaufsichtigten Lauf blockieren.
+/// </summary>
+internal sealed class SmokeTagPickerService : ITagPickerService
+{
+    public TagPickRequest? LastRequest { get; private set; }
+
+    /// <summary>Nächstes Ergebnis; null = Abbruch.</summary>
+    public TagPickResult? NextResult { get; set; }
+
+    public Task<TagPickResult?> PickAsync(TagPickRequest request, Window? owner)
+    {
+        LastRequest = request;
+        var result = NextResult;
+        NextResult = null;
+        return Task.FromResult(result);
     }
 }

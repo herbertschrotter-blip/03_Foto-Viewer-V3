@@ -14,7 +14,9 @@ großer Foto- und Video-Bibliotheken (50 000–500 000 Dateien). Nachfolger der 
   EXIF-Orientierung; Videos und Formate ohne Windows-Codec über FFmpeg), Sortierung nach Datum/Name/Größe, Volltextsuche
   über Dateiname und Endung (FTS5), Filter Alle/Bilder/Videos/Favoriten, Ordnerfilter, Unterordner-Kacheln für Ordner
   ohne direkte Dateien, Favorit und 1–5 Sterne je Kachel, Mehrfachauswahl mit Aktionsleiste (Favorit, Bewertung,
-  Verschieben nach…, Papierkorb) und Rückgängig.
+  Tags, Verschieben nach…, Papierkorb) und Rückgängig. Umschaltbar auf eine **Listenansicht** mit Spalten.
+- **Tags**: frei definierbare, farbige Schlagworte (Seite „Tags“), Zuweisen für die Auswahl (Aktionsleiste,
+  Kontextmenü, Strg+T), Tag-Punkte auf der Kachel, Filter nach Tags (ODER/UND/ohne Tag), Suche findet Tag-Namen.
 - **Lightbox**: eigenes Fenster (auch auf einem zweiten Monitor) für Bilder mit Zoom/Pan und Info-Panel sowie Videos
   über LibVLC mit Transportleiste; Favorit, Bewertung, Papierkorb, „Im Explorer anzeigen“, „Mit Standardprogramm
   öffnen“.
@@ -106,7 +108,27 @@ Ordner-Umbenennung) zurück.
 | Strg+Pos1 / Strg+Ende | Erste / letzte Seite |
 | F5 | Aktualisieren |
 | Strg+M | Auswahl ins Archiv… |
+| Strg+T | Tags der Auswahl bearbeiten (Tag-Auswahl) |
+| Rechtsklick | Tag-Menü der Auswahl (nicht ausgewählte Kachel/Zeile wird zuerst gewählt) |
 | Enter im Suchfeld | Suchen |
+
+#### Tags
+Tags legt man auf der Seite **Tags** an (Name, Farbe aus einer Palette mit zwölf Farben, Reihenfolge, Umbenennen,
+Löschen mit Bestätigung und Anzahl der betroffenen Dateien) oder direkt in der Tag-Auswahl („Neues Tag…“). Zuweisen:
+Knopf **Tags** in der Aktionsleiste oder Rechtsklick — Häkchen = alle ausgewählten Dateien haben das Tag, „(teilweise)“
+= nur ein Teil; Klick setzt das Tag bei allen bzw. entfernt es. **Strg+T** öffnet die Tag-Auswahl mit dreistufigen
+Häkchen für eine gemischte Auswahl. Die Kachel zeigt je Tag einen farbigen Punkt (Hover = Namen). Das Dropdown **Tags**
+neben den Filter-Pills filtert nach einem oder mehreren Tags — „mindestens eines“ (ODER), „alle“ (UND) oder „nur
+Dateien ohne Tag“. Die Suche findet neben Dateinamen auch Dateien, deren Tag-Name den Suchtext enthält. Tags hängen am
+Katalog-Eintrag: „Aktualisieren“ behält sie, „Neu aufbauen“ und der Papierkorb entfernen die Zuweisungen.
+
+#### Listenansicht
+Der Umschalter rechts in der Kopfzeile wechselt zwischen Kachel-Grid und Liste (die Wahl bleibt gespeichert). Die
+Liste zeigt dieselbe Seite mit den Spalten Name (mit Vorschaubild), Ordner, Geändert, Größe, Typ, Bewertung (Sterne
+klickbar), Favorit (Herz klickbar), Tags und Status. Rechtsklick auf eine Spaltenüberschrift blendet Spalten ein/aus,
+Ziehen ändert die Reihenfolge — beides bleibt gespeichert. Klick auf Name, Geändert oder Größe sortiert die ganze
+Trefferliste (wie die Sortier-Auswahl), die übrigen Spalten sortieren nur die geladene Seite. Auswahl, Aktionsleiste,
+Doppelklick/Enter (Lightbox) und Tastenkürzel wie im Grid.
 
 ### Lightbox
 Rahmenloses Fenster, Toolbar und Titelleiste blenden sich nach kurzer Zeit aus (Mausbewegung oder Taste blendet sie
@@ -131,6 +153,7 @@ Codec).
 | Strg+1 … Strg+5 | Bewertung 1–5 Sterne |
 | Strg+0 | Bewertung löschen |
 | Strg+M | Ins Archiv… |
+| Strg+T | Tags der Datei bearbeiten (die Titelleiste zeigt die Tags) |
 | Entf | In den Papierkorb (mit Bestätigung) |
 
 ### Archive
@@ -169,6 +192,11 @@ werden protokolliert umbenannt und lassen sich mit Rückgängig zurücknehmen).
   (Ebenenname aus den Pfad-Ebenen, Duplikate entfernt, Separator wählbar; Dateien in der Quellwurzel → `_root`;
   Namenskonflikte → `_1`, `_2`, …), optional direkt in die Zielwurzel und leere Quellordner löschen. Vorschau, Ausführen,
   Rückgängig.
+
+### Tags
+Verwaltung der Tags: neues Tag anlegen (Enter), je Tag Farbe aus der Palette, nach oben/unten (Reihenfolge in Menüs,
+Chips und Filter), Umbenennen, Löschen (fragt nach und nennt die Zahl der Dateien; die Dateien selbst bleiben
+unverändert). Neben dem Namen steht, wie vielen Dateien das Tag zugewiesen ist.
 
 ### Einstellungen
 Farbschema (Hell/Dunkel/System folgt Windows live), Speicherorte mit „Ordner öffnen“, Thumbnail-Cache (Belegung,
@@ -229,7 +257,7 @@ Das Ergebnis des Rauchtests steht in `<AppData>\smoke-result.txt` und im Log (Ze
 
 ```powershell
 dotnet test tests/PhotoViewerV3.Tests --nologo        # Services + Data (xUnit, FluentAssertions; echte SQLite-Migration in Temp)
-dotnet test tests/PhotoViewerV3.Wpf.Tests --nologo    # WPF-gebundener Code (WIC-Renderer, GalleryQuery, Converter)
+dotnet test tests/PhotoViewerV3.Wpf.Tests --nologo    # WPF-gebundener Code (WIC-Renderer, GalleryQuery, Converter, Tags, Listenansicht)
 ```
 
 Integrations-Rauchtest (steuert die ganze App über ihre ViewModels, prüft Dateisystem und Datenbank, macht Screenshots):
@@ -270,16 +298,16 @@ src/
   PhotoViewerV3.Data/              # LibraryContext (EF Core), EntitiesMapping, Migrations,
                                    # RawSql (BulkScanWriter, FtsIndexer, FtsQueryBuilder)
   PhotoViewerV3.Services/          # WPF-frei: Catalog, Database, Infrastructure (AppDataPaths), Library, Media
-                                   # (Formatregister), Messaging, Operations, Scanning, Sorter, Thumbnails, Archive;
+                                   # (Formatregister), Messaging, Operations, Scanning, Sorter, Tags, Thumbnails, Archive;
                                    # AddPhotoViewerServices() + AddXyz() je Modul
   PhotoViewerV3.Wpf/               # App.xaml.cs (Host + DI), MainWindow (NavigationView);
                                    # Module Folders, Gallery, Library, Lightbox, Settings, Shell (+ Smoke), Sorter,
                                    # Thumbnails (WIC-Renderer)
 tests/
-  PhotoViewerV3.Tests/             # xUnit: Services + Data (241 Tests)
-  PhotoViewerV3.Wpf.Tests/         # xUnit: WPF-gebundener Code (33 Tests)
+  PhotoViewerV3.Tests/             # xUnit: Services + Data (256 Tests)
+  PhotoViewerV3.Wpf.Tests/         # xUnit: WPF-gebundener Code (97 Tests)
   PhotoViewerV3.PerfTests/         # Konsolen-Harness der Spikes (SQLite-Bulk, WIC, FFmpeg, Storage, V0.1-Scan)
-docs/adr/                          # Architekturentscheidungen ADR-0001 … ADR-0019
+docs/adr/                          # Architekturentscheidungen ADR-0001 … ADR-0021
 docs/spikes/                       # Messungen der sechs Spikes und der Real-Welt-Scan-Validation
 mockups/                           # HTML-Design-Vorlagen (Fluent hell/dunkel, Lightbox)
 chatgpt-review/                    # Review-Runden zum Plan

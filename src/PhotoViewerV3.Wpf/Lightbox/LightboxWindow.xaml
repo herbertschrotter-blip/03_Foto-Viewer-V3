@@ -7,6 +7,7 @@
                  xmlns:vlc="clr-namespace:LibVLCSharp.WPF;assembly=LibVLCSharp.WPF"
                  xmlns:local="clr-namespace:PhotoViewerV3.Lightbox"
                  xmlns:controls="clr-namespace:PhotoViewerV3.Lightbox.Controls"
+                 xmlns:tags="clr-namespace:PhotoViewerV3.Gallery.Tags"
                  mc:Ignorable="d"
                  d:DataContext="{d:DesignInstance Type=local:LightboxViewModel}"
                  Title="{Binding Title}"
@@ -42,6 +43,12 @@
                      CanMaximize="True">
             <ui:TitleBar.TrailingContent>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
+                    <!-- Tags der Datei (Strg+T bearbeitet, ADR-0021) -->
+                    <tags:TagChipsControl Tags="{Binding CurrentTags}"
+                                          Compact="False"
+                                          VerticalAlignment="Center"
+                                          Margin="0,2,12,0"
+                                          ToolTip="{Binding CurrentTagsText}" />
                     <TextBlock Text="{Binding Subtitle}"
                                FontSize="12"
                                VerticalAlignment="Center"

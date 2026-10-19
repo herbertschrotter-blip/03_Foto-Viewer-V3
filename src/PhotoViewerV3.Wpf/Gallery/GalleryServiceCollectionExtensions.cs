@@ -3,7 +3,9 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using PhotoViewerV3.Gallery.ArchiveTarget;
 using PhotoViewerV3.Gallery.Archives;
 using PhotoViewerV3.Gallery.Data;
+using PhotoViewerV3.Gallery.ListView;
 using PhotoViewerV3.Gallery.Services;
+using PhotoViewerV3.Gallery.Tags;
 using PhotoViewerV3.Gallery.ViewModels;
 using PhotoViewerV3.Gallery.Views;
 using PhotoViewerV3.Services.Operations;
@@ -29,6 +31,9 @@ public static class GalleryServiceCollectionExtensions
         services.AddGalleryArchives();
         services.TryAddSingleton<IArchiveTargetPicker, ArchiveTargetPicker>();
         services.TryAddSingleton<IArchiveMoveService, ArchiveMoveService>();
+        // Tags (ADR-0021) und Listenansicht: Tag-Auswahl-Dialog, Ansichts-Einstellungen (Grid/Liste, Spalten)
+        services.TryAddSingleton<ITagPickerService, TagPickerService>();
+        services.TryAddSingleton<IGalleryViewSettingsStore, GalleryViewSettingsStore>();
         return services;
     }
 }

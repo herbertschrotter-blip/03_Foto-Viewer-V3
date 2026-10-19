@@ -11,6 +11,7 @@ using PhotoViewerV3.Services.Thumbnails;
 using PhotoViewerV3.Services.Watch;
 using PhotoViewerV3.Lightbox;
 using PhotoViewerV3.Settings;
+using PhotoViewerV3.Settings.TagManagement;
 using PhotoViewerV3.Shell;
 using PhotoViewerV3.Sorter;
 using PhotoViewerV3.Thumbnails;
@@ -94,6 +95,7 @@ public partial class App : Application
         // Galerie (Wpf/Gallery: PageSource, ViewModel, View, Dialog-/Ordnerauswahl-Dienste) und Sortieren (Wpf/Sorter)
         services.AddGallery();
         services.AddSorterUi();
+        services.AddTagManagement(); // Seite „Tags“ (Wpf/Settings/TagManagement, ADR-0021)
 
         services.AddSingleton<MainWindow>();
     }

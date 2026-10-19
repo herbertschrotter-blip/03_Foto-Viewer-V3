@@ -28,6 +28,19 @@ public enum GallerySort
     SizeAsc,
 }
 
+/// <summary>Verknüpfung der gewählten Tags im Tag-Filter (ADR-0021).</summary>
+public enum GalleryTagMode
+{
+    /// <summary>ODER: mindestens eines der gewählten Tags.</summary>
+    Any,
+
+    /// <summary>UND: alle gewählten Tags.</summary>
+    All,
+
+    /// <summary>Nur Dateien ohne Tag (gewählte Tags werden ignoriert).</summary>
+    None,
+}
+
 /// <summary>
 /// Flaches Zeilen-DTO einer Grid-Page (ADR-0010: kleine DTOs, keine Entities im UI).
 /// <paramref name="RootRole"/> = Rolle der Wurzel des Ordners (0 Eingang, 1 Archiv, null unbekannt — ADR-0020).

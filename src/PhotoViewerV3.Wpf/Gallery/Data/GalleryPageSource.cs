@@ -19,7 +19,9 @@ namespace PhotoViewerV3.Gallery.Data;
 /// <paramref name="IncludeSubfolders"/> steuert, ob der Ordnerfilter rekursiv (Pfad-Prefix) wirkt.
 /// <paramref name="SearchTerm"/> ist freier Benutzertext; den FTS5-MATCH-Ausdruck baut
 /// <see cref="FtsQueryBuilder.FromUserInput"/> (eine Implementierung im Repo) — Text ohne suchbaren Inhalt
-/// (leer, nur Sonderzeichen wie <c>---</c>) gilt als „keine Suche“.
+/// (leer, nur Sonderzeichen wie <c>---</c>) gilt als „keine Suche“. Die Suche findet außerdem Dateien, deren
+/// Tag-Name den Suchtext enthält (Tags, ADR-0021). <paramref name="TagIds"/> + <paramref name="TagMode"/> filtern
+/// nach Tags (ODER / UND / ohne Tag).
 /// </summary>
 public sealed record GalleryQuery(
     int LibraryId,
@@ -27,13 +29,18 @@ public sealed record GalleryQuery(
     string? SearchTerm,
     int? FolderId = null,
     bool IncludeSubfolders = true,
-    GallerySort Sort = GallerySort.ModifiedDesc)
+    GallerySort Sort = GallerySort.ModifiedDesc,
+    IReadOnlyList<int>? TagIds = null,
+    GalleryTagMode TagMode = GalleryTagMode.Any)
 {
     /// <summary>Sicherer FTS5-MATCH-Ausdruck (quotierte Präfix-Phrasen) oder null ohne suchbaren Inhalt.</summary>
     public string? MatchExpression => FtsQueryBuilder.FromUserInput(SearchTerm);
 
     public bool HasSearch => MatchExpression is not null;
     public bool HasFolder => FolderId is not null;
+
+    /// <summary>True, wenn ein Tag-Filter wirkt (Tags gewählt oder Modus „ohne Tag“).</summary>
+    public bool HasTagFilter => TagMode == GalleryTagMode.None || TagIds is { Count: > 0 };
 }
 
 /// <summary>
@@ -352,30 +359,14 @@ public sealed class GalleryPageSource : IDisposable
     private static string BuildPageSql(GalleryQuery query, string folderClause, bool reverse)
     {
         var orderBy = BuildOrderBy(query.Sort, reverse);
-        if (query.HasSearch)
-        {
-            return $"""
-                SELECT {FileColumns}
-                FROM FilesFts ft
-                JOIN Files f ON f.Id = ft.rowid
-                JOIN Folders fo ON fo.Id = f.FolderId
-                {RootJoin}
-                WHERE FilesFts MATCH $term
-                  AND f.LibraryId = $libId
-                  {BuildFilterClause(query.Filter)}
-                  {folderClause}
-                ORDER BY {orderBy}
-                LIMIT $limit OFFSET $offset;
-                """;
-        }
-
         return $"""
             SELECT {FileColumns}
-            FROM Files f
+            FROM {BuildFilesSource(query)}
             JOIN Folders fo ON fo.Id = f.FolderId
             {RootJoin}
             WHERE f.LibraryId = $libId
               {BuildFilterClause(query.Filter)}
+              {BuildTagClause(query)}
               {folderClause}
             ORDER BY {orderBy}
             LIMIT $limit OFFSET $offset;
@@ -384,27 +375,53 @@ public sealed class GalleryPageSource : IDisposable
 
     private static string BuildCountSql(GalleryQuery query, string folderClause)
     {
-        if (query.HasSearch)
-        {
-            return $"""
-                SELECT COUNT(*)
-                FROM FilesFts ft
-                JOIN Files f ON f.Id = ft.rowid
-                WHERE FilesFts MATCH $term
-                  AND f.LibraryId = $libId
-                  {BuildFilterClause(query.Filter)}
-                  {folderClause};
-                """;
-        }
-
         return $"""
             SELECT COUNT(*)
-            FROM Files f
+            FROM {BuildFilesSource(query)}
             WHERE f.LibraryId = $libId
               {BuildFilterClause(query.Filter)}
+              {BuildTagClause(query)}
               {folderClause};
             """;
     }
+
+    /// <summary>
+    /// Quelle der Files-Zeilen. Mit Suche treiben die Treffer die Abfrage wie vor 0.2.6 (damals
+    /// <c>FROM FilesFts JOIN Files</c>): FTS5-Treffer (Name/Endung, Präfix-Phrasen) vereinigt mit den Dateien, deren
+    /// Tag-Name den Suchtext enthält (NOCASE-Spalte, LIKE, ADR-0021), einmal materialisiert und per
+    /// <c>CROSS JOIN</c> (feste Join-Reihenfolge) über die Rowid an Files gebunden — kein Durchlauf aller Dateien der
+    /// Library. Ohne Suche einfach <c>Files f</c>.
+    /// </summary>
+    private static string BuildFilesSource(GalleryQuery query) => query.HasSearch
+        ? """
+          (SELECT rowid AS Id FROM FilesFts WHERE FilesFts MATCH $term
+           UNION
+           SELECT ft.FileId FROM FileTags ft JOIN Tags t ON t.Id = ft.TagId WHERE t.Name LIKE $tagLike ESCAPE '\') hit
+          CROSS JOIN Files f ON f.Id = hit.Id
+          """
+        : "Files f";
+
+    /// <summary>Tag-Filter: ODER (mindestens eines), UND (alle gewählten) oder „ohne Tag“ (ADR-0021).</summary>
+    private static string BuildTagClause(GalleryQuery query)
+    {
+        if (query.TagMode == GalleryTagMode.None)
+        {
+            return "AND NOT EXISTS (SELECT 1 FROM FileTags ft WHERE ft.FileId = f.Id)";
+        }
+
+        if (query.TagIds is not { Count: > 0 } tagIds)
+        {
+            return string.Empty;
+        }
+
+        var inList = string.Join(",", Enumerable.Range(0, tagIds.Count).Select(i => "$tag" + i));
+        return query.TagMode == GalleryTagMode.All
+            ? $"AND f.Id IN (SELECT ft.FileId FROM FileTags ft WHERE ft.TagId IN ({inList}) GROUP BY ft.FileId HAVING COUNT(DISTINCT ft.TagId) = $tagCount)"
+            : $"AND f.Id IN (SELECT ft.FileId FROM FileTags ft WHERE ft.TagId IN ({inList}))";
+    }
+
+    /// <summary>LIKE-Muster „%text%“ für die Tag-Namenssuche (Sonderzeichen von LIKE escaped).</summary>
+    internal static string BuildTagLikePattern(string searchTerm) => "%" + EscapeLike(searchTerm.Trim()) + "%";
 
     /// <summary>Sortierspalte + Richtung; Id als stabile Zweitsortierung in derselben Richtung.</summary>
     private static string BuildOrderBy(GallerySort sort, bool reverse)
@@ -455,6 +472,20 @@ public sealed class GalleryPageSource : IDisposable
         if (query.MatchExpression is { } matchExpression)
         {
             cmd.Parameters.AddWithValue("$term", matchExpression);
+            cmd.Parameters.AddWithValue("$tagLike", BuildTagLikePattern(query.SearchTerm!));
+        }
+
+        if (query.TagMode != GalleryTagMode.None && query.TagIds is { Count: > 0 } tagIds)
+        {
+            for (var i = 0; i < tagIds.Count; i++)
+            {
+                cmd.Parameters.AddWithValue("$tag" + i, tagIds[i]);
+            }
+
+            if (query.TagMode == GalleryTagMode.All)
+            {
+                cmd.Parameters.AddWithValue("$tagCount", tagIds.Distinct().Count());
+            }
         }
 
         if (folder.FolderId is { } folderId)

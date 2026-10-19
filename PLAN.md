@@ -173,7 +173,10 @@ FilesFts           -- FTS5 virtual table (Files.Name, Extension)
 - LibraryRoots (Id, LibraryId, Path, Role, Name, SortOrder) + `Folders.RootId` — 0.2.5, Migration `AddLibraryRoots`,
   ADR-0020: Wurzelordner je Bibliothek, Role 0 = Eingang (beliebig viele), 1 = Archiv (genau eine; `Libraries.RootPath`
   zeigt auf sie). Indizes `UX_LibraryRoots_Library_Path`, `IX_LibraryRoots_Library_Role`, `IX_Folders_Root`.
-- Tags / FileTags (V0.2 wenn Tags-UI kommt)
+- Tags / FileTags — umgesetzt in 0.2.6 (Migration `AddTags`, ADR-0021):
+  `Tags (Id, Name UNIQUE COLLATE NOCASE, Color "#RRGGBB", SortOrder, CreatedAtUtc)`,
+  `FileTags (FileId → Files ON DELETE CASCADE, TagId → Tags ON DELETE CASCADE, PK (FileId, TagId), IX_FileTags_Tag)`.
+  Tags sind global (nicht je Library); Suche nach Tag-Namen per Join, nicht über `FilesFts`.
 - Albums / AlbumFiles (V0.3+)
 - Plans / PlanFolders / PlanAssignments (V0.3)
 - FileHashes (V0.3+ separat von Files)

@@ -23,6 +23,8 @@ public sealed class LibraryContext : DbContext
     public DbSet<OperationBatch> OperationBatches => Set<OperationBatch>();
     public DbSet<FileOperation> FileOperations => Set<FileOperation>();
     public DbSet<Setting> Settings => Set<Setting>();
+    public DbSet<Tag> Tags => Set<Tag>();
+    public DbSet<FileTag> FileTags => Set<FileTag>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

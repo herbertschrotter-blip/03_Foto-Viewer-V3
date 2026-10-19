@@ -1,0 +1,55 @@
+<UserControl x:Class="PhotoViewerV3.Gallery.Tags.TagChipsControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:PhotoViewerV3.Gallery.Tags"
+             x:Name="Root"
+             Focusable="False"
+             IsTabStop="False">
+    <!--
+        Tag-Chips: kompakt (Kachel) als farbige Punkte mit Tooltip, sonst (Liste, Dialoge) als farbige Pillen mit Namen.
+        Nur Darstellung — keine Interaktion, kein eigener Automation-Inhalt (Kacheln bleiben Blatt-Peers).
+    -->
+    <UserControl.Resources>
+        <local:TagBrushConverter x:Key="TagBrush" />
+    </UserControl.Resources>
+    <ItemsControl ItemsSource="{Binding Tags, ElementName=Root}"
+                  ClipToBounds="True"
+                  IsTabStop="False"
+                  Focusable="False">
+        <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+                <!-- einzeilig: Kachel, Listenzeile und Titelleiste haben feste Höhe; Überlauf wird abgeschnitten -->
+                <StackPanel Orientation="Horizontal" />
+            </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+            <DataTemplate>
+                <Border x:Name="Chip"
+                        Background="{Binding Color, Converter={StaticResource TagBrush}}"
+                        CornerRadius="8"
+                        Padding="7,1"
+                        Margin="0,0,4,2"
+                        ToolTip="{Binding Name}"
+                        SnapsToDevicePixels="True">
+                    <TextBlock x:Name="Label"
+                               Text="{Binding Name}"
+                               FontSize="10"
+                               Foreground="White"
+                               VerticalAlignment="Center" />
+                </Border>
+                <DataTemplate.Triggers>
+                    <DataTrigger Binding="{Binding Compact, ElementName=Root}" Value="True">
+                        <Setter TargetName="Label" Property="Visibility" Value="Collapsed" />
+                        <Setter TargetName="Chip" Property="Padding" Value="0" />
+                        <Setter TargetName="Chip" Property="Width" Value="10" />
+                        <Setter TargetName="Chip" Property="Height" Value="10" />
+                        <Setter TargetName="Chip" Property="CornerRadius" Value="5" />
+                        <Setter TargetName="Chip" Property="Margin" Value="0,0,3,0" />
+                        <Setter TargetName="Chip" Property="BorderBrush" Value="#66000000" />
+                        <Setter TargetName="Chip" Property="BorderThickness" Value="1" />
+                    </DataTrigger>
+                </DataTemplate.Triggers>
+            </DataTemplate>
+        </ItemsControl.ItemTemplate>
+    </ItemsControl>
+</UserControl>

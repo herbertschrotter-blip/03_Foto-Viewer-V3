@@ -58,6 +58,22 @@ namespace PhotoViewerV3.Data.Migrations
                     b.ToTable("FileOperations", (string)null);
                 });
 
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.FileTag", b =>
+                {
+                    b.Property<int>("FileId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("TagId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("FileId", "TagId");
+
+                    b.HasIndex("TagId")
+                        .HasDatabaseName("IX_FileTags_Tag");
+
+                    b.ToTable("FileTags", (string)null);
+                });
+
             modelBuilder.Entity("PhotoViewerV3.Domain.Entities.Folder", b =>
                 {
                     b.Property<int>("Id")
@@ -276,6 +292,36 @@ namespace PhotoViewerV3.Data.Migrations
                     b.ToTable("Settings", (string)null);
                 });
 
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.Tag", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Color")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasDatabaseName("UX_Tags_Name");
+
+                    b.ToTable("Tags", (string)null);
+                });
+
             modelBuilder.Entity("PhotoViewerV3.Domain.Entities.Thumbnail", b =>
                 {
                     b.Property<int>("FileId")
@@ -325,6 +371,21 @@ namespace PhotoViewerV3.Data.Migrations
                         .HasDatabaseName("IX_Thumbnails_File_Size_Kind");
 
                     b.ToTable("Thumbnails", (string)null);
+                });
+
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.FileTag", b =>
+                {
+                    b.HasOne("PhotoViewerV3.Domain.Entities.MediaFile", null)
+                        .WithMany()
+                        .HasForeignKey("FileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("PhotoViewerV3.Domain.Entities.Tag", null)
+                        .WithMany()
+                        .HasForeignKey("TagId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

@@ -10,7 +10,9 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using Microsoft.Extensions.Logging;
 using PhotoViewerV3.Gallery.Controls;
+using PhotoViewerV3.Gallery.ListView;
 using PhotoViewerV3.Gallery.ViewModels;
+using PhotoViewerV3.Shell;
 
 namespace PhotoViewerV3.Gallery.Views;
 
@@ -23,17 +25,40 @@ namespace PhotoViewerV3.Gallery.Views;
 public partial class GalleryView : UserControl
 {
     private readonly GalleryViewModel _viewModel;
+    private readonly INavigationService _navigation;
     private readonly ILogger<GalleryView> _logger;
     private Stopwatch? _gridStopwatch;
 
-    public GalleryView(GalleryViewModel viewModel, ILogger<GalleryView> logger)
+    /// <summary>Kachel bzw. Listenzeile, auf der das Kontextmenü geöffnet wurde (null beim Knopf „Tags“ der Aktionsleiste).</summary>
+    private GalleryItem? _menuTarget;
+
+    public GalleryView(GalleryViewModel viewModel, INavigationService navigation, ILogger<GalleryView> logger)
     {
         _viewModel = viewModel;
+        _navigation = navigation;
         _logger = logger;
         InitializeComponent();
         DataContext = viewModel;
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
+
+        // Listenansicht erst bei Bedarf erzeugen (Start im Kachel-Modus bleibt so schnell wie bisher).
+        viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(GalleryViewModel.ShowList) && viewModel.ShowList)
+            {
+                EnsureListView();
+            }
+        };
+        if (viewModel.ShowList)
+        {
+            EnsureListView();
+        }
+
+        // Menü der Aktionsleiste: eigene Instanz (ein ContextMenu kann nur einem Besitzer zugleich gehören).
+        var flyout = new ContextMenu();
+        flyout.Opened += OnTagMenuOpened;
+        TagsDropDown.Flyout = flyout;
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -153,6 +178,165 @@ public partial class GalleryView : UserControl
     /// <summary>Das Kachel-Panel meldet den sichtbaren Index-Bereich — das ViewModel fordert Vorschaubilder dafür zuerst an.</summary>
     private void OnVisibleRangeChanged(object sender, VisibleRangeChangedEventArgs e)
         => _viewModel.ReportVisibleRange(e.FirstIndex, e.LastIndex);
+
+    // ---- Listenansicht ---------------------------------------------------------------------------
+
+    /// <summary>Die Listenansicht, sobald sie einmal angezeigt wurde (sonst null).</summary>
+    public GalleryListView? ListView { get; private set; }
+
+    private void EnsureListView()
+    {
+        if (ListView is not null)
+        {
+            return;
+        }
+
+        // DataContext erbt vom UserControl (GalleryViewModel); dasselbe Tag-Kontextmenü auf den Zeilen,
+        // Rechtsklick wählt die Zeile, falls sie nicht ausgewählt ist.
+        var listView = new GalleryListView();
+        listView.DataGrid.ContextMenu = (ContextMenu)Resources["TagContextMenu"];
+        listView.DataGrid.ContextMenuOpening += OnListContextMenuOpening;
+        ListView = listView;
+        ListViewHost.Content = listView;
+        _logger.LogInformation("Listenansicht erzeugt");
+    }
+
+    // ---- Tags (ADR-0021): Kontextmenü / Menü der Aktionsleiste ----------------------------------
+
+    /// <summary>Rechtsklick auf eine nicht ausgewählte Kachel wählt nur diese (wie im Explorer).</summary>
+    private void OnTileContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        _menuTarget = (sender as ListBoxItem)?.DataContext as GalleryItem;
+        if (_menuTarget is { IsSelected: false } item)
+        {
+            _viewModel.ClearSelectionCommand.Execute(null);
+            item.IsSelected = true;
+        }
+    }
+
+    private void OnListContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        var row = FindAncestor<DataGridRow>(e.OriginalSource as DependencyObject);
+        _menuTarget = row?.DataContext as GalleryItem;
+        if (_menuTarget is { IsSelected: false } item)
+        {
+            _viewModel.ClearSelectionCommand.Execute(null);
+            item.IsSelected = true;
+        }
+    }
+
+    /// <summary>
+    /// Baut das Menü beim Öffnen. Auf Kachel/Listenzeile zuerst die Datei-Aktionen (Archiv: Inhalt anzeigen, Entpacken;
+    /// Ins Archiv…; Im Explorer anzeigen), danach das Tag-Menü: je Tag ein Häkchen-Eintrag (Zustand der Auswahl), dazu
+    /// Dialog und Verwaltung. Der Knopf „Tags“ der Aktionsleiste hat eine eigene Instanz und zeigt nur das Tag-Menü.
+    /// </summary>
+    private void OnTagMenuOpened(object sender, RoutedEventArgs e)
+    {
+        if (sender is not ContextMenu menu)
+        {
+            return;
+        }
+
+        menu.Items.Clear();
+        var target = ReferenceEquals(menu, Resources["TagContextMenu"]) ? _menuTarget : null;
+        if (target is not null)
+        {
+            AddFileActions(menu, target);
+            menu.Items.Add(new Separator());
+        }
+
+        if (!_viewModel.HasSelection)
+        {
+            menu.Items.Add(new MenuItem { Header = "Keine Datei ausgewählt", IsEnabled = false });
+        }
+        else if (_viewModel.TagMenuEntries.Count == 0)
+        {
+            menu.Items.Add(new MenuItem { Header = "Noch keine Tags angelegt", IsEnabled = false });
+        }
+        else
+        {
+            foreach (var entry in _viewModel.TagMenuEntries)
+            {
+                var item = new MenuItem
+                {
+                    Header = entry.State is null ? $"{entry.Name}  (teilweise)" : entry.Name,
+                    IsCheckable = true,
+                    IsChecked = entry.State == true,
+                    Icon = new Border { Width = 12, Height = 12, CornerRadius = new CornerRadius(6), Background = entry.Brush },
+                    Command = _viewModel.ToggleSelectionTagCommand,
+                    CommandParameter = entry,
+                };
+                menu.Items.Add(item);
+            }
+        }
+
+        menu.Items.Add(new Separator());
+        menu.Items.Add(new MenuItem
+        {
+            Header = "Tags bearbeiten…",
+            InputGestureText = "Strg+T",
+            Command = _viewModel.EditSelectionTagsCommand,
+        });
+        var manage = new MenuItem { Header = "Tags verwalten…" };
+        manage.Click += (_, _) => _navigation.NavigateTo(NavigationTags.Tags);
+        menu.Items.Add(manage);
+    }
+
+    private void AddFileActions(ContextMenu menu, GalleryItem target)
+    {
+        if (target.IsArchive)
+        {
+            menu.Items.Add(new MenuItem
+            {
+                Header = "Inhalt anzeigen",
+                Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.DocumentBulletList24 },
+                Command = _viewModel.OpenInLightboxCommand,
+                CommandParameter = target,
+            });
+            menu.Items.Add(new MenuItem
+            {
+                Header = "Entpacken…",
+                Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.FolderZip24 },
+                Command = _viewModel.ExtractItemCommand,
+                CommandParameter = target,
+            });
+        }
+
+        menu.Items.Add(new MenuItem
+        {
+            Header = "Ins Archiv…",
+            InputGestureText = "Strg+M",
+            Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Archive24 },
+            Command = _viewModel.ArchiveItemCommand,
+            CommandParameter = target,
+        });
+        menu.Items.Add(new MenuItem
+        {
+            Header = "Im Explorer anzeigen",
+            Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.FolderOpen24 },
+            Command = _viewModel.ShowInExplorerCommand,
+            CommandParameter = target,
+        });
+    }
+
+    private static T? FindAncestor<T>(DependencyObject? start)
+        where T : DependencyObject
+    {
+        var current = start;
+        while (current is not null)
+        {
+            if (current is T match)
+            {
+                return match;
+            }
+
+            current = current is Visual or System.Windows.Media.Media3D.Visual3D
+                ? VisualTreeHelper.GetParent(current)
+                : LogicalTreeHelper.GetParent(current);
+        }
+
+        return null;
+    }
 
     private static bool IsInsideButton(DependencyObject? source, DependencyObject container)
     {

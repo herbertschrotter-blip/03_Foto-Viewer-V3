@@ -8,6 +8,7 @@
                  xmlns:settings="clr-namespace:PhotoViewerV3.Settings"
                  xmlns:gallery="clr-namespace:PhotoViewerV3.Gallery.Views"
                  xmlns:sorter="clr-namespace:PhotoViewerV3.Sorter"
+                 xmlns:tagmgmt="clr-namespace:PhotoViewerV3.Settings.TagManagement"
                  Title="PhotoViewer V3"
                  Height="800"
                  Width="1280"
@@ -59,6 +60,13 @@
                                        TargetPageType="{x:Type sorter:SorterPage}">
                     <ui:NavigationViewItem.Icon>
                         <ui:SymbolIcon Symbol="FolderArrowRight24" />
+                    </ui:NavigationViewItem.Icon>
+                </ui:NavigationViewItem>
+                <ui:NavigationViewItem Content="Tags"
+                                       TargetPageTag="tags"
+                                       TargetPageType="{x:Type tagmgmt:TagManagementPage}">
+                    <ui:NavigationViewItem.Icon>
+                        <ui:SymbolIcon Symbol="Tag24" />
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
             </ui:NavigationView.MenuItems>
