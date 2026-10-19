@@ -44,7 +44,10 @@ public sealed record GalleryQuery(
 public sealed class GalleryPageSource : IDisposable
 {
     private const string FileColumns =
-        "f.Id, f.FolderId, f.Name, f.Extension, f.Size, f.ModifiedAtUtc, f.MediaType, f.IsFavorite, f.Rating, f.Missing, fo.Path";
+        "f.Id, f.FolderId, f.Name, f.Extension, f.Size, f.ModifiedAtUtc, f.MediaType, f.IsFavorite, f.Rating, f.Missing, fo.Path, lr.Role";
+
+    /// <summary>Rolle der Wurzel je Datei (Badge „Eingang“, ADR-0020); LEFT JOIN, weil Altzeilen ohne RootId denkbar sind.</summary>
+    private const string RootJoin = "LEFT JOIN LibraryRoots lr ON lr.Id = fo.RootId";
 
     /// <summary>Chunk-Größe für IN-Listen (SQLite-Variablenlimit bleibt weit darunter).</summary>
     private const int InChunkSize = 500;
@@ -356,6 +359,7 @@ public sealed class GalleryPageSource : IDisposable
                 FROM FilesFts ft
                 JOIN Files f ON f.Id = ft.rowid
                 JOIN Folders fo ON fo.Id = f.FolderId
+                {RootJoin}
                 WHERE FilesFts MATCH $term
                   AND f.LibraryId = $libId
                   {BuildFilterClause(query.Filter)}
@@ -369,6 +373,7 @@ public sealed class GalleryPageSource : IDisposable
             SELECT {FileColumns}
             FROM Files f
             JOIN Folders fo ON fo.Id = f.FolderId
+            {RootJoin}
             WHERE f.LibraryId = $libId
               {BuildFilterClause(query.Filter)}
               {folderClause}
@@ -423,12 +428,24 @@ public sealed class GalleryPageSource : IDisposable
         return $"{column} {direction}, f.Id {direction}";
     }
 
+    /// <summary>
+    /// Status-Filter (ADR-0020) über die (kleine) Folders-Tabelle: Ordner, deren Wurzel die Rolle Eingang (0) bzw.
+    /// Archiv (1) hat — als IN-Subquery, damit die Count-Query ohne Join auskommt.
+    /// </summary>
+    private const string InboxClause =
+        "AND f.FolderId IN (SELECT d.Id FROM Folders d JOIN LibraryRoots r ON r.Id = d.RootId WHERE d.LibraryId = $libId AND r.Role = 0)";
+
+    private const string ArchiveClause =
+        "AND f.FolderId IN (SELECT d.Id FROM Folders d JOIN LibraryRoots r ON r.Id = d.RootId WHERE d.LibraryId = $libId AND r.Role = 1)";
+
     private static string BuildFilterClause(GalleryFilter filter) => filter switch
     {
         GalleryFilter.Images => "AND f.MediaType = 0",
         GalleryFilter.Videos => "AND f.MediaType = 1",
         GalleryFilter.Favorites => "AND f.IsFavorite = 1",
         GalleryFilter.Archives => "AND f.MediaType = 2",
+        GalleryFilter.NotArchived => InboxClause,
+        GalleryFilter.Archived => ArchiveClause,
         _ => string.Empty,
     };
 
@@ -465,7 +482,8 @@ public sealed class GalleryPageSource : IDisposable
         IsFavorite: reader.GetInt32(7) == 1,
         Rating: reader.IsDBNull(8) ? null : (byte)reader.GetInt32(8),
         Missing: reader.GetInt32(9) == 1,
-        FolderPath: reader.GetString(10));
+        FolderPath: reader.GetString(10),
+        RootRole: reader.IsDBNull(11) ? null : reader.GetInt32(11));
 
     // ---- Ausführung -------------------------------------------------------------------------
 

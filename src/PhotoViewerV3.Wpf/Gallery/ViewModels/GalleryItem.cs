@@ -30,6 +30,7 @@ public sealed partial class GalleryItem : ObservableObject
         SourcePath = Path.Combine(dto.FolderPath, dto.Name);
         ModifiedAtUnix = dto.ModifiedAtUnix;
         SourceModifiedAtUtc = DateTimeOffset.FromUnixTimeSeconds(dto.ModifiedAtUnix).UtcDateTime;
+        IsInbox = dto.IsInbox;
         _isFavorite = dto.IsFavorite;
         _rating = dto.Rating;
         _missing = dto.Missing;
@@ -54,6 +55,9 @@ public sealed partial class GalleryItem : ObservableObject
     public long ModifiedAtUnix { get; }
     public DateTime SourceModifiedAtUtc { get; }
 
+    /// <summary>Datei liegt unter einer Eingangs-Wurzel (Badge „Eingang“, ADR-0020).</summary>
+    public bool IsInbox { get; }
+
     [ObservableProperty] private bool _isFavorite;
 
     [ObservableProperty]
@@ -77,6 +81,7 @@ public sealed partial class GalleryItem : ObservableObject
            && Size == dto.Size
            && ModifiedAtUnix == dto.ModifiedAtUnix
            && MediaType == (MediaType)dto.MediaType
+           && IsInbox == dto.IsInbox
            && string.Equals(Name, dto.Name, StringComparison.Ordinal)
            && string.Equals(Extension, dto.Extension, StringComparison.Ordinal)
            && string.Equals(FolderPath, dto.FolderPath, StringComparison.Ordinal);

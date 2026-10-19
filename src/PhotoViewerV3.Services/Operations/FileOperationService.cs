@@ -120,6 +120,265 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
             ct);
     }
 
+    public async Task<FolderOperationResult> CreateFolderAsync(int libraryId, string parentFolderPath, string name, CancellationToken ct = default)
+    {
+        var folderName = ValidateFileName(name);
+        var parent = NormalizeDirectoryPath(parentFolderPath);
+        var full = Path.Combine(parent, folderName);
+
+        await _writeLock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            await using var ctx = _factory.Create();
+            var root = await FindRootContainingAsync(ctx, libraryId, parent, ct).ConfigureAwait(false)
+                ?? throw new InvalidOperationException($"„{parent}“ liegt unter keiner Wurzel der Bibliothek.");
+
+            var batch = new OperationBatch
+            {
+                OperationType = OperationType.MkDir,
+                Status = BatchStatus.Pending,
+                CreatedAtUtc = DateTime.UtcNow,
+                Description = $"Ordner „{folderName}“ in „{parent}“ angelegt",
+            };
+            var op = new FileOperation
+            {
+                Action = OperationType.MkDir,
+                SourcePath = full,
+                DestPath = null,
+                Status = FileOperationStatus.Pending,
+            };
+            await using (var tx = await ctx.Database.BeginTransactionAsync(ct).ConfigureAwait(false))
+            {
+                ctx.OperationBatches.Add(batch);
+                await ctx.SaveChangesAsync(ct).ConfigureAwait(false);
+                op.BatchId = batch.Id;
+                ctx.FileOperations.Add(op);
+                await ctx.SaveChangesAsync(ct).ConfigureAwait(false);
+                await tx.CommitAsync(ct).ConfigureAwait(false);
+            }
+
+            batch.Status = BatchStatus.Applying;
+            await MarkApplyingAsync(ctx, op, ct).ConfigureAwait(false);
+
+            try
+            {
+                Directory.CreateDirectory(full);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                op.Status = FileOperationStatus.Failed;
+                op.Error = Truncate($"Ordner konnte nicht angelegt werden: {ex.Message}");
+                op.ExecutedAtUtc = DateTime.UtcNow;
+                batch.Status = BatchStatus.Failed;
+                batch.CompletedAtUtc = DateTime.UtcNow;
+                await ctx.SaveChangesAsync(CancellationToken.None).ConfigureAwait(false);
+                _logger.LogWarning(ex, "Ordner anlegen fehlgeschlagen: {Path}", full);
+                return new FolderOperationResult(batch.Id, false, null, full, op.Error);
+            }
+
+            Folder? folder = null;
+            var error = await CommitItemAsync(ctx, op, undo: false, null, async token =>
+            {
+                folder = await EnsureFolderChainAsync(ctx, root, full, token).ConfigureAwait(false);
+            }).ConfigureAwait(false);
+
+            batch.Status = BatchStatus.Applied;
+            batch.CompletedAtUtc = DateTime.UtcNow;
+            await ctx.SaveChangesAsync(CancellationToken.None).ConfigureAwait(false);
+            _logger.LogInformation("Ordner angelegt: {Path} (Batch {BatchId}, FolderId {FolderId})", full, batch.Id, folder?.Id);
+            PublishFoldersChanged(libraryId);
+            return new FolderOperationResult(batch.Id, error is null, folder?.Id, full, error);
+        }
+        finally
+        {
+            _writeLock.Release();
+        }
+    }
+
+    public async Task<FolderOperationResult> RenameFolderAsync(int folderId, string newName, CancellationToken ct = default)
+    {
+        var name = ValidateFileName(newName);
+
+        await _writeLock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            await using var ctx = _factory.Create();
+            var folder = await ctx.Folders.FirstOrDefaultAsync(f => f.Id == folderId, ct).ConfigureAwait(false)
+                ?? throw new InvalidOperationException($"Ordner Id={folderId} nicht im Katalog.");
+            var oldPath = NormalizeDirectoryPath(folder.Path);
+            var root = folder.RootId is { } rootId
+                ? await ctx.LibraryRoots.AsNoTracking().FirstOrDefaultAsync(r => r.Id == rootId, ct).ConfigureAwait(false)
+                : await FindRootContainingAsync(ctx, folder.LibraryId, oldPath, ct).ConfigureAwait(false);
+            if (root is not null && PathEquals(oldPath, NormalizeDirectoryPath(root.Path)))
+            {
+                throw new InvalidOperationException("Ein Wurzelordner der Bibliothek kann nicht umbenannt werden.");
+            }
+
+            var parentDir = Path.GetDirectoryName(oldPath)
+                ?? throw new InvalidOperationException("Ein Laufwerk kann nicht umbenannt werden.");
+            var newPath = Path.Combine(parentDir, name);
+            if (string.Equals(oldPath, newPath, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("Der neue Name ist identisch mit dem bisherigen.");
+            }
+
+            var caseOnly = PathEquals(oldPath, newPath);
+            var libraryId = folder.LibraryId;
+            if (!caseOnly)
+            {
+                if (Directory.Exists(newPath) || File.Exists(newPath))
+                {
+                    throw new InvalidOperationException("Ziel existiert bereits.");
+                }
+
+                var lowerNew = AsciiLower(newPath);
+                if (await ctx.Folders.AnyAsync(f => f.LibraryId == libraryId && f.Path.ToLower() == lowerNew, ct).ConfigureAwait(false))
+                {
+                    throw new InvalidOperationException("Ziel existiert bereits im Katalog.");
+                }
+            }
+
+            if (!Directory.Exists(oldPath))
+            {
+                throw new DirectoryNotFoundException($"Der Ordner „{oldPath}“ ist nicht (mehr) vorhanden.");
+            }
+
+            // Unterordner und Dateien laden (getrackt — ihre Pfade werden nach dem Dateisystem-Schritt umgeschrieben)
+            var lowerPrefix = AsciiLower(oldPath + Path.DirectorySeparatorChar);
+            var descendants = await ctx.Folders
+                .Where(f => f.LibraryId == libraryId && f.Path.ToLower().StartsWith(lowerPrefix))
+                .ToListAsync(ct)
+                .ConfigureAwait(false);
+            var folderIds = descendants.Select(d => d.Id).Append(folder.Id).ToList();
+            var pathsById = descendants.ToDictionary(d => d.Id, d => d.Path);
+            pathsById[folder.Id] = folder.Path;
+            var files = new List<MediaFile>();
+            foreach (var chunk in folderIds.Chunk(QueryChunkSize))
+            {
+                files.AddRange(await ctx.Files.AsNoTracking().Where(f => chunk.Contains(f.FolderId)).ToListAsync(ct).ConfigureAwait(false));
+            }
+
+            // Protokoll (ADR-0012): Ordner-Operation zuerst, dann je Datei Quelle → Ziel
+            var batch = new OperationBatch
+            {
+                OperationType = OperationType.RenameFolder,
+                Status = BatchStatus.Pending,
+                CreatedAtUtc = DateTime.UtcNow,
+                Description = $"Ordner „{folder.Name}“ in „{name}“ umbenannt ({CountText(files.Count)})",
+            };
+            var folderOp = new FileOperation
+            {
+                Action = OperationType.RenameFolder,
+                SourcePath = oldPath,
+                DestPath = newPath,
+                Status = FileOperationStatus.Pending,
+            };
+            var fileOps = new List<FileOperation>(files.Count);
+            foreach (var file in files)
+            {
+                var source = Path.Combine(pathsById[file.FolderId], file.Name);
+                fileOps.Add(new FileOperation
+                {
+                    FileId = file.Id,
+                    Action = OperationType.Move,
+                    SourcePath = source,
+                    DestPath = newPath + source[oldPath.Length..],
+                    Status = FileOperationStatus.Pending,
+                });
+            }
+
+            await using (var tx = await ctx.Database.BeginTransactionAsync(ct).ConfigureAwait(false))
+            {
+                ctx.OperationBatches.Add(batch);
+                await ctx.SaveChangesAsync(ct).ConfigureAwait(false);
+                folderOp.BatchId = batch.Id;
+                ctx.FileOperations.Add(folderOp);
+                foreach (var op in fileOps)
+                {
+                    op.BatchId = batch.Id;
+                    ctx.FileOperations.Add(op);
+                }
+
+                await ctx.SaveChangesAsync(ct).ConfigureAwait(false);
+                await tx.CommitAsync(ct).ConfigureAwait(false);
+            }
+
+            batch.Status = BatchStatus.Applying;
+            await MarkApplyingAsync(ctx, folderOp, ct).ConfigureAwait(false);
+
+            try
+            {
+                Directory.Move(oldPath, newPath);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                var now = DateTime.UtcNow;
+                var message = Truncate($"Umbenennen fehlgeschlagen: {ex.Message}");
+                foreach (var op in fileOps.Prepend(folderOp))
+                {
+                    op.Status = FileOperationStatus.Failed;
+                    op.Error = message;
+                    op.ExecutedAtUtc = now;
+                }
+
+                batch.Status = BatchStatus.Failed;
+                batch.CompletedAtUtc = now;
+                await ctx.SaveChangesAsync(CancellationToken.None).ConfigureAwait(false);
+                _logger.LogWarning(ex, "Ordner umbenennen fehlgeschlagen: {Old} → {New}", oldPath, newPath);
+                return new FolderOperationResult(batch.Id, false, folder.Id, oldPath, message);
+            }
+
+            var error = await CommitItemAsync(ctx, folderOp, undo: false, null, _ =>
+            {
+                ApplyFolderPaths(folder, descendants, oldPath, newPath, name);
+                foreach (var op in fileOps)
+                {
+                    MarkDone(op, undo: false, null);
+                }
+
+                return Task.CompletedTask;
+            }).ConfigureAwait(false);
+
+            batch.Status = BatchStatus.Applied;
+            batch.CompletedAtUtc = DateTime.UtcNow;
+            await ctx.SaveChangesAsync(CancellationToken.None).ConfigureAwait(false);
+
+            var changes = new ChangeSet();
+            foreach (var file in files)
+            {
+                changes.Add(libraryId, FilesChangeKind.Moved, file.Id);
+            }
+
+            Publish(changes);
+            PublishFoldersChanged(libraryId);
+            _logger.LogInformation("Ordner umbenannt: {Old} → {New} ({Files} Dateien, {Subfolders} Unterordner, Batch {BatchId})", oldPath, newPath, files.Count, descendants.Count, batch.Id);
+            return new FolderOperationResult(batch.Id, error is null, folder.Id, newPath, error);
+        }
+        finally
+        {
+            _writeLock.Release();
+        }
+    }
+
+    /// <summary>Pfade des Ordners und aller Unterordner umschreiben (Präfix ersetzen), Name des Ordners setzen.</summary>
+    private static void ApplyFolderPaths(Folder folder, IEnumerable<Folder> descendants, string oldPath, string newPath, string? newName)
+    {
+        folder.Path = newPath;
+        if (newName is not null)
+        {
+            folder.Name = newName;
+        }
+
+        foreach (var d in descendants)
+        {
+            var normalized = NormalizeDirectoryPath(d.Path);
+            if (normalized.Length > oldPath.Length)
+            {
+                d.Path = newPath + normalized[oldPath.Length..];
+            }
+        }
+    }
+
     public async Task<FileOperationBatchResult?> UndoLastAsync(CancellationToken ct = default)
     {
         await _writeLock.WaitAsync(ct).ConfigureAwait(false);
@@ -128,7 +387,7 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
             await using var ctx = _factory.Create();
             var batchId = await ctx.OperationBatches
                 .Where(b => b.Status == BatchStatus.Applied
-                            && (b.OperationType == OperationType.Move || b.OperationType == OperationType.Rename))
+                            && (b.OperationType == OperationType.Move || b.OperationType == OperationType.Rename || b.OperationType == OperationType.RenameFolder))
                 .OrderByDescending(b => b.Id)
                 .Select(b => (int?)b.Id)
                 .FirstOrDefaultAsync(ct)
@@ -227,6 +486,10 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
     {
         public required OperationBatch Batch { get; init; }
         public required List<(CatalogFile File, FileOperation Op)> Items { get; init; }
+
+        /// <summary>Wurzeln der beteiligten Libraries (ADR-0020) — für „Ziel innerhalb der Bibliothek?“.</summary>
+        public required List<LibraryRoot> Roots { get; init; }
+
         public List<FileOperationItemResult> Results { get; } = new();
         public ChangeSet Changes { get; } = new();
     }
@@ -256,11 +519,18 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
                 return new FileOperationBatchResult(0, type, 0, unknown.Count, unknown);
             }
 
+            var libraryIds = known.Select(cf => cf.Library.Id).Distinct().ToList();
+            var roots = await ctx.LibraryRoots.AsNoTracking()
+                .Where(r => libraryIds.Contains(r.LibraryId))
+                .ToListAsync(ct)
+                .ConfigureAwait(false);
+
             var run = await CreateBatchAsync(
                 ctx,
                 type,
                 describe(known),
                 known.Select(cf => (cf, cf.FullPath, destOf(cf))),
+                roots,
                 ct).ConfigureAwait(false);
 
             try
@@ -293,6 +563,7 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
         OperationType type,
         string description,
         IEnumerable<(CatalogFile File, string Source, string? Dest)> items,
+        List<LibraryRoot> roots,
         CancellationToken ct)
     {
         var batch = new OperationBatch
@@ -332,7 +603,7 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
         batch.Status = BatchStatus.Applying;
         await ctx.SaveChangesAsync(ct).ConfigureAwait(false);
 
-        return new BatchRun { Batch = batch, Items = list };
+        return new BatchRun { Batch = batch, Items = list, Roots = roots };
     }
 
     /// <summary>Batch-Abschluss ohne CancellationToken: die Dateisystem-Schritte sind erfolgt, die Buchung muss zu Ende laufen.</summary>
@@ -494,14 +765,15 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
             return;
         }
 
-        // Innerhalb der Library-Root: Zielordner-Zeile (+ fehlende Zwischenordner) vor dem Move
+        // Unterhalb einer Wurzel der Library (ADR-0020): Zielordner-Zeile (+ fehlende Zwischenordner) vor dem Move
         // anlegen — außerhalb der Item-Transaktion, damit ein Rollback keine Ordner-Ids verliert.
         Folder? targetFolder = null;
-        if (IsInsideRoot(target, NormalizeDirectoryPath(cf.Library.RootPath)))
+        var targetRoot = FindRootContaining(run.Roots, cf.Library.Id, target);
+        if (targetRoot is not null)
         {
             if (!targetFolders.TryGetValue(cf.Library.Id, out targetFolder))
             {
-                targetFolder = await EnsureFolderChainAsync(ctx, cf.Library, target, ct).ConfigureAwait(false);
+                targetFolder = await EnsureFolderChainAsync(ctx, targetRoot, target, ct).ConfigureAwait(false);
                 targetFolders[cf.Library.Id] = targetFolder;
             }
 
@@ -645,7 +917,7 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
 
         if (!CanUndo(batch.OperationType, batch.Status))
         {
-            var reason = batch.OperationType is OperationType.Move or OperationType.Rename
+            var reason = batch.OperationType is OperationType.Move or OperationType.Rename or OperationType.RenameFolder
                 ? $"Batch {batch.Id} hat Status {batch.Status} und ist nicht (mehr) rückgängig machbar."
                 : $"Batch {batch.Id} ({batch.OperationType}) ist nicht rückgängig machbar.";
             var items = ops.Count > 0
@@ -661,15 +933,22 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
         var changes = new ChangeSet();
         try
         {
-            foreach (var op in ops)
+            if (batch.OperationType == OperationType.RenameFolder)
             {
-                ct.ThrowIfCancellationRequested();
-                if (op.Status != FileOperationStatus.Applied)
+                results.AddRange(await UndoRenameFolderAsync(ctx, ops, changes, ct).ConfigureAwait(false));
+            }
+            else
+            {
+                foreach (var op in ops)
                 {
-                    continue; // Failed/Undone: nichts zurückzunehmen
-                }
+                    ct.ThrowIfCancellationRequested();
+                    if (op.Status != FileOperationStatus.Applied)
+                    {
+                        continue; // Failed/Undone: nichts zurückzunehmen
+                    }
 
-                results.Add(await UndoItemAsync(ctx, op, changes, ct).ConfigureAwait(false));
+                    results.Add(await UndoItemAsync(ctx, op, changes, ct).ConfigureAwait(false));
+                }
             }
         }
         catch (Exception ex)
@@ -724,14 +1003,25 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
         var row = await FindCatalogRowByPathAsync(ctx, dest, ct).ConfigureAwait(false)
                   ?? await FindCatalogRowByIdAsync(ctx, op.FileId, dest, source, ct).ConfigureAwait(false);
 
-        var library = row is not null
-            ? await ctx.Libraries.FirstOrDefaultAsync(l => l.Id == row.LibraryId, ct).ConfigureAwait(false)
-            : await FindLibraryContainingAsync(ctx, sourceDir, ct).ConfigureAwait(false);
+        // Ursprungsordner unter einer Wurzel (ADR-0020): bei bekannter Zeile nur Wurzeln ihrer Library,
+        // sonst irgendeine Wurzel (Datei war aus der Library heraus verschoben worden).
+        LibraryEntity? library;
+        LibraryRoot? sourceRoot;
+        if (row is not null)
+        {
+            library = await ctx.Libraries.FirstOrDefaultAsync(l => l.Id == row.LibraryId, ct).ConfigureAwait(false);
+            sourceRoot = library is null ? null : await FindRootContainingAsync(ctx, library.Id, sourceDir, ct).ConfigureAwait(false);
+        }
+        else
+        {
+            sourceRoot = await FindRootContainingAsync(ctx, null, sourceDir, ct).ConfigureAwait(false);
+            library = sourceRoot is null ? null : await ctx.Libraries.FirstOrDefaultAsync(l => l.Id == sourceRoot.LibraryId, ct).ConfigureAwait(false);
+        }
 
         Folder? folder = null;
-        if (library is not null && IsInsideRoot(NormalizeDirectoryPath(sourceDir), NormalizeDirectoryPath(library.RootPath)))
+        if (library is not null && sourceRoot is not null)
         {
-            folder = await EnsureFolderChainAsync(ctx, library, sourceDir, ct).ConfigureAwait(false);
+            folder = await EnsureFolderChainAsync(ctx, sourceRoot, sourceDir, ct).ConfigureAwait(false);
         }
 
         try
@@ -810,6 +1100,91 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
         }
 
         return new FileOperationItemResult(resultFileId, source, dest, error is null, error ?? hint);
+    }
+
+    /// <summary>
+    /// Undo eines RenameFolder-Batches: der Ordner wird in einem Schritt zurückbenannt (Dateisystem), danach die
+    /// Pfade der Folders-Zeilen; alle Operationen des Batches (Ordner + Dateien) werden Undone.
+    /// </summary>
+    private async Task<List<FileOperationItemResult>> UndoRenameFolderAsync(LibraryContext ctx, List<FileOperation> ops, ChangeSet changes, CancellationToken ct)
+    {
+        var folderOp = ops.FirstOrDefault(o => o.FileId is null && o.Action == OperationType.RenameFolder);
+        var fileOps = ops.Where(o => !ReferenceEquals(o, folderOp)).ToList();
+        if (folderOp is null || folderOp.Status != FileOperationStatus.Applied || string.IsNullOrEmpty(folderOp.DestPath))
+        {
+            return new List<FileOperationItemResult>
+            {
+                new(0, folderOp?.SourcePath ?? string.Empty, folderOp?.DestPath, false, "Ordner-Operation nicht (mehr) rückgängig machbar."),
+            };
+        }
+
+        var oldPath = NormalizeDirectoryPath(folderOp.SourcePath);
+        var newPath = NormalizeDirectoryPath(folderOp.DestPath);
+        if (!Directory.Exists(newPath))
+        {
+            return new List<FileOperationItemResult> { await UndoFailAsync(ctx, folderOp, "Ordner ist am Zielort nicht mehr vorhanden.", ct).ConfigureAwait(false) };
+        }
+
+        var caseOnly = PathEquals(oldPath, newPath);
+        if (!caseOnly && (Directory.Exists(oldPath) || File.Exists(oldPath)))
+        {
+            return new List<FileOperationItemResult> { await UndoFailAsync(ctx, folderOp, "Ursprungsort ist inzwischen belegt.", ct).ConfigureAwait(false) };
+        }
+
+        var lowerNew = AsciiLower(newPath);
+        var folder = await ctx.Folders.FirstOrDefaultAsync(f => f.Path.ToLower() == lowerNew, ct).ConfigureAwait(false);
+        var lowerPrefix = AsciiLower(newPath + Path.DirectorySeparatorChar);
+        var descendants = folder is null
+            ? new List<Folder>()
+            : await ctx.Folders.Where(f => f.LibraryId == folder.LibraryId && f.Path.ToLower().StartsWith(lowerPrefix)).ToListAsync(ct).ConfigureAwait(false);
+
+        try
+        {
+            Directory.Move(newPath, oldPath);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return new List<FileOperationItemResult> { await UndoFailAsync(ctx, folderOp, $"Zurückbenennen fehlgeschlagen: {ex.Message}", ct).ConfigureAwait(false) };
+        }
+
+        var error = await CommitItemAsync(ctx, folderOp, undo: true, null, _ =>
+        {
+            if (folder is not null)
+            {
+                ApplyFolderPaths(folder, descendants, newPath, oldPath, FolderNameOf(oldPath));
+            }
+
+            foreach (var op in fileOps)
+            {
+                if (op.Status == FileOperationStatus.Applied)
+                {
+                    MarkDone(op, undo: true, null);
+                }
+            }
+
+            return Task.CompletedTask;
+        }).ConfigureAwait(false);
+
+        var results = new List<FileOperationItemResult>(ops.Count)
+        {
+            new(0, folderOp.SourcePath, folderOp.DestPath, error is null, error),
+        };
+        foreach (var op in fileOps)
+        {
+            results.Add(new FileOperationItemResult(op.FileId ?? 0, op.SourcePath, op.DestPath, error is null, error));
+            if (error is null && op.FileId is { } fileId && folder is not null)
+            {
+                changes.Add(folder.LibraryId, FilesChangeKind.Moved, fileId);
+            }
+        }
+
+        if (folder is not null)
+        {
+            PublishFoldersChanged(folder.LibraryId);
+        }
+
+        _logger.LogInformation("Ordner-Umbenennung rückgängig: {New} → {Old} ({Files} Dateien)", newPath, oldPath, fileOps.Count);
+        return results;
     }
 
     private async Task<FileOperationItemResult> UndoFailAsync(LibraryContext ctx, FileOperation op, string message, CancellationToken ct)
@@ -1108,20 +1483,20 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
             $"INSERT INTO FilesFts(rowid, Name, Extension) VALUES({id}, {name}, {extension})", ct);
 
     /// <summary>
-    /// Stellt die Folders-Kette von der Library-Root bis <paramref name="folderPath"/> sicher
-    /// (Path, ParentId-Kette, Name, ScannedAt) und liefert die Zeile des Zielordners.
-    /// Vergleich ASCII-case-insensitiv (wie SQLite <c>lower()</c>); erwartet eine normalisierte Library-Root.
+    /// Stellt die Folders-Kette von der Wurzel (ADR-0020) bis <paramref name="folderPath"/> sicher
+    /// (Path, RootId, ParentId-Kette, Name, ScannedAt) und liefert die Zeile des Zielordners.
+    /// Vergleich ASCII-case-insensitiv (wie SQLite <c>lower()</c>); erwartet eine normalisierte Wurzel.
     /// Der Scanner legt nur Ordner MIT Dateien an, deren ParentId bleibt leer, wenn der Elternordner
     /// keine Dateien hat — wird so ein Elternordner hier nachgetragen, werden diese verwaisten
     /// direkten Kinder an ihn gehängt (gemischte Bäume bleiben konsistent).
     /// </summary>
-    private static async Task<Folder> EnsureFolderChainAsync(LibraryContext ctx, LibraryEntity library, string folderPath, CancellationToken ct)
+    private static async Task<Folder> EnsureFolderChainAsync(LibraryContext ctx, LibraryRoot libraryRoot, string folderPath, CancellationToken ct)
     {
-        var root = NormalizeDirectoryPath(library.RootPath);
+        var root = NormalizeDirectoryPath(libraryRoot.Path);
         var target = NormalizeDirectoryPath(folderPath);
         if (!IsInsideRoot(target, root))
         {
-            throw new InvalidOperationException($"„{target}“ liegt nicht unterhalb der Library-Root „{root}“.");
+            throw new InvalidOperationException($"„{target}“ liegt nicht unterhalb der Wurzel „{root}“.");
         }
 
         var chain = new List<string> { root };
@@ -1138,8 +1513,8 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
             }
         }
 
-        var candidates = chain.Select(AsciiLower).Append(AsciiLower(library.RootPath)).Distinct().ToList();
-        var libraryId = library.Id;
+        var candidates = chain.Select(AsciiLower).Append(AsciiLower(libraryRoot.Path)).Distinct().ToList();
+        var libraryId = libraryRoot.LibraryId;
         var existing = await ctx.Folders
             .Where(f => f.LibraryId == libraryId && candidates.Contains(f.Path.ToLower()))
             .ToListAsync(ct)
@@ -1153,7 +1528,8 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
             {
                 row = new Folder
                 {
-                    LibraryId = library.Id,
+                    LibraryId = libraryId,
+                    RootId = libraryRoot.Id,
                     Path = path,
                     ParentId = parent?.Id,
                     Name = FolderNameOf(path),
@@ -1211,14 +1587,35 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
                && !lower[lowerPrefix.Length..].Contains(Path.DirectorySeparatorChar);
     }
 
-    private static async Task<LibraryEntity?> FindLibraryContainingAsync(LibraryContext ctx, string directory, CancellationToken ct)
+    /// <summary>Wurzel (ADR-0020), unter der <paramref name="directory"/> liegt — bei mehreren die längste; optional auf eine Library begrenzt.</summary>
+    private static async Task<LibraryRoot?> FindRootContainingAsync(LibraryContext ctx, int? libraryId, string directory, CancellationToken ct)
+    {
+        var roots = await ctx.LibraryRoots.AsNoTracking()
+            .Where(r => libraryId == null || r.LibraryId == libraryId)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        return FindRootContaining(roots, libraryId, directory);
+    }
+
+    private static LibraryRoot? FindRootContaining(IEnumerable<LibraryRoot> roots, int? libraryId, string directory)
     {
         var dir = NormalizeDirectoryPath(directory);
-        var libraries = await ctx.Libraries.ToListAsync(ct).ConfigureAwait(false);
-        return libraries
-            .Where(l => IsInsideRoot(dir, NormalizeDirectoryPath(l.RootPath)))
-            .OrderByDescending(l => l.RootPath.Length)
+        return roots
+            .Where(r => (libraryId is null || r.LibraryId == libraryId) && IsInsideRoot(dir, NormalizeDirectoryPath(r.Path)))
+            .OrderByDescending(r => r.Path.Length)
             .FirstOrDefault();
+    }
+
+    private void PublishFoldersChanged(int libraryId)
+    {
+        try
+        {
+            _messenger.Send(new FoldersChangedMessage(libraryId));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Empfänger der FoldersChangedMessage warf eine Ausnahme");
+        }
     }
 
     private void DeleteThumbnailFiles(int libraryId, int fileId)
@@ -1306,7 +1703,7 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
     }
 
     private static bool CanUndo(OperationType type, BatchStatus status)
-        => status == BatchStatus.Applied && type is OperationType.Move or OperationType.Rename;
+        => status == BatchStatus.Applied && type is OperationType.Move or OperationType.Rename or OperationType.RenameFolder;
 
     /// <summary>Voller Pfad ohne abschließende Trennzeichen; Laufwerks-/UNC-Wurzeln behalten ihres („E:\“).</summary>
     private static string NormalizeDirectoryPath(string path)

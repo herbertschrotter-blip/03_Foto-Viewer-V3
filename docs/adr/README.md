@@ -38,12 +38,13 @@ Wenn eine ADR-Entscheidung revidiert wird: **neues ADR anlegen** + altes auf "Su
 | [0017](0017-modul-entkopplung-messenger.md) | Modul-Entkopplung über WeakReferenceMessenger und Modul-Registrierungen | Accepted |
 | [0018](0018-datei-operationen-nur-ueber-service.md) | Datei-Operationen ausschließlich über IFileOperationService | Accepted |
 | [0019](0019-incremental-scan.md) | Incremental-Scan: Identität Ordner+Name, Missing statt Löschen, Mass-Missing-Guard | Accepted |
+| [0020](0020-bibliothek-mehrere-wurzeln-rollen.md) | Bibliothek mit mehreren Wurzeln und Rollen (Eingang / Archiv) | Accepted |
 | [0022](0022-archive-als-katalog-eintraege.md) | Archive als Katalog-Einträge, Entpacken über SharpCompress | Accepted |
 
 ## Quellen der Entscheidungen
 
 ADR-0001 bis ADR-0015 wurden in 3 ChatGPT-Review-Runden mit GPT-5 validiert. Siehe [`chatgpt-review/`](../../chatgpt-review/) für Original-Diskussion.
-ADR-0016 bis ADR-0019 dokumentieren die Entscheidungen der Umsetzung bis Release 0.2.0 (siehe [CHANGELOG.md](../../CHANGELOG.md)).
+ADR-0016 bis ADR-0019 (und ADR-0020 ab 0.2.5) dokumentieren die Entscheidungen der Umsetzung bis Release 0.2.0 (siehe [CHANGELOG.md](../../CHANGELOG.md)).
 
 ## Template für neue ADRs
 

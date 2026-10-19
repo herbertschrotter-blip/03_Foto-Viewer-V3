@@ -68,13 +68,20 @@
                           IsChecked="{Binding IncludeSubfolders}"
                           Margin="4,0,0,6" />
 
-                <ui:InfoBar Grid.Row="3"
-                            Message="{Binding HintText}"
-                            Severity="Warning"
-                            IsClosable="False"
-                            IsOpen="{Binding HintText, Converter={StaticResource NullToBool}, Mode=OneWay}"
-                            Visibility="{Binding HintText, Converter={StaticResource NullToVis}}"
-                            Margin="0,0,0,6" />
+                <StackPanel Grid.Row="3">
+                    <ui:InfoBar Message="{Binding HintText}"
+                                Severity="Warning"
+                                IsClosable="False"
+                                IsOpen="{Binding HintText, Converter={StaticResource NullToBool}, Mode=OneWay}"
+                                Visibility="{Binding HintText, Converter={StaticResource NullToVis}}"
+                                Margin="0,0,0,6" />
+                    <ui:InfoBar Message="{Binding ErrorMessage}"
+                                Severity="Error"
+                                IsClosable="False"
+                                IsOpen="{Binding ErrorMessage, Converter={StaticResource NullToBool}, Mode=OneWay}"
+                                Visibility="{Binding ErrorMessage, Converter={StaticResource NullToVis}}"
+                                Margin="0,0,0,6" />
+                </StackPanel>
 
                 <Grid Grid.Row="4">
                     <TreeView ItemsSource="{Binding Roots}"
@@ -87,6 +94,23 @@
                             <Style TargetType="TreeViewItem" BasedOn="{StaticResource DefaultTreeViewItemStyle}">
                                 <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
                                 <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
+                                <!-- ViewModel für das Kontextmenü (liegt außerhalb des visuellen Baums) -->
+                                <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=TreeView}}" />
+                                <Setter Property="ContextMenu">
+                                    <Setter.Value>
+                                        <ContextMenu>
+                                            <MenuItem Header="Neuer Ordner…"
+                                                      Icon="{ui:SymbolIcon FolderAdd24}"
+                                                      Command="{Binding PlacementTarget.Tag.CreateSubfolderCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                      CommandParameter="{Binding}" />
+                                            <MenuItem Header="Umbenennen…"
+                                                      Icon="{ui:SymbolIcon Rename24}"
+                                                      IsEnabled="{Binding CanRename}"
+                                                      Command="{Binding PlacementTarget.Tag.RenameFolderCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                      CommandParameter="{Binding}" />
+                                        </ContextMenu>
+                                    </Setter.Value>
+                                </Setter>
                             </Style>
                         </TreeView.ItemContainerStyle>
                         <TreeView.ItemTemplate>
@@ -98,6 +122,13 @@
                                                    VerticalAlignment="Center"
                                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                                     <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                                    <!-- Rolle der Wurzel (ADR-0020) -->
+                                    <Border Margin="6,0,0,0" Padding="5,0" CornerRadius="8" VerticalAlignment="Center"
+                                            Background="{DynamicResource AccentFillColorTertiaryBrush}"
+                                            Visibility="{Binding RoleLabel, Converter={StaticResource NullToVis}}">
+                                        <TextBlock Text="{Binding RoleLabel}" FontSize="10" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                                    </Border>
                                     <TextBlock Margin="8,0,0,0"
                                                FontSize="11"
                                                VerticalAlignment="Center"

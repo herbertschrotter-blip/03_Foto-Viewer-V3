@@ -34,7 +34,7 @@
                 <ui:TextBlock FontTypography="Title" Text="Bibliotheken" />
                 <ui:TextBlock FontTypography="Caption"
                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                              Text="Jede Bibliothek entspricht einem Foto-Ordner. Galerie und Ordnerbaum zeigen die aktive Bibliothek. „Aktualisieren“ übernimmt Änderungen auf der Platte, „Neu aufbauen“ erstellt den Katalog komplett neu." />
+                              Text="Jede Bibliothek hat einen Archiv-Ordner und beliebig viele Eingangs-Ordner; „Ins Archiv…“ in der Galerie verschiebt Dateien aus dem Eingang ins Archiv. Galerie und Ordnerbaum zeigen die aktive Bibliothek. „Aktualisieren“ übernimmt Änderungen auf der Platte (alle Ordner), „Neu aufbauen“ erstellt den Katalog komplett neu." />
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                 <ui:Button Content="Liste neu laden"
@@ -202,7 +202,7 @@
                                             </Border>
                                             <Border Margin="8,0,0,0" Padding="8,2" CornerRadius="10" VerticalAlignment="Center"
                                                     Background="{DynamicResource SystemFillColorCautionBackgroundBrush}"
-                                                    Visibility="{Binding IsRootAvailable, Converter={StaticResource InvBoolToVis}}">
+                                                    Visibility="{Binding HasOfflineRoot, Converter={StaticResource BoolToVis}}">
                                                 <StackPanel Orientation="Horizontal">
                                                     <ui:SymbolIcon Symbol="Warning16" FontSize="12" Margin="0,0,4,0"
                                                                    Foreground="{DynamicResource SystemFillColorCautionBrush}" />
@@ -210,15 +210,73 @@
                                                 </StackPanel>
                                             </Border>
                                         </StackPanel>
-                                        <TextBlock Text="{Binding RootPath}"
-                                                   FontSize="12"
-                                                   Margin="0,2,0,0"
-                                                   TextTrimming="CharacterEllipsis"
-                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                        <TextBlock FontSize="12" Margin="0,2,0,0" Foreground="{DynamicResource TextFillColorTertiaryBrush}"><Run Text="{Binding CountsText, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding TimestampText, Mode=OneWay}" /></TextBlock>
+                                        <TextBlock FontSize="12" Margin="0,2,0,0" Foreground="{DynamicResource TextFillColorTertiaryBrush}"><Run Text="{Binding CountsText, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding RootsText, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding TimestampText, Mode=OneWay}" /></TextBlock>
+
+                                        <!-- Wurzeln (ADR-0020): Archiv zuerst, dann Eingänge; je Zeile Rolle, Pfad, Erreichbarkeit, Aktionen -->
+                                        <ItemsControl ItemsSource="{Binding Roots}" Margin="0,8,0,0">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="{x:Type local:LibraryRootListItem}">
+                                                    <Grid Margin="0,0,0,4">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <Border Grid.Column="0" Width="64" Padding="0,1" CornerRadius="8" VerticalAlignment="Center" Margin="0,0,8,0">
+                                                            <Border.Style>
+                                                                <Style TargetType="Border">
+                                                                    <Setter Property="Background" Value="{DynamicResource AccentFillColorTertiaryBrush}" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsArchive}" Value="True">
+                                                                            <Setter Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Border.Style>
+                                                            <TextBlock Text="{Binding RoleText}" FontSize="11" FontWeight="SemiBold" TextAlignment="Center"
+                                                                       Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                                                        </Border>
+                                                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                                            <TextBlock Text="{Binding Path}" FontSize="12" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                                       TextTrimming="CharacterEllipsis" MaxWidth="520"
+                                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                            <ui:SymbolIcon Symbol="Warning16" FontSize="12" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                                           ToolTip="Ordner nicht erreichbar"
+                                                                           Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                                                           Visibility="{Binding IsAvailable, Converter={StaticResource InvBoolToVis}}" />
+                                                        </StackPanel>
+                                                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
+                                                            <ui:Button Appearance="Transparent" Icon="{ui:SymbolIcon Archive24}" Padding="6,4"
+                                                                       ToolTip="Diesen Ordner zur Archiv-Wurzel machen (bisheriges Archiv wird Eingang)"
+                                                                       Visibility="{Binding CanMakeArchive, Converter={StaticResource BoolToVis}}"
+                                                                       Command="{Binding DataContext.MakeArchiveRootCommand, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}"
+                                                                       CommandParameter="{Binding}" />
+                                                            <ui:Button Appearance="Transparent" Icon="{ui:SymbolIcon Rename24}" Padding="6,4"
+                                                                       ToolTip="Anzeigename der Wurzel ändern"
+                                                                       Command="{Binding DataContext.RenameRootCommand, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}"
+                                                                       CommandParameter="{Binding}" />
+                                                            <ui:Button Appearance="Transparent" Icon="{ui:SymbolIcon Delete24}" Padding="6,4"
+                                                                       ToolTip="Eingang nur aus dem Katalog entfernen (löscht keine Dateien auf der Festplatte)"
+                                                                       Visibility="{Binding CanRemove, Converter={StaticResource BoolToVis}}"
+                                                                       Command="{Binding DataContext.RemoveRootCommand, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}"
+                                                                       CommandParameter="{Binding}" />
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <ui:Button Content="Eingang hinzufügen…"
+                                                   Icon="{ui:SymbolIcon MailInbox24}"
+                                                   Appearance="Secondary"
+                                                   HorizontalAlignment="Left"
+                                                   Margin="0,4,0,0"
+                                                   ToolTip="Weiteren Ordner als Eingang aufnehmen — Dateien darin gelten als „nicht archiviert“"
+                                                   Command="{Binding DataContext.AddInboxRootCommand, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}"
+                                                   CommandParameter="{Binding}" />
                                     </StackPanel>
 
-                                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Top" Margin="16,0,0,0">
                                         <!-- Primär: „Scannen“ (Fresh) bei leerem Katalog, sonst „Aktualisieren“ (Incremental).
                                              Bewusst auch bei nicht erreichbarem Ordner aktiv: der Scan meldet dann „Bibliothek offline“
                                              mit [Erneut prüfen] [Andere Bibliothek wählen] (PLAN Kap. 12). -->

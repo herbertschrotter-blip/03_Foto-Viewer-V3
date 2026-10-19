@@ -12,6 +12,7 @@ using Microsoft.Extensions.Logging;
 using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Library;
 using PhotoViewerV3.Services.Messaging;
+using PhotoViewerV3.Services.Operations;
 using PhotoViewerV3.Shell;
 
 namespace PhotoViewerV3.Folders;
@@ -19,20 +20,24 @@ namespace PhotoViewerV3.Folders;
 /// <summary>
 /// Ordnerbaum der aktiven Bibliothek. Lädt alle Folder-Zeilen (eine Query) und die Dateianzahl je Ordner
 /// (eine GroupBy-Query), baut daraus einen In-Memory-Index und materialisiert Knoten lazy beim Aufklappen.
+/// Oberste Knoten sind die Wurzeln der Bibliothek mit Rolle (ADR-0020: Archiv zuerst, dann Eingänge).
 /// Auswahl → FolderSelectedMessage; „Gesamte Bibliothek“ → FolderId null.
-/// Lädt neu bei ActiveLibraryChangedMessage, ScanCompletedMessage und (gebündelt) nach Datei-Operationen
-/// (FilesChangedMessage Moved/Removed/Added: Zähler und neue Ordner); aufgeklappte Knoten und die Auswahl
-/// werden dabei über den Pfad wiederhergestellt.
+/// Kontextmenü „Neuer Ordner“ / „Umbenennen“ läuft protokolliert über <see cref="IFileOperationService"/>.
+/// Lädt neu bei ActiveLibraryChangedMessage, ScanCompletedMessage, LibraryRootsChangedMessage, FoldersChangedMessage
+/// und (gebündelt) nach Datei-Operationen (FilesChangedMessage Moved/Removed/Added: Zähler und neue Ordner);
+/// aufgeklappte Knoten und die Auswahl werden dabei über den Pfad wiederhergestellt.
 /// </summary>
 public sealed partial class FolderTreeViewModel : ObservableObject
 {
     private const string WholeLibraryText = "Gesamte Bibliothek";
     private const int ReloadDebounceMs = 300;
 
-    private sealed record FolderRow(int Id, int? ParentId, string Name, string Path);
+    private sealed record FolderRow(int Id, int? ParentId, int? RootId, string Name, string Path);
 
     private readonly ILibraryContextFactory _factory;
     private readonly ILibraryService _libraries;
+    private readonly IFileOperationService _fileOps;
+    private readonly IDialogService _dialogs;
     private readonly ILogger<FolderTreeViewModel> _logger;
     private readonly IMessenger _messenger = WeakReferenceMessenger.Default;
 
@@ -40,6 +45,7 @@ public sealed partial class FolderTreeViewModel : ObservableObject
     private List<FolderRow> _rootRows = new();
     private Dictionary<int, int> _directCounts = new();
     private Dictionary<int, int> _totalCounts = new();
+    private Dictionary<int, LibraryRootInfo> _rootsById = new();
     private FolderNode? _selectedNode;
     private int _libraryId;
     private int? _loadedLibraryId;
@@ -64,15 +70,102 @@ public sealed partial class FolderTreeViewModel : ObservableObject
     [ObservableProperty]
     private bool _includeSubfolders = true;
 
-    public FolderTreeViewModel(ILibraryContextFactory factory, ILibraryService libraries, ILogger<FolderTreeViewModel> logger)
+    public FolderTreeViewModel(
+        ILibraryContextFactory factory,
+        ILibraryService libraries,
+        IFileOperationService fileOps,
+        IDialogService dialogs,
+        ILogger<FolderTreeViewModel> logger)
     {
         _factory = factory;
         _libraries = libraries;
+        _fileOps = fileOps;
+        _dialogs = dialogs;
         _logger = logger;
 
         _messenger.Register<FolderTreeViewModel, ActiveLibraryChangedMessage>(this, static (r, m) => UiThread.Post(() => { _ = r.ReloadAsync(); }));
         _messenger.Register<FolderTreeViewModel, ScanCompletedMessage>(this, static (r, m) => UiThread.Post(() => { _ = r.ReloadAsync(); }));
+        _messenger.Register<FolderTreeViewModel, LibraryRootsChangedMessage>(this, static (r, m) => UiThread.Post(() => { _ = r.ReloadAsync(); }));
+        _messenger.Register<FolderTreeViewModel, FoldersChangedMessage>(this, static (r, m) => UiThread.Post(() => r.ScheduleReload(m.LibraryId)));
         _messenger.Register<FolderTreeViewModel, FilesChangedMessage>(this, static (r, m) => UiThread.Post(() => r.OnFilesChanged(m)));
+    }
+
+    [ObservableProperty]
+    private string? _errorMessage;
+
+    // ---- Kontextmenü: Neuer Ordner / Umbenennen (ADR-0020, protokolliert über IFileOperationService) ----
+
+    [RelayCommand]
+    private async Task CreateSubfolderAsync(FolderNode? parent)
+    {
+        if (parent is null || parent.IsPlaceholder || !HasLibrary)
+        {
+            return;
+        }
+
+        var name = await _dialogs.PromptTextAsync("Neuer Ordner", $"Neuer Ordner in „{parent.Path}“:", "Neuer Ordner", "Anlegen").ConfigureAwait(true);
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return;
+        }
+
+        try
+        {
+            ErrorMessage = null;
+            var result = await _fileOps.CreateFolderAsync(_libraryId, parent.Path, name.Trim()).ConfigureAwait(true);
+            if (!result.Success)
+            {
+                ErrorMessage = result.Error ?? "Ordner konnte nicht angelegt werden.";
+                return;
+            }
+
+            parent.IsExpanded = true;
+            _logger.LogInformation("Ordnerbaum: Ordner angelegt {Path}", result.Path);
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Ordner konnte nicht angelegt werden: {ex.Message}";
+            _logger.LogWarning(ex, "Ordnerbaum: Neuer Ordner in {Parent} fehlgeschlagen", parent.Path);
+        }
+    }
+
+    /// <summary>Ordner umbenennen — mit Dateien über eine protokollierte RenameFolder-Operation (rückgängig machbar); Wurzeln nicht.</summary>
+    [RelayCommand]
+    private async Task RenameFolderAsync(FolderNode? node)
+    {
+        if (node is null || !node.CanRename || !HasLibrary)
+        {
+            return;
+        }
+
+        var newName = await _dialogs.PromptTextAsync("Ordner umbenennen", $"Neuer Name für „{node.Name}“:", node.Name, "Umbenennen").ConfigureAwait(true);
+        if (string.IsNullOrWhiteSpace(newName) || newName.Trim() == node.Name)
+        {
+            return;
+        }
+
+        try
+        {
+            ErrorMessage = null;
+            var result = await _fileOps.RenameFolderAsync(node.Id, newName.Trim()).ConfigureAwait(true);
+            if (!result.Success)
+            {
+                ErrorMessage = result.Error ?? "Ordner konnte nicht umbenannt werden.";
+                return;
+            }
+
+            if (_selectedNode is not null && ReferenceEquals(_selectedNode, node))
+            {
+                SelectionText = result.Path; // Pfad des gewählten Knotens hat sich geändert; Reload stellt die Auswahl darüber wieder her
+            }
+
+            _logger.LogInformation("Ordnerbaum: Ordner umbenannt → {Path}", result.Path);
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Ordner konnte nicht umbenannt werden: {ex.Message}";
+            _logger.LogWarning(ex, "Ordnerbaum: Umbenennen von {Path} fehlgeschlagen", node.Path);
+        }
     }
 
     public ObservableCollection<FolderNode> Roots { get; } = new();
@@ -123,7 +216,17 @@ public sealed partial class FolderTreeViewModel : ObservableObject
     /// <summary>Datei-Operationen (Papierkorb, Verschieben, Undo) ändern Zähler und legen Ordner an → gebündelt neu laden.</summary>
     private void OnFilesChanged(FilesChangedMessage message)
     {
-        if (message.Kind == FilesChangeKind.Metadata || _loadedLibraryId is null || message.LibraryId != _loadedLibraryId)
+        if (message.Kind == FilesChangeKind.Metadata)
+        {
+            return;
+        }
+
+        ScheduleReload(message.LibraryId);
+    }
+
+    private void ScheduleReload(int libraryId)
+    {
+        if (_loadedLibraryId is null || libraryId != _loadedLibraryId)
         {
             return;
         }
@@ -174,7 +277,13 @@ public sealed partial class FolderTreeViewModel : ObservableObject
             _libraryId = active.Id;
             LibraryName = active.Name;
             HasLibrary = true;
-            HintText = active.IsRootAvailable ? null : $"Bibliothek offline: {active.RootPath} ist nicht erreichbar.";
+            var offline = active.Roots.Where(r => !r.IsAvailable).Select(r => r.Path).ToList();
+            HintText = offline.Count == 0
+                ? null
+                : offline.Count == 1
+                    ? $"Wurzel offline: {offline[0]} ist nicht erreichbar."
+                    : $"{offline.Count} Wurzeln nicht erreichbar: {string.Join(", ", offline)}";
+            _rootsById = active.Roots.ToDictionary(r => r.Id);
 
             List<FolderRow> rows;
             Dictionary<int, int> counts;
@@ -182,7 +291,7 @@ public sealed partial class FolderTreeViewModel : ObservableObject
             {
                 rows = await ctx.Folders.AsNoTracking()
                     .Where(f => f.LibraryId == active.Id)
-                    .Select(f => new FolderRow(f.Id, f.ParentId, f.Name, f.Path))
+                    .Select(f => new FolderRow(f.Id, f.ParentId, f.RootId, f.Name, f.Path))
                     .ToListAsync()
                     .ConfigureAwait(true);
                 counts = await ctx.Files.AsNoTracking()
@@ -347,7 +456,14 @@ public sealed partial class FolderTreeViewModel : ObservableObject
             list.Sort((a, b) => comparer.Compare(a.Name, b.Name));
         }
 
-        _rootRows.Sort((a, b) => comparer.Compare(a.Path, b.Path));
+        // Wurzeln: Archiv zuerst, dann Eingänge in ihrer SortOrder, verwaiste Zeilen zuletzt nach Pfad (ADR-0020)
+        _rootRows.Sort((a, b) =>
+        {
+            var ka = RootSortKey(a);
+            var kb = RootSortKey(b);
+            var byKey = ka.CompareTo(kb);
+            return byKey != 0 ? byKey : comparer.Compare(a.Path, b.Path);
+        });
 
         _directCounts = counts;
         _totalCounts = new Dictionary<int, int>(rows.Count);
@@ -372,6 +488,28 @@ public sealed partial class FolderTreeViewModel : ObservableObject
         return total;
     }
 
+    private int RootSortKey(FolderRow row)
+    {
+        if (row.RootId is { } rootId && _rootsById.TryGetValue(rootId, out var root) && IsRootRow(row, root))
+        {
+            return root.IsArchive ? 0 : 1 + root.SortOrder;
+        }
+
+        return int.MaxValue;
+    }
+
+    /// <summary>Zeile ist die Wurzel selbst (Pfad = Wurzelpfad), nicht ein verwaister Unterordner mit ParentId NULL.</summary>
+    private static bool IsRootRow(FolderRow row, LibraryRootInfo root) =>
+        string.Equals(
+            row.Path.TrimEnd(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar),
+            root.Path.TrimEnd(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar),
+            StringComparison.OrdinalIgnoreCase);
+
+    private string? RoleLabelOf(FolderRow row) =>
+        row.ParentId is null && row.RootId is { } rootId && _rootsById.TryGetValue(rootId, out var root) && IsRootRow(row, root)
+            ? root.RoleText
+            : null;
+
     private FolderNode CreateNode(FolderRow row) => new(
         this,
         row.Id,
@@ -379,7 +517,8 @@ public sealed partial class FolderTreeViewModel : ObservableObject
         row.Path,
         _directCounts.GetValueOrDefault(row.Id),
         _totalCounts.GetValueOrDefault(row.Id),
-        _childrenByParent.ContainsKey(row.Id));
+        _childrenByParent.ContainsKey(row.Id),
+        RoleLabelOf(row));
 
     private void ResetSelection()
     {

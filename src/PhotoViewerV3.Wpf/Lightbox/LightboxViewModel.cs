@@ -45,6 +45,7 @@ public sealed partial class LightboxViewModel : ObservableObject, IDisposable
     private readonly ICatalogUpdateService? _catalog;
     private readonly IFileOperationService? _fileOperations;
     private readonly IArchiveService? _archives;
+    private readonly IArchiveMoveService? _archiveMove;
     private readonly ILogger<LightboxViewModel> _logger;
     private readonly Dispatcher _dispatcher;
     private readonly LightboxImageCache _cache = new(capacity: 4);
@@ -68,7 +69,8 @@ public sealed partial class LightboxViewModel : ObservableObject, IDisposable
         ILogger<LightboxViewModel> logger,
         ICatalogUpdateService? catalog = null,
         IFileOperationService? fileOperations = null,
-        IArchiveService? archives = null)
+        IArchiveService? archives = null,
+        IArchiveMoveService? archiveMove = null)
     {
         _vlc = vlc;
         _contextFactory = contextFactory;
@@ -76,6 +78,7 @@ public sealed partial class LightboxViewModel : ObservableObject, IDisposable
         _catalog = catalog;
         _fileOperations = fileOperations;
         _archives = archives;
+        _archiveMove = archiveMove;
         _dispatcher = Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
         _volume = Math.Clamp(vlc.LastVolume, 0, 100);
         _isMuted = vlc.LastMuted;
@@ -914,6 +917,65 @@ public sealed partial class LightboxViewModel : ObservableObject, IDisposable
         {
             ShowStatus($"Löschen fehlgeschlagen: {ex.Message}");
             _logger.LogWarning(ex, "RecycleAsync fehlgeschlagen für File {FileId}", item.FileId);
+        }
+    }
+
+    /// <summary>
+    /// Strg+M: aktuelle Datei „Ins Archiv…“ (ADR-0020) über den WPF-freien <see cref="IArchiveMoveService"/> — der
+    /// Zieldialog gehört zur Galerie, die Lightbox kennt sie nicht. Der neue Pfad kommt per FilesChangedMessage(Moved).
+    /// </summary>
+    [RelayCommand]
+    private async Task ArchiveCurrentAsync()
+    {
+        var item = CurrentItem;
+        if (item is null)
+        {
+            return;
+        }
+
+        if (_archiveMove is null)
+        {
+            ShowStatus("Archiv-Dienst nicht verfügbar — Verschieben nicht möglich.");
+            return;
+        }
+
+        if (item.IsVideo)
+        {
+            StopVideo(); // Datei-Handle von VLC freigeben
+        }
+
+        try
+        {
+            var result = await _archiveMove.ArchiveAsync(new[] { item.FileId }).ConfigureAwait(true);
+            if (result is null)
+            {
+                if (item.IsVideo && ReferenceEquals(CurrentItem, item))
+                {
+                    _ = ShowCurrentAsync();
+                }
+
+                return; // abgebrochen
+            }
+
+            var itemResult = result.Items.FirstOrDefault(r => r.FileId == item.FileId);
+            var success = itemResult?.Success ?? result.Succeeded > 0;
+            if (success)
+            {
+                ShowStatus($"„{item.Name}“ ins Archiv verschoben.");
+            }
+            else
+            {
+                ShowStatus($"Ins Archiv fehlgeschlagen: {itemResult?.Error ?? "unbekannter Fehler"}");
+                if (item.IsVideo && ReferenceEquals(CurrentItem, item))
+                {
+                    _ = ShowCurrentAsync();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Ins Archiv fehlgeschlagen: {ex.Message}");
+            _logger.LogWarning(ex, "ArchiveAsync fehlgeschlagen für File {FileId}", item.FileId);
         }
     }
 

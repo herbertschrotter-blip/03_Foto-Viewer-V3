@@ -5,7 +5,8 @@ namespace PhotoViewerV3.Folders;
 
 /// <summary>
 /// Knoten im Ordnerbaum. Kinder werden erst beim Aufklappen aus dem In-Memory-Index des ViewModels
-/// erzeugt (lazy); bis dahin hält ein Platzhalter-Knoten den Expander sichtbar.
+/// erzeugt (lazy); bis dahin hält ein Platzhalter-Knoten den Expander sichtbar. Wurzelordner der Bibliothek
+/// (ADR-0020) tragen ihre Rolle (<see cref="RoleLabel"/> „Archiv“ / „Eingang“).
 /// </summary>
 public sealed partial class FolderNode : ObservableObject
 {
@@ -26,7 +27,7 @@ public sealed partial class FolderNode : ObservableObject
         Path = string.Empty;
     }
 
-    public FolderNode(FolderTreeViewModel owner, int id, string name, string path, int fileCount, int totalFileCount, bool hasChildren)
+    public FolderNode(FolderTreeViewModel owner, int id, string name, string path, int fileCount, int totalFileCount, bool hasChildren, string? roleLabel = null)
     {
         _owner = owner;
         Id = id;
@@ -35,6 +36,7 @@ public sealed partial class FolderNode : ObservableObject
         FileCount = fileCount;
         TotalFileCount = totalFileCount;
         HasChildren = hasChildren;
+        RoleLabel = roleLabel;
 
         if (hasChildren)
         {
@@ -56,7 +58,15 @@ public sealed partial class FolderNode : ObservableObject
 
     public bool HasChildren { get; }
 
+    /// <summary>„Archiv“ / „Eingang“ bei Wurzelordnern der Bibliothek, sonst null.</summary>
+    public string? RoleLabel { get; }
+
+    public bool IsLibraryRoot => RoleLabel is not null;
+
     public bool IsPlaceholder => _owner is null;
+
+    /// <summary>Umbenennen nur für normale Ordner (Wurzeln sind Bibliothekseinstellung, Platzhalter nichts).</summary>
+    public bool CanRename => !IsPlaceholder && !IsLibraryRoot;
 
     public ObservableCollection<FolderNode> Children { get; } = new();
 

@@ -3,6 +3,54 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.9] — 2026-10-19
+
+### Neu
+- **Eingang und Archiv in einer Bibliothek** (ADR-0020): Tabelle `LibraryRoots` (Id, LibraryId, Path, Role, Name,
+  SortOrder) mit genau einer Archiv-Wurzel und beliebig vielen Eingangs-Wurzeln, `Folders.RootId`. Migration
+  `AddLibraryRoots` übernimmt jede `Libraries.RootPath` als Archiv-Wurzel und setzt `RootId` bestehender Ordner per
+  Pfad-Präfix; `RootPath` bleibt als Anzeigefeld der Archiv-Wurzel. `LibraryInfo.Roots` (+ `ArchiveRoot`,
+  `InboxRoots`, `HasOfflineRoot`), `ILibraryService.GetRootsAsync/AddRootAsync/RenameRootAsync/SetRootRoleAsync/
+  RemoveRootAsync` (Entfernen nur aus dem Katalog), `LibraryRootsChangedMessage`.
+- Scanner über alle Wurzeln: Fresh/ClearAndRescan nur, wenn alle Wurzeln erreichbar sind; Incremental je Wurzel mit
+  eigenem Offline- und Mass-Missing-Guard (Offline-Wurzel wird übersprungen, Ergebnis `LibraryOffline` mit ihrem Pfad),
+  Ordnerkette je Wurzel, `ScanResult.RootsScanned`.
+- `FileOperationService`: „innerhalb der Bibliothek“ = unter irgendeiner Wurzel; Zielordner-Kette unter der passenden
+  Wurzel, Undo entsprechend. Neu `CreateFolderAsync` (MkDir-Batch) und `RenameFolderAsync` (RenameFolder-Batch: Ordner-
+  plus je Datei eine Operation, `Directory.Move`, Folders-Pfade samt Unterordnern, rückgängig machbar; Wurzeln nicht),
+  `FoldersChangedMessage`.
+- Bibliotheksseite: Wurzeln je Bibliothek mit Rolle und Erreichbarkeit, „Eingang hinzufügen…“ (mit Angebot zu
+  aktualisieren), zur Archiv-Wurzel machen, Anzeigename ändern, Eingang entfernen (nur Katalog).
+- Galerie: Filter-Pills „Nicht archiviert“ / „Archiviert“ (SQL über `Folders.RootId → LibraryRoots.Role`, Count-Query
+  mitgezogen), Badge „Eingang“ auf der Kachel, Aktion **Ins Archiv…** (Aktionsleiste, Strg+M, Kontextmenü der Kachel,
+  Lightbox Strg+M bzw. Overlay-Knopf über `IArchiveMoveService`). Dialog `Gallery/ArchiveTarget/ArchiveTargetDialog`: Ordnerbaum
+  der Archiv-Wurzel (Katalog- und Dateisystem-Ordner), Suche, Neuer Ordner, Umbenennen, Vorschlag „Jahr\Jahr-Monat“ aus
+  EXIF-Aufnahme- bzw. Dateidatum, zuletzt benutzter Zielordner vorgemerkt (Setting `archive.lastTarget.{libraryId}`).
+  Die Ansicht bleibt nach dem Verschieben beim Filter.
+- Ordnerbaum: Wurzeln als oberste Knoten mit Rolle (Archiv zuerst), Kontextmenü „Neuer Ordner…“ / „Umbenennen…“.
+- Rauchtest: Schritt „Eingang → Archiv“ (zweite Wurzel, Incremental über 2 Wurzeln, Status-Filter + Badge, Ins Archiv mit
+  Fake-Zieldialog, Rückgängig, Ordner anlegen/umbenennen, Eingang entfernen) — 16 OK.
+
+### Integration
+- Zusammengeführt mit Ordnerüberwachung (0.2.7) und Archiven (0.2.8): Der Dienst für „Ins Archiv…“ heißt
+  `IArchiveMoveService`/`ArchiveMoveService` (Ordner `Wpf/Gallery/ArchiveTarget`), damit er nicht mit dem
+  ZIP/RAR-Dienst `Services/Archive/IArchiveService` kollidiert; Filter-Pills Alle / Bilder / Videos / Favoriten /
+  Archive / Nicht archiviert / Archiviert.
+- Ordnerüberwachung beobachtet jetzt alle Wurzeln der Bibliothek (`LibraryWatchService.GetRootPaths` über
+  `LibraryInfo.Roots`) und baut ihre Watcher bei `LibraryRootsChangedMessage` neu auf; Tests `WatchRootPathsTests`.
+- Rauchtest-Reihenfolge: … → Archiv (ZIP) → Eingang → Archiv → Ordnerüberwachung (Überwachung bleibt bis zum
+  letzten Schritt aus).
+
+### Tests
+- `PhotoViewerV3.Tests`: Migration auf einer Alt-DB, Wurzelverwaltung, Scanner über zwei Wurzeln (Fresh, Incremental,
+  Offline-Wurzel), Move Eingang → Archiv mit Undo, Ordner anlegen/umbenennen (257 Tests).
+- `PhotoViewerV3.Wpf.Tests`: Status-Filter im `GalleryPageSource` (auch mit Suche/Ordnerfilter), Archiv-Dialog-ViewModel
+  (Baum, Vorauswahl, Suche, Vorschlag, Neuer Ordner, Umbenennen), Datumsvorschlag, echtes Dialogfenster (63 Tests).
+
+### Offen
+- Sortieren/Flatten arbeiten weiter nur unter der Archiv-Wurzel (`Libraries.RootPath`); Eingänge als Quelle folgen.
+- Dateisystem-Ordner ohne Katalogzeile lassen sich im Archiv-Dialog anlegen/auswählen, aber nicht umbenennen.
+
 ## [0.2.8] — 2026-10-19
 
 ### Hinzugefügt

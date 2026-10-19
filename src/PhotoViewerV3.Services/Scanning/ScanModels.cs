@@ -100,7 +100,9 @@ public sealed record ScanOptions
 /// Ergebnis eines abgeschlossenen Scans, inkl. Zähler und Timing. Die positionalen Felder stammen aus dem
 /// Fresh-Scan und bleiben erhalten; die Diff-Zähler (Added, Modified, MarkedMissing, Reappeared, FoldersAdded)
 /// und <see cref="Outcome"/> kamen mit dem Incremental-Scan dazu. Bei Fresh/ClearAndRescan gilt
-/// Added = FilesInserted und FoldersAdded = FoldersInserted.
+/// Added = FilesInserted und FoldersAdded = FoldersInserted. <paramref name="RootPath"/> ist bei
+/// <see cref="ScanOutcome.LibraryOffline"/> die nicht erreichbare Wurzel, sonst die Archiv-Wurzel (ADR-0020);
+/// die Zähler summieren über alle Wurzeln.
 /// </summary>
 public sealed record ScanResult(
     int LibraryId,
@@ -141,6 +143,9 @@ public sealed record ScanResult(
     /// und dieser Zähler nennt die Zahl für den Rückfrage-Dialog.
     /// </summary>
     public int MissingDetected { get; init; }
+
+    /// <summary>Zahl der tatsächlich durchlaufenen Wurzeln (ADR-0020); bei LibraryOffline vor dem Start 0.</summary>
+    public int RootsScanned { get; init; }
 
     /// <summary>true, wenn der Scan irgendetwas am Katalog verändert hat.</summary>
     public bool HasChanges => Added > 0 || Modified > 0 || MarkedMissing > 0 || Reappeared > 0 || FoldersAdded > 0;

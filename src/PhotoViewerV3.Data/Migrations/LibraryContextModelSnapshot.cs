@@ -78,10 +78,16 @@ namespace PhotoViewerV3.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<int?>("RootId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<long>("ScannedAt")
                         .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("RootId")
+                        .HasDatabaseName("IX_Folders_Root");
 
                     b.HasIndex("LibraryId", "Path")
                         .IsUnique()
@@ -113,6 +119,41 @@ namespace PhotoViewerV3.Data.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Libraries", (string)null);
+                });
+
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.LibraryRoot", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("LibraryId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Path")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LibraryId", "Path")
+                        .IsUnique()
+                        .HasDatabaseName("UX_LibraryRoots_Library_Path");
+
+                    b.HasIndex("LibraryId", "Role")
+                        .HasDatabaseName("IX_LibraryRoots_Library_Role");
+
+                    b.ToTable("LibraryRoots", (string)null);
                 });
 
             modelBuilder.Entity("PhotoViewerV3.Domain.Entities.MediaFile", b =>

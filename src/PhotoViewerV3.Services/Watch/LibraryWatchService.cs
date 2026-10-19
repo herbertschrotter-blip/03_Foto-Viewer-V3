@@ -123,11 +123,23 @@ public sealed class LibraryWatchService : ILibraryWatchService
     }
 
     /// <summary>
-    /// Zu überwachende Wurzeln einer Bibliothek. Bewusst an einer Stelle gekapselt: sobald Bibliotheken mehrere Wurzeln
-    /// (Eingang/Archiv) haben, wird hier die Liste geliefert — der Rest des Dienstes arbeitet bereits mit n Wurzeln.
+    /// Zu überwachende Wurzeln einer Bibliothek (ADR-0020): Archiv-Wurzel und alle Eingangs-Wurzeln. Ohne Wurzelliste
+    /// (Alt-Katalog vor der Migration) dient <see cref="LibraryInfo.RootPath"/> als einzige Wurzel.
     /// </summary>
-    internal static IReadOnlyList<string> GetRootPaths(LibraryInfo library)
-        => string.IsNullOrWhiteSpace(library.RootPath) ? [] : [library.RootPath];
+    public static IReadOnlyList<string> GetRootPaths(LibraryInfo library)
+    {
+        var roots = library.Roots
+            .Select(r => r.Path)
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (roots.Count == 0 && !string.IsNullOrWhiteSpace(library.RootPath))
+        {
+            roots.Add(library.RootPath);
+        }
+
+        return roots;
+    }
 
     // ---- Lebenszyklus ------------------------------------------------------------------------------
 
@@ -161,6 +173,7 @@ public sealed class LibraryWatchService : ILibraryWatchService
         }
 
         _messenger.Register<LibraryWatchService, ActiveLibraryChangedMessage>(this, static (r, m) => r.OnActiveLibraryChanged(m));
+        _messenger.Register<LibraryWatchService, LibraryRootsChangedMessage>(this, static (r, m) => r.OnLibraryRootsChanged(m));
         _messenger.Register<LibraryWatchService, ScanProgressMessage>(this, static (r, m) => r.OnExternalScanProgress(m));
         _messenger.Register<LibraryWatchService, ScanCompletedMessage>(this, static (r, m) => r.OnExternalScanFinished(m.LibraryId, m.Result.Outcome == ScanOutcome.Completed));
         _messenger.Register<LibraryWatchService, ScanAbortedMessage>(this, static (r, m) => r.OnExternalScanFinished(m.LibraryId, completedOk: false));
@@ -281,6 +294,13 @@ public sealed class LibraryWatchService : ILibraryWatchService
     private void OnActiveLibraryChanged(ActiveLibraryChangedMessage message)
     {
         _logger.LogDebug("Ordnerüberwachung: ActiveLibraryChangedMessage LibraryId={LibraryId}", message.LibraryId);
+        _ = AttachToActiveLibraryAsync(CancellationToken.None);
+    }
+
+    /// <summary>Wurzel hinzugefügt/entfernt/Rolle getauscht: Watcher der aktiven Bibliothek neu aufbauen.</summary>
+    private void OnLibraryRootsChanged(LibraryRootsChangedMessage message)
+    {
+        _logger.LogDebug("Ordnerüberwachung: LibraryRootsChangedMessage LibraryId={LibraryId}", message.LibraryId);
         _ = AttachToActiveLibraryAsync(CancellationToken.None);
     }
 

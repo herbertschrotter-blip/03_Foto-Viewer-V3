@@ -9,6 +9,12 @@ namespace PhotoViewerV3.Services.Messaging;
 /// <summary>Die aktive Library hat gewechselt (neu angelegt, aktiviert oder nach Scan).</summary>
 public sealed record ActiveLibraryChangedMessage(int LibraryId);
 
+/// <summary>
+/// Wurzeln einer Library wurden hinzugefügt, entfernt, umbenannt oder in der Rolle geändert (ADR-0020).
+/// Galerie und Ordnerbaum laden neu; beim Entfernen einer Wurzel sind ihre Dateien aus dem Katalog verschwunden.
+/// </summary>
+public sealed record LibraryRootsChangedMessage(int LibraryId);
+
 /// <summary>Fortschritt eines laufenden Scans (für Statusleiste, ADR-0013).</summary>
 public sealed record ScanProgressMessage(int LibraryId, ScanProgress Progress);
 
@@ -32,6 +38,9 @@ public enum FilesChangeKind
 
 /// <summary>Katalog-Änderung an konkreten Dateien.</summary>
 public sealed record FilesChangedMessage(int LibraryId, FilesChangeKind Kind, IReadOnlyList<int> FileIds);
+
+/// <summary>Ordner angelegt oder umbenannt (Folders-Zeilen geändert, ohne dass Dateien dazukamen oder fehlen) — Ordnerbaum lädt neu.</summary>
+public sealed record FoldersChangedMessage(int LibraryId);
 
 /// <summary>Benutzer hat im Ordnerbaum einen Ordner gewählt; FolderId null = ganze Library.</summary>
 public sealed record FolderSelectedMessage(int LibraryId, int? FolderId, bool IncludeSubfolders);

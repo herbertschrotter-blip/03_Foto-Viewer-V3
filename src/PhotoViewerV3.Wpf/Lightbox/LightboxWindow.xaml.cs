@@ -190,6 +190,9 @@ public partial class LightboxWindow : FluentWindow
                 }
 
                 break;
+            case Key.M when ctrl:
+                _ = _viewModel.ArchiveCurrentCommand.ExecuteAsync(null);
+                break;
             case Key.M:
                 if (_viewModel.IsVideo)
                 {

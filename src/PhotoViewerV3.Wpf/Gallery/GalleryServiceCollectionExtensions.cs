@@ -1,18 +1,21 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using PhotoViewerV3.Gallery.ArchiveTarget;
 using PhotoViewerV3.Gallery.Archives;
 using PhotoViewerV3.Gallery.Data;
 using PhotoViewerV3.Gallery.Services;
 using PhotoViewerV3.Gallery.ViewModels;
 using PhotoViewerV3.Gallery.Views;
+using PhotoViewerV3.Services.Operations;
 
 namespace PhotoViewerV3.Gallery;
 
 /// <summary>
 /// DI-Registrierung des Galerie-Moduls (Wpf/Gallery): Raw-SQLite-Lesepfad, ViewModel (Singleton — Galerie-Seite
-/// und Ordner-Seite teilen den Zustand), View (transient, je Seite eine Instanz) sowie Dialog- und
-/// Ordnerauswahl-Dienste. Letztere per TryAdd, damit der Rauchtest (SmokeTestRunner.ConfigureServices) seine
-/// Fakes vorher setzen kann. Wird in App.xaml.cs mit einer Zeile aufgerufen.
+/// und Ordner-Seite teilen den Zustand), View (transient, je Seite eine Instanz), Dialog- und
+/// Ordnerauswahl-Dienste sowie „Ins Archiv…“ (<see cref="IArchiveMoveService"/> für Galerie und Lightbox, ADR-0020).
+/// Letztere per TryAdd, damit der Rauchtest (SmokeTestRunner.ConfigureServices) seine Fakes vorher setzen kann.
+/// Wird in App.xaml.cs mit einer Zeile aufgerufen.
 /// </summary>
 public static class GalleryServiceCollectionExtensions
 {
@@ -24,6 +27,8 @@ public static class GalleryServiceCollectionExtensions
         services.TryAddSingleton<IGalleryDialogService, GalleryDialogService>();
         services.TryAddSingleton<IFolderPickerService, FolderPickerService>();
         services.AddGalleryArchives();
+        services.TryAddSingleton<IArchiveTargetPicker, ArchiveTargetPicker>();
+        services.TryAddSingleton<IArchiveMoveService, ArchiveMoveService>();
         return services;
     }
 }

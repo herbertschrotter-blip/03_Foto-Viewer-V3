@@ -34,6 +34,31 @@ internal sealed class SmokeGalleryDialogService : IGalleryDialogService
     }
 }
 
+/// <summary>Rauchtest-Ersatz für den Dialog „Ins Archiv…“: liefert den vom Szenario gesetzten Zielordner und merkt sich die Anfrage.</summary>
+internal sealed class SmokeArchiveTargetPicker : PhotoViewerV3.Gallery.ArchiveTarget.IArchiveTargetPicker
+{
+    private readonly ILogger<SmokeArchiveTargetPicker> _logger;
+
+    public SmokeArchiveTargetPicker(ILogger<SmokeArchiveTargetPicker> logger)
+    {
+        _logger = logger;
+    }
+
+    /// <summary>Nächstes Ergebnis; null = Benutzer bricht ab.</summary>
+    public string? NextTarget { get; set; }
+
+    public PhotoViewerV3.Gallery.ArchiveTarget.ArchiveTargetRequest? LastRequest { get; private set; }
+
+    public Task<string?> PickAsync(PhotoViewerV3.Gallery.ArchiveTarget.ArchiveTargetRequest request)
+    {
+        LastRequest = request;
+        _logger.LogInformation(
+            "Rauchtest-Archivdialog: {Count} Datei(en), Archiv {Root}, zuletzt {Last}, Vorschlag {Suggestion} → {Target}",
+            request.FileIds.Count, request.ArchiveRootPath, request.LastTargetPath ?? "-", request.SuggestedRelativePath ?? "-", NextTarget ?? "(Abbruch)");
+        return Task.FromResult(NextTarget);
+    }
+}
+
 /// <summary>Rauchtest-Ersatz für die Ordnerauswahl („Verschieben nach…“): liefert den vom Szenario gesetzten Zielordner.</summary>
 internal sealed class SmokeFolderPickerService : IFolderPickerService
 {

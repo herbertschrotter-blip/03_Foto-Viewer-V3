@@ -3,6 +3,8 @@ using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using PhotoViewerV3.Data;
+using PhotoViewerV3.Domain.Entities;
+using PhotoViewerV3.Domain.Enums;
 using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Infrastructure;
 using PhotoViewerV3.Services.Messaging;
@@ -12,33 +14,37 @@ using LibraryEntity = PhotoViewerV3.Domain.Entities.Library;
 namespace PhotoViewerV3.Services.Library;
 
 /// <summary>
-/// Verwaltung der Bibliotheken (ADR-0003: eine aktive Library, Multi-Library vorbereitet).
-/// EF Core für CRUD und Zähl-Queries, Raw-SQLite für die Massenlöschung beim Leeren
-/// (FTS-Einträge, Thumbnails, Files, Folders in einer Transaktion — ADR-0004).
+/// Verwaltung der Bibliotheken (ADR-0003) und ihrer Wurzelordner (ADR-0020: genau eine Archiv-Wurzel, beliebig
+/// viele Eingangs-Wurzeln). EF Core für CRUD und Zähl-Queries, Raw-SQLite für die Massenlöschung beim Leeren bzw.
+/// Entfernen einer Wurzel (FTS-Einträge, Thumbnails, Files, Folders in einer Transaktion — ADR-0004).
+/// <c>Libraries.RootPath</c> wird als Anzeige-/Kompatibilitätsfeld mit der Archiv-Wurzel synchron gehalten.
 /// </summary>
 public sealed class LibraryService : ILibraryService
 {
     private readonly ILibraryContextFactory _factory;
     private readonly IAppDataPaths _paths;
     private readonly ILogger<LibraryService> _logger;
-    private readonly IMessenger _messenger = WeakReferenceMessenger.Default;
+    private readonly IMessenger _messenger;
 
-    public LibraryService(ILibraryContextFactory factory, IAppDataPaths paths, ILogger<LibraryService> logger)
+    public LibraryService(ILibraryContextFactory factory, IAppDataPaths paths, ILogger<LibraryService> logger, IMessenger? messenger = null)
     {
         _factory = factory;
         _paths = paths;
         _logger = logger;
+        _messenger = messenger ?? WeakReferenceMessenger.Default;
     }
 
     public async Task<IReadOnlyList<LibraryInfo>> GetAllAsync(CancellationToken ct = default)
     {
         List<LibraryEntity> entities;
+        List<LibraryRoot> roots;
         Dictionary<int, int> folderCounts;
         Dictionary<int, int> fileCounts;
 
         await using (var ctx = _factory.Create())
         {
             entities = await ActiveFirst(ctx.Libraries.AsNoTracking()).ToListAsync(ct).ConfigureAwait(false);
+            roots = await ctx.LibraryRoots.AsNoTracking().ToListAsync(ct).ConfigureAwait(false);
 
             // Zähler je Library in zwei GroupBy-Queries statt N+1
             folderCounts = await ctx.Folders.AsNoTracking()
@@ -53,15 +59,13 @@ public sealed class LibraryService : ILibraryService
                 .ConfigureAwait(false);
         }
 
-        // Erreichbarkeit parallel prüfen — Offline-Laufwerke würden sonst nacheinander bis zum Timeout blockieren
-        var availability = await Task.WhenAll(entities.Select(e => IsRootAvailableAsync(e.RootPath, ct)))
-            .ConfigureAwait(false);
+        // Erreichbarkeit aller Wurzeln parallel prüfen — Offline-Laufwerke würden sonst nacheinander bis zum Timeout blockieren
+        var rootInfos = await ToRootInfosAsync(roots, ct).ConfigureAwait(false);
 
         var result = new List<LibraryInfo>(entities.Count);
-        for (var i = 0; i < entities.Count; i++)
+        foreach (var e in entities)
         {
-            var e = entities[i];
-            result.Add(ToInfo(e, folderCounts.GetValueOrDefault(e.Id), fileCounts.GetValueOrDefault(e.Id), availability[i]));
+            result.Add(ToInfo(e, folderCounts.GetValueOrDefault(e.Id), fileCounts.GetValueOrDefault(e.Id), rootInfos.Where(r => r.LibraryId == e.Id)));
         }
 
         return result;
@@ -98,19 +102,10 @@ public sealed class LibraryService : ILibraryService
         var displayName = string.IsNullOrWhiteSpace(name) ? SuggestName(normalized) : name.Trim();
 
         LibraryEntity entity;
+        LibraryRoot root;
         await using (var ctx = _factory.Create())
         {
-            // Duplikat-Check case-insensitive auf normalisierten Pfaden (SQLite vergleicht sonst byteweise)
-            var existing = await ctx.Libraries.AsNoTracking()
-                .Select(l => new { l.Id, l.Name, l.RootPath })
-                .ToListAsync(ct)
-                .ConfigureAwait(false);
-            var duplicate = existing.FirstOrDefault(l => PathEquals(SafeNormalize(l.RootPath), normalized));
-            if (duplicate is not null)
-            {
-                throw new InvalidOperationException(
-                    $"Der Ordner „{normalized}“ gehört bereits zur Bibliothek „{duplicate.Name}“.");
-            }
+            await EnsureRootPathIsFreeAsync(ctx, libraryId: null, normalized, ct).ConfigureAwait(false);
 
             var now = DateTime.UtcNow;
             entity = new LibraryEntity
@@ -122,12 +117,23 @@ public sealed class LibraryService : ILibraryService
             };
             ctx.Libraries.Add(entity);
             await ctx.SaveChangesAsync(ct).ConfigureAwait(false);
+
+            root = new LibraryRoot
+            {
+                LibraryId = entity.Id,
+                Path = normalized,
+                Role = LibraryRootRole.Archive,
+                Name = SuggestName(normalized),
+                SortOrder = 0,
+            };
+            ctx.LibraryRoots.Add(root);
+            await ctx.SaveChangesAsync(ct).ConfigureAwait(false);
         }
 
-        _logger.LogInformation("Bibliothek angelegt: Id={LibraryId} Name={Name} Root={Root}", entity.Id, entity.Name, entity.RootPath);
+        _logger.LogInformation("Bibliothek angelegt: Id={LibraryId} Name={Name} Archiv-Wurzel={Root}", entity.Id, entity.Name, entity.RootPath);
         _messenger.Send(new ActiveLibraryChangedMessage(entity.Id));
 
-        return ToInfo(entity, 0, 0, isRootAvailable: true);
+        return ToInfo(entity, 0, 0, new[] { ToRootInfo(root, isAvailable: true) });
     }
 
     public async Task RenameAsync(int libraryId, string newName, CancellationToken ct = default)
@@ -196,6 +202,7 @@ public sealed class LibraryService : ILibraryService
 
         await using (var ctx = _factory.Create())
         {
+            await ctx.LibraryRoots.Where(r => r.LibraryId == libraryId).ExecuteDeleteAsync(ct).ConfigureAwait(false);
             await ctx.Libraries.Where(l => l.Id == libraryId).ExecuteDeleteAsync(ct).ConfigureAwait(false);
         }
 
@@ -223,6 +230,204 @@ public sealed class LibraryService : ILibraryService
         }
     }
 
+    // ---- Wurzeln (ADR-0020) -----------------------------------------------------------------
+
+    public async Task<IReadOnlyList<LibraryRootInfo>> GetRootsAsync(int libraryId, CancellationToken ct = default)
+    {
+        List<LibraryRoot> roots;
+        await using (var ctx = _factory.Create())
+        {
+            roots = await ctx.LibraryRoots.AsNoTracking().Where(r => r.LibraryId == libraryId).ToListAsync(ct).ConfigureAwait(false);
+        }
+
+        return await ToRootInfosAsync(roots, ct).ConfigureAwait(false);
+    }
+
+    public async Task<LibraryRootInfo> AddRootAsync(int libraryId, string path, LibraryRootRole role, string? name = null, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        var normalized = NormalizeRootPath(path);
+        if (!Directory.Exists(normalized))
+        {
+            throw new DirectoryNotFoundException($"Der Ordner „{normalized}“ existiert nicht oder ist nicht erreichbar.");
+        }
+
+        LibraryRoot root;
+        await using (var ctx = _factory.Create())
+        {
+            var library = await ctx.Libraries.FindAsync(new object[] { libraryId }, ct).ConfigureAwait(false)
+                ?? throw new InvalidOperationException($"Bibliothek Id={libraryId} nicht gefunden.");
+
+            await EnsureRootPathIsFreeAsync(ctx, libraryId, normalized, ct).ConfigureAwait(false);
+
+            if (role == LibraryRootRole.Archive
+                && await ctx.LibraryRoots.AnyAsync(r => r.LibraryId == libraryId && r.Role == LibraryRootRole.Archive, ct).ConfigureAwait(false))
+            {
+                throw new InvalidOperationException("Die Bibliothek hat bereits eine Archiv-Wurzel — eine Bibliothek hat genau eine.");
+            }
+
+            var maxSort = await ctx.LibraryRoots.Where(r => r.LibraryId == libraryId).Select(r => (int?)r.SortOrder).MaxAsync(ct).ConfigureAwait(false) ?? -1;
+            root = new LibraryRoot
+            {
+                LibraryId = libraryId,
+                Path = normalized,
+                Role = role,
+                Name = string.IsNullOrWhiteSpace(name) ? SuggestName(normalized) : name.Trim(),
+                SortOrder = maxSort + 1,
+            };
+            ctx.LibraryRoots.Add(root);
+            if (role == LibraryRootRole.Archive)
+            {
+                library.RootPath = normalized;
+            }
+
+            await ctx.SaveChangesAsync(ct).ConfigureAwait(false);
+        }
+
+        _logger.LogInformation("Wurzel hinzugefügt: Library={LibraryId} Id={RootId} Rolle={Role} Pfad={Path}", libraryId, root.Id, root.Role, root.Path);
+        _messenger.Send(new LibraryRootsChangedMessage(libraryId));
+        return ToRootInfo(root, isAvailable: true);
+    }
+
+    public async Task RenameRootAsync(int rootId, string newName, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(newName);
+        int libraryId;
+        await using (var ctx = _factory.Create())
+        {
+            var root = await ctx.LibraryRoots.FindAsync(new object[] { rootId }, ct).ConfigureAwait(false)
+                ?? throw new InvalidOperationException($"Wurzel Id={rootId} nicht gefunden.");
+            root.Name = newName.Trim();
+            libraryId = root.LibraryId;
+            await ctx.SaveChangesAsync(ct).ConfigureAwait(false);
+        }
+
+        _logger.LogInformation("Wurzel umbenannt: Id={RootId} Name={Name}", rootId, newName.Trim());
+        _messenger.Send(new LibraryRootsChangedMessage(libraryId));
+    }
+
+    public async Task SetRootRoleAsync(int rootId, LibraryRootRole role, CancellationToken ct = default)
+    {
+        int libraryId;
+        await using (var ctx = _factory.Create())
+        {
+            var root = await ctx.LibraryRoots.FindAsync(new object[] { rootId }, ct).ConfigureAwait(false)
+                ?? throw new InvalidOperationException($"Wurzel Id={rootId} nicht gefunden.");
+            libraryId = root.LibraryId;
+            if (root.Role == role)
+            {
+                return;
+            }
+
+            var library = await ctx.Libraries.FindAsync(new object[] { libraryId }, ct).ConfigureAwait(false)
+                ?? throw new InvalidOperationException($"Bibliothek Id={libraryId} nicht gefunden.");
+
+            if (role == LibraryRootRole.Inbox)
+            {
+                throw new InvalidOperationException(
+                    "Die Archiv-Wurzel kann nicht zum Eingang werden — mache stattdessen eine andere Wurzel zum Archiv.");
+            }
+
+            // Eingang → Archiv: bisherige Archiv-Wurzel wird Eingang, RootPath folgt der neuen Archiv-Wurzel.
+            var previous = await ctx.LibraryRoots
+                .Where(r => r.LibraryId == libraryId && r.Role == LibraryRootRole.Archive && r.Id != rootId)
+                .ToListAsync(ct)
+                .ConfigureAwait(false);
+            foreach (var p in previous)
+            {
+                p.Role = LibraryRootRole.Inbox;
+            }
+
+            root.Role = LibraryRootRole.Archive;
+            library.RootPath = root.Path;
+            await ctx.SaveChangesAsync(ct).ConfigureAwait(false);
+        }
+
+        _logger.LogInformation("Wurzel-Rolle gesetzt: Id={RootId} Rolle={Role}", rootId, role);
+        _messenger.Send(new LibraryRootsChangedMessage(libraryId));
+    }
+
+    public async Task RemoveRootAsync(int rootId, CancellationToken ct = default)
+    {
+        int libraryId;
+        List<int> fileIds;
+        await using (var ctx = _factory.Create())
+        {
+            var root = await ctx.LibraryRoots.AsNoTracking().FirstOrDefaultAsync(r => r.Id == rootId, ct).ConfigureAwait(false)
+                ?? throw new InvalidOperationException($"Wurzel Id={rootId} nicht gefunden.");
+            if (root.Role == LibraryRootRole.Archive)
+            {
+                throw new InvalidOperationException("Die Archiv-Wurzel kann nicht entfernt werden — entferne die Bibliothek oder mache eine andere Wurzel zum Archiv.");
+            }
+
+            libraryId = root.LibraryId;
+            fileIds = await ctx.Files.AsNoTracking()
+                .Where(f => f.LibraryId == libraryId && ctx.Folders.Any(d => d.Id == f.FolderId && d.RootId == rootId))
+                .Select(f => f.Id)
+                .ToListAsync(ct)
+                .ConfigureAwait(false);
+        }
+
+        var sw = Stopwatch.StartNew();
+        var result = await Task.Run(() =>
+        {
+            using var connection = _factory.OpenSqliteConnection();
+            return LibraryCatalogCleanup.DeleteRootRows(connection, libraryId, rootId, _logger);
+        }, ct).ConfigureAwait(false);
+
+        await using (var ctx = _factory.Create())
+        {
+            await ctx.LibraryRoots.Where(r => r.Id == rootId).ExecuteDeleteAsync(ct).ConfigureAwait(false);
+        }
+
+        await Task.Run(() => DeleteThumbnailFiles(libraryId, fileIds), CancellationToken.None).ConfigureAwait(false);
+
+        _logger.LogInformation(
+            "Wurzel entfernt: Library={LibraryId} Id={RootId} — {Files} Dateien, {Folders} Ordner, {Thumbnails} Thumbnail-Zeilen in {Ms:N0} ms (FTS-Rebuild: {Rebuilt})",
+            libraryId, rootId, result.Files, result.Folders, result.Thumbnails, sw.Elapsed.TotalMilliseconds, result.FtsRebuilt);
+
+        if (fileIds.Count > 0)
+        {
+            _messenger.Send(new FilesChangedMessage(libraryId, FilesChangeKind.Removed, fileIds));
+        }
+
+        _messenger.Send(new LibraryRootsChangedMessage(libraryId));
+    }
+
+    /// <summary>
+    /// Der Pfad darf keine bestehende Wurzel sein (alle Libraries) und innerhalb derselben Library weder in einer
+    /// Wurzel liegen noch eine enthalten — sonst würde der Scanner Dateien doppelt katalogisieren.
+    /// </summary>
+    private static async Task EnsureRootPathIsFreeAsync(LibraryContext ctx, int? libraryId, string normalized, CancellationToken ct)
+    {
+        var roots = await ctx.LibraryRoots.AsNoTracking()
+            .Join(ctx.Libraries.AsNoTracking(), r => r.LibraryId, l => l.Id, (r, l) => new { Root = r, LibraryName = l.Name })
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        foreach (var entry in roots)
+        {
+            var existing = SafeNormalize(entry.Root.Path);
+            if (PathEquals(existing, normalized))
+            {
+                throw new InvalidOperationException($"Der Ordner „{normalized}“ gehört bereits zur Bibliothek „{entry.LibraryName}“.");
+            }
+
+            if (libraryId is { } id && entry.Root.LibraryId == id)
+            {
+                if (IsInside(normalized, existing))
+                {
+                    throw new InvalidOperationException($"„{normalized}“ liegt innerhalb der Wurzel „{existing}“ derselben Bibliothek.");
+                }
+
+                if (IsInside(existing, normalized))
+                {
+                    throw new InvalidOperationException($"„{normalized}“ enthält die Wurzel „{existing}“ derselben Bibliothek.");
+                }
+            }
+        }
+    }
+
     // ---- Pfad-Helfer -----------------------------------------------------------------------
 
     /// <summary>Absoluter Pfad ohne abschließenden Separator; Laufwerkswurzeln (C:\) behalten ihn.</summary>
@@ -244,6 +449,18 @@ public sealed class LibraryService : ILibraryService
         var trimmed = rootPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         var name = Path.GetFileName(trimmed);
         return string.IsNullOrEmpty(name) ? trimmed : name;
+    }
+
+    /// <summary>true, wenn <paramref name="path"/> gleich <paramref name="root"/> ist oder darunter liegt (beide normalisiert).</summary>
+    public static bool IsInside(string path, string root)
+    {
+        if (PathEquals(path, root))
+        {
+            return true;
+        }
+
+        var prefix = root.EndsWith(Path.DirectorySeparatorChar) ? root : root + Path.DirectorySeparatorChar;
+        return path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string SafeNormalize(string rootPath)
@@ -282,12 +499,52 @@ public sealed class LibraryService : ILibraryService
     {
         var folders = await ctx.Folders.CountAsync(f => f.LibraryId == entity.Id, ct).ConfigureAwait(false);
         var files = await ctx.Files.CountAsync(f => f.LibraryId == entity.Id, ct).ConfigureAwait(false);
-        var available = await IsRootAvailableAsync(entity.RootPath, ct).ConfigureAwait(false);
-        return ToInfo(entity, folders, files, available);
+        var roots = await ctx.LibraryRoots.AsNoTracking().Where(r => r.LibraryId == entity.Id).ToListAsync(ct).ConfigureAwait(false);
+        var rootInfos = await ToRootInfosAsync(roots, ct).ConfigureAwait(false);
+        return ToInfo(entity, folders, files, rootInfos);
     }
 
-    private static LibraryInfo ToInfo(LibraryEntity e, int folderCount, int fileCount, bool isRootAvailable) =>
-        new(e.Id, e.Name, e.RootPath, e.CreatedAt, e.LastOpenedAt, folderCount, fileCount, isRootAvailable);
+    /// <summary>Erreichbarkeit aller Wurzeln parallel; Reihenfolge: Archiv zuerst, dann SortOrder, Id.</summary>
+    private static async Task<IReadOnlyList<LibraryRootInfo>> ToRootInfosAsync(List<LibraryRoot> roots, CancellationToken ct)
+    {
+        var ordered = roots
+            .OrderBy(r => r.LibraryId)
+            .ThenBy(r => r.Role == LibraryRootRole.Archive ? 0 : 1)
+            .ThenBy(r => r.SortOrder)
+            .ThenBy(r => r.Id)
+            .ToList();
+        var availability = await Task.WhenAll(ordered.Select(r => IsRootAvailableAsync(r.Path, ct))).ConfigureAwait(false);
+        var result = new List<LibraryRootInfo>(ordered.Count);
+        for (var i = 0; i < ordered.Count; i++)
+        {
+            result.Add(ToRootInfo(ordered[i], availability[i]));
+        }
+
+        return result;
+    }
+
+    private static LibraryRootInfo ToRootInfo(LibraryRoot r, bool isAvailable) =>
+        new(r.Id, r.LibraryId, r.Path, r.Role, r.Name, r.SortOrder, isAvailable);
+
+    /// <summary>
+    /// RootPath/IsRootAvailable spiegeln die Archiv-Wurzel; fehlt sie (sollte nach der Migration nie vorkommen),
+    /// bleibt der Pfad der Library-Zeile und gilt als nicht erreichbar.
+    /// </summary>
+    private static LibraryInfo ToInfo(LibraryEntity e, int folderCount, int fileCount, IEnumerable<LibraryRootInfo> roots)
+    {
+        var list = roots.ToList();
+        var archive = list.FirstOrDefault(r => r.IsArchive);
+        return new LibraryInfo(
+            e.Id,
+            e.Name,
+            archive?.Path ?? e.RootPath,
+            e.CreatedAt,
+            e.LastOpenedAt,
+            folderCount,
+            fileCount,
+            archive?.IsAvailable ?? false,
+            list);
+    }
 
     // ---- Raw-SQLite ------------------------------------------------------------------------
 
@@ -314,6 +571,43 @@ public sealed class LibraryService : ILibraryService
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             _logger.LogWarning(ex, "Thumbnail-Cache konnte nicht (vollständig) gelöscht werden: {Path}", path);
+        }
+    }
+
+    /// <summary>Cache-Dateien einzelner Dateien (FileId-basiert, <c>{fileId}_*</c>) löschen — best effort.</summary>
+    private void DeleteThumbnailFiles(int libraryId, IReadOnlyList<int> fileIds)
+    {
+        var dir = _paths.GetLibraryThumbnailsPath(libraryId);
+        if (fileIds.Count == 0 || !Directory.Exists(dir))
+        {
+            return;
+        }
+
+        var ids = new HashSet<int>(fileIds);
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(dir))
+            {
+                var name = Path.GetFileName(file);
+                var underscore = name.IndexOf('_');
+                if (underscore <= 0 || !int.TryParse(name.AsSpan(0, underscore), out var id) || !ids.Contains(id))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    File.Delete(file);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    _logger.LogDebug(ex, "Thumbnail-Datei konnte nicht gelöscht werden: {Path}", file);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogDebug(ex, "Thumbnail-Cache nicht lesbar: {Dir}", dir);
         }
     }
 }

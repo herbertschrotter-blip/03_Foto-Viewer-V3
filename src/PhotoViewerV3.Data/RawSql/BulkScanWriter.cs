@@ -11,7 +11,8 @@ namespace PhotoViewerV3.Data.RawSql;
 /// </summary>
 public sealed class BulkScanWriter
 {
-    public sealed record FolderRow(int Id, int LibraryId, string Path, int? ParentId, string Name, long ScannedAtUnix);
+    /// <param name="RootId">Wurzel (LibraryRoots.Id), unter der der Ordner liegt — ADR-0020.</param>
+    public sealed record FolderRow(int Id, int LibraryId, string Path, int? ParentId, string Name, long ScannedAtUnix, int? RootId = null);
 
     public sealed record FileRow(
         int Id,
@@ -40,12 +41,13 @@ public sealed class BulkScanWriter
         using var cmd = connection.CreateCommand();
         cmd.Transaction = tx;
         cmd.CommandText = """
-            INSERT OR IGNORE INTO Folders (Id, LibraryId, Path, ParentId, Name, ScannedAt)
-            VALUES ($id, $libId, $path, $parentId, $name, $scannedAt);
+            INSERT OR IGNORE INTO Folders (Id, LibraryId, RootId, Path, ParentId, Name, ScannedAt)
+            VALUES ($id, $libId, $rootId, $path, $parentId, $name, $scannedAt);
             """;
 
         var pId = AddParam(cmd, "$id", SqliteType.Integer);
         var pLib = AddParam(cmd, "$libId", SqliteType.Integer);
+        var pRoot = AddParam(cmd, "$rootId", SqliteType.Integer);
         var pPath = AddParam(cmd, "$path", SqliteType.Text);
         var pParent = AddParam(cmd, "$parentId", SqliteType.Integer);
         var pName = AddParam(cmd, "$name", SqliteType.Text);
@@ -57,6 +59,7 @@ public sealed class BulkScanWriter
         {
             pId.Value = f.Id;
             pLib.Value = f.LibraryId;
+            pRoot.Value = f.RootId is { } root ? root : DBNull.Value;
             pPath.Value = f.Path;
             pParent.Value = f.ParentId is { } pp ? pp : DBNull.Value;
             pName.Value = f.Name;

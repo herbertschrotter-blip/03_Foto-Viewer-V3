@@ -164,12 +164,15 @@ OperationBatches   (Id, OperationType, Status, CreatedAtUtc, CompletedAtUtc,
                    -- Status: pending | applying | applied | undoing | undone | failed
 FileOperations     (Id, BatchId, FileId, Action, SourcePath, DestPath,
                     Status, Error, ExecutedAtUtc, UndoneAtUtc)
-                   -- Action: move | copy | recycle | rename | mkdir
+                   -- Action: move | copy | recycle | rename | mkdir | renamefolder (0.2.5)
 Settings           (Key, Value)
 FilesFts           -- FTS5 virtual table (Files.Name, Extension)
 ```
 
 ### V0.2+ Tabellen
+- LibraryRoots (Id, LibraryId, Path, Role, Name, SortOrder) + `Folders.RootId` — 0.2.5, Migration `AddLibraryRoots`,
+  ADR-0020: Wurzelordner je Bibliothek, Role 0 = Eingang (beliebig viele), 1 = Archiv (genau eine; `Libraries.RootPath`
+  zeigt auf sie). Indizes `UX_LibraryRoots_Library_Path`, `IX_LibraryRoots_Library_Role`, `IX_Folders_Root`.
 - Tags / FileTags (V0.2 wenn Tags-UI kommt)
 - Albums / AlbumFiles (V0.3+)
 - Plans / PlanFolders / PlanAssignments (V0.3)
@@ -491,6 +494,9 @@ AggressiveBackgroundThumbs:     false  ← Bilder ja, Videos nur on-demand
 - Vor jedem Scan-Batch: Root-Recheck
 - Bei IOException während Scan: Root-Recheck → wenn offline, Mark Library Offline, return
 - **Mass-Missing-Threshold:** bei `>10.000` ODER `>20%` der Library NICHT auto-committen → UI-Dialog
+- **Mehrere Wurzeln (ADR-0020, ab 0.2.5):** Erreichbarkeit, Root-Recheck und Mass-Missing-Guard gelten je Wurzel.
+  Fresh/ClearAndRescan starten nur, wenn alle Wurzeln erreichbar sind; der Incremental-Scan überspringt eine
+  Offline-Wurzel (keine Missing-Markierung dort), gleicht die übrigen ab und meldet `LibraryOffline` mit ihrem Pfad.
 
 ### UI bei Storage offline
 ```

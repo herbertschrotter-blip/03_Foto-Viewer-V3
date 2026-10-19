@@ -67,6 +67,7 @@ public sealed partial class GalleryViewModel : ObservableObject
     private readonly IThumbnailService _thumbnails;
     private readonly ICatalogUpdateService _catalog;
     private readonly IFileOperationService _fileOps;
+    private readonly IArchiveMoveService _archiveMove;
     private readonly ILightboxService _lightbox;
     private readonly IGalleryDialogService _dialogs;
     private readonly IFolderPickerService _folderPicker;
@@ -106,6 +107,7 @@ public sealed partial class GalleryViewModel : ObservableObject
         IThumbnailService thumbnails,
         ICatalogUpdateService catalog,
         IFileOperationService fileOps,
+        IArchiveMoveService archiveMove,
         ILightboxService lightbox,
         IGalleryDialogService dialogs,
         IFolderPickerService folderPicker,
@@ -117,6 +119,7 @@ public sealed partial class GalleryViewModel : ObservableObject
         _thumbnails = thumbnails;
         _catalog = catalog;
         _fileOps = fileOps;
+        _archiveMove = archiveMove;
         _lightbox = lightbox;
         _dialogs = dialogs;
         _folderPicker = folderPicker;
@@ -214,7 +217,7 @@ public sealed partial class GalleryViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(
         nameof(FavoriteSelectionCommand), nameof(UnfavoriteSelectionCommand),
         nameof(SetSelectionRatingCommand), nameof(ClearSelectionRatingCommand),
-        nameof(MoveSelectionCommand), nameof(RecycleSelectionCommand), nameof(ExtractSelectionCommand))]
+        nameof(MoveSelectionCommand), nameof(RecycleSelectionCommand), nameof(ArchiveSelectionCommand), nameof(ExtractSelectionCommand))]
     private int _selectedCount;
 
     /// <summary>Archive in der Auswahl (Aktionsleiste „Entpacken…“, ADR-0022).</summary>
@@ -231,7 +234,7 @@ public sealed partial class GalleryViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(
         nameof(FavoriteSelectionCommand), nameof(UnfavoriteSelectionCommand),
         nameof(SetSelectionRatingCommand), nameof(ClearSelectionRatingCommand),
-        nameof(MoveSelectionCommand), nameof(RecycleSelectionCommand), nameof(UndoCommand), nameof(ExtractSelectionCommand))]
+        nameof(MoveSelectionCommand), nameof(RecycleSelectionCommand), nameof(ArchiveSelectionCommand), nameof(UndoCommand), nameof(ExtractSelectionCommand))]
     private bool _isOperationRunning;
 
     [ObservableProperty]
@@ -279,6 +282,8 @@ public sealed partial class GalleryViewModel : ObservableObject
                 GalleryFilter.Videos => "Keine Videos in dieser Bibliothek.",
                 GalleryFilter.Favorites => "Noch keine Favoriten — markiere Dateien mit dem Herz.",
                 GalleryFilter.Archives => "Keine Archive (ZIP, RAR, 7z …) in dieser Bibliothek.",
+                GalleryFilter.NotArchived => "Nichts im Eingang — alle Dateien sind archiviert. Eingangs-Ordner verwaltest du unter „Bibliothek“.",
+                GalleryFilter.Archived => "Noch nichts archiviert — wähle Dateien und verschiebe sie mit „Ins Archiv…“ (Strg+M).",
                 _ => "Diese Bibliothek enthält noch keine Dateien. Starte unter „Bibliothek“ einen Scan.",
             };
         }
@@ -428,6 +433,33 @@ public sealed partial class GalleryViewModel : ObservableObject
             this, static (r, m) => r.RunOnUi(() => r.HandleFilesChangedAsync(m)));
         _messenger.Register<GalleryViewModel, ExtractArchiveRequestedMessage>(
             this, static (r, m) => r.RunOnUi(() => r.ExtractArchivesAsync([new ArchiveExtractTarget(m.FileId, m.Path, m.Name)], ActiveWindow())));
+        _messenger.Register<GalleryViewModel, LibraryRootsChangedMessage>(
+            this, static (r, m) => r.RunOnUi(() => r.HandleLibraryRootsChangedAsync(m)));
+        _messenger.Register<GalleryViewModel, FoldersChangedMessage>(
+            this, static (r, m) => r.RunOnUi(() => r.HandleFoldersChangedAsync(m)));
+    }
+
+    /// <summary>Wurzeln geändert (ADR-0020): Archiv-Wurzel bzw. Anzeigepfad kann wechseln, Status-Filter liefert andere Treffer → Library neu laden.</summary>
+    private Task HandleLibraryRootsChangedAsync(LibraryRootsChangedMessage m)
+    {
+        if (!HasLibrary || m.LibraryId != _libraryId)
+        {
+            return Task.CompletedTask;
+        }
+
+        _logger.LogInformation("LibraryRootsChangedMessage: LibraryId={LibraryId}", m.LibraryId);
+        return ReloadLibraryAsync(m.LibraryId);
+    }
+
+    /// <summary>Ordner angelegt/umbenannt: Pfade der Kacheln und Unterordner-Kacheln nachziehen (gebündelt).</summary>
+    private Task HandleFoldersChangedAsync(FoldersChangedMessage m)
+    {
+        if (HasLibrary && m.LibraryId == _libraryId)
+        {
+            ScheduleReload();
+        }
+
+        return Task.CompletedTask;
     }
 
     private Task HandleActiveLibraryChangedAsync(ActiveLibraryChangedMessage m)
@@ -1374,6 +1406,46 @@ public sealed partial class GalleryViewModel : ObservableObject
         {
             var result = await _fileOps.MoveAsync(ids, target);
             await ReportBatchResultAsync("Verschieben", result);
+            ScheduleReload();
+        });
+    }
+
+    // ---- „Ins Archiv…“ (ADR-0020) ---------------------------------------------------------------
+
+    /// <summary>Aktionsleiste / Strg+M: Auswahl in den Archiv-Ordner verschieben (Zieldialog im IArchiveMoveService).</summary>
+    [RelayCommand(CanExecute = nameof(CanActOnSelection))]
+    private Task ArchiveSelectionAsync() => ArchiveIdsAsync(SelectedIdsSnapshot());
+
+    /// <summary>Kontextmenü der Kachel: ist die Kachel Teil der Auswahl, wird die ganze Auswahl archiviert, sonst nur sie.</summary>
+    [RelayCommand]
+    private Task ArchiveItemAsync(GalleryItem? item)
+    {
+        if (item is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        var ids = item.IsSelected ? SelectedIdsSnapshot() : new[] { item.Id };
+        return ArchiveIdsAsync(ids);
+    }
+
+    private Task ArchiveIdsAsync(IReadOnlyList<int> ids)
+    {
+        if (ids.Count == 0)
+        {
+            return Task.CompletedTask;
+        }
+
+        // Die aktuelle Ansicht bleibt (z. B. Filter „Nicht archiviert“): der Reload zeigt die restlichen Dateien.
+        return RunOperationAsync("Ins Archiv", async () =>
+        {
+            var result = await _archiveMove.ArchiveAsync(ids);
+            if (result is null)
+            {
+                return; // abgebrochen
+            }
+
+            await ReportBatchResultAsync("Ins Archiv", result);
             ScheduleReload();
         });
     }

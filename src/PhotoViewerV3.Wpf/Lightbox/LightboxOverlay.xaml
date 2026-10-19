@@ -202,6 +202,11 @@
                         <ui:SymbolIcon Symbol="Open24" FontSize="18" />
                     </Button>
                     <Button Style="{StaticResource LightboxOverlayButton}"
+                            Command="{Binding ArchiveCurrentCommand}"
+                            ToolTip="Ins Archiv… (Strg+M)">
+                        <ui:SymbolIcon Symbol="Archive24" FontSize="18" />
+                    </Button>
+                    <Button Style="{StaticResource LightboxOverlayButton}"
                             Command="{Binding DeleteCurrentCommand}"
                             ToolTip="In den Papierkorb (Entf)">
                         <ui:SymbolIcon Symbol="Delete24" FontSize="18" />

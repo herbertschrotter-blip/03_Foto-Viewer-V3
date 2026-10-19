@@ -20,5 +20,9 @@ internal sealed class FolderConfiguration : IEntityTypeConfiguration<Folder>
         b.HasIndex(x => new { x.LibraryId, x.Path })
             .IsUnique()
             .HasDatabaseName("UX_Folders_Library_Path");
+
+        // Status-Filter der Galerie (Eingang/Archiv) läuft über Folders.RootId → LibraryRoots.Role (ADR-0020)
+        b.HasIndex(x => x.RootId)
+            .HasDatabaseName("IX_Folders_Root");
     }
 }

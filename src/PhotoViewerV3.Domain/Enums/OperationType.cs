@@ -11,4 +11,7 @@ public enum OperationType
     Copy = 2,
     Rename = 3,
     MkDir = 4,
+
+    /// <summary>Ordner umbenannt (Dateisystem + Folders-Zeilen; eine Operation je enthaltener Datei, ADR-0020).</summary>
+    RenameFolder = 5,
 }

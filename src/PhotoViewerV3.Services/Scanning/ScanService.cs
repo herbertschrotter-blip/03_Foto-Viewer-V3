@@ -6,6 +6,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using PhotoViewerV3.Data.RawSql;
+using PhotoViewerV3.Domain.Enums;
 using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Library;
 using PhotoViewerV3.Services.Messaging;
@@ -33,18 +34,23 @@ public interface IScanService
         CancellationToken cancellationToken);
 }
 
+/// <summary>Eine Wurzel der Bibliothek, wie der Scanner sie sieht (ADR-0020).</summary>
+internal sealed record ScanRoot(int Id, string Path, LibraryRootRole Role);
+
 /// <summary>
-/// Orchestriert einen Scan: Library laden, Root mit Timeout prüfen (PLAN Kap. 12), dann je nach Modus
+/// Orchestriert einen Scan über alle Wurzeln der Bibliothek (ADR-0020): Wurzeln laden, jede mit Timeout prüfen
+/// (PLAN Kap. 12), dann je nach Modus
 /// <list type="bullet">
-/// <item>Fresh/ClearAndRescan: (optional Katalog leeren,) Filesystem traversieren, Folders + Files via Raw-SQLite
+/// <item>Fresh/ClearAndRescan: alle Wurzeln müssen erreichbar sein (ein Offline-Laufwerk darf den Katalog nie
+/// leeren); (optional Katalog leeren,) jede Wurzel traversieren, Folders (mit RootId) + Files via Raw-SQLite
 /// Bulk-Insert persistieren, FTS5 komplett aufbauen;</item>
-/// <item>Incremental: Diff gegen den Katalog mit stabilen FileIds, gezielte FTS-Pflege, Missing-Markierungen nur
-/// bei erreichbarem Root und unterhalb des Mass-Missing-Schwellwerts (<see cref="IncrementalScanRunner"/>).</item>
+/// <item>Incremental: je Wurzel ein Diff gegen den Katalog mit stabilen FileIds, Offline- und Mass-Missing-Guard
+/// je Wurzel (<see cref="IncrementalScanRunner"/>); eine nicht erreichbare Wurzel wird übersprungen, die übrigen
+/// werden abgeglichen.</item>
 /// </list>
 /// Fortschritt geht an das optionale IProgress und gedrosselt als ScanProgressMessage an den Messenger. Am Ende
 /// ScanCompletedMessage (Completed, MassMissingBlocked) bzw. ScanAbortedMessage (LibraryOffline, Abbruch, Fehler);
 /// der Incremental-Scan sendet zusätzlich FilesChangedMessages (Added/Metadata/Removed) für Galerie und Ordnerbaum.
-/// Ein nicht erreichbarer Root führt in allen Modi zu <see cref="ScanOutcome.LibraryOffline"/> ohne Katalogänderung.
 /// </summary>
 public sealed class ScanService : IScanService
 {
@@ -144,30 +150,80 @@ public sealed class ScanService : IScanService
     private async Task<ScanResult> RunIncrementalScanAsync(int libraryId, ScanOptions options, ScanProgressReporter reporter, CancellationToken ct)
     {
         var sw = Stopwatch.StartNew();
-        var rootPath = await LoadRootPathAsync(libraryId, ct).ConfigureAwait(false);
+        var roots = await LoadRootsAsync(libraryId, ct).ConfigureAwait(false);
+        var runner = new IncrementalScanRunner(_contextFactory, _enumerator, _bulkWriter, _logger);
 
-        // Vorbedingung: Root erreichbar (Timeout lokal 1 s, UNC 3 s) — sonst keine Katalogänderung
-        if (!await RootAvailabilityProbe.IsAvailableAsync(rootPath, ct).ConfigureAwait(false))
+        var outcomes = new List<(ScanRoot Root, IncrementalScanRunner.Outcome Outcome)>();
+        string? offlineRoot = null;
+        foreach (var root in roots)
         {
-            _logger.LogWarning("Incremental-Scan nicht gestartet, Bibliothek offline: {Root}", rootPath);
-            return OfflineResult(libraryId, rootPath, ScanMode.Incremental, sw.Elapsed);
+            ct.ThrowIfCancellationRequested();
+
+            // Vorbedingung je Wurzel: erreichbar (Timeout lokal 1 s, UNC 3 s) — sonst keine Katalogänderung für sie
+            if (!await RootAvailabilityProbe.IsAvailableAsync(root.Path, ct).ConfigureAwait(false))
+            {
+                _logger.LogWarning("Incremental-Scan für Wurzel übersprungen, offline: {Root}", root.Path);
+                offlineRoot ??= root.Path;
+                continue;
+            }
+
+            // Start-Ids vor jeder Wurzel neu lesen: die vorige Wurzel hat bereits Zeilen geschrieben.
+            var (nextFolderId, nextFileId) = ReadNextIds();
+            var outcome = await runner.RunAsync(libraryId, root.Id, root.Path, options, nextFolderId, nextFileId, reporter, ct).ConfigureAwait(false);
+            outcomes.Add((root, outcome));
+            if (outcome.Result.Outcome == ScanOutcome.LibraryOffline)
+            {
+                offlineRoot ??= root.Path;
+            }
         }
 
-        var (nextFolderId, nextFileId) = ReadNextIds();
-        var runner = new IncrementalScanRunner(_contextFactory, _enumerator, _bulkWriter, _logger);
-        var outcome = await runner.RunAsync(libraryId, rootPath, options, nextFolderId, nextFileId, reporter, ct).ConfigureAwait(false);
-        var result = outcome.Result;
+        var result = Aggregate(libraryId, roots, outcomes.Select(o => o.Outcome.Result).ToList(), offlineRoot, sw.Elapsed);
 
         _logger.LogInformation(
-            "Incremental-Scan fertig ({Outcome}): {Added} neu, {Modified} geändert, {Missing} fehlend markiert ({Detected} erkannt), {Reappeared} wieder da, {Folders} neue Ordner, {Fts} FTS-Zeilen in {Sec:N2} s",
-            result.Outcome, result.Added, result.Modified, result.MarkedMissing, result.MissingDetected, result.Reappeared, result.FoldersAdded, result.FtsRowsInserted, result.TotalDuration.TotalSeconds);
+            "Incremental-Scan fertig ({Outcome}, {Roots} Wurzeln): {Added} neu, {Modified} geändert, {Missing} fehlend markiert ({Detected} erkannt), {Reappeared} wieder da, {Folders} neue Ordner, {Fts} FTS-Zeilen in {Sec:N2} s",
+            result.Outcome, roots.Count, result.Added, result.Modified, result.MarkedMissing, result.MissingDetected, result.Reappeared, result.FoldersAdded, result.FtsRowsInserted, result.TotalDuration.TotalSeconds);
 
         // Galerie, Ordnerbaum und Lightbox nachziehen — nur für tatsächlich geschriebene Zeilen
-        SendFilesChanged(libraryId, FilesChangeKind.Added, outcome.AddedIds);
-        SendFilesChanged(libraryId, FilesChangeKind.Metadata, outcome.ModifiedIds);
-        SendFilesChanged(libraryId, FilesChangeKind.Removed, outcome.RemovedIds);
+        SendFilesChanged(libraryId, FilesChangeKind.Added, outcomes.SelectMany(o => o.Outcome.AddedIds).ToList());
+        SendFilesChanged(libraryId, FilesChangeKind.Metadata, outcomes.SelectMany(o => o.Outcome.ModifiedIds).ToList());
+        SendFilesChanged(libraryId, FilesChangeKind.Removed, outcomes.SelectMany(o => o.Outcome.RemovedIds).ToList());
 
         return result;
+    }
+
+    /// <summary>
+    /// Fasst die Ergebnisse je Wurzel zusammen. Outcome: MassMissingBlocked, sobald eine Wurzel die Rückfrage
+    /// braucht (die Wiederholung mit ConfirmMassMissing läuft wieder über alle Wurzeln); sonst LibraryOffline,
+    /// wenn eine Wurzel nicht erreichbar war (RootPath = diese Wurzel); sonst Completed.
+    /// </summary>
+    private static ScanResult Aggregate(int libraryId, IReadOnlyList<ScanRoot> roots, IReadOnlyList<ScanResult> parts, string? offlineRoot, TimeSpan elapsed)
+    {
+        var outcome = parts.Any(p => p.Outcome == ScanOutcome.MassMissingBlocked)
+            ? ScanOutcome.MassMissingBlocked
+            : offlineRoot is not null ? ScanOutcome.LibraryOffline : ScanOutcome.Completed;
+
+        return new ScanResult(
+            LibraryId: libraryId,
+            RootPath: offlineRoot ?? ArchivePath(roots),
+            FoldersInserted: parts.Sum(p => p.FoldersInserted),
+            FilesInserted: parts.Sum(p => p.FilesInserted),
+            FtsRowsInserted: parts.Sum(p => p.FtsRowsInserted),
+            TotalBytes: parts.Sum(p => p.TotalBytes),
+            TotalDuration: elapsed,
+            EnumerationDuration: TimeSpan.FromTicks(parts.Sum(p => p.EnumerationDuration.Ticks)),
+            PersistenceDuration: TimeSpan.FromTicks(parts.Sum(p => p.PersistenceDuration.Ticks)),
+            FtsDuration: TimeSpan.FromTicks(parts.Sum(p => p.FtsDuration.Ticks)))
+        {
+            Mode = ScanMode.Incremental,
+            Outcome = outcome,
+            Added = parts.Sum(p => p.Added),
+            FoldersAdded = parts.Sum(p => p.FoldersAdded),
+            Modified = parts.Sum(p => p.Modified),
+            Reappeared = parts.Sum(p => p.Reappeared),
+            MarkedMissing = parts.Sum(p => p.MarkedMissing),
+            MissingDetected = parts.Sum(p => p.MissingDetected),
+            RootsScanned = parts.Count,
+        };
     }
 
     private void SendFilesChanged(int libraryId, FilesChangeKind kind, IReadOnlyList<int> fileIds)
@@ -193,14 +249,17 @@ public sealed class ScanService : IScanService
     {
         var totalSw = Stopwatch.StartNew();
 
-        // 1) Library laden, RootPath holen
-        var rootPath = await LoadRootPathAsync(libraryId, ct).ConfigureAwait(false);
+        // 1) Wurzeln laden
+        var roots = await LoadRootsAsync(libraryId, ct).ConfigureAwait(false);
 
-        // 2) Root erreichbar? — VOR dem Leeren prüfen, damit ein Offline-Laufwerk nie den Katalog löscht (PLAN Kap. 12)
-        if (!await RootAvailabilityProbe.IsAvailableAsync(rootPath, ct).ConfigureAwait(false))
+        // 2) Alle Wurzeln erreichbar? — VOR dem Leeren prüfen, damit ein Offline-Laufwerk nie den Katalog löscht (PLAN Kap. 12)
+        foreach (var root in roots)
         {
-            _logger.LogWarning("Scan nicht gestartet, Bibliothek offline: {Root} (Mode={Mode})", rootPath, mode);
-            return OfflineResult(libraryId, rootPath, mode, totalSw.Elapsed);
+            if (!await RootAvailabilityProbe.IsAvailableAsync(root.Path, ct).ConfigureAwait(false))
+            {
+                _logger.LogWarning("Scan nicht gestartet, Wurzel offline: {Root} (Mode={Mode})", root.Path, mode);
+                return OfflineResult(libraryId, root.Path, mode, totalSw.Elapsed);
+            }
         }
 
         // 3) ClearAndRescan: bestehende Katalogdaten dieser Library löschen (FileIds werden neu vergeben)
@@ -218,73 +277,78 @@ public sealed class ScanService : IScanService
         var (nextFolderId, nextFileId) = ReadNextIds();
 
         _logger.LogInformation(
-            "Scan startet: Library={LibraryId} Root={Root} Mode={Mode} StartIds Folder={FolderId} File={FileId}",
-            libraryId, rootPath, mode, nextFolderId, nextFileId);
+            "Scan startet: Library={LibraryId} Wurzeln={Roots} Mode={Mode} StartIds Folder={FolderId} File={FileId}",
+            libraryId, string.Join(" | ", roots.Select(r => $"{r.Role}:{r.Path}")), mode, nextFolderId, nextFileId);
 
-        // 6) Enumeration + In-Memory-Aggregation
+        // 6) Enumeration + In-Memory-Aggregation je Wurzel
         var enumSw = Stopwatch.StartNew();
         var folderMap = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var folderRows = new List<BulkScanWriter.FolderRow>();
         var fileRows = new List<BulkScanWriter.FileRow>();
         long totalBytes = 0;
         var scannedAtUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var rootKey = TrimSeparators(rootPath);
 
-        // Legt den Ordner und alle fehlenden Zwischenordner bis zum Root an, damit die ParentId-Kette
-        // vollständig ist (Ordnerbaum + Container-Kacheln brauchen auch Ordner ohne direkte Medien).
-        int GetOrCreateFolderId(string folderPath)
+        foreach (var root in roots)
         {
-            var isRoot = string.Equals(TrimSeparators(folderPath), rootKey, StringComparison.OrdinalIgnoreCase);
-            if (isRoot)
-            {
-                folderPath = rootPath; // kanonische Schreibweise des Roots
-            }
+            var rootPath = root.Path;
+            var rootKey = TrimSeparators(rootPath);
 
-            if (folderMap.TryGetValue(folderPath, out var existingId))
+            // Legt den Ordner und alle fehlenden Zwischenordner bis zur Wurzel an, damit die ParentId-Kette
+            // vollständig ist (Ordnerbaum + Container-Kacheln brauchen auch Ordner ohne direkte Medien).
+            int GetOrCreateFolderId(string folderPath)
             {
-                return existingId;
-            }
-
-            int? parentId = null;
-            if (!isRoot)
-            {
-                var parentPath = Path.GetDirectoryName(folderPath);
-                if (!string.IsNullOrEmpty(parentPath) && TrimSeparators(parentPath).Length >= rootKey.Length)
+                var isRoot = string.Equals(TrimSeparators(folderPath), rootKey, StringComparison.OrdinalIgnoreCase);
+                if (isRoot)
                 {
-                    parentId = GetOrCreateFolderId(parentPath);
+                    folderPath = rootPath; // kanonische Schreibweise der Wurzel
                 }
+
+                if (folderMap.TryGetValue(folderPath, out var existingId))
+                {
+                    return existingId;
+                }
+
+                int? parentId = null;
+                if (!isRoot)
+                {
+                    var parentPath = Path.GetDirectoryName(folderPath);
+                    if (!string.IsNullOrEmpty(parentPath) && TrimSeparators(parentPath).Length >= rootKey.Length)
+                    {
+                        parentId = GetOrCreateFolderId(parentPath);
+                    }
+                }
+
+                var id = nextFolderId++;
+                folderMap[folderPath] = id;
+                folderRows.Add(new BulkScanWriter.FolderRow(id, libraryId, folderPath, parentId, FolderDisplayName(folderPath), scannedAtUnix, root.Id));
+                return id;
             }
 
-            var id = nextFolderId++;
-            folderMap[folderPath] = id;
-            folderRows.Add(new BulkScanWriter.FolderRow(id, libraryId, folderPath, parentId, FolderDisplayName(folderPath), scannedAtUnix));
-            return id;
-        }
+            foreach (var df in _enumerator.Enumerate(rootPath, ct))
+            {
+                var folderId = GetOrCreateFolderId(df.FolderPath);
 
-        foreach (var df in _enumerator.Enumerate(rootPath, ct))
-        {
-            var folderId = GetOrCreateFolderId(df.FolderPath);
+                fileRows.Add(new BulkScanWriter.FileRow(
+                    Id: nextFileId++,
+                    LibraryId: libraryId,
+                    FolderId: folderId,
+                    Name: df.Name,
+                    Extension: df.Extension,
+                    Size: df.Size,
+                    CreatedAtUnix: ToUnix(df.CreatedAtUtc),
+                    ModifiedAtUnix: ToUnix(df.ModifiedAtUtc),
+                    MediaType: (int)df.MediaType,
+                    Width: null,
+                    Height: null,
+                    DurationMs: null,
+                    Codec: null,
+                    IsFavorite: false,
+                    Rating: null,
+                    Missing: false));
 
-            fileRows.Add(new BulkScanWriter.FileRow(
-                Id: nextFileId++,
-                LibraryId: libraryId,
-                FolderId: folderId,
-                Name: df.Name,
-                Extension: df.Extension,
-                Size: df.Size,
-                CreatedAtUnix: ToUnix(df.CreatedAtUtc),
-                ModifiedAtUnix: ToUnix(df.ModifiedAtUtc),
-                MediaType: (int)df.MediaType,
-                Width: null,
-                Height: null,
-                DurationMs: null,
-                Codec: null,
-                IsFavorite: false,
-                Rating: null,
-                Missing: false));
-
-            totalBytes += df.Size;
-            reporter.Report(new ScanProgress(folderRows.Count, fileRows.Count, totalBytes, df.FolderPath));
+                totalBytes += df.Size;
+                reporter.Report(new ScanProgress(folderRows.Count, fileRows.Count, totalBytes, df.FolderPath));
+            }
         }
 
         enumSw.Stop();
@@ -295,8 +359,8 @@ public sealed class ScanService : IScanService
         if (fileRows.Count == 0)
         {
             _logger.LogWarning(
-                "Keine Mediendateien unter {Root} gefunden — Ordner leer, nur nicht unterstützte Formate oder fehlende Leserechte.",
-                rootPath);
+                "Keine Mediendateien unter den Wurzeln der Bibliothek {LibraryId} gefunden — Ordner leer, nur nicht unterstützte Formate oder fehlende Leserechte.",
+                libraryId);
         }
 
         // Abbruch vor der Persistenz: nichts schreiben
@@ -356,7 +420,7 @@ public sealed class ScanService : IScanService
 
         return new ScanResult(
             LibraryId: libraryId,
-            RootPath: rootPath,
+            RootPath: ArchivePath(roots),
             FoldersInserted: folderReport.Inserted,
             FilesInserted: fileReport.Inserted,
             FtsRowsInserted: (int)ftsReport.RowsInserted,
@@ -367,6 +431,7 @@ public sealed class ScanService : IScanService
             FtsDuration: ftsReport.Duration)
         {
             Mode = mode,
+            RootsScanned = roots.Count,
         };
     }
 
@@ -379,15 +444,30 @@ public sealed class ScanService : IScanService
             Outcome = ScanOutcome.LibraryOffline,
         };
 
-    private async Task<string> LoadRootPathAsync(int libraryId, CancellationToken ct)
+    private static string ArchivePath(IReadOnlyList<ScanRoot> roots) =>
+        (roots.FirstOrDefault(r => r.Role == LibraryRootRole.Archive) ?? roots[0]).Path;
+
+    /// <summary>Wurzeln der Library: Archiv zuerst, dann Eingänge nach SortOrder (ADR-0020).</summary>
+    private async Task<IReadOnlyList<ScanRoot>> LoadRootsAsync(int libraryId, CancellationToken ct)
     {
         await using var ctx = _contextFactory.Create();
-        var rootPath = await ctx.Libraries.AsNoTracking()
-            .Where(l => l.Id == libraryId)
-            .Select(l => l.RootPath)
-            .FirstOrDefaultAsync(ct)
+        var roots = await ctx.LibraryRoots.AsNoTracking()
+            .Where(r => r.LibraryId == libraryId)
+            .OrderBy(r => r.Role == LibraryRootRole.Archive ? 0 : 1)
+            .ThenBy(r => r.SortOrder)
+            .ThenBy(r => r.Id)
+            .Select(r => new ScanRoot(r.Id, r.Path, r.Role))
+            .ToListAsync(ct)
             .ConfigureAwait(false);
-        return rootPath ?? throw new InvalidOperationException($"Library Id={libraryId} nicht gefunden.");
+        if (roots.Count > 0)
+        {
+            return roots;
+        }
+
+        var exists = await ctx.Libraries.AnyAsync(l => l.Id == libraryId, ct).ConfigureAwait(false);
+        throw new InvalidOperationException(exists
+            ? $"Library Id={libraryId} hat keine Wurzel."
+            : $"Library Id={libraryId} nicht gefunden.");
     }
 
     private async Task EnsureLibraryIsEmptyAsync(int libraryId, CancellationToken ct)

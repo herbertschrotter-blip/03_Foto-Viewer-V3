@@ -9,6 +9,7 @@ using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
+using PhotoViewerV3.Domain.Enums;
 using PhotoViewerV3.Services.Library;
 using PhotoViewerV3.Services.Scanning;
 using PhotoViewerV3.Shell;
@@ -70,7 +71,9 @@ public sealed partial class LibraryViewModel : ObservableObject
     // ---- Scan-Panel ----
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsScanPanelVisible))]
-    [NotifyCanExecuteChangedFor(nameof(ScanCommand), nameof(RebuildCommand), nameof(RemoveCommand), nameof(CreateLibraryCommand), nameof(SetActiveCommand), nameof(RenameCommand), nameof(CancelScanCommand))]
+    [NotifyCanExecuteChangedFor(
+        nameof(ScanCommand), nameof(RebuildCommand), nameof(RemoveCommand), nameof(CreateLibraryCommand), nameof(SetActiveCommand), nameof(RenameCommand), nameof(CancelScanCommand),
+        nameof(AddInboxRootCommand), nameof(MakeArchiveRootCommand), nameof(RenameRootCommand), nameof(RemoveRootCommand))]
     private bool _isScanning;
 
     [ObservableProperty]
@@ -332,6 +335,140 @@ public sealed partial class LibraryViewModel : ObservableObject
         {
             ErrorMessage = $"Bibliothek konnte nicht entfernt werden: {ex.Message}";
             _logger.LogError(ex, "Delete fehlgeschlagen: {Id}", item.Id);
+        }
+    }
+
+    // ---- Wurzeln (ADR-0020) ----
+
+    private bool CanModifyRoot(LibraryRootListItem? root) => !IsScanning;
+
+    /// <summary>Eingangs-Wurzel per Ordnerdialog hinzufügen; danach Angebot, die Bibliothek zu aktualisieren (Scan über alle Wurzeln).</summary>
+    [RelayCommand(CanExecute = nameof(CanModifyItem))]
+    private async Task AddInboxRootAsync(LibraryListItem? item)
+    {
+        if (item is null)
+        {
+            return;
+        }
+
+        var folder = _dialogs.PickFolder($"Eingangs-Ordner für „{item.Name}“ wählen");
+        if (folder is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _libraries.AddRootAsync(item.Id, folder, LibraryRootRole.Inbox).ConfigureAwait(true);
+            ErrorMessage = null;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Eingang konnte nicht hinzugefügt werden: {ex.Message}";
+            _logger.LogError(ex, "AddRoot fehlgeschlagen: {Folder}", folder);
+            return;
+        }
+
+        await LoadAsync().ConfigureAwait(true);
+
+        var scanNow = await _dialogs.ConfirmAsync(
+            "Eingang hinzugefügt",
+            $"„{folder}“ ist jetzt ein Eingangs-Ordner von „{item.Name}“. Soll die Bibliothek jetzt aktualisiert werden, damit die Dateien im Katalog erscheinen?",
+            "Jetzt aktualisieren",
+            cancelText: "Später").ConfigureAwait(true);
+        if (scanNow && Libraries.FirstOrDefault(l => l.Id == item.Id) is { } refreshed)
+        {
+            await StartScanAsync(refreshed, refreshed.IsEmpty ? ScanMode.Fresh : ScanMode.Incremental).ConfigureAwait(true);
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanModifyRoot))]
+    private async Task MakeArchiveRootAsync(LibraryRootListItem? root)
+    {
+        if (root is null || root.IsArchive)
+        {
+            return;
+        }
+
+        var ok = await _dialogs.ConfirmAsync(
+            "Archiv-Wurzel wechseln?",
+            $"„{root.Path}“ wird die Archiv-Wurzel von „{root.Library.Name}“; der bisherige Archiv-Ordner „{root.Library.RootPath}“ wird zum Eingang. " +
+            "Dateien werden nicht verschoben — nur die Rollen ändern sich (Filter „Nicht archiviert“/„Archiviert“ und Ziel von „Ins Archiv…“).",
+            "Zum Archiv machen").ConfigureAwait(true);
+        if (!ok)
+        {
+            return;
+        }
+
+        try
+        {
+            await _libraries.SetRootRoleAsync(root.Id, LibraryRootRole.Archive).ConfigureAwait(true);
+            ErrorMessage = null;
+            await LoadAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Rolle konnte nicht geändert werden: {ex.Message}";
+            _logger.LogError(ex, "SetRootRole fehlgeschlagen: {RootId}", root.Id);
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanModifyRoot))]
+    private async Task RenameRootAsync(LibraryRootListItem? root)
+    {
+        if (root is null)
+        {
+            return;
+        }
+
+        var newName = await _dialogs.PromptTextAsync("Wurzel umbenennen", $"Anzeigename für „{root.Path}“:", root.Name, "Umbenennen").ConfigureAwait(true);
+        if (string.IsNullOrWhiteSpace(newName) || newName.Trim() == root.Name)
+        {
+            return;
+        }
+
+        try
+        {
+            await _libraries.RenameRootAsync(root.Id, newName).ConfigureAwait(true);
+            ErrorMessage = null;
+            await LoadAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Wurzel konnte nicht umbenannt werden: {ex.Message}";
+            _logger.LogError(ex, "RenameRoot fehlgeschlagen: {RootId}", root.Id);
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanModifyRoot))]
+    private async Task RemoveRootAsync(LibraryRootListItem? root)
+    {
+        if (root is null || !root.CanRemove)
+        {
+            return;
+        }
+
+        var ok = await _dialogs.ConfirmAsync(
+            "Eingang aus dem Katalog entfernen?",
+            $"„{root.Path}“ wird mit seinen Katalogdaten (Ordner, Dateien, Vorschaubilder, Favoriten, Bewertungen) aus der Bibliothek entfernt — " +
+            "nur aus dem Katalog.\n\nDie Fotos und Videos auf der Festplatte bleiben unverändert — es werden keine Dateien gelöscht.",
+            "Entfernen",
+            isDestructive: true).ConfigureAwait(true);
+        if (!ok)
+        {
+            return;
+        }
+
+        try
+        {
+            await _libraries.RemoveRootAsync(root.Id).ConfigureAwait(true);
+            ErrorMessage = null;
+            await LoadAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Eingang konnte nicht entfernt werden: {ex.Message}";
+            _logger.LogError(ex, "RemoveRoot fehlgeschlagen: {RootId}", root.Id);
         }
     }
 

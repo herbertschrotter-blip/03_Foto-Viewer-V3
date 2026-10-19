@@ -16,6 +16,7 @@ public sealed class LibraryContext : DbContext
     }
 
     public DbSet<Library> Libraries => Set<Library>();
+    public DbSet<LibraryRoot> LibraryRoots => Set<LibraryRoot>();
     public DbSet<Folder> Folders => Set<Folder>();
     public DbSet<MediaFile> Files => Set<MediaFile>();
     public DbSet<Thumbnail> Thumbnails => Set<Thumbnail>();

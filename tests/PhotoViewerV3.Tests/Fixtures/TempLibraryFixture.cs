@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using PhotoViewerV3.Data;
 using PhotoViewerV3.Data.RawSql;
 using PhotoViewerV3.Domain.Entities;
+using PhotoViewerV3.Domain.Enums;
 using PhotoViewerV3.Services.Catalog;
 using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Library;
@@ -25,8 +26,10 @@ public sealed class TempLibraryFixture : IDisposable
     {
         RootDir = Path.Combine(Path.GetTempPath(), "PhotoViewerV3.Tests", Guid.NewGuid().ToString("N"));
         LibraryRoot = Path.Combine(RootDir, "library");
+        InboxDir = Path.Combine(RootDir, "inbox");
         OutsideDir = Path.Combine(RootDir, "outside");
         Directory.CreateDirectory(LibraryRoot);
+        Directory.CreateDirectory(InboxDir);
         Directory.CreateDirectory(OutsideDir);
 
         Paths = new TestAppDataPaths(Path.Combine(RootDir, "appdata"));
@@ -37,7 +40,11 @@ public sealed class TempLibraryFixture : IDisposable
 
     public string RootDir { get; }
 
+    /// <summary>Archiv-Wurzel der Test-Library (ADR-0020); entspricht Libraries.RootPath.</summary>
     public string LibraryRoot { get; }
+
+    /// <summary>Zweiter Ordner neben der Archiv-Wurzel — per <see cref="AddInboxRootAsync"/> als Eingangs-Wurzel nutzbar.</summary>
+    public string InboxDir { get; }
 
     public string OutsideDir { get; }
 
@@ -61,6 +68,7 @@ public sealed class TempLibraryFixture : IDisposable
 
     public LibraryContext CreateContext() => ContextFactory.Create();
 
+    /// <summary>Library mit <see cref="LibraryRoot"/> als Archiv-Wurzel (wie <see cref="LibraryService.CreateAsync"/>, ADR-0020).</summary>
     public async Task<Library> CreateLibraryAsync(string name = "Test")
     {
         await using var ctx = CreateContext();
@@ -73,12 +81,45 @@ public sealed class TempLibraryFixture : IDisposable
         };
         ctx.Libraries.Add(library);
         await ctx.SaveChangesAsync();
+        ctx.LibraryRoots.Add(new LibraryRoot
+        {
+            LibraryId = library.Id,
+            Path = LibraryRoot,
+            Role = LibraryRootRole.Archive,
+            Name = "library",
+            SortOrder = 0,
+        });
+        await ctx.SaveChangesAsync();
         return library;
     }
+
+    /// <summary>Fügt <see cref="InboxDir"/> (oder einen anderen Ordner) als Eingangs-Wurzel hinzu.</summary>
+    public async Task<LibraryRoot> AddInboxRootAsync(int libraryId, string? path = null)
+    {
+        await using var ctx = CreateContext();
+        var root = new LibraryRoot
+        {
+            LibraryId = libraryId,
+            Path = path ?? InboxDir,
+            Role = LibraryRootRole.Inbox,
+            Name = Path.GetFileName(path ?? InboxDir),
+            SortOrder = await ctx.LibraryRoots.CountAsync(r => r.LibraryId == libraryId),
+        };
+        ctx.LibraryRoots.Add(root);
+        await ctx.SaveChangesAsync();
+        return root;
+    }
+
+    public LibraryService CreateLibraryService()
+        => new(ContextFactory, Paths, NullLogger<LibraryService>.Instance, Messenger);
 
     /// <summary>Legt eine Datei unterhalb der Library-Root an (Dummy-Bytes mit JPEG-Signatur).</summary>
     public string WriteLibraryFile(string relativePath, int size = 2048)
         => WriteFile(Path.Combine(LibraryRoot, relativePath), size);
+
+    /// <summary>Legt eine Datei unterhalb des Eingangs-Ordners an.</summary>
+    public string WriteInboxFile(string relativePath, int size = 2048)
+        => WriteFile(Path.Combine(InboxDir, relativePath), size);
 
     public static string WriteFile(string fullPath, int size = 2048)
     {
@@ -99,16 +140,17 @@ public sealed class TempLibraryFixture : IDisposable
 
     /// <summary>Fresh-Scan der Library über den echten ScanService (Enumerator + BulkWriter + FTS).</summary>
     public Task<ScanResult> ScanAsync(int libraryId)
-    {
-        var scanner = new ScanService(
-            ContextFactory,
-            new FolderEnumerator(Formats, NullLogger<FolderEnumerator>.Instance),
-            new BulkScanWriter(),
-            new FtsIndexer(),
-            new LibraryService(ContextFactory, Paths, NullLogger<LibraryService>.Instance),
-            NullLogger<ScanService>.Instance);
-        return scanner.ScanAsync(libraryId, ScanMode.Fresh, null, CancellationToken.None);
-    }
+        => CreateScanService().ScanAsync(libraryId, ScanMode.Fresh, null, CancellationToken.None);
+
+    /// <summary>ScanService mit dem Messenger der Fixture (Enumerator + BulkWriter + FTS + LibraryService).</summary>
+    public ScanService CreateScanService() => new(
+        ContextFactory,
+        new FolderEnumerator(Formats, NullLogger<FolderEnumerator>.Instance),
+        new BulkScanWriter(),
+        new FtsIndexer(),
+        CreateLibraryService(),
+        NullLogger<ScanService>.Instance,
+        Messenger);
 
     public FileOperationService CreateFileOperationService(IRecycleBin? recycleBin = null)
         => new(ContextFactory, Paths, recycleBin ?? new FakeRecycleBin(), Formats, NullLogger<FileOperationService>.Instance, Messenger);
@@ -132,6 +174,18 @@ public sealed class TempLibraryFixture : IDisposable
     {
         await using var ctx = CreateContext();
         return await ctx.Folders.AsNoTracking().FirstOrDefaultAsync(f => f.Path == fullPath);
+    }
+
+    public async Task<Folder?> FindFolderByIdAsync(int id)
+    {
+        await using var ctx = CreateContext();
+        return await ctx.Folders.AsNoTracking().FirstOrDefaultAsync(f => f.Id == id);
+    }
+
+    public async Task<List<LibraryRoot>> GetRootsAsync(int libraryId)
+    {
+        await using var ctx = CreateContext();
+        return await ctx.LibraryRoots.AsNoTracking().Where(r => r.LibraryId == libraryId).OrderBy(r => r.Id).ToListAsync();
     }
 
     public async Task<OperationBatch?> GetBatchAsync(int batchId)

@@ -12,16 +12,17 @@ using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using PhotoViewerV3.Folders;
+using PhotoViewerV3.Domain.Enums;
 using PhotoViewerV3.Gallery.Controls;
 using PhotoViewerV3.Libraries;
 using PhotoViewerV3.Lightbox;
-using PhotoViewerV3.Domain.Enums;
 using PhotoViewerV3.Services.Archive;
 using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Infrastructure;
 using PhotoViewerV3.Services.Library;
 using PhotoViewerV3.Services.Media;
 using PhotoViewerV3.Services.Messaging;
+using PhotoViewerV3.Services.Operations;
 using PhotoViewerV3.Services.Scanning;
 using PhotoViewerV3.Services.Thumbnails;
 using PhotoViewerV3.Services.Watch;
@@ -87,6 +88,8 @@ internal sealed class SmokeScenario
     private readonly IThumbnailService _thumbnails;
     private readonly StatusBarViewModel _statusBar;
     private readonly SmokeFolderPickerService _picker;
+    private readonly SmokeArchiveTargetPicker _archivePicker;
+    private readonly IFileOperationService _fileOps;
     private readonly IAppDataPaths _paths;
     private readonly ILibraryWatchService _watch;
 
@@ -122,6 +125,8 @@ internal sealed class SmokeScenario
         _thumbnails = services.GetRequiredService<IThumbnailService>();
         _statusBar = services.GetRequiredService<StatusBarViewModel>();
         _picker = services.GetRequiredService<SmokeFolderPickerService>();
+        _archivePicker = services.GetRequiredService<SmokeArchiveTargetPicker>();
+        _fileOps = services.GetRequiredService<IFileOperationService>();
         _paths = services.GetRequiredService<IAppDataPaths>();
         _watch = services.GetRequiredService<ILibraryWatchService>();
         _archives = services.GetRequiredService<IArchiveService>();
@@ -134,6 +139,9 @@ internal sealed class SmokeScenario
 
     /// <summary>Ablage für die im Incremental-Schritt vorübergehend geparkte Datei — im isolierten AppData, nie neben der Bibliothek.</summary>
     private string ParkingDir => Path.Combine(_paths.AppDataRoot, "smoke-geparkt");
+
+    /// <summary>Eingangs-Ordner für den Schritt „Eingang → Archiv“ — Geschwisterordner der Testbibliothek (nie darunter: er wäre sonst Teil der Archiv-Wurzel).</summary>
+    private string InboxDir => Path.Combine(Path.GetDirectoryName(_root) ?? _root, Path.GetFileName(_root) + "-Eingang");
 
     public async Task RunAsync()
     {
@@ -173,6 +181,7 @@ internal sealed class SmokeScenario
         await StepAsync("Einstellungen + Theme", SettingsAsync).ConfigureAwait(true);
         await StepAsync("Aktualisieren (Incremental) + Neu aufbauen (ClearAndRescan)", RescanAsync).ConfigureAwait(true);
         await StepAsync("Archiv: ZIP → Kachel → Inhaltsansicht → Entpacken → Katalog", ArchiveAsync).ConfigureAwait(true);
+        await StepAsync("Eingang → Archiv (zweite Wurzel, Status-Filter, Ins Archiv, Rückgängig, Ordner anlegen/umbenennen)", InboxArchiveAsync).ConfigureAwait(true);
         await StepAsync("Ordnerüberwachung: Datei kopieren → automatischer Diff-Scan → Galerie", WatchAsync).ConfigureAwait(true);
         if (_cleanup)
         {
@@ -212,6 +221,157 @@ internal sealed class SmokeScenario
 
             Directory.Delete(ParkingDir);
         }
+
+        if (Directory.Exists(InboxDir))
+        {
+            Directory.Delete(InboxDir, recursive: true);
+            _logger.LogInformation("Rauchtest   Eingangs-Ordner eines früheren Laufs entfernt: {Path}", InboxDir);
+        }
+
+        // Ordner, die der Schritt „Eingang → Archiv“ in der Archiv-Wurzel anlegt (nach Rückgängig leer)
+        var smokeYear = Path.Combine(_root, "2026");
+        foreach (var name in new[] { "Smoke-Archiv", "Smoke-Neu", "Smoke-Umbenannt" })
+        {
+            var dir = Path.Combine(smokeYear, name);
+            if (Directory.Exists(dir) && !Directory.EnumerateFileSystemEntries(dir).Any())
+            {
+                Directory.Delete(dir);
+                _logger.LogInformation("Rauchtest   Ordner eines früheren Laufs entfernt: {Path}", dir);
+            }
+        }
+
+        if (Directory.Exists(smokeYear) && !Directory.EnumerateFileSystemEntries(smokeYear).Any())
+        {
+            Directory.Delete(smokeYear);
+        }
+    }
+
+    /// <summary>
+    /// ADR-0020: Geschwisterordner als Eingangs-Wurzel aufnehmen, Incremental-Scan über beide Wurzeln (Added = 2,
+    /// RootsScanned = 2), Filter „Nicht archiviert“ (2, Badge „Eingang“), „Ins Archiv…“ mit Fake-Zieldialog nach
+    /// <c>2026\Smoke-Archiv</c> (Dateien + Files.FolderId unter der Archiv-Wurzel, Ansicht bleibt beim Filter und ist
+    /// leer, Setting archive.lastTarget), Filter „Archiviert“ = alle, Rückgängig (zurück in den Eingang), Ordner
+    /// anlegen + umbenennen (MkDir/RenameFolder-Batches), Eingangs-Wurzel entfernen (nur Katalog).
+    /// </summary>
+    private async Task InboxArchiveAsync()
+    {
+        var inbox = InboxDir;
+        Directory.CreateDirectory(inbox);
+        var unsorted = Path.Combine(_root, "Unsortiert");
+        var sources = Directory.EnumerateFiles(unsorted, "*.jpg").OrderBy(f => f, StringComparer.OrdinalIgnoreCase).Take(2).ToList();
+        Check(sources.Count == 2, "2 JPGs aus „Unsortiert“ als Eingangs-Material kopiert");
+        var inboxFiles = new List<string>();
+        foreach (var source in sources)
+        {
+            var copy = Path.Combine(inbox, "eingang-" + Path.GetFileName(source));
+            File.Copy(source, copy, overwrite: true);
+            inboxFiles.Add(copy);
+        }
+
+        // (1) Eingangs-Wurzel hinzufügen
+        var inboxRoot = await _libraries.AddRootAsync(_libraryId, inbox, LibraryRootRole.Inbox).ConfigureAwait(true);
+        var info = await _libraries.GetAsync(_libraryId).ConfigureAwait(true);
+        Check(info is not null && info.Roots.Count == 2 && info.ArchiveRoot is { } && PathEquals(info.ArchiveRoot.Path, _root) && inboxRoot.IsInbox,
+            $"Bibliothek hat 2 Wurzeln: Archiv „{info?.ArchiveRoot?.Path}“ + Eingang „{inboxRoot.Path}“");
+        var dupe = await CatchAsync(() => _libraries.AddRootAsync(_libraryId, Path.Combine(_root, "2024"), LibraryRootRole.Inbox)).ConfigureAwait(true);
+        Check(dupe is InvalidOperationException, "Ordner innerhalb der Archiv-Wurzel wird als Eingang abgelehnt");
+
+        // (2) Incremental-Scan über beide Wurzeln
+        _navigation.NavigateTo(NavigationTags.Library);
+        await WaitUntilAsync(() => _navigation.CurrentTag == NavigationTags.Library, ShortWait, "Bibliotheksseite").ConfigureAwait(true);
+        _lastScan = null;
+        await _library.RunSmokeScanAsync(_root).ConfigureAwait(true);
+        Check(_library.ErrorMessage is null && !_library.ScanSummaryIsWarning, $"Aktualisieren mit Eingang: {_library.ScanSummary}");
+        Check(_lastScan is { Mode: ScanMode.Incremental, Outcome: ScanOutcome.Completed, Added: 2, RootsScanned: 2 },
+            $"Incremental über 2 Wurzeln: Added={_lastScan?.Added}, RootsScanned={_lastScan?.RootsScanned}");
+        _mediaCount += 2;
+        await WaitUntilAsync(
+            () => _navigation.CurrentTag == NavigationTags.Gallery && !_gallery.IsLoading && _gallery.TotalCount == _mediaCount,
+            ShortWait,
+            $"Galerie zeigt {_mediaCount} Dateien inkl. Eingang").ConfigureAwait(true);
+        var inboxRootId = await DbScalarAsync<int>("SELECT Id FROM LibraryRoots WHERE LibraryId = $lib AND Role = 0", ("$lib", _libraryId)).ConfigureAwait(true);
+        var archiveRootId = await DbScalarAsync<int>("SELECT Id FROM LibraryRoots WHERE LibraryId = $lib AND Role = 1", ("$lib", _libraryId)).ConfigureAwait(true);
+        var inboxFolderRows = await DbScalarAsync<int>("SELECT COUNT(*) FROM Folders WHERE LibraryId = $lib AND RootId = $r", ("$lib", _libraryId), ("$r", inboxRootId)).ConfigureAwait(true);
+        var nullRootRows = await DbScalarAsync<int>("SELECT COUNT(*) FROM Folders WHERE LibraryId = $lib AND RootId IS NULL", ("$lib", _libraryId)).ConfigureAwait(true);
+        Check(inboxFolderRows == 1 && nullRootRows == 0, $"DB: Folders.RootId gesetzt (Eingang {inboxFolderRows} Ordner, {nullRootRows} ohne Wurzel)");
+
+        // (3) Filter „Nicht archiviert“ + Badge
+        _gallery.Filter = GalleryFilter.NotArchived;
+        await WaitForGalleryAsync("Filter Nicht archiviert").ConfigureAwait(true);
+        Check(_gallery.TotalCount == 2 && _gallery.CurrentPage.All(i => i.IsInbox), $"Filter „Nicht archiviert“: {_gallery.TotalCount} Dateien mit Badge „Eingang“");
+        await SnapshotAsync("11-galerie-eingang").ConfigureAwait(true);
+
+        // (4) Ins Archiv… (Fake-Zieldialog) — Ansicht bleibt beim Filter und ist danach leer
+        var archived = _gallery.CurrentPage.ToList();
+        var archivedIds = string.Join(",", archived.Select(i => i.Id.ToString(CultureInfo.InvariantCulture)));
+        foreach (var item in archived)
+        {
+            item.IsSelected = true;
+        }
+
+        var target = Path.Combine(_root, "2026", "Smoke-Archiv");
+        _archivePicker.NextTarget = target;
+        await _gallery.ArchiveSelectionCommand.ExecuteAsync(null).ConfigureAwait(true);
+        await WaitUntilAsync(() => !_gallery.IsOperationRunning, ShortWait, "Ins Archiv beendet").ConfigureAwait(true);
+        await WaitForGalleryAsync("Reload nach Ins Archiv").ConfigureAwait(true);
+        Check(_gallery.ErrorMessage is null, $"Ins Archiv ohne Fehler ({_gallery.StatusText})");
+        var request = _archivePicker.LastRequest;
+        Check(request is { } && request.ArchiveRootId == archiveRootId && request.FileIds.Count == 2 && request.SuggestedRelativePath is not null,
+            $"Zieldialog bekam Archiv-Wurzel, 2 Dateien, Vorschlag „{request?.SuggestedRelativePath}“");
+        foreach (var item in archived)
+        {
+            Check(File.Exists(Path.Combine(target, item.Name)) && !File.Exists(item.SourcePath), $"Datei archiviert: {item.Name}");
+        }
+
+        var underArchive = await DbScalarAsync<int>(
+            $"SELECT COUNT(*) FROM Files f JOIN Folders d ON d.Id = f.FolderId WHERE f.Id IN ({archivedIds}) AND d.RootId = $r", ("$r", archiveRootId)).ConfigureAwait(true);
+        Check(underArchive == 2, "DB: Files.FolderId zeigt auf einen Ordner der Archiv-Wurzel");
+        Check(_gallery.Filter == GalleryFilter.NotArchived && _gallery.TotalCount == 0 && _gallery.IsEmpty, $"Ansicht bleibt bei „Nicht archiviert“ und ist leer: {_gallery.EmptyMessage}");
+        var remembered = await DbScalarAsync<string>("SELECT Value FROM Settings WHERE Key = $k", ("$k", "archive.lastTarget." + _libraryId)).ConfigureAwait(true);
+        Check(PathEquals(remembered ?? string.Empty, target), $"Setting archive.lastTarget = {remembered}");
+
+        _gallery.Filter = GalleryFilter.Archived;
+        await WaitForGalleryAsync("Filter Archiviert").ConfigureAwait(true);
+        Check(_gallery.TotalCount == _mediaCount && _gallery.CurrentPage.All(i => !i.IsInbox), $"Filter „Archiviert“: {_gallery.TotalCount} Dateien");
+
+        // (5) Rückgängig → zurück in den Eingang
+        Check(_gallery.CanUndo, "Rückgängig verfügbar");
+        await _gallery.UndoCommand.ExecuteAsync(null).ConfigureAwait(true);
+        await WaitUntilAsync(() => !_gallery.IsOperationRunning, ShortWait, "Rückgängig beendet").ConfigureAwait(true);
+        await WaitForGalleryAsync("Reload nach Rückgängig").ConfigureAwait(true);
+        foreach (var item in archived)
+        {
+            Check(File.Exists(item.SourcePath) && !File.Exists(Path.Combine(target, item.Name)), $"Datei zurück im Eingang: {item.Name}");
+        }
+
+        var underInbox = await DbScalarAsync<int>(
+            $"SELECT COUNT(*) FROM Files f JOIN Folders d ON d.Id = f.FolderId WHERE f.Id IN ({archivedIds}) AND d.RootId = $r", ("$r", inboxRootId)).ConfigureAwait(true);
+        Check(underInbox == 2, "DB: Files.FolderId wieder unter der Eingangs-Wurzel");
+        _gallery.Filter = GalleryFilter.NotArchived;
+        await WaitForGalleryAsync("Filter Nicht archiviert nach Rückgängig").ConfigureAwait(true);
+        Check(_gallery.TotalCount == 2, $"„Nicht archiviert“ nach Rückgängig: {_gallery.TotalCount}");
+
+        // (6) Ordner anlegen + umbenennen (Dateisystem + Folders-Zeile, protokolliert)
+        var created = await _fileOps.CreateFolderAsync(_libraryId, Path.Combine(_root, "2026"), "Smoke-Neu").ConfigureAwait(true);
+        Check(created.Success && created.FolderId is not null && Directory.Exists(created.Path), $"Ordner angelegt: {created.Path} (FolderId {created.FolderId})");
+        var renamed = await _fileOps.RenameFolderAsync(created.FolderId!.Value, "Smoke-Umbenannt").ConfigureAwait(true);
+        Check(renamed.Success && Directory.Exists(renamed.Path) && !Directory.Exists(created.Path), $"Ordner umbenannt: {renamed.Path}");
+        var renamedRow = await DbScalarAsync<string>("SELECT Path FROM Folders WHERE Id = $id", ("$id", created.FolderId.Value)).ConfigureAwait(true);
+        Check(PathEquals(renamedRow ?? string.Empty, renamed.Path), $"DB: Folders.Path = {renamedRow}");
+        var folderBatches = await DbScalarAsync<int>("SELECT COUNT(*) FROM OperationBatches WHERE OperationType IN (4, 5) AND Status = 2").ConfigureAwait(true);
+        Check(folderBatches >= 2, $"OperationBatches MkDir/RenameFolder angewendet: {folderBatches}");
+
+        // (7) Eingangs-Wurzel entfernen (nur Katalog), Dateien bleiben auf der Platte
+        _gallery.Filter = GalleryFilter.All;
+        await WaitForGalleryAsync("Filter Alle").ConfigureAwait(true);
+        await _libraries.RemoveRootAsync(inboxRoot.Id).ConfigureAwait(true);
+        var leftRows = await DbScalarAsync<int>($"SELECT COUNT(*) FROM Files WHERE Id IN ({archivedIds})").ConfigureAwait(true);
+        Check(leftRows == 0 && inboxFiles.All(File.Exists), "Eingang entfernt: Katalogzeilen weg, Dateien auf der Platte unverändert");
+        _mediaCount -= 2;
+        await WaitUntilAsync(() => !_gallery.IsLoading && _gallery.TotalCount == _mediaCount, ShortWait, $"Galerie nach Entfernen des Eingangs: {_mediaCount}").ConfigureAwait(true);
+        var rootsLeft = await DbScalarAsync<int>("SELECT COUNT(*) FROM LibraryRoots WHERE LibraryId = $lib", ("$lib", _libraryId)).ConfigureAwait(true);
+        Check(rootsLeft == 1, "nur noch die Archiv-Wurzel");
+        Directory.Delete(inbox, recursive: true);
     }
 
     // ---- Schritte ------------------------------------------------------------------------------
@@ -1041,6 +1201,20 @@ internal sealed class SmokeScenario
         }
 
         _logger.LogInformation("Rauchtest   ✓ {What}", what);
+    }
+
+    /// <summary>Führt die Aktion aus und liefert die geworfene Ausnahme (null, wenn keine).</summary>
+    private static async Task<Exception?> CatchAsync(Func<Task> action)
+    {
+        try
+        {
+            await action().ConfigureAwait(true);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            return ex;
+        }
     }
 
     private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout, string what)

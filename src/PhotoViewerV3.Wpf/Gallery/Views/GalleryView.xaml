@@ -53,6 +53,19 @@
             <Setter Property="VerticalContentAlignment" Value="Stretch" />
             <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="SnapsToDevicePixels" Value="True" />
+            <!-- ViewModel für das Kontextmenü (liegt außerhalb des visuellen Baums) -->
+            <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=ListBox}}" />
+            <Setter Property="ContextMenu">
+                <Setter.Value>
+                    <ContextMenu>
+                        <MenuItem Header="Ins Archiv…"
+                                  InputGestureText="Strg+M"
+                                  Icon="{ui:SymbolIcon Archive24}"
+                                  Command="{Binding PlacementTarget.Tag.ArchiveItemCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding}" />
+                    </ContextMenu>
+                </Setter.Value>
+            </Setter>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
@@ -174,20 +187,32 @@
                                        HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
 
-                    <!-- „fehlt“-Badge oben mittig -->
-                    <Border HorizontalAlignment="Center"
-                            VerticalAlignment="Top"
-                            Margin="0,6,0,0"
-                            Padding="6,1"
-                            CornerRadius="3"
-                            Background="#CCC42B1C"
-                            IsHitTestVisible="False"
-                            Visibility="{Binding Missing, Converter={StaticResource BoolToVis}}">
-                        <StackPanel Orientation="Horizontal">
-                            <ui:SymbolIcon Symbol="Warning16" FontSize="11" Foreground="White" Margin="0,0,3,0" />
-                            <TextBlock Text="fehlt" FontSize="10" Foreground="White" FontWeight="SemiBold" />
-                        </StackPanel>
-                    </Border>
+                    <!-- Badges oben mittig: „fehlt“ und „Eingang“ (Datei unter einer Eingangs-Wurzel, ADR-0020) -->
+                    <StackPanel Orientation="Horizontal"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Top"
+                                Margin="0,6,0,0"
+                                IsHitTestVisible="False">
+                        <Border Padding="6,1"
+                                Margin="0,0,3,0"
+                                CornerRadius="3"
+                                Background="#CCC42B1C"
+                                Visibility="{Binding Missing, Converter={StaticResource BoolToVis}}">
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="Warning16" FontSize="11" Foreground="White" Margin="0,0,3,0" />
+                                <TextBlock Text="fehlt" FontSize="10" Foreground="White" FontWeight="SemiBold" />
+                            </StackPanel>
+                        </Border>
+                        <Border Padding="6,1"
+                                CornerRadius="3"
+                                Background="#CC0F6CBD"
+                                Visibility="{Binding IsInbox, Converter={StaticResource BoolToVis}}">
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="MailInbox16" FontSize="11" Foreground="White" Margin="0,0,3,0" />
+                                <TextBlock Text="Eingang" FontSize="10" Foreground="White" FontWeight="SemiBold" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
 
                     <!-- Herz oben rechts: Toggle Favorit (sichtbar wenn gesetzt, sonst bei Hover) -->
                     <Button x:Name="HeartButton"
@@ -309,6 +334,7 @@
         <KeyBinding Modifiers="Ctrl" Key="Home" Command="{Binding FirstPageCommand}" />
         <KeyBinding Modifiers="Ctrl" Key="End" Command="{Binding LastPageCommand}" />
         <KeyBinding Key="F5" Command="{Binding ReloadCommand}" />
+        <KeyBinding Modifiers="Ctrl" Key="M" Command="{Binding ArchiveSelectionCommand}" />
     </UserControl.InputBindings>
 
     <Grid Margin="16,8,16,12">
@@ -363,8 +389,15 @@
                                  IsChecked="{Binding Filter, Converter={StaticResource EnumEquals}, ConverterParameter=Videos}" />
                     <RadioButton Content="Favoriten" GroupName="Filter" Margin="0,0,8,0"
                                  IsChecked="{Binding Filter, Converter={StaticResource EnumEquals}, ConverterParameter=Favorites}" />
-                    <RadioButton Content="Archive" GroupName="Filter"
+                    <RadioButton Content="Archive" GroupName="Filter" Margin="0,0,8,0"
                                  IsChecked="{Binding Filter, Converter={StaticResource EnumEquals}, ConverterParameter=Archives}" />
+                    <!-- Status-Filter (ADR-0020): Eingang / Archiv über Folders.RootId → LibraryRoots.Role -->
+                    <RadioButton Content="Nicht archiviert" GroupName="Filter" Margin="0,0,8,0"
+                                 ToolTip="Dateien in Eingangs-Ordnern"
+                                 IsChecked="{Binding Filter, Converter={StaticResource EnumEquals}, ConverterParameter=NotArchived}" />
+                    <RadioButton Content="Archiviert" GroupName="Filter"
+                                 ToolTip="Dateien im Archiv-Ordner"
+                                 IsChecked="{Binding Filter, Converter={StaticResource EnumEquals}, ConverterParameter=Archived}" />
                 </StackPanel>
 
                 <!-- Ordner-Chip -->
@@ -625,6 +658,10 @@
                         <ui:Button Appearance="Transparent" Content="Verschieben nach…"
                                    Icon="{ui:SymbolIcon FolderArrowRight24}"
                                    Command="{Binding MoveSelectionCommand}" />
+                        <ui:Button Appearance="Transparent" Content="Ins Archiv…"
+                                   Icon="{ui:SymbolIcon Archive24}"
+                                   ToolTip="Auswahl in den Archiv-Ordner der Bibliothek verschieben (Strg+M)"
+                                   Command="{Binding ArchiveSelectionCommand}" />
                         <ui:Button Appearance="Transparent" Content="Papierkorb"
                                    Icon="{ui:SymbolIcon Delete24}"
                                    ToolTip="Auswahl in den Papierkorb verschieben (Entf)"

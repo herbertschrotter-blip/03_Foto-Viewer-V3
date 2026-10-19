@@ -68,14 +68,32 @@ Eine portable Auslieferung (`dotnet publish`) gibt es noch nicht; die App läuft
   Zusammenfassung. Bei nicht erreichbarem Ordner: Dialog „Bibliothek offline“ ([Erneut prüfen] [Andere Bibliothek
   wählen]); bei ungewöhnlich vielen fehlenden Dateien (> 10 000 oder > 20 %): Dialog ([Erneut prüfen]
   [Als fehlend markieren] [Abbrechen]).
+- Je Bibliothek die Liste ihrer Wurzelordner mit Rolle (siehe „Eingang und Archiv“): **Eingang hinzufügen…**,
+  Archiv-Symbol = diesen Ordner zur Archiv-Wurzel machen, Umbenennen (Anzeigename), Entfernen (nur Eingänge, nur aus
+  dem Katalog). Scannen/Aktualisieren läuft über alle Wurzeln.
+
+### Eingang und Archiv
+Eine Bibliothek hat genau einen **Archiv-Ordner** (der beim Anlegen gewählte Ordner) und beliebig viele
+**Eingangs-Ordner** (Kamera-Import, Handy-Upload, Downloads). Dateien unter einem Eingang gelten als „nicht archiviert“.
+- **Bibliothek → Eingang hinzufügen…**: Ordner wählen (darf nicht in oder über einem anderen Ordner der Bibliothek
+  liegen), danach „Jetzt aktualisieren“ nimmt die Dateien in den Katalog auf.
+- **Galerie**: Filter-Pills **Nicht archiviert** (alles in Eingängen) und **Archiviert**; Kacheln im Eingang tragen das
+  Badge „Eingang“. Der Ordnerbaum zeigt die Wurzeln als oberste Knoten mit Rolle.
+- **Ins Archiv…** (Aktionsleiste, **Strg+M**, Kontextmenü der Kachel, in der Lightbox **Strg+M**): Dialog mit dem
+  Ordnerbaum des Archivs (auch Ordner, die nur auf der Platte existieren), Suchfeld, **Neuer Ordner…**,
+  **Umbenennen…**, Vorschlag „Jahr\Jahr-Monat“ aus Aufnahme- bzw. Dateidatum; der zuletzt benutzte Zielordner ist
+  vorgewählt. Verschoben wird protokolliert (Rückgängig wie bei „Verschieben nach…“); Favoriten, Bewertungen und
+  Vorschaubilder bleiben. Die Ansicht bleibt beim Filter und zeigt die restlichen Dateien.
+- Einen Eingang zu entfernen löscht nur seine Katalogdaten — die Dateien auf der Platte bleiben.
 
 ### Galerie
-Toolbar: Sortierung, Filter-Pills (Alle / Bilder / Videos / Favoriten / Archive), Suchfeld (Dateiname oder Endung; Wörter werden
+Toolbar: Sortierung, Filter-Pills (Alle / Bilder / Videos / Favoriten / Archive / Nicht archiviert / Archiviert), Suchfeld (Dateiname oder Endung; Wörter werden
 als Präfix gesucht, Sonderzeichen sind erlaubt), Seitengröße, Pager, Aktualisieren. Ein Ordnerfilter erscheint als
 Chip und lässt sich dort wieder aufheben. Kacheln: Herz = Favorit, Sterne = Bewertung, Badge „fehlt“ bei Dateien, die
 beim letzten Scan nicht mehr auf der Platte lagen. Ordner ohne direkte Dateien zeigen ihre Unterordner als Kacheln.
 Bei einer Auswahl erscheint unten die Aktionsleiste (Favorit setzen/entfernen, Bewertung, Verschieben nach…,
-Papierkorb, Auswahl aufheben); **Rückgängig** nimmt die letzte Verschiebung/Umbenennung zurück.
+Ins Archiv…, Papierkorb, Auswahl aufheben); **Rückgängig** nimmt die letzte Verschiebung/Umbenennung (auch eine
+Ordner-Umbenennung) zurück.
 
 | Taste | Wirkung |
 |---|---|
@@ -87,6 +105,7 @@ Papierkorb, Auswahl aufheben); **Rückgängig** nimmt die letzte Verschiebung/Um
 | Strg+← / Strg+→ | Vorherige / nächste Seite |
 | Strg+Pos1 / Strg+Ende | Erste / letzte Seite |
 | F5 | Aktualisieren |
+| Strg+M | Auswahl ins Archiv… |
 | Enter im Suchfeld | Suchen |
 
 ### Lightbox
@@ -111,6 +130,7 @@ Codec).
 | Strg+D | Favorit umschalten |
 | Strg+1 … Strg+5 | Bewertung 1–5 Sterne |
 | Strg+0 | Bewertung löschen |
+| Strg+M | Ins Archiv… |
 | Entf | In den Papierkorb (mit Bestätigung) |
 
 ### Archive
@@ -134,7 +154,9 @@ Vorschaubild, die Kachel zeigt ein Archiv-Symbol mit Endung und Größe. Die Fil
 ### Ordner
 Links der Ordnerbaum der aktiven Bibliothek (Dateizähler direkt / gesamt), rechts die Galerie. Umschalter „mit
 Unterordnern“; „Gesamte Bibliothek“ hebt den Ordnerfilter auf. Nach Scans und Datei-Operationen lädt der Baum neu und
-behält Aufklapp-Zustand und Auswahl.
+behält Aufklapp-Zustand und Auswahl. Oberste Knoten sind die Wurzeln mit Rolle (Archiv, Eingang). Kontextmenü:
+**Neuer Ordner…** (Ordner auf der Platte + Katalogzeile) und **Umbenennen…** (nicht für Wurzeln; Ordner mit Dateien
+werden protokolliert umbenannt und lassen sich mit Rückgängig zurücknehmen).
 
 ### Sortieren
 - **Sortieren**: Quellordner innerhalb der Bibliothek wählen, Patterns (Regex auf den Dateinamen ohne Endung, nach
@@ -230,7 +252,10 @@ Mediendateien, damit der Mass-Missing-Guard beim Incremental-Schritt nicht greif
 `Unsortiert\smoke-archiv.zip` an, entpackt es nach `Unsortiert\smoke-archiv\` und verschiebt das ZIP in den
 Windows-Papierkorb (der Ordner wird beim nächsten Lauf vorab entfernt). Die Ordnerüberwachung ist während des Laufs
 ausgeschaltet und wird erst im letzten Schritt (Ruhezeit 1 s, `Unsortiert\smoke-watch.jpg` kopieren und löschen)
-eingeschaltet.
+eingeschaltet. Der Schritt „Eingang → Archiv“
+legt den Geschwisterordner `<Bibliothek>-Eingang` als Eingangs-Wurzel an (wird am Ende wieder entfernt) und hinterlässt
+in der Bibliothek die leeren Ordner `2026\Smoke-Archiv` und `2026\Smoke-Umbenannt` (beim nächsten Lauf vorab entfernt)
+— deshalb immer gegen eine Kopie laufen lassen.
 
 Spike- und Benchmark-Harness: `dotnet run --project tests/PhotoViewerV3.PerfTests -c Release -- <spike>` (siehe
 [docs/spikes/](docs/spikes/)).

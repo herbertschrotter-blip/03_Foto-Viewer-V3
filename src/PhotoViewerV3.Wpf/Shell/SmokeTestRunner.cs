@@ -50,6 +50,8 @@ public static class SmokeTestRunner
         services.AddSingleton<IFolderPickerService>(sp => sp.GetRequiredService<SmokeFolderPickerService>());
         services.AddSingleton<SmokeGalleryDialogService>();
         services.AddSingleton<IGalleryDialogService>(sp => sp.GetRequiredService<SmokeGalleryDialogService>());
+        services.AddSingleton<SmokeArchiveTargetPicker>();
+        services.AddSingleton<PhotoViewerV3.Gallery.ArchiveTarget.IArchiveTargetPicker>(sp => sp.GetRequiredService<SmokeArchiveTargetPicker>());
         return services;
     }
 

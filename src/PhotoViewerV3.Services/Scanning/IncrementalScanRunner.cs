@@ -9,10 +9,10 @@ using PhotoViewerV3.Services.Database;
 namespace PhotoViewerV3.Services.Scanning;
 
 /// <summary>
-/// Diff-Re-Scan einer Bibliothek mit stabilen FileIds (ScanMode.Incremental) und Offline-vs-Missing-Guard
-/// (PLAN Kap. 12). Ablauf:
+/// Diff-Re-Scan EINER Wurzel einer Bibliothek mit stabilen FileIds (ScanMode.Incremental) und Offline-vs-Missing-Guard
+/// (PLAN Kap. 12); der ScanService ruft ihn je Wurzel auf (ADR-0020). Ablauf:
 /// <list type="number">
-/// <item>Katalog-Snapshot laden: Ordner nach Pfad, Dateien nach (FolderId, Name) — beides case-insensitiv.</item>
+/// <item>Katalog-Snapshot der Wurzel laden (Folders.RootId): Ordner nach Pfad, Dateien nach (FolderId, Name) — beides case-insensitiv.</item>
 /// <item>Dateisystem enumerieren und abgleichen: unbekannt → neu (fortlaufende Id, Ordnerkette anlegen);
 /// bekannt mit anderer Größe/Änderungszeit → geändert; bekannt und bisher Missing → wieder da.
 /// Alle 2000 Dateien und bei jedem IO-Fehler wird der Root erneut geprüft.</item>
@@ -57,6 +57,7 @@ internal sealed class IncrementalScanRunner
 
     public async Task<Outcome> RunAsync(
         int libraryId,
+        int rootId,
         string rootPath,
         ScanOptions options,
         int nextFolderId,
@@ -66,16 +67,16 @@ internal sealed class IncrementalScanRunner
     {
         var totalSw = Stopwatch.StartNew();
 
-        // 1) Katalog-Snapshot
+        // 1) Katalog-Snapshot der Wurzel
         CatalogSnapshot catalog;
         using (var connection = _contextFactory.OpenSqliteConnection())
         {
-            catalog = CatalogSnapshot.Load(connection, libraryId, _logger);
+            catalog = CatalogSnapshot.Load(connection, libraryId, rootId, _logger);
         }
 
         _logger.LogInformation(
-            "Incremental-Scan startet: Library={LibraryId} Root={Root} Katalog: {Folders} Ordner, {Files} Dateien ({Present} vorhanden) StartIds Folder={FolderId} File={FileId}",
-            libraryId, rootPath, catalog.FolderIdsByPath.Count, catalog.AllFiles.Count, catalog.PresentCount, nextFolderId, nextFileId);
+            "Incremental-Scan startet: Library={LibraryId} Wurzel={RootId} Root={Root} Katalog: {Folders} Ordner, {Files} Dateien ({Present} vorhanden) StartIds Folder={FolderId} File={FileId}",
+            libraryId, rootId, rootPath, catalog.FolderIdsByPath.Count, catalog.AllFiles.Count, catalog.PresentCount, nextFolderId, nextFileId);
 
         // Diff-Ergebnis der Enumeration
         var newFolderRows = new List<BulkScanWriter.FolderRow>();
@@ -137,7 +138,7 @@ internal sealed class IncrementalScanRunner
 
                 var id = nextFolderId++;
                 folderMap[folderPath] = id;
-                newFolderRows.Add(new BulkScanWriter.FolderRow(id, libraryId, folderPath, parentId, FolderDisplayName(folderPath), scannedAtUnix));
+                newFolderRows.Add(new BulkScanWriter.FolderRow(id, libraryId, folderPath, parentId, FolderDisplayName(folderPath), scannedAtUnix, rootId));
                 return id;
             }
 
@@ -409,14 +410,16 @@ internal sealed class IncrementalScanRunner
             return false;
         }
 
-        public static CatalogSnapshot Load(SqliteConnection connection, int libraryId, ILogger logger)
+        /// <summary>Nur Ordner (und ihre Dateien) der angegebenen Wurzel — andere Wurzeln bleiben unberührt (ADR-0020).</summary>
+        public static CatalogSnapshot Load(SqliteConnection connection, int libraryId, int rootId, ILogger logger)
         {
             var snapshot = new CatalogSnapshot();
 
             using (var cmd = connection.CreateCommand())
             {
-                cmd.CommandText = "SELECT Id, Path FROM Folders WHERE LibraryId = $lib;";
+                cmd.CommandText = "SELECT Id, Path FROM Folders WHERE LibraryId = $lib AND RootId = $root;";
                 cmd.Parameters.AddWithValue("$lib", libraryId);
+                cmd.Parameters.AddWithValue("$root", rootId);
                 using var reader = cmd.ExecuteReader();
                 while (reader.Read())
                 {
@@ -432,8 +435,14 @@ internal sealed class IncrementalScanRunner
             var duplicateFiles = 0;
             using (var cmd = connection.CreateCommand())
             {
-                cmd.CommandText = "SELECT Id, FolderId, Name, Size, ModifiedAtUtc, Missing FROM Files WHERE LibraryId = $lib;";
+                cmd.CommandText = """
+                    SELECT f.Id, f.FolderId, f.Name, f.Size, f.ModifiedAtUtc, f.Missing
+                    FROM Files f
+                    WHERE f.LibraryId = $lib
+                      AND f.FolderId IN (SELECT Id FROM Folders WHERE LibraryId = $lib AND RootId = $root);
+                    """;
                 cmd.Parameters.AddWithValue("$lib", libraryId);
+                cmd.Parameters.AddWithValue("$root", rootId);
                 using var reader = cmd.ExecuteReader();
                 while (reader.Read())
                 {
