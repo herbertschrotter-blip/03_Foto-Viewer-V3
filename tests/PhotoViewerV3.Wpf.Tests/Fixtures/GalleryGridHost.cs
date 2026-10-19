@@ -117,8 +117,8 @@ internal sealed class GalleryGridHost : IDisposable
             ShowInTaskbar = false,
             ShowActivated = false,
             WindowStartupLocation = WindowStartupLocation.Manual,
-            Left = 0,
-            Top = 0,
+            Left = -5000, // außerhalb des sichtbaren Bereichs
+            Top = -5000,
             Content = ListBox,
         };
     }

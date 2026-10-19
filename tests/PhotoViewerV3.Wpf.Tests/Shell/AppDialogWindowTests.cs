@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Windows;
 using System.Windows.Threading;
 using PhotoViewerV3.Shell;
 using PhotoViewerV3.Shell.Dialogs;
@@ -73,6 +74,11 @@ public sealed class AppDialogWindowTests
         var outcome = TestUiThread.Run(() =>
         {
             var window = new AppDialogWindow(request);
+            // Testfenster außerhalb des sichtbaren Bereichs — sonst erscheint der Dialog auf dem Desktop des Benutzers.
+            window.WindowStartupLocation = WindowStartupLocation.Manual;
+            window.Left = -5000;
+            window.Top = -5000;
+            window.ShowActivated = false;
             // Erst wenn das Fenster fertig gelayoutet ist (ContextIdle), wird der Knopf „gedrückt“ —
             // hängt das Layout, kommt dieser Aufruf nie und der Test läuft in den Timeout.
             window.Loaded += (_, _) => window.Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, () => window.Finish(finishWith));
