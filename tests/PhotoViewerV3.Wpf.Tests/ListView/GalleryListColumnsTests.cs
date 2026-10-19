@@ -51,7 +51,7 @@ public sealed class GalleryListColumnsTests
     }
 
     [Fact]
-    public void Standard_zeigt_alle_Spalten_in_Definitionsreihenfolge_inklusive_Status_Platzhalter()
+    public void Standard_zeigt_alle_Spalten_in_Definitionsreihenfolge_inklusive_Status()
     {
         var settings = GalleryListColumnSettings.Default;
         settings.Visible.Should().Equal(GalleryListColumns.All.Select(c => c.Key));

@@ -3,6 +3,22 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.11] — 2026-10-19
+
+### Geändert
+- Listenansicht, Spalte „Status“: zeigt jetzt „fehlt“, „Eingang“ oder „Archiv“ (Rolle der Wurzel, ADR-0020) statt nur
+  „fehlt“; sortierbar. `GalleryItem.IsArchived`/`StatusText`, Platzhalter-Konverter entfernt.
+
+### Tests
+- `tests/PhotoViewerV3.Wpf.Tests`: 121 (+7 `ListView/GalleryItemStatusTests`); `tests/PhotoViewerV3.Tests`: 344.
+- Rauchtest des integrierten Stands (0.2.7–0.2.10): 19/19 OK, 0 WPF-Binding-Fehler.
+
+### Offen
+- WPF-UI 4: Wird ein Fenster mit TitleBar geschlossen, bevor es einmal gezeichnet wurde (Rauchtest öffnet und schließt
+  die Lightbox binnen ~100 ms), wirft `TitleBar.OnWindowContentRendered` „Hwnd mit dem Wert Null ist ungültig“. Der
+  globale Handler fängt das ab, die App läuft weiter; Abhilfe wäre, das Schließen bis `ContentRendered` zu verzögern.
+- Rauchtest-Startskript: robocopy kopierte im App-Container der Claude-Desktop-App teils 0 Dateien — dort Copy-Item nutzen.
+
 ## [0.2.10] — 2026-10-19
 
 ### Neu

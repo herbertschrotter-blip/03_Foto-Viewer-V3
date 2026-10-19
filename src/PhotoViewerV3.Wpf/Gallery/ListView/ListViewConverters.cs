@@ -24,15 +24,3 @@ public sealed class MediaTypeTextConverter : IValueConverter
         => throw new NotSupportedException();
 }
 
-/// <summary>
-/// Spalte „Status“ — Platzhalter: zeigt bislang nur „fehlt“ (Missing) oder nichts.
-/// TODO (Agent A / Integration): Eingangs-/Archiv-Status der Datei aus dem Bibliotheksmodul anzeigen.
-/// </summary>
-public sealed class MissingToStatusTextConverter : IValueConverter
-{
-    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
-        => value is true ? "fehlt" : string.Empty;
-
-    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
-        => throw new NotSupportedException();
-}

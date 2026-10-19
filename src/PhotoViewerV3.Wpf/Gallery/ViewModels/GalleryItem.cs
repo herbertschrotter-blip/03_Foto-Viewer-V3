@@ -34,6 +34,7 @@ public sealed partial class GalleryItem : ObservableObject
         ModifiedAtUnix = dto.ModifiedAtUnix;
         SourceModifiedAtUtc = DateTimeOffset.FromUnixTimeSeconds(dto.ModifiedAtUnix).UtcDateTime;
         IsInbox = dto.IsInbox;
+        IsArchived = dto.RootRole == 1;
         _isFavorite = dto.IsFavorite;
         _rating = dto.Rating;
         _missing = dto.Missing;
@@ -61,13 +62,21 @@ public sealed partial class GalleryItem : ObservableObject
     /// <summary>Datei liegt unter einer Eingangs-Wurzel (Badge „Eingang“, ADR-0020).</summary>
     public bool IsInbox { get; }
 
+    /// <summary>Datei liegt unter der Archiv-Wurzel (ADR-0020); Zeilen ohne bekannte Wurzel sind weder Eingang noch Archiv.</summary>
+    public bool IsArchived { get; }
+
+    /// <summary>Spalte „Status“ der Listenansicht: „fehlt“ vor „Eingang“/„Archiv“, leer bei unbekannter Wurzel.</summary>
+    public string StatusText => Missing ? "fehlt" : IsInbox ? "Eingang" : IsArchived ? "Archiv" : string.Empty;
+
     [ObservableProperty] private bool _isFavorite;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasRating))]
     private byte? _rating;
 
-    [ObservableProperty] private bool _missing;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatusText))]
+    private bool _missing;
 
     /// <summary>Auswahlzustand — zweiseitig an ListBoxItem.IsSelected gebunden.</summary>
     [ObservableProperty] private bool _isSelected;
@@ -108,6 +117,7 @@ public sealed partial class GalleryItem : ObservableObject
            && ModifiedAtUnix == dto.ModifiedAtUnix
            && MediaType == (MediaType)dto.MediaType
            && IsInbox == dto.IsInbox
+           && IsArchived == (dto.RootRole == 1)
            && string.Equals(Name, dto.Name, StringComparison.Ordinal)
            && string.Equals(Extension, dto.Extension, StringComparison.Ordinal)
            && string.Equals(FolderPath, dto.FolderPath, StringComparison.Ordinal);

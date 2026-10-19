@@ -22,7 +22,6 @@
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
         <local:UtcToLocalTextConverter x:Key="UtcToLocal" />
         <local:MediaTypeTextConverter x:Key="MediaTypeText" />
-        <local:MissingToStatusTextConverter x:Key="MissingToStatus" />
 
         <DataTemplate x:Key="NameCell" DataType="{x:Type vm:GalleryItem}">
             <StackPanel Orientation="Horizontal" ToolTip="{Binding SourcePath}">
@@ -71,10 +70,19 @@
         </DataTemplate>
 
         <DataTemplate x:Key="StatusCell" DataType="{x:Type vm:GalleryItem}">
-            <!-- TODO (Agent A / Integration): Status aus dem Bibliotheksmodul (Eingang/Archiv) — bis dahin nur „fehlt“. -->
-            <TextBlock Text="{Binding Missing, Converter={StaticResource MissingToStatus}}"
-                       VerticalAlignment="Center"
-                       Foreground="{DynamicResource SystemFillColorCriticalBrush}" />
+            <!-- Status (ADR-0020): fehlt / Eingang / Archiv; „fehlt“ in Warnfarbe -->
+            <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding Missing}" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
         </DataTemplate>
 
         <Style x:Key="RowStyle" TargetType="DataGridRow">

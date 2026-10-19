@@ -127,7 +127,7 @@ public partial class GalleryListView : UserControl
                 // Sortierung nur clientseitig innerhalb der Page (TagsText = Namen in Anzeigereihenfolge).
                 return new DataGridTemplateColumn { CellTemplate = (DataTemplate)Resources["TagsCell"], SortMemberPath = nameof(GalleryItem.TagsText) };
             case GalleryListColumnKey.Status:
-                return new DataGridTemplateColumn { CellTemplate = (DataTemplate)Resources["StatusCell"], SortMemberPath = nameof(GalleryItem.Missing) };
+                return new DataGridTemplateColumn { CellTemplate = (DataTemplate)Resources["StatusCell"], SortMemberPath = nameof(GalleryItem.StatusText) };
             default:
                 throw new ArgumentOutOfRangeException(nameof(def), def.Key, "Unbekannte Spalte");
         }

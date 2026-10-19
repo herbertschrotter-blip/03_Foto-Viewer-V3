@@ -37,7 +37,7 @@ public sealed record GalleryListColumnDefinition(
     public bool SortsServerSide => SortAscending is not null;
 }
 
-/// <summary>Alle Spalten in Standardreihenfolge; „Status“ ist ein Platzhalter (Daten liefert das Bibliotheksmodul).</summary>
+/// <summary>Alle Spalten in Standardreihenfolge; „Status“ = fehlt / Eingang / Archiv (ADR-0020).</summary>
 public static class GalleryListColumns
 {
     public static IReadOnlyList<GalleryListColumnDefinition> All { get; } =
