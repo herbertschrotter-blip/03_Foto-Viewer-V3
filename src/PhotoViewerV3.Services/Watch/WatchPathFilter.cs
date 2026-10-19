@@ -8,6 +8,13 @@ namespace PhotoViewerV3.Services.Watch;
 /// <c>@eaDir</c>, Papierkorb, der eigene Thumbnail-Cache) werden ignoriert. Ordner zählen bei Anlegen/Löschen/Umbenennen
 /// (eine verschobene Ordnerstruktur liefert nicht für jede Datei ein Ereignis), nicht bei „Changed“ (das feuert für jede
 /// beliebige Datei darin, auch für Nicht-Medien).
+/// <para>
+/// Ordnernamen mit Punkt (<c>2024.06 Urlaub</c>, <c>v1.2</c>) haben für <see cref="Path.GetExtension(string)"/> eine
+/// „Endung“. Angelegt/umbenannt erkennt sie <see cref="Directory.Exists(string)"/>. Gelöscht lässt sich nicht mehr
+/// prüfen, ob der Pfad ein Ordner war: dann gilt er als Ordner, wenn die „Endung“ nicht wie eine Dateiendung aussieht
+/// (siehe <see cref="LooksLikeFileExtension"/>). Restlücke: ein gelöschter Ordner wie <c>Fotos.alt</c> (Endung sieht
+/// echt aus) löst keinen Scan aus — das nächste „Aktualisieren“ oder Ereignis holt es nach.
+/// </para>
 /// </summary>
 public sealed class WatchPathFilter
 {
@@ -70,16 +77,56 @@ public sealed class WatchPathFilter
         var extension = Path.GetExtension(name);
         if (extension.Length > 0)
         {
-            return !IgnoredExtensions.Contains(extension) && _formats.IsSupported(extension);
+            if (IgnoredExtensions.Contains(extension))
+            {
+                return false;
+            }
+
+            if (_formats.IsSupported(extension))
+            {
+                return true;
+            }
         }
 
-        // Ohne Endung: Ordner-Ereignisse (angelegt, gelöscht, umbenannt) — "Changed" eines Ordners feuert bei jeder Datei darin.
+        // Ordner-Ereignisse (angelegt, gelöscht, umbenannt) — "Changed" eines Ordners feuert bei jeder Datei darin.
         if (change == WatcherChangeTypes.Changed)
         {
             return false;
         }
 
-        return change == WatcherChangeTypes.Deleted || Directory.Exists(fullPath);
+        if (Directory.Exists(fullPath))
+        {
+            return true; // auch Ordner mit Punkt im Namen („2024.06 Urlaub“)
+        }
+
+        // Gelöscht: ohne Endung vermutlich ein Ordner; mit „Endung“ nur, wenn sie nicht wie eine Dateiendung aussieht.
+        return change == WatcherChangeTypes.Deleted && (extension.Length == 0 || !LooksLikeFileExtension(extension));
+    }
+
+    /// <summary>
+    /// Typische Dateiendung: 1–8 Zeichen nach dem Punkt, nur Buchstaben/Ziffern, mindestens ein Buchstabe
+    /// (<c>.txt</c>, <c>.xmp</c>, <c>.mp4</c>) — nicht <c>.06 Urlaub</c>, <c>.06</c> oder <c>. Teil 2</c>.
+    /// </summary>
+    internal static bool LooksLikeFileExtension(string extension)
+    {
+        if (extension.Length < 2 || extension.Length > 9 || extension[0] != '.')
+        {
+            return false;
+        }
+
+        var hasLetter = false;
+        for (var i = 1; i < extension.Length; i++)
+        {
+            var c = extension[i];
+            if (!char.IsLetterOrDigit(c))
+            {
+                return false;
+            }
+
+            hasLetter |= char.IsLetter(c);
+        }
+
+        return hasLetter;
     }
 
     private static bool HasIgnoredSegment(string directory)

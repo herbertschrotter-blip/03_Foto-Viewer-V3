@@ -3,6 +3,57 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.14] — 2026-10-19
+
+### Behoben (Ordnerüberwachung härten, Befunde aus dem Code-Review)
+- **Nie zwei Scans derselben Bibliothek gleichzeitig** (Befund 1, bestätigt): `ScanService` hatte keine Sperre;
+  „Aktualisieren“/„Neu aufbauen“, Entpacken und der automatische Scan konnten parallel laufen (die Überwachung erkannte
+  fremde Scans erst an deren erster `ScanProgressMessage`, die Bibliotheksseite gar nichts). Neu `Services/Scanning/ScanGate`
+  (`IScanGate`, ein `SemaphoreSlim` je Bibliothek, Singleton): `ScanService` belegt die Bibliothek vor dem ersten
+  Dateisystem-Zugriff, der spätere Scan wartet (abbrechbar; auch ein beim Warten abgebrochener Aufruf sendet seine
+  `ScanAbortedMessage`). Die Überwachung hört auf `IScanGate.Acquired`: ein fremder Scan gilt ab Belegung als laufend,
+  und die bis dahin gesammelten Ereignisse sind durch ihn abgedeckt (zusammengelegt statt zweimal gescannt); endet er
+  nicht erfolgreich, gelten sie wieder.
+- **Bibliothekswechsel während eines automatischen Scans** (Befund 2, bestätigt): kam der Abbruch zu spät, wurde das
+  Ergebnis der vorigen Bibliothek der neuen zugeordnet — Sperre „angehalten“ bzw. „Automatisch aktualisiert: …“ mit
+  falscher Bibliothek. Jetzt Epoche je Bibliothekswechsel; Ergebnis und Sperre eines veralteten Scans werden verworfen,
+  die neue Bibliothek zeigt nicht „läuft…“ für den fremden Scan.
+- **Ordner mit Punkt im Namen** (Befund 3, bestätigt): `WatchPathFilter` hielt `2024.06 Urlaub` für eine Datei mit
+  Endung „.06 Urlaub“ und verwarf Anlegen/Hineinverschieben/Umbenennen/Löschen. Jetzt zählt jeder existierende Ordner;
+  gelöschte Pfade gelten als Ordner, wenn ihre „Endung“ keine Dateiendung sein kann (Leerzeichen, nur Ziffern, > 8
+  Zeichen). Restlücke dokumentiert (gelöschter Ordner `Fotos.alt`).
+- **Speicherreihenfolge der Einstellungen** (Befund 4, bestätigt): `SetQuietPeriodAsync`/`SetEnabledAsync` speicherten
+  ohne Reihenfolge; die NumberBox „Ruhezeit“ (UpdateSourceTrigger=PropertyChanged, Aufruf ohne await) konnte einen
+  älteren Wert zuletzt schreiben. Jetzt nacheinander (`SemaphoreSlim`), und jeder Speichervorgang schreibt den aktuellen
+  Stand statt seines Aufrufwerts.
+- **Flut von Statusnachrichten** (Befund 5, bestätigt): jedes relevante Dateiereignis schickte eine
+  `WatchStatusChangedMessage` (beim Kopieren Tausender Dateien Tausende Dispatcher-Aufträge mit Normal-Priorität).
+  Jetzt gehen reine Countdown-Verschiebungen höchstens alle 500 ms hinaus (die letzte nachlaufend), Zustandswechsel
+  sofort; gesendet wird immer der jüngste Zustand, nie ein älterer nach einem jüngeren. Die Statusleiste bündelt
+  zusätzlich (höchstens ein ausstehender Auftrag, Background-Priorität).
+
+### Geprüft, nicht umgesetzt
+- Eigene Datei-Operationen (Verschieben, „Ins Archiv…“, Papierkorb) lösen hinterher weiterhin einen (entprellten)
+  automatischen Scan aus, der „keine Änderungen“ findet. Sauber unterdrücken ließe sich das nur in
+  `FileOperationService` (Pfade der laufenden `OperationBatch` melden bzw. die Bibliothek für den Batch belegen); ein
+  pauschales Ignorieren während eines Batches verlöre echte externe Änderungen und Teilfehler (Kopie am Ziel, Quelle
+  nicht gelöscht). Entpacken profitiert bereits vom Zusammenlegen (es scannt am Ende selbst).
+
+### Tests
+- `tests/PhotoViewerV3.Tests`: 366 (+22): `Watch/ScanGateTests` (3, echter ScanService: zweiter Scan wartet, Abbruch
+  beim Warten), `Watch/LibraryWatchServiceTests.Hardening` (8: fremder Scan vor seiner ersten Fortschrittsmeldung,
+  Zusammenlegen, Abbruch gibt Ereignisse zurück, Bibliothekswechsel ×2, Ordner „2024.06 Urlaub“ hinein/hinaus,
+  Speicherreihenfolge, Nachrichtenrate), `Watch/WatchPathFilterTests` (+11). Jeder Befund-Test scheitert mit dem alten
+  Verhalten (gegengeprüft durch gezieltes Zurückbauen). `tests/PhotoViewerV3.Wpf.Tests`: 121.
+- Rauchtest 19/19 OK, 0 WPF-Binding-Fehler.
+
+### Offen
+- Scan und Datei-Operation derselben Bibliothek sind nicht gegeneinander gesperrt (Single-Writer gilt nur je Dienst): ein
+  Scan, der den Katalog liest, während ein Batch Dateien verschiebt, kann eine verschobene Datei als „fehlt“ + „neu“
+  sehen. Kandidat: `FileOperationService` belegt für die Dauer eines Batches dasselbe `IScanGate`.
+- Ein wartender manueller Scan zeigt auf der Bibliotheksseite bis zum Start „Ordner werden durchsucht…“ ohne Hinweis aufs
+  Warten.
+
 ## [0.2.13] — 2026-10-19
 
 ### Geändert

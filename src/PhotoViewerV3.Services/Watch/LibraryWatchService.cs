@@ -14,25 +14,35 @@ namespace PhotoViewerV3.Services.Watch;
 /// <item>Ein <see cref="FileSystemWatcher"/> je Wurzel (rekursiv, 64 KB Puffer). Nicht erreichbare Wurzeln werden alle
 /// <see cref="RootRetryInterval"/> erneut versucht; nach einem Watcher-Fehler (Pufferüberlauf) wird der Watcher neu
 /// gestartet und ein Scan eingeplant, weil Ereignisse verloren sein können.</item>
-/// <item>Relevant sind nur Medienformate (<see cref="WatchPathFilter"/>). Ereignisse werden gezählt, nicht gespeichert; jedes
-/// Ereignis startet die Ruhezeit neu. Erst <see cref="QuietPeriod"/> ohne weiteres Ereignis löst einen Incremental-Scan
-/// über <see cref="IScanService"/> aus.</item>
-/// <item>Nie parallel zu einem laufenden Scan — weder zum eigenen noch zu einem manuellen (erkannt an
-/// <see cref="ScanProgressMessage"/>/<see cref="ScanCompletedMessage"/>/<see cref="ScanAbortedMessage"/> der Bibliothek).
-/// Während eines Scans gesammelte Ereignisse werden nach dessen Ende erneut geprüft (neue Ruhezeit).</item>
+/// <item>Relevant sind nur Medienformate und Ordner (<see cref="WatchPathFilter"/>). Ereignisse werden gezählt, nicht
+/// gespeichert; jedes Ereignis startet die Ruhezeit neu. Erst <see cref="QuietPeriod"/> ohne weiteres Ereignis löst einen
+/// Incremental-Scan über <see cref="IScanService"/> aus.</item>
+/// <item>Nie parallel zu einem laufenden Scan derselben Bibliothek: <see cref="IScanGate"/> serialisiert alle Scans
+/// (der spätere wartet). Belegt ein fremder Scan (Bibliotheksseite, Entpacken) die Bibliothek, sind alle bis dahin
+/// gesammelten Ereignisse durch ihn abgedeckt und werden verworfen (zusammengelegt); endet er nicht erfolgreich, kommen
+/// sie zurück. Ereignisse während eines Scans werden nach dessen Ende erneut geprüft (neue Ruhezeit). Zusätzlich
+/// erkennt der Dienst fremde Scans an <see cref="ScanProgressMessage"/>/<see cref="ScanCompletedMessage"/>/
+/// <see cref="ScanAbortedMessage"/> der Bibliothek.</item>
 /// <item>Endet der automatische Scan mit <see cref="ScanOutcome.MassMissingBlocked"/> oder <see cref="ScanOutcome.LibraryOffline"/>,
 /// wird nicht automatisch wiederholt (<see cref="WatchState.Blocked"/>, Hinweis in der Statusleiste); ein erfolgreicher
 /// manueller Scan, ein Bibliothekswechsel oder das Umschalten der Einstellung hebt die Sperre auf.</item>
 /// <item>Wechsel der aktiven Bibliothek per <see cref="ActiveLibraryChangedMessage"/>; Start beim App-Start, Stop beim
-/// Beenden (Dispose über den DI-Container).</item>
+/// Beenden (Dispose über den DI-Container). Jeder Wechsel erhöht eine Epoche: das Ergebnis eines automatischen Scans
+/// der vorigen Bibliothek (Sperre, „Automatisch aktualisiert“) wird verworfen statt der neuen zugeordnet.</item>
 /// </list>
 /// Alle Zustandsänderungen gehen als <see cref="WatchStatusChangedMessage"/> an den Messenger (vom Watcher-, Timer- oder
-/// Scan-Thread). Der Zustand wird unter einem Lock geführt; Nachrichten werden außerhalb des Locks gesendet.
+/// Scan-Thread). Der Zustand wird unter einem Lock geführt; gesendet wird außerhalb des Locks, immer der jüngste Zustand
+/// und nie ein älterer nach einem jüngeren. Reine Countdown-Verschiebungen (jedes Ereignis setzt die Ruhezeit neu)
+/// gehen höchstens alle <see cref="CountdownPublishInterval"/> hinaus, die letzte nachlaufend — beim Kopieren Tausender
+/// Dateien flutet das den UI-Thread nicht.
 /// </summary>
 public sealed class LibraryWatchService : ILibraryWatchService
 {
     /// <summary>Abstand, in dem eine nicht erreichbare Wurzel erneut versucht wird.</summary>
     public static readonly TimeSpan RootRetryInterval = TimeSpan.FromSeconds(30);
+
+    /// <summary>Mindestabstand zweier Statusnachrichten, die nur den Countdown verschieben.</summary>
+    public static readonly TimeSpan CountdownPublishInterval = TimeSpan.FromMilliseconds(500);
 
     private const int WatcherBufferSize = 64 * 1024;
 
@@ -42,12 +52,16 @@ public sealed class LibraryWatchService : ILibraryWatchService
     private readonly WatchPathFilter _filter;
     private readonly ILogger<LibraryWatchService> _logger;
     private readonly IMessenger _messenger;
+    private readonly IScanGate _scanGate;
     private readonly TimeSpan _rootRetryInterval;
 
     private readonly object _gate = new();
+    private readonly object _sendGate = new();
+    private readonly SemaphoreSlim _saveLock = new(1, 1);
     private readonly List<FileSystemWatcher> _watchers = new();
     private readonly Timer _quietTimer;
     private readonly Timer _retryTimer;
+    private readonly Timer _publishTimer;
 
     private bool _started;
     private bool _disposed;
@@ -57,7 +71,9 @@ public sealed class LibraryWatchService : ILibraryWatchService
     private string[] _roots = [];
     private string[] _unavailableRoots = [];
     private int _pendingEvents;
+    private int _coveredEvents;
     private bool _ownScanRunning;
+    private long _ownScanEpoch;
     private bool _externalScanRunning;
     private bool _blocked;
     private string? _blockedReason;
@@ -65,9 +81,15 @@ public sealed class LibraryWatchService : ILibraryWatchService
     private CancellationTokenSource? _scanCts;
     private WatchStatus _status = WatchStatus.Off;
     private int _attachVersion;
+    private long _libraryEpoch;
+    private long _statusVersion;
+    private long _sentVersion;
+    private long _lastCountdownPublishTicks = long.MinValue / 2;
+    private bool _publishScheduled;
 
     /// <param name="messenger">Optional (Tests); produktiv WeakReferenceMessenger.Default.</param>
     /// <param name="rootRetryInterval">Optional (Tests); produktiv <see cref="RootRetryInterval"/>.</param>
+    /// <param name="scanGate">Optional (Tests); produktiv der Singleton, den auch der ScanService belegt.</param>
     public LibraryWatchService(
         ILibraryService libraries,
         IScanService scans,
@@ -76,7 +98,8 @@ public sealed class LibraryWatchService : ILibraryWatchService
         IAppDataPaths paths,
         ILogger<LibraryWatchService> logger,
         IMessenger? messenger = null,
-        TimeSpan? rootRetryInterval = null)
+        TimeSpan? rootRetryInterval = null,
+        IScanGate? scanGate = null)
     {
         _libraries = libraries;
         _scans = scans;
@@ -84,9 +107,11 @@ public sealed class LibraryWatchService : ILibraryWatchService
         _filter = new WatchPathFilter(formats, paths.ThumbnailsRoot);
         _logger = logger;
         _messenger = messenger ?? WeakReferenceMessenger.Default;
+        _scanGate = scanGate ?? new ScanGate();
         _rootRetryInterval = rootRetryInterval ?? RootRetryInterval;
         _quietTimer = new Timer(_ => OnQuietElapsed(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
         _retryTimer = new Timer(_ => OnRetryTick(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+        _publishTimer = new Timer(_ => OnPublishTick(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
     }
 
     public bool IsEnabled
@@ -177,6 +202,7 @@ public sealed class LibraryWatchService : ILibraryWatchService
         _messenger.Register<LibraryWatchService, ScanProgressMessage>(this, static (r, m) => r.OnExternalScanProgress(m));
         _messenger.Register<LibraryWatchService, ScanCompletedMessage>(this, static (r, m) => r.OnExternalScanFinished(m.LibraryId, m.Result.Outcome == ScanOutcome.Completed));
         _messenger.Register<LibraryWatchService, ScanAbortedMessage>(this, static (r, m) => r.OnExternalScanFinished(m.LibraryId, completedOk: false));
+        _scanGate.Acquired += OnScanGateAcquired;
 
         _logger.LogInformation("Ordnerüberwachung: {State}, Ruhezeit {Quiet} s", settings.Enabled ? "an" : "aus", (int)_quietPeriod.TotalSeconds);
         await AttachToActiveLibraryAsync(ct).ConfigureAwait(false);
@@ -184,7 +210,6 @@ public sealed class LibraryWatchService : ILibraryWatchService
 
     public Task StopAsync()
     {
-        WatchStatus status;
         lock (_gate)
         {
             if (!_started)
@@ -193,24 +218,29 @@ public sealed class LibraryWatchService : ILibraryWatchService
             }
 
             _started = false;
+            _libraryEpoch++;
             CancelOwnScanLocked();
             DisposeWatchersLocked();
             _quietTimer.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
             _retryTimer.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+            _publishTimer.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+            _publishScheduled = false;
             _libraryId = null;
             _roots = [];
             _unavailableRoots = [];
             _pendingEvents = 0;
+            _coveredEvents = 0;
             _dueAtUtc = null;
             _blocked = false;
             _blockedReason = null;
             _externalScanRunning = false;
-            status = SetStatusLocked();
+            SetStatusLocked();
         }
 
+        _scanGate.Acquired -= OnScanGateAcquired;
         _messenger.UnregisterAll(this);
         _logger.LogInformation("Ordnerüberwachung beendet");
-        Send(status);
+        Publish();
         return Task.CompletedTask;
     }
 
@@ -232,24 +262,23 @@ public sealed class LibraryWatchService : ILibraryWatchService
 
         _quietTimer.Dispose();
         _retryTimer.Dispose();
+        _publishTimer.Dispose();
     }
 
     // ---- Einstellungen -----------------------------------------------------------------------------
 
     public async Task SetEnabledAsync(bool enabled, CancellationToken ct = default)
     {
-        WatchStatus status;
-        TimeSpan quiet;
         lock (_gate)
         {
             _enabled = enabled;
-            quiet = _quietPeriod;
             _blocked = false;
             _blockedReason = null;
             if (!enabled)
             {
                 CancelOwnScanLocked();
                 _pendingEvents = 0;
+                _coveredEvents = 0;
                 _dueAtUtc = null;
                 _quietTimer.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
             }
@@ -259,34 +288,55 @@ public sealed class LibraryWatchService : ILibraryWatchService
                 RebuildWatchersLocked();
             }
 
-            status = SetStatusLocked();
+            SetStatusLocked();
         }
 
         _logger.LogInformation("Ordnerüberwachung {State}", enabled ? "eingeschaltet" : "ausgeschaltet");
-        Send(status);
-        await _settingsStore.SaveAsync(new WatchSettings(enabled, quiet), ct).ConfigureAwait(false);
+        Publish();
+        await PersistSettingsAsync(ct).ConfigureAwait(false);
     }
 
     public async Task SetQuietPeriodAsync(TimeSpan quietPeriod, CancellationToken ct = default)
     {
         var quiet = WatchSettings.ClampQuietPeriod(quietPeriod);
-        WatchStatus status;
-        bool enabled;
         lock (_gate)
         {
             _quietPeriod = quiet;
-            enabled = _enabled;
             if (_pendingEvents > 0 && !_ownScanRunning && !_externalScanRunning && !_blocked)
             {
                 ArmQuietTimerLocked();
             }
 
-            status = SetStatusLocked();
+            SetStatusLocked();
         }
 
         _logger.LogInformation("Ordnerüberwachung: Ruhezeit {Quiet} s", (int)quiet.TotalSeconds);
-        Send(status);
-        await _settingsStore.SaveAsync(new WatchSettings(enabled, quiet), ct).ConfigureAwait(false);
+        Publish();
+        await PersistSettingsAsync(ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Speichert den aktuellen Stand (nicht den Wert des Aufrufs): Speichervorgänge laufen nacheinander und lesen den
+    /// Zustand erst, wenn sie an der Reihe sind. Schnelle Folgen (NumberBox-Pfeile, Tippen) können sich so nicht
+    /// überholen — der zuletzt gesetzte Wert steht immer zuletzt in der Settings-Tabelle.
+    /// </summary>
+    private async Task PersistSettingsAsync(CancellationToken ct)
+    {
+        await _saveLock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            WatchSettings current;
+            lock (_gate)
+            {
+                current = new WatchSettings(_enabled, _quietPeriod);
+            }
+
+            await _settingsStore.SaveAsync(current, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _saveLock.Release();
+        }
     }
 
     // ---- Bibliothek --------------------------------------------------------------------------------
@@ -328,7 +378,6 @@ public sealed class LibraryWatchService : ILibraryWatchService
         }
 
         var roots = library is null ? [] : GetRootPaths(library).ToArray();
-        WatchStatus status;
         lock (_gate)
         {
             if (!_started || version != _attachVersion)
@@ -340,9 +389,15 @@ public sealed class LibraryWatchService : ILibraryWatchService
             if (!unchanged)
             {
                 CancelOwnScanLocked();
+                if (_libraryId != library?.Id)
+                {
+                    _libraryEpoch++; // Ergebnis eines noch laufenden Scans gehört nicht mehr zur aktiven Bibliothek
+                }
+
                 _libraryId = library?.Id;
                 _roots = roots;
                 _pendingEvents = 0;
+                _coveredEvents = 0;
                 _dueAtUtc = null;
                 _blocked = false;
                 _blockedReason = null;
@@ -357,10 +412,10 @@ public sealed class LibraryWatchService : ILibraryWatchService
                 RebuildWatchersLocked();
             }
 
-            status = SetStatusLocked();
+            SetStatusLocked();
         }
 
-        Send(status);
+        Publish();
     }
 
     /// <summary>Watcher für die aktuellen Wurzeln (neu) aufbauen; Zähler und Sperre bleiben unberührt.</summary>
@@ -434,7 +489,6 @@ public sealed class LibraryWatchService : ILibraryWatchService
 
     private void OnRetryTick()
     {
-        WatchStatus status;
         lock (_gate)
         {
             if (!_started || !_enabled || _libraryId is null || _unavailableRoots.Length == 0)
@@ -451,10 +505,10 @@ public sealed class LibraryWatchService : ILibraryWatchService
                 ArmQuietTimerLocked();
             }
 
-            status = SetStatusLocked();
+            SetStatusLocked();
         }
 
-        Send(status);
+        Publish();
     }
 
     // ---- Ereignisse --------------------------------------------------------------------------------
@@ -466,7 +520,7 @@ public sealed class LibraryWatchService : ILibraryWatchService
             return;
         }
 
-        WatchStatus? status = null;
+        var publishNow = false;
         lock (_gate)
         {
             if (!_started || !_enabled || _libraryId is null || _blocked)
@@ -476,16 +530,18 @@ public sealed class LibraryWatchService : ILibraryWatchService
 
             _pendingEvents++;
             ArmQuietTimerLocked();
-            if (!_ownScanRunning && !_externalScanRunning)
+            if (!IsScanRunningForActiveLibraryLocked())
             {
-                status = SetStatusLocked();
+                var countdownOnly = _status.State == WatchState.ChangesPending && _status.LibraryId == _libraryId;
+                SetStatusLocked();
+                publishNow = ShouldPublishNowLocked(countdownOnly);
             }
         }
 
         _logger.LogDebug("Ordnerüberwachung: {Change} {Path}", change, fullPath);
-        if (status is not null)
+        if (publishNow)
         {
-            Send(status);
+            Publish();
         }
     }
 
@@ -495,7 +551,6 @@ public sealed class LibraryWatchService : ILibraryWatchService
         // Nicht im Watcher-Callback selbst neu aufbauen (Dispose des eigenen Watchers).
         ThreadPool.QueueUserWorkItem(_ =>
         {
-            WatchStatus status;
             lock (_gate)
             {
                 if (!_started || !_enabled || _libraryId is null)
@@ -510,10 +565,10 @@ public sealed class LibraryWatchService : ILibraryWatchService
                     ArmQuietTimerLocked();
                 }
 
-                status = SetStatusLocked();
+                SetStatusLocked();
             }
 
-            Send(status);
+            Publish();
         });
     }
 
@@ -528,9 +583,9 @@ public sealed class LibraryWatchService : ILibraryWatchService
     private void OnQuietElapsed()
     {
         int libraryId;
+        long epoch;
         CancellationToken token;
         int events;
-        WatchStatus status;
         lock (_gate)
         {
             if (!_started || !_enabled || _libraryId is null || _blocked || _pendingEvents == 0)
@@ -545,20 +600,23 @@ public sealed class LibraryWatchService : ILibraryWatchService
 
             events = _pendingEvents;
             _pendingEvents = 0;
+            _coveredEvents = 0;
             _dueAtUtc = null;
             _ownScanRunning = true;
+            _ownScanEpoch = _libraryEpoch;
             _scanCts = new CancellationTokenSource();
             token = _scanCts.Token;
             libraryId = _libraryId.Value;
-            status = SetStatusLocked();
+            epoch = _libraryEpoch;
+            SetStatusLocked();
         }
 
         _logger.LogInformation("Ordnerüberwachung: {Events} Ereignis(se), Ruhezeit abgelaufen → Incremental-Scan der Bibliothek {LibraryId}", events, libraryId);
-        Send(status);
-        _ = RunAutoScanAsync(libraryId, token);
+        Publish();
+        _ = RunAutoScanAsync(libraryId, epoch, token);
     }
 
-    private async Task RunAutoScanAsync(int libraryId, CancellationToken token)
+    private async Task RunAutoScanAsync(int libraryId, long epoch, CancellationToken token)
     {
         ScanResult? result = null;
         string? blockReason = null;
@@ -589,29 +647,43 @@ public sealed class LibraryWatchService : ILibraryWatchService
             _logger.LogError(ex, "Ordnerüberwachung: automatischer Scan fehlgeschlagen");
         }
 
-        WatchStatus status;
         lock (_gate)
         {
             _ownScanRunning = false;
             _scanCts?.Dispose();
             _scanCts = null;
-            if (blockReason is not null)
+            if (epoch != _libraryEpoch)
             {
-                _blocked = true;
-                _blockedReason = blockReason;
-                _pendingEvents = 0;
-                _dueAtUtc = null;
-                _logger.LogWarning("Ordnerüberwachung angehalten: {Reason}", blockReason);
-            }
-            else if (_pendingEvents > 0 && _started && _enabled && !_externalScanRunning)
-            {
-                ArmQuietTimerLocked(); // während des Scans kamen weitere Ereignisse
-            }
+                // Bibliothek gewechselt (oder Überwachung beendet), während der Scan lief: Sperre und Ergebnis gehören
+                // zur vorigen Bibliothek und dürfen der aktiven nicht zugeordnet werden.
+                _logger.LogInformation("Ordnerüberwachung: Ergebnis des automatischen Scans der Bibliothek {LibraryId} verworfen (Bibliothek gewechselt)", libraryId);
+                if (_pendingEvents > 0 && _started && _enabled && !_blocked && !_externalScanRunning)
+                {
+                    ArmQuietTimerLocked(); // Ereignisse der neuen Bibliothek, die auf das Ende dieses Scans gewartet haben
+                }
 
-            status = SetStatusLocked(result is { Outcome: ScanOutcome.Completed } ? result : null);
+                SetStatusLocked();
+            }
+            else
+            {
+                if (blockReason is not null)
+                {
+                    _blocked = true;
+                    _blockedReason = blockReason;
+                    _pendingEvents = 0;
+                    _dueAtUtc = null;
+                    _logger.LogWarning("Ordnerüberwachung angehalten: {Reason}", blockReason);
+                }
+                else if (_pendingEvents > 0 && _started && _enabled && !_externalScanRunning)
+                {
+                    ArmQuietTimerLocked(); // während des Scans kamen weitere Ereignisse
+                }
+
+                SetStatusLocked(result is { Outcome: ScanOutcome.Completed } ? result : null);
+            }
         }
 
-        Send(status);
+        Publish();
     }
 
     private void CancelOwnScanLocked()
@@ -626,14 +698,54 @@ public sealed class LibraryWatchService : ILibraryWatchService
         }
     }
 
-    // ---- Manuelle Scans (Bibliotheksseite) ---------------------------------------------------------
+    /// <summary>Läuft ein Scan der aktiven Bibliothek (eigener der aktuellen Epoche oder fremder)?</summary>
+    private bool IsScanRunningForActiveLibraryLocked()
+        => (_ownScanRunning && _ownScanEpoch == _libraryEpoch) || _externalScanRunning;
+
+    // ---- Fremde Scans (Bibliotheksseite, Entpacken) ------------------------------------------------
+
+    /// <summary>
+    /// Ein Scan hat die Bibliothek belegt und liest das Dateisystem erst danach: alle bis hierher gesammelten Ereignisse
+    /// sieht er. Sie werden verworfen (merkt sich <see cref="_coveredEvents"/> für den Fall, dass er nicht erfolgreich
+    /// endet). Ein fremder Scan gilt ab hier als laufend (kein Countdown, kein eigener Scan) — nicht erst ab seiner
+    /// ersten <see cref="ScanProgressMessage"/>; jeder belegende Scan endet mit ScanCompleted- oder ScanAbortedMessage.
+    /// </summary>
+    private void OnScanGateAcquired(int libraryId)
+    {
+        lock (_gate)
+        {
+            if (!_started || libraryId != _libraryId)
+            {
+                return;
+            }
+
+            if (_pendingEvents > 0)
+            {
+                _coveredEvents += _pendingEvents;
+                _pendingEvents = 0;
+                _dueAtUtc = null;
+                _quietTimer.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+            }
+
+            // Belegt der eigene Scan (oder ein fremder, während der eigene noch wartet), bleibt der eigene maßgeblich —
+            // dessen Ende prüft die Ereignisse erneut.
+            if (!_ownScanRunning)
+            {
+                _externalScanRunning = true;
+            }
+
+            SetStatusLocked();
+        }
+
+        Publish();
+    }
 
     private void OnExternalScanProgress(ScanProgressMessage message)
     {
-        WatchStatus? status = null;
+        var publish = false;
         lock (_gate)
         {
-            if (!_started || message.LibraryId != _libraryId || _ownScanRunning || _externalScanRunning)
+            if (!_started || message.LibraryId != _libraryId || IsScanRunningForActiveLibraryLocked())
             {
                 return;
             }
@@ -643,22 +755,22 @@ public sealed class LibraryWatchService : ILibraryWatchService
             {
                 _quietTimer.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
                 _dueAtUtc = null;
-                status = SetStatusLocked();
+                SetStatusLocked();
+                publish = true;
             }
         }
 
-        if (status is not null)
+        if (publish)
         {
-            Send(status);
+            Publish();
         }
     }
 
     private void OnExternalScanFinished(int libraryId, bool completedOk)
     {
-        WatchStatus status;
         lock (_gate)
         {
-            if (!_started || libraryId != _libraryId || _ownScanRunning)
+            if (!_started || libraryId != _libraryId || (_ownScanRunning && _ownScanEpoch == _libraryEpoch))
             {
                 return;
             }
@@ -671,15 +783,21 @@ public sealed class LibraryWatchService : ILibraryWatchService
                 _logger.LogInformation("Ordnerüberwachung: Sperre nach erfolgreichem manuellen Scan aufgehoben");
             }
 
+            if (!completedOk && _coveredEvents > 0 && _enabled && !_blocked)
+            {
+                _pendingEvents += _coveredEvents; // abgebrochen/fehlgeschlagen: die abgedeckten Ereignisse gelten wieder
+            }
+
+            _coveredEvents = 0;
             if (_pendingEvents > 0 && _enabled && !_blocked)
             {
                 ArmQuietTimerLocked();
             }
 
-            status = SetStatusLocked();
+            SetStatusLocked();
         }
 
-        Send(status);
+        Publish();
     }
 
     // ---- Zustand -----------------------------------------------------------------------------------
@@ -697,7 +815,7 @@ public sealed class LibraryWatchService : ILibraryWatchService
             state = WatchState.Blocked;
             reason = _blockedReason;
         }
-        else if (_ownScanRunning)
+        else if (_ownScanRunning && _ownScanEpoch == _libraryEpoch)
         {
             state = WatchState.Scanning;
         }
@@ -716,18 +834,77 @@ public sealed class LibraryWatchService : ILibraryWatchService
         }
 
         _status = new WatchStatus(_libraryId, state, state == WatchState.ChangesPending ? _dueAtUtc : null, reason, lastAutoScan);
+        _statusVersion++;
         return _status;
     }
 
-    private void Send(WatchStatus status)
+    /// <summary>
+    /// Drosselung reiner Countdown-Verschiebungen: sofort, wenn der letzte Countdown-Versand mindestens
+    /// <see cref="CountdownPublishInterval"/> zurückliegt, sonst einmal nachlaufend über <see cref="_publishTimer"/>.
+    /// Zustandswechsel gehen immer sofort hinaus.
+    /// </summary>
+    private bool ShouldPublishNowLocked(bool countdownOnly)
     {
-        try
+        var now = Environment.TickCount64;
+        var interval = (long)CountdownPublishInterval.TotalMilliseconds;
+        var elapsed = now - _lastCountdownPublishTicks;
+        if (!countdownOnly || elapsed >= interval)
         {
-            _messenger.Send(new WatchStatusChangedMessage(status));
+            _lastCountdownPublishTicks = now;
+            return true;
         }
-        catch (Exception ex)
+
+        if (!_publishScheduled)
         {
-            _logger.LogWarning(ex, "Ordnerüberwachung: Statusnachricht konnte nicht zugestellt werden");
+            _publishScheduled = true;
+            _publishTimer.Change(TimeSpan.FromMilliseconds(interval - elapsed), Timeout.InfiniteTimeSpan);
+        }
+
+        return false;
+    }
+
+    private void OnPublishTick()
+    {
+        lock (_gate)
+        {
+            _publishScheduled = false;
+            _lastCountdownPublishTicks = Environment.TickCount64;
+        }
+
+        Publish();
+    }
+
+    /// <summary>
+    /// Sendet den jüngsten Zustand, falls er noch nicht gesendet wurde. Serialisiert über <see cref="_sendGate"/>: ein
+    /// älterer Zustand kann einen jüngeren nie überholen (Watcher-, Timer- und Scan-Threads senden gleichzeitig).
+    /// Nie unter <see cref="_gate"/> aufrufen.
+    /// </summary>
+    private void Publish()
+    {
+        lock (_sendGate)
+        {
+            WatchStatus status;
+            long version;
+            lock (_gate)
+            {
+                status = _status;
+                version = _statusVersion;
+            }
+
+            if (version == _sentVersion)
+            {
+                return;
+            }
+
+            _sentVersion = version;
+            try
+            {
+                _messenger.Send(new WatchStatusChangedMessage(status));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Ordnerüberwachung: Statusnachricht konnte nicht zugestellt werden");
+            }
         }
     }
 }

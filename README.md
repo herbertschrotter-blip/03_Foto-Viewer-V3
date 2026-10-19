@@ -214,8 +214,19 @@ Neue, gelöschte, umbenannte oder geänderte Fotos und Videos (nur Formate aus d
 „Aktualisieren“ (Incremental-Scan, stabile FileIds) — die Statusleiste zeigt vorher „Änderungen erkannt —
 Aktualisierung in n s“, danach „Automatisch aktualisiert: …“. Regeln:
 
-- Nie parallel zu einem laufenden Scan: läuft gerade „Aktualisieren“ oder „Neu aufbauen“, wartet die Automatik und prüft
-  die gesammelten Änderungen danach erneut.
+- Nie zwei Scans derselben Bibliothek gleichzeitig — egal ob „Aktualisieren“, „Neu aufbauen“, Entpacken oder Automatik:
+  der spätere wartet, bis der laufende fertig ist. Änderungen, die vor dem Start eines manuellen Scans passiert sind,
+  erledigt dieser gleich mit (kein zweiter automatischer Scan danach); was während des Scans passiert, prüft die Automatik
+  danach erneut. Wird der manuelle Scan abgebrochen, gelten die gesammelten Änderungen wieder.
+- Auch Ordner zählen (angelegt, hinein-/hinausverschoben, umbenannt, gelöscht), mit Punkt im Namen wie `2024.06 Urlaub`.
+  Einzige Lücke: ein *gelöschter* Ordner, dessen Name wie eine Dateiendung endet (`Fotos.alt`), ist von einer gelöschten
+  Nicht-Mediendatei nicht zu unterscheiden und löst keinen Scan aus.
+- Wechselt die aktive Bibliothek während eines automatischen Scans, wird dessen Ergebnis (auch eine Sperre) verworfen und
+  nicht der neuen Bibliothek zugeordnet.
+- Eigene Datei-Vorgänge der App (Verschieben, „Ins Archiv…“, Papierkorb) buchen den Katalog selbst; die Überwachung sieht
+  ihre Dateiereignisse trotzdem und aktualisiert danach einmal automatisch (Ergebnis „keine Änderungen“). Entpacken
+  aktualisiert am Ende selbst — die Ereignisse davor sind damit erledigt, ein zweiter automatischer Scan entfällt in der
+  Regel.
 - Meldet der automatische Scan **viele fehlende Dateien** (Mass-Missing-Guard) oder eine **Bibliothek offline**, wird nicht
   automatisch wiederholt; die Statusleiste zeigt „Automatische Aktualisierung angehalten: …“, bis ein manuelles
   „Aktualisieren“ auf der Bibliotheksseite erfolgreich war (oder die Bibliothek gewechselt bzw. die Überwachung
@@ -223,7 +234,10 @@ Aktualisierung in n s“, danach „Automatisch aktualisiert: …“. Regeln:
 - Nicht erreichbare Wurzeln (USB/NAS) werden alle 30 s erneut versucht; kommt die Wurzel zurück, folgt ein Scan nach der
   Ruhezeit. Ein Pufferüberlauf des Watchers startet ihn neu und plant ebenfalls einen Scan ein.
 - Einstellungen „Bibliotheksordner überwachen“ (Standard: an) und „Ruhezeit“ liegen in der Settings-Tabelle
-  (`watch.enabled`, `watch.quietSeconds`) und wirken sofort.
+  (`watch.enabled`, `watch.quietSeconds`) und wirken sofort; schnelle Änderungen (Pfeile der Ruhezeit) werden der Reihe
+  nach gespeichert, der zuletzt eingestellte Wert gilt.
+- Beim Kopieren Tausender Dateien verschiebt jedes Ereignis den Countdown; die Statusleiste bekommt davon höchstens zwei
+  Meldungen je Sekunde (gebündelt, Background-Priorität).
 
 ### Statusleiste
 Links: aktive Bibliothek, Scan-Fortschritt bzw. -Ergebnis, Vorschaubilder in der Warteschlange. Rechts: Hinweise

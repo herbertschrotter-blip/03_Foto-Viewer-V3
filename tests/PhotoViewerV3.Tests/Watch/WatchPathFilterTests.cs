@@ -57,4 +57,39 @@ public sealed class WatchPathFilterTests
             Directory.Delete(dir, recursive: true);
         }
     }
+
+    [Theory]
+    [InlineData("2024.06 Urlaub")]
+    [InlineData("v1.2")]
+    [InlineData("Fotos.alt")]
+    public void Directory_with_a_dot_in_its_name_counts_when_created_or_renamed(string name)
+    {
+        var parent = Path.Combine(Path.GetTempPath(), "PhotoViewerV3.Tests", "watch-dot-" + Guid.NewGuid().ToString("N"));
+        var dir = Path.Combine(parent, name);
+        Directory.CreateDirectory(dir);
+        try
+        {
+            _filter.IsRelevant(WatcherChangeTypes.Created, dir).Should().BeTrue("ein angelegter Ordner kann Medien enthalten — auch mit Punkt im Namen");
+            _filter.IsRelevant(WatcherChangeTypes.Renamed, dir, oldPath: Path.Combine(parent, "alt")).Should().BeTrue();
+            _filter.IsRelevant(WatcherChangeTypes.Changed, dir).Should().BeFalse("Changed eines Ordners feuert für jede Datei darin");
+        }
+        finally
+        {
+            Directory.Delete(parent, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(@"C:\lib\2024.06 Urlaub", true)]
+    [InlineData(@"C:\lib\2024.06", true)]
+    [InlineData(@"C:\lib\Teil 1. Rom", true)]
+    [InlineData(@"C:\lib\2024\IMG_0001.jpg", true)]
+    [InlineData(@"C:\lib\2024\notizen.txt", false)]
+    [InlineData(@"C:\lib\2024\IMG_0001.jpg.xmp", false)]
+    [InlineData(@"C:\lib\2024\IMG_0001.jpg.tmp", false)]
+    [InlineData(@"C:\lib\2024\video.crdownload", false)]
+    public void Deleted_path_with_a_dot_counts_when_it_cannot_be_a_file_extension(string path, bool expected)
+    {
+        _filter.IsRelevant(WatcherChangeTypes.Deleted, path).Should().Be(expected);
+    }
 }

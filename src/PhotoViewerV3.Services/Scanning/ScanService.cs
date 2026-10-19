@@ -64,8 +64,10 @@ public sealed class ScanService : IScanService
     private readonly ILibraryService _libraryService;
     private readonly ILogger<ScanService> _logger;
     private readonly IMessenger _messenger;
+    private readonly IScanGate _scanGate;
 
     /// <param name="messenger">Optional (Tests); produktiv WeakReferenceMessenger.Default.</param>
+    /// <param name="scanGate">Optional (Tests: eigene Instanz); produktiv der gemeinsame Singleton (auch für die Ordnerüberwachung).</param>
     public ScanService(
         ILibraryContextFactory contextFactory,
         FolderEnumerator enumerator,
@@ -73,7 +75,8 @@ public sealed class ScanService : IScanService
         FtsIndexer ftsIndexer,
         ILibraryService libraryService,
         ILogger<ScanService> logger,
-        IMessenger? messenger = null)
+        IMessenger? messenger = null,
+        IScanGate? scanGate = null)
     {
         _contextFactory = contextFactory;
         _enumerator = enumerator;
@@ -82,6 +85,7 @@ public sealed class ScanService : IScanService
         _libraryService = libraryService;
         _logger = logger;
         _messenger = messenger ?? WeakReferenceMessenger.Default;
+        _scanGate = scanGate ?? new ScanGate();
     }
 
     public Task<ScanResult> ScanAsync(
@@ -117,6 +121,9 @@ public sealed class ScanService : IScanService
         var reporter = new ScanProgressReporter(libraryId, progress, _messenger);
         try
         {
+            // Nie zwei Scans derselben Bibliothek gleichzeitig (manuell, Entpacken, Ordnerüberwachung): der spätere wartet.
+            // Im try, damit auch ein beim Warten abgebrochener Aufruf seine ScanAbortedMessage sendet.
+            using var lease = await _scanGate.AcquireAsync(libraryId, ct).ConfigureAwait(false);
             var result = mode == ScanMode.Incremental
                 ? await RunIncrementalScanAsync(libraryId, options, reporter, ct).ConfigureAwait(false)
                 : await RunFullScanAsync(libraryId, mode, reporter, ct).ConfigureAwait(false);

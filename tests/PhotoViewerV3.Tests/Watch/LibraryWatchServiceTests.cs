@@ -12,7 +12,7 @@ namespace PhotoViewerV3.Tests.Watch;
 /// Ordnerüberwachung mit echtem FileSystemWatcher auf dem Temp-Ordner der <see cref="TempLibraryFixture"/> und einem
 /// Scan-Fake. Ruhezeit 1 s (Minimum); alle Waits mit Timeout.
 /// </summary>
-public sealed class LibraryWatchServiceTests
+public sealed partial class LibraryWatchServiceTests
 {
     private static readonly TimeSpan Quiet = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan EventTimeout = TimeSpan.FromSeconds(10);
@@ -28,6 +28,9 @@ public sealed class LibraryWatchServiceTests
         public FakeScanService Scans { get; private set; } = null!;
         public WatchSettingsStore Store { get; private set; } = null!;
         public LibraryWatchService Service { get; private set; } = null!;
+
+        /// <summary>Gemeinsame Scan-Sperre wie in der App (ScanService-Singleton und Ordnerüberwachung).</summary>
+        public ScanGate Gate { get; } = new();
 
         public IReadOnlyList<WatchStatus> Statuses
         {
@@ -46,7 +49,7 @@ public sealed class LibraryWatchServiceTests
             h.Fixture = await TempLibraryFixture.CreateAsync();
             var library = await h.Fixture.CreateLibraryAsync();
             h.LibraryId = library.Id;
-            h.Scans = new FakeScanService(h.Fixture.Messenger);
+            h.Scans = new FakeScanService(h.Fixture.Messenger) { ScanGate = h.Gate };
             configureScans?.Invoke(h.Scans);
             h.Store = new WatchSettingsStore(h.Fixture.ContextFactory);
             await h.Store.SaveAsync(new WatchSettings(enabled, Quiet));
@@ -68,7 +71,8 @@ public sealed class LibraryWatchServiceTests
             Fixture.Paths,
             NullLogger<LibraryWatchService>.Instance,
             Fixture.Messenger,
-            rootRetryInterval: TimeSpan.FromMilliseconds(400));
+            rootRetryInterval: TimeSpan.FromMilliseconds(400),
+            scanGate: Gate);
 
         public string WriteFile(string relativePath) => Fixture.WriteLibraryFile(relativePath);
 

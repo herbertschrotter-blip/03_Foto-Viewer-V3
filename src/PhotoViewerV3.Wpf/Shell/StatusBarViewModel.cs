@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
@@ -82,7 +83,7 @@ public sealed partial class StatusBarViewModel : ObservableObject, IDisposable
         _recoveryTimer = new DispatcherTimer(RecoveryPollInterval, DispatcherPriority.Background, (_, _) => _ = RefreshRecoveryAsync(), dispatcher);
         _watchTimer = new DispatcherTimer(WatchTickInterval, DispatcherPriority.Background, OnWatchTick, dispatcher);
         _watchTimer.Stop();
-        _messenger.Register<StatusBarViewModel, WatchStatusChangedMessage>(this, static (r, m) => UiThread.Post(() => r.OnWatchStatus(m.Status)));
+        _messenger.Register<StatusBarViewModel, WatchStatusChangedMessage>(this, static (r, m) => r.QueueWatchStatus(m.Status));
 
         _messenger.Register<StatusBarViewModel, ScanProgressMessage>(this, static (r, m) => UiThread.Post(() => r.OnScanProgress(m)));
         _messenger.Register<StatusBarViewModel, ScanCompletedMessage>(this, static (r, m) => UiThread.Post(() => r.OnScanCompleted(m)));
@@ -280,12 +281,46 @@ public sealed partial class StatusBarViewModel : ObservableObject, IDisposable
     private readonly DispatcherTimer _watchTimer;
     private WatchStatus _watchStatus = WatchStatus.Off;
     private DateTime? _watchClearAtUtc;
+    private WatchStatus? _queuedWatchStatus;
+    private int _watchPostQueued;
 
     /// <summary>Hinweis der Ordnerüberwachung (Countdown, laufender/abgeschlossener automatischer Scan, Sperre); null = nichts.</summary>
     [ObservableProperty] private string? _watchText;
 
     /// <summary>true bei angehaltener Automatik (Warnsymbol statt Sync-Symbol).</summary>
     [ObservableProperty] private bool _watchIsWarning;
+
+    /// <summary>
+    /// Bündelt Statusnachrichten der Ordnerüberwachung (kommen von Watcher-/Timer-/Scan-Threads, beim Kopieren vieler
+    /// Dateien auch dicht hintereinander): nur der jüngste Zustand zählt, höchstens ein Dispatcher-Auftrag steht aus,
+    /// mit Background-Priorität (CLAUDE.md: viele Hintergrund-Meldungen gebündelt an den UI-Thread).
+    /// </summary>
+    private void QueueWatchStatus(WatchStatus status)
+    {
+        Interlocked.Exchange(ref _queuedWatchStatus, status);
+        if (Interlocked.Exchange(ref _watchPostQueued, 1) != 0)
+        {
+            return; // ein Auftrag steht schon aus und nimmt den jüngsten Zustand mit
+        }
+
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess())
+        {
+            ApplyQueuedWatchStatus();
+            return;
+        }
+
+        _ = dispatcher.InvokeAsync(ApplyQueuedWatchStatus, DispatcherPriority.Background);
+    }
+
+    private void ApplyQueuedWatchStatus()
+    {
+        Volatile.Write(ref _watchPostQueued, 0);
+        if (Interlocked.Exchange(ref _queuedWatchStatus, null) is { } status)
+        {
+            OnWatchStatus(status);
+        }
+    }
 
     private void OnWatchStatus(WatchStatus status)
     {

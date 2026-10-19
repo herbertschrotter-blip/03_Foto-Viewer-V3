@@ -35,6 +35,15 @@ public sealed class FakeScanService : IScanService
     /// <summary>Wird bei jedem Scan-Start freigegeben.</summary>
     public SemaphoreSlim Started { get; } = new(0);
 
+    /// <summary>Wird freigegeben, wenn ein Scan sein Ergebnis zurückgibt (auch bei Abbruch/Fehler nicht).</summary>
+    public SemaphoreSlim Finished { get; } = new(0);
+
+    /// <summary>true: <see cref="Gate"/> wartet ohne CancellationToken — der Scan liefert sein Ergebnis trotz Abbruch (z. B. Abbruch kam zu spät).</summary>
+    public bool IgnoreCancellation { get; set; }
+
+    /// <summary>Wenn gesetzt, belegt der Scan wie der echte ScanService die Bibliothek (der spätere wartet).</summary>
+    public IScanGate? ScanGate { get; set; }
+
     public List<ScanMode> Modes { get; } = new();
 
     public Task<ScanResult> ScanAsync(int libraryId, ScanMode mode, IProgress<ScanProgress>? progress, CancellationToken cancellationToken)
@@ -49,12 +58,13 @@ public sealed class FakeScanService : IScanService
         }
 
         Started.Release();
+        using var lease = ScanGate is { } scanGate ? await scanGate.AcquireAsync(libraryId, cancellationToken) : null;
         _messenger.Send(new ScanProgressMessage(libraryId, new ScanProgress(0, 0, 0, null)));
 
         var gate = Gate;
         if (gate is not null)
         {
-            await gate.Task.WaitAsync(cancellationToken);
+            await (IgnoreCancellation ? gate.Task : gate.Task.WaitAsync(cancellationToken));
         }
         else
         {
@@ -78,6 +88,7 @@ public sealed class FakeScanService : IScanService
             _messenger.Send(new ScanCompletedMessage(libraryId, result));
         }
 
+        Finished.Release();
         return result;
     }
 }
