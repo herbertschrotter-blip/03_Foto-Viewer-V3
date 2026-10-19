@@ -1,0 +1,255 @@
+<UserControl x:Class="PhotoViewerV3.Gallery.Controls.GalleryToolbar"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:gc="clr-namespace:PhotoViewerV3.Gallery.Controls"
+             xmlns:conv="clr-namespace:PhotoViewerV3.Gallery.Converters"
+             xmlns:tags="clr-namespace:PhotoViewerV3.Gallery.Tags"
+             xmlns:vm="clr-namespace:PhotoViewerV3.Gallery.ViewModels"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:GalleryViewModel, IsDesignTimeCreatable=False}"
+             d:DesignWidth="1000"
+             Focusable="False">
+    <!--
+        Kopfzeile der Galerie (0.2.13, vorher direkt in GalleryView.xaml). DataContext = GalleryViewModel; Bindungen und
+        Commands unverändert. Zwei ToolbarFlowPanel-Zeilen, die bei wenig Platz umbrechen statt überzulaufen:
+          1. Typ-Filter als Segmentgruppe (Alle | Bilder | Videos | Favoriten | Archive), Status-Dropdown (Nicht
+             archiviert / Archiviert), Tag-Filter, Ordner-Chip, Suche (Mindestbreite, wächst bis MaxWidth; passt sie
+             nicht mehr in die Zeile, rutscht sie in eine eigene Zeile darunter).
+          2. Sortierung, Seitengröße — Umschalter Kachel/Liste, Rückgängig, Aktualisieren (rechtsbündig).
+    -->
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        <conv:EnumEqualsConverter x:Key="EnumEquals" />
+
+        <!-- Ein Segment der Filtergruppe (Fluent „Segmented“): ausgewählt = Akzentfläche, Hover = dezente Fläche -->
+        <Style x:Key="FilterSegment" TargetType="RadioButton">
+            <Setter Property="GroupName" Value="Filter" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+            <Setter Property="Padding" Value="10,0" />
+            <Setter Property="MinHeight" Value="28" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Segment"
+                                CornerRadius="4"
+                                Background="Transparent"
+                                BorderBrush="Transparent"
+                                BorderThickness="1"
+                                Padding="{TemplateBinding Padding}"
+                                MinHeight="{TemplateBinding MinHeight}">
+                            <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Segment" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Segment" Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Segment" Property="BorderBrush" Value="{DynamicResource FocusStrokeColorOuterBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Rahmenloser Schließen-Knopf im Ordner-Chip -->
+        <Style x:Key="ChipButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="3" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="12" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <StackPanel>
+        <!-- Zeile 1: Filter + Suche -->
+        <gc:ToolbarFlowPanel x:Name="FilterRow" Margin="0,0,0,6">
+            <Border x:Name="TypeFilterGroup"
+                    Padding="2"
+                    CornerRadius="6"
+                    BorderThickness="1"
+                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                    Background="{DynamicResource ControlFillColorDefaultBrush}">
+                <StackPanel Orientation="Horizontal">
+                    <RadioButton Style="{StaticResource FilterSegment}" Content="Alle"
+                                 IsChecked="{Binding Filter, Converter={StaticResource EnumEquals}, ConverterParameter=All}" />
+                    <RadioButton Style="{StaticResource FilterSegment}" AutomationProperties.Name="Bilder"
+                                 IsChecked="{Binding Filter, Converter={StaticResource EnumEquals}, ConverterParameter=Images}">
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="Image24" FontSize="14" Margin="0,0,5,0" />
+                            <TextBlock Text="Bilder" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </RadioButton>
+                    <RadioButton Style="{StaticResource FilterSegment}" AutomationProperties.Name="Videos"
+                                 IsChecked="{Binding Filter, Converter={StaticResource EnumEquals}, ConverterParameter=Videos}">
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="Video24" FontSize="14" Margin="0,0,5,0" />
+                            <TextBlock Text="Videos" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </RadioButton>
+                    <RadioButton Style="{StaticResource FilterSegment}" AutomationProperties.Name="Favoriten"
+                                 IsChecked="{Binding Filter, Converter={StaticResource EnumEquals}, ConverterParameter=Favorites}">
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="Heart24" FontSize="14" Margin="0,0,5,0" />
+                            <TextBlock Text="Favoriten" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </RadioButton>
+                    <RadioButton Style="{StaticResource FilterSegment}" AutomationProperties.Name="Archive"
+                                 ToolTip="ZIP-, RAR- und 7z-Archive"
+                                 IsChecked="{Binding Filter, Converter={StaticResource EnumEquals}, ConverterParameter=Archives}">
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="FolderZip24" FontSize="14" Margin="0,0,5,0" />
+                            <TextBlock Text="Archive" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </RadioButton>
+                </StackPanel>
+            </Border>
+
+            <!-- Status-Filter (ADR-0020): Eingang / Archiv über Folders.RootId → LibraryRoots.Role -->
+            <gc:GalleryStatusFilterDropDown />
+
+            <!-- Tag-Filter (ODER/UND/ohne Tag), ADR-0021 -->
+            <tags:TagFilterDropDown />
+
+            <!-- Ordner-Chip -->
+            <Border Padding="10,3,4,3"
+                    CornerRadius="14"
+                    Background="{DynamicResource AccentFillColorTertiaryBrush}"
+                    Visibility="{Binding HasFolderFilter, Converter={StaticResource BoolToVis}}">
+                <StackPanel Orientation="Horizontal">
+                    <ui:SymbolIcon Symbol="Folder24" FontSize="14" Margin="0,0,6,0"
+                                   Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                    <TextBlock Text="{Binding FolderChipText}"
+                               FontSize="12"
+                               VerticalAlignment="Center"
+                               MaxWidth="260"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding FolderChipText}"
+                               Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                    <Button Style="{StaticResource ChipButton}"
+                            Margin="6,0,0,0"
+                            ToolTip="Ordnerfilter aufheben"
+                            AutomationProperties.Name="Ordnerfilter aufheben"
+                            Command="{Binding ClearFolderFilterCommand}">
+                        <ui:SymbolIcon Symbol="Dismiss16" FontSize="12"
+                                       Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                    </Button>
+                </StackPanel>
+            </Border>
+
+            <!-- Suche: belegt mindestens MinWidth, wächst bis MaxWidth; Enter sucht, Esc leert -->
+            <Grid x:Name="SearchArea"
+                  gc:ToolbarFlowPanel.Fill="True"
+                  MinWidth="360"
+                  MaxWidth="640">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <ui:TextBox x:Name="SearchBox"
+                            Grid.Column="0"
+                            AutomationProperties.AutomationId="GallerySearchBox"
+                            AutomationProperties.Name="Suche"
+                            Icon="{ui:SymbolIcon Search24}"
+                            PlaceholderText="Name, Endung oder Tag…"
+                            ToolTip="Suche nach Dateiname, Endung oder Tag-Name (Enter sucht, Esc leert)"
+                            ClearButtonEnabled="False"
+                            Text="{Binding SearchTerm, UpdateSourceTrigger=PropertyChanged}">
+                    <ui:TextBox.InputBindings>
+                        <KeyBinding Key="Return" Command="{Binding SearchCommand}" />
+                        <KeyBinding Key="Escape" Command="{Binding ClearSearchCommand}" />
+                    </ui:TextBox.InputBindings>
+                </ui:TextBox>
+                <ui:Button Grid.Column="1" Content="Suchen" Command="{Binding SearchCommand}" Margin="4,0,0,0" />
+                <ui:Button Grid.Column="2"
+                           Icon="{ui:SymbolIcon Dismiss24}"
+                           ToolTip="Suche leeren (Esc)"
+                           AutomationProperties.Name="Leeren"
+                           Command="{Binding ClearSearchCommand}"
+                           Margin="4,0,0,0" />
+            </Grid>
+        </gc:ToolbarFlowPanel>
+
+        <!-- Zeile 2: Sortierung + Seitengröße links, Ansicht + Rückgängig + Aktualisieren rechts -->
+        <gc:ToolbarFlowPanel x:Name="ViewRow">
+            <StackPanel Orientation="Horizontal">
+                <ui:SymbolIcon Symbol="ArrowSort24" FontSize="16" Margin="0,0,6,0"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                <ComboBox MinWidth="170"
+                          AutomationProperties.AutomationId="GallerySortCombo"
+                          AutomationProperties.Name="Sortierung"
+                          ItemsSource="{Binding SortOptions}"
+                          SelectedItem="{Binding SelectedSort, Mode=TwoWay}"
+                          DisplayMemberPath="Label"
+                          ToolTip="Sortierung" />
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" Margin="8,0,0,0">
+                <TextBlock Text="Pro Seite:" VerticalAlignment="Center" Margin="0,0,6,0"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                <ComboBox MinWidth="80"
+                          AutomationProperties.AutomationId="GalleryPageSizeCombo"
+                          AutomationProperties.Name="Dateien pro Seite"
+                          ItemsSource="{Binding PageSizeOptions}"
+                          SelectedItem="{Binding PageSize, Mode=TwoWay}"
+                          ToolTip="Dateien pro Seite" />
+            </StackPanel>
+
+            <!-- Abstandhalter: schiebt die rechte Gruppe an den Rand -->
+            <Border gc:ToolbarFlowPanel.Fill="True" MinWidth="0" Height="1" />
+
+            <StackPanel Orientation="Horizontal">
+                <!-- Umschalter Kachel-Grid / Liste (Wahl wird gemerkt) -->
+                <RadioButton GroupName="ViewMode"
+                             Style="{StaticResource {x:Type ToggleButton}}"
+                             Padding="8,4"
+                             Margin="0,0,2,0"
+                             ToolTip="Kachelansicht"
+                             AutomationProperties.Name="Kachelansicht"
+                             IsChecked="{Binding ViewMode, Converter={StaticResource EnumEquals}, ConverterParameter=Grid}">
+                    <ui:SymbolIcon Symbol="Grid24" FontSize="16" />
+                </RadioButton>
+                <RadioButton GroupName="ViewMode"
+                             Style="{StaticResource {x:Type ToggleButton}}"
+                             Padding="8,4"
+                             Margin="0,0,12,0"
+                             ToolTip="Listenansicht"
+                             AutomationProperties.Name="Listenansicht"
+                             IsChecked="{Binding ViewMode, Converter={StaticResource EnumEquals}, ConverterParameter=List}">
+                    <ui:SymbolIcon Symbol="AppsListDetail24" FontSize="16" />
+                </RadioButton>
+                <ui:Button Content="Rückgängig"
+                           Icon="{ui:SymbolIcon ArrowUndo24}"
+                           ToolTip="Letzte Datei-Operation rückgängig machen"
+                           Command="{Binding UndoCommand}"
+                           Margin="0,0,4,0" />
+                <ui:Button Icon="{ui:SymbolIcon ArrowClockwise24}"
+                           ToolTip="Aktualisieren (F5)"
+                           AutomationProperties.Name="Aktualisieren"
+                           Command="{Binding ReloadCommand}" />
+            </StackPanel>
+        </gc:ToolbarFlowPanel>
+    </StackPanel>
+</UserControl>

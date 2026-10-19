@@ -80,7 +80,7 @@ Eine Bibliothek hat genau einen **Archiv-Ordner** (der beim Anlegen gewählte Or
 **Eingangs-Ordner** (Kamera-Import, Handy-Upload, Downloads). Dateien unter einem Eingang gelten als „nicht archiviert“.
 - **Bibliothek → Eingang hinzufügen…**: Ordner wählen (darf nicht in oder über einem anderen Ordner der Bibliothek
   liegen), danach „Jetzt aktualisieren“ nimmt die Dateien in den Katalog auf.
-- **Galerie**: Filter-Pills **Nicht archiviert** (alles in Eingängen) und **Archiviert**; Kacheln im Eingang tragen das
+- **Galerie**: Dropdown **Status** mit **Nicht archiviert** (alles in Eingängen) und **Archiviert**; Kacheln im Eingang tragen das
   Badge „Eingang“. Der Ordnerbaum zeigt die Wurzeln als oberste Knoten mit Rolle.
 - **Ins Archiv…** (Aktionsleiste, **Strg+M**, Kontextmenü der Kachel, in der Lightbox **Strg+M**): Dialog mit dem
   Ordnerbaum des Archivs (auch Ordner, die nur auf der Platte existieren), Suchfeld, **Neuer Ordner…**,
@@ -90,8 +90,10 @@ Eine Bibliothek hat genau einen **Archiv-Ordner** (der beim Anlegen gewählte Or
 - Einen Eingang zu entfernen löscht nur seine Katalogdaten — die Dateien auf der Platte bleiben.
 
 ### Galerie
-Toolbar: Sortierung, Filter-Pills (Alle / Bilder / Videos / Favoriten / Archive / Nicht archiviert / Archiviert), Suchfeld (Dateiname oder Endung; Wörter werden
-als Präfix gesucht, Sonderzeichen sind erlaubt), Seitengröße, Pager, Aktualisieren. Ein Ordnerfilter erscheint als
+Toolbar: Filter-Pills als Segmentgruppe (Alle / Bilder / Videos / Favoriten / Archive), Dropdown **Status** (Nicht archiviert /
+Archiviert), Tag-Filter, Suchfeld (Dateiname, Endung oder Tag-Name; Wörter werden
+als Präfix gesucht, Sonderzeichen sind erlaubt; ✕ leert die Suche), Sortierung, Seitengröße, Pager, Aktualisieren. In schmalen
+Fenstern (bzw. rechts auf der Ordner-Seite) rutscht die Suche in eine eigene Zeile, statt gequetscht zu werden. Ein Ordnerfilter erscheint als
 Chip und lässt sich dort wieder aufheben. Kacheln: Herz = Favorit, Sterne = Bewertung, Badge „fehlt“ bei Dateien, die
 beim letzten Scan nicht mehr auf der Platte lagen. Ordner ohne direkte Dateien zeigen ihre Unterordner als Kacheln.
 Bei einer Auswahl erscheint unten die Aktionsleiste (Favorit setzen/entfernen, Bewertung, Verschieben nach…,

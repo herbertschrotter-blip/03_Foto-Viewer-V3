@@ -36,7 +36,7 @@ public sealed record DialogOutcome(DialogChoice Choice, string? InputText);
 /// Höhe aus dem Inhalt — bewusst ohne die Größenlogik der Wpf.Ui MessageBox (Layout-Schleife, siehe XAML).
 /// Enter = Primärknopf (bzw. Schließen, wenn es keinen gibt), Esc = Schließen.
 /// </summary>
-public sealed partial class AppDialogWindow : FluentWindow
+public sealed partial class AppDialogWindow : AppFluentWindow
 {
     private DialogChoice _choice = DialogChoice.None;
 

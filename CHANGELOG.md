@@ -3,6 +3,46 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.13] — 2026-10-19
+
+### Geändert
+- **Galerie-Kopfzeile** als eigenes Control `Gallery/Controls/GalleryToolbar` (vorher direkt in `GalleryView.xaml`),
+  sauber von 1024 bis 2560 px Fensterbreite und in der schmalen rechten Hälfte der Ordner-Seite:
+  - Typ-Filter als Segmentgruppe im Fluent-Stil (Alle | Bilder | Videos | Favoriten | Archive, mit Symbolen wie im
+    Mockup), Status-Filter **Nicht archiviert / Archiviert** im neuen Dropdown **Status**
+    (`GalleryStatusFilterDropDown`, aktiver Wert in Akzentfarbe). Bindungen und Commands unverändert (`Filter` über
+    `EnumEquals`, Werte `GalleryFilter.*`).
+  - Neues Layout-Panel `ToolbarFlowPanel`: bricht um statt überzulaufen; die Suche zählt für den Umbruch mit ihrer
+    Mindestbreite (360 px) und wächst bis 640 px — passt sie nicht mehr neben die Filter, rutscht sie in eine eigene
+    Zeile. Zweite Zeile: Sortierung, Seitengröße links; Kachel/Liste, Rückgängig, Aktualisieren rechtsbündig.
+  - Suchfeld: Platzhalter „Name, Endung oder Tag…“ (die Suche findet seit 0.2.10 auch Tag-Namen), „Leeren“ als
+    Symbolknopf ✕; der eingebaute Leeren-Knopf des Eingabefelds ist aus (er leerte nur den Text, ohne neu zu laden).
+- Neue Basisklasse `Shell/Dialogs/AppFluentWindow` für Lightbox und `AppDialogWindow`.
+
+### Behoben
+- Erledigt (offener Punkt aus 0.2.11): Wurde ein Fenster mit WPF-UI-TitleBar nach `Loaded`, aber vor dem ersten
+  Zeichnen geschlossen (Rauchtest: Lightbox öffnen und binnen ~100 ms schließen), warf
+  `TitleBar.OnWindowContentRendered` „Hwnd mit dem Wert Null ist ungültig“ in den globalen Handler (FTL im Log).
+  Ursache: WPF stellt `ContentRendered` mit Input-Priorität ein und bricht es beim Schließen nicht ab.
+  `AppFluentWindow.OnContentRendered` verwirft das Ereignis eines geschlossenen Fensters — zentral für Lightbox und
+  `AppDialogWindow`, ohne Verzögerung des Schließens und ohne Reflection.
+
+### Tests
+- `tests/PhotoViewerV3.Wpf.Tests`: 134 (+13) — `Shell/EarlyCloseWindowTests` (Kontrolle: reines FluentWindow mit
+  TitleBar wirft weiterhin; AppFluentWindow, echte Lightbox und modaler AppDialogWindow schließen vor dem Zeichnen
+  ohne Ausnahme), `Gallery/GalleryToolbarLayoutTests` (echtes `GalleryToolbar` bei 1024/1280/1920/2560 px, mit
+  Ordner-Chip + aktivem Status, Ordner-Seite: nichts ragt über den Rand, Suche ≥ Mindestbreite, Platzhalter passt,
+  Zeilenzahl; `ToolbarFlowPanel` direkt). `tests/PhotoViewerV3.Tests`: 344.
+- Belege: `docs/spikes/07-galerie-kopfzeile.md` mit Bildern bei 1024, 1280 (auch mit Ordner-Chip) und 1920 px.
+- Rauchtest: 19/19 OK, 0 WPF-Binding-Fehler, kein FTL/„Hwnd“ mehr im Log (Lightbox öffnen/schließen). Ein Lauf davor
+  scheiterte einmalig an „Thumbnails 0/42“ (Thumbnail-Dienst startete erst nach der Prüfung, ohne Bezug zu dieser
+  Änderung); Wiederholung grün.
+
+### Offen
+- Weitere FluentWindows mit TitleBar (`MainWindow`, `ArchiveTargetDialog`, `ExtractArchiveDialog`, `TagPickerDialog`)
+  erben noch von `FluentWindow`; sie werden nur durch Benutzeraktion nach dem Zeichnen geschlossen. Umstellen = eine
+  Zeile je XAML/Code-Behind auf `AppFluentWindow`.
+
 ## [0.2.12] — 2026-10-19
 
 ### Behoben

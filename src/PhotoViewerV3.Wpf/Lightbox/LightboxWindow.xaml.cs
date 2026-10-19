@@ -20,7 +20,7 @@ namespace PhotoViewerV3.Lightbox;
 /// enthält nur Fenster-/Tastatur-Mechanik: Tastenbelegung, Vollbild, Auto-Hide der Toolbar,
 /// Bestätigungsdialog und die Anbindung an LibVLCSharps Vordergrundfenster (Airspace).
 /// </summary>
-public partial class LightboxWindow : FluentWindow
+public partial class LightboxWindow : AppFluentWindow
 {
     private const int MinDecodePixelLimit = 3840;
 
