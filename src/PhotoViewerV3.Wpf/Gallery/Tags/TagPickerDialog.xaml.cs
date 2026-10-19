@@ -42,7 +42,7 @@ public sealed partial class TagPickItem : ObservableObject
 /// Modaler Dialog zur Tag-Zuweisung für eine Auswahl (Strg+T). Liefert nur die Änderungen gegenüber dem
 /// Ausgangszustand; ein auf „gemischt“ belassenes Häkchen ändert nichts. Enter = Übernehmen, Esc = Abbrechen.
 /// </summary>
-public sealed partial class TagPickerDialog : FluentWindow
+public sealed partial class TagPickerDialog : PhotoViewerV3.Shell.Dialogs.AppFluentWindow
 {
     private readonly TagPickRequest _request;
     private readonly ObservableCollection<TagPickItem> _items = new();

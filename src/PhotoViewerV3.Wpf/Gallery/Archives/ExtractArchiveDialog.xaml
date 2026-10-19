@@ -1,4 +1,5 @@
-<ui:FluentWindow x:Class="PhotoViewerV3.Gallery.Archives.ExtractArchiveDialog"
+<dialogs:AppFluentWindow xmlns:dialogs="clr-namespace:PhotoViewerV3.Shell.Dialogs"
+        x:Class="PhotoViewerV3.Gallery.Archives.ExtractArchiveDialog"
                  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -152,4 +153,4 @@
             </StackPanel>
         </Border>
     </Grid>
-</ui:FluentWindow>
+</dialogs:AppFluentWindow>

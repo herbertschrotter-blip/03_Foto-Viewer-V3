@@ -1,4 +1,5 @@
-<ui:FluentWindow x:Class="PhotoViewerV3.MainWindow"
+<dialogs:AppFluentWindow xmlns:dialogs="clr-namespace:PhotoViewerV3.Shell.Dialogs"
+        x:Class="PhotoViewerV3.MainWindow"
                  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
@@ -85,4 +86,4 @@
         <!-- Statusleiste (ADR-0013): Scan · Vorschaubilder · Hintergrund · Hinweise -->
         <shell:StatusBar Grid.Row="2" DataContext="{Binding StatusBar}" />
     </Grid>
-</ui:FluentWindow>
+</dialogs:AppFluentWindow>

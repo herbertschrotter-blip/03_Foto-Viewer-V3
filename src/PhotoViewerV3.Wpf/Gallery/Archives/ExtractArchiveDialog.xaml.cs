@@ -10,7 +10,7 @@ namespace PhotoViewerV3.Gallery.Archives;
 /// Entpacken-Dialog (ADR-0022): Code-Behind nur Fenster-Mechanik (Enter = Entpacken, Esc = Abbrechen/Schließen, X bricht
 /// einen laufenden Lauf erst ab). Fachlogik im <see cref="ExtractArchiveDialogViewModel"/>.
 /// </summary>
-public sealed partial class ExtractArchiveDialog : FluentWindow
+public sealed partial class ExtractArchiveDialog : PhotoViewerV3.Shell.Dialogs.AppFluentWindow
 {
     private readonly ExtractArchiveDialogViewModel _viewModel;
 

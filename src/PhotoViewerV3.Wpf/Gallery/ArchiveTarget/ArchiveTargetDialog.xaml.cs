@@ -12,7 +12,7 @@ namespace PhotoViewerV3.Gallery.ArchiveTarget;
 /// Modaler Dialog „Ins Archiv…“ (ADR-0020). Code-Behind nur Fenster-Mechanik: Laden des Baums, Namensabfragen über
 /// <see cref="AppDialogWindow"/>, Enter/Esc, Doppelklick auf Suchtreffer. Fachlogik im <see cref="ArchiveTargetViewModel"/>.
 /// </summary>
-public sealed partial class ArchiveTargetDialog : FluentWindow
+public sealed partial class ArchiveTargetDialog : PhotoViewerV3.Shell.Dialogs.AppFluentWindow
 {
     private readonly ArchiveTargetViewModel _viewModel;
     private string? _result;

@@ -14,7 +14,7 @@ namespace PhotoViewerV3;
 /// Seiten kommen über den NavigationPageProvider aus DI; Navigation läuft über NavigationView.Navigate(tag),
 /// Klicks werden per SelectionChanged an den NavigationService zurückgemeldet.
 /// </summary>
-public partial class MainWindow : FluentWindow
+public partial class MainWindow : PhotoViewerV3.Shell.Dialogs.AppFluentWindow
 {
     private readonly ShellViewModel _shell;
     private readonly NavigationService _navigation;

@@ -3,6 +3,15 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.15] — 2026-10-19
+
+### Geändert
+- `MainWindow`, `ArchiveTargetDialog`, `ExtractArchiveDialog` und `TagPickerDialog` erben von `Shell/Dialogs/AppFluentWindow`
+  (offener Punkt aus 0.2.13) — alle Fenster der App sind gegen das frühe Schließen vor dem ersten Zeichnen geschützt.
+  CLAUDE.md: Regel für neue Fenster.
+- Rauchtest, Schritt „Thumbnails“: wartet zuerst auf die geladene Galerieseite; unter Last war die Seite nach dem
+  Fresh-Scan noch leer und der Schritt meldete „0/42“ (Befund aus den Läufen der Agenten zu 0.2.12/0.2.13).
+
 ## [0.2.14] — 2026-10-19
 
 ### Behoben (Ordnerüberwachung härten, Befunde aus dem Code-Review)

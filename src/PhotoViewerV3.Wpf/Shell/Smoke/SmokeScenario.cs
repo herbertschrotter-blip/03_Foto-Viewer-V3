@@ -420,12 +420,16 @@ internal sealed class SmokeScenario
 
     private async Task ThumbnailsAsync()
     {
+        // Erst auf die geladene Galerieseite warten: unter Last kommt das Kachel-Grid nach dem Fresh-Scan verzögert —
+        // eine leere Seite hätte sonst „0 fehlende Bilder“ gemeldet und den Schritt sofort beendet.
+        await WaitUntilAsync(() => !_gallery.IsLoading && _gallery.CurrentPage.Count > 0, ShortWait, "Galerieseite geladen").ConfigureAwait(true);
+
         // Warten, bis jede Kachel ein Bild hat — oder die Queue leer bleibt (Fehler je Datei stehen dann in der DB).
         var deadline = DateTime.UtcNow + LongWait;
         while (DateTime.UtcNow < deadline)
         {
             var missing = _gallery.CurrentPage.Count(i => i.Thumbnail is null);
-            if (missing == 0)
+            if (missing == 0 && _gallery.CurrentPage.Count > 0)
             {
                 break;
             }
