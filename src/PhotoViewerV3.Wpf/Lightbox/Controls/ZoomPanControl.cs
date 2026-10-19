@@ -75,7 +75,16 @@ public sealed class ZoomPanControl : Grid, IZoomPanTarget
             Visibility = Visibility.Collapsed,
         };
         RenderOptions.SetBitmapScalingMode(_image, BitmapScalingMode.HighQuality);
-        Children.Add(_image);
+
+        // Das Bild liegt auf einem Canvas: Der misst Kinder ohne Begrenzung und schneidet sie nicht auf den
+        // Layout-Platz zu. Direkt im Grid würde WPF ein Bild, das größer als die Bühne ist, erst auf die
+        // Bühnengröße beschneiden und dann per RenderTransform verkleinern — sichtbar war dann nur die linke
+        // obere Ecke in Fit-Größe (v0.2.3). Die Bühne selbst (dieses Grid) schneidet per ClipToBounds ab.
+        var host = new Canvas { ClipToBounds = false };
+        Canvas.SetLeft(_image, 0);
+        Canvas.SetTop(_image, 0);
+        host.Children.Add(_image);
+        Children.Add(host);
 
         Loaded += (_, _) => { UpdateDpi(); Relayout(); };
         SizeChanged += (_, _) => Relayout();
@@ -346,6 +355,9 @@ public sealed class ZoomPanControl : Grid, IZoomPanTarget
             : BitmapScalingMode.Linear);
 
         var percent = Math.Round(_scale * _dpiScale * 100, _scale * _dpiScale * 100 < 10 ? 1 : 0);
+        Serilog.Log.Debug(
+            "ZoomPan: Ansicht {ViewW:N0}x{ViewH:N0} Bild {ImgW}x{ImgH} Faktor {Scale:N4} DPI {Dpi:N2} Fit={Fit} Versatz {Tx:N0},{Ty:N0}",
+            viewW, viewH, _pixelWidth, _pixelHeight, _scale, _dpiScale, _isFit, _translateX, _translateY);
         if (Math.Abs(ZoomPercent - percent) > 1e-9)
         {
             SetCurrentValue(ZoomPercentProperty, percent);

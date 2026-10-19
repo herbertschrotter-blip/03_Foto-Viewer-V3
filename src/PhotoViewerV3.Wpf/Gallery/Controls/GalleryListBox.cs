@@ -36,13 +36,13 @@ public sealed class GalleryListBoxItem : ListBoxItem
 
         protected override string GetNameCore()
         {
-            var name = base.GetNameCore();
-            if (!string.IsNullOrEmpty(name))
+            // Dateiname statt des Typnamens aus ToString() des Datenobjekts.
+            if ((Owner as ListBoxItem)?.DataContext is ViewModels.GalleryItem item)
             {
-                return name;
+                return item.Name;
             }
 
-            return (Owner as ListBoxItem)?.DataContext is ViewModels.GalleryItem item ? item.Name : string.Empty;
+            return base.GetNameCore();
         }
     }
 }
