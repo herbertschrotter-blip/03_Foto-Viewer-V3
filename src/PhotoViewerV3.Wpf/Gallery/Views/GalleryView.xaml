@@ -94,6 +94,28 @@
                 </Setter.Value>
             </Setter>
             <EventSetter Event="MouseDoubleClick" Handler="OnItemDoubleClick" />
+            <!-- Kontextmenü (Archive, ADR-0022): Tag trägt das Galerie-ViewModel, DataContext ist die Kachel -->
+            <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=ListBox}}" />
+            <Setter Property="ContextMenu">
+                <Setter.Value>
+                    <ContextMenu>
+                        <MenuItem Header="Inhalt anzeigen"
+                                  Icon="{ui:SymbolIcon DocumentBulletList24}"
+                                  Visibility="{Binding PlacementTarget.DataContext.IsArchive, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVis}}"
+                                  Command="{Binding PlacementTarget.Tag.OpenInLightboxCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                        <MenuItem Header="Entpacken…"
+                                  Icon="{ui:SymbolIcon FolderZip24}"
+                                  Visibility="{Binding PlacementTarget.DataContext.IsArchive, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVis}}"
+                                  Command="{Binding PlacementTarget.Tag.ExtractItemCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                        <MenuItem Header="Im Explorer anzeigen"
+                                  Icon="{ui:SymbolIcon FolderOpen24}"
+                                  Command="{Binding PlacementTarget.Tag.ShowInExplorerCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                    </ContextMenu>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <!-- Kachel-Inhalt -->
@@ -121,6 +143,24 @@
                            HorizontalAlignment="Stretch"
                            VerticalAlignment="Stretch"
                            RenderOptions.BitmapScalingMode="HighQuality" />
+
+                    <!-- Archiv (ADR-0022): Icon + Endung + Größe statt Vorschaubild -->
+                    <Border Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}"
+                            Visibility="{Binding IsArchive, Converter={StaticResource BoolToVis}}">
+                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <!-- Viewbox: SymbolIcon übernahm im Kachel-Container die FontSize nicht (Icon blieb 16 px) -->
+                            <Viewbox Width="40" Height="40" HorizontalAlignment="Center">
+                                <ui:SymbolIcon Symbol="Archive24" Foreground="{DynamicResource AccentFillColorDefaultBrush}" />
+                            </Viewbox>
+                            <Border Margin="0,6,0,0" Padding="8,2" CornerRadius="3" HorizontalAlignment="Center"
+                                    Background="{DynamicResource AccentFillColorDefaultBrush}">
+                                <TextBlock Text="{Binding ArchiveBadge}" FontSize="11" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                            </Border>
+                            <TextBlock Text="{Binding SizeDisplay}" Margin="0,4,0,0" FontSize="11" HorizontalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+                    </Border>
 
                     <!-- Video: Play-Overlay (immer sichtbar) -->
                     <Border Width="36" Height="36"
@@ -321,8 +361,10 @@
                                  IsChecked="{Binding Filter, Converter={StaticResource EnumEquals}, ConverterParameter=Images}" />
                     <RadioButton Content="Videos" GroupName="Filter" Margin="0,0,8,0"
                                  IsChecked="{Binding Filter, Converter={StaticResource EnumEquals}, ConverterParameter=Videos}" />
-                    <RadioButton Content="Favoriten" GroupName="Filter"
+                    <RadioButton Content="Favoriten" GroupName="Filter" Margin="0,0,8,0"
                                  IsChecked="{Binding Filter, Converter={StaticResource EnumEquals}, ConverterParameter=Favorites}" />
+                    <RadioButton Content="Archive" GroupName="Filter"
+                                 IsChecked="{Binding Filter, Converter={StaticResource EnumEquals}, ConverterParameter=Archives}" />
                 </StackPanel>
 
                 <!-- Ordner-Chip -->
@@ -587,6 +629,11 @@
                                    Icon="{ui:SymbolIcon Delete24}"
                                    ToolTip="Auswahl in den Papierkorb verschieben (Entf)"
                                    Command="{Binding RecycleSelectionCommand}" />
+                        <ui:Button Appearance="Transparent" Content="Entpacken…"
+                                   Icon="{ui:SymbolIcon FolderZip24}"
+                                   ToolTip="Ausgewählte Archive entpacken"
+                                   Command="{Binding ExtractSelectionCommand}"
+                                   Visibility="{Binding CanExtractSelection, Converter={StaticResource BoolToVis}}" />
 
                         <Border Width="1" Margin="6,4,6,4" Background="{DynamicResource ControlStrokeColorDefaultBrush}" />
 

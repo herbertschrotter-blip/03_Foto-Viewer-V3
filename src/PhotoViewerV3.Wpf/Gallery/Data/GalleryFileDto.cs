@@ -6,6 +6,9 @@ public enum GalleryFilter
     Images,
     Videos,
     Favorites,
+
+    /// <summary>Nur Archive (ZIP/RAR/7z …, MediaType 2, ADR-0022).</summary>
+    Archives,
 }
 
 /// <summary>Sortierung der Galerie; die Zweitsortierung nach Id ist immer stabil (siehe GalleryPageSource).</summary>
@@ -34,6 +37,7 @@ public sealed record GalleryFileDto(
     string FolderPath)
 {
     public bool IsVideo => MediaType == 1;
+    public bool IsArchive => MediaType == 2;
     public string SizeDisplay => FormatSize(Size);
 
     public static string FormatSize(long size) => size switch

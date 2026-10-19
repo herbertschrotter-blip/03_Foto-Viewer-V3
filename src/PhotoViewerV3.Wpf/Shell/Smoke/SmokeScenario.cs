@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -14,6 +15,8 @@ using PhotoViewerV3.Folders;
 using PhotoViewerV3.Gallery.Controls;
 using PhotoViewerV3.Libraries;
 using PhotoViewerV3.Lightbox;
+using PhotoViewerV3.Domain.Enums;
+using PhotoViewerV3.Services.Archive;
 using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Infrastructure;
 using PhotoViewerV3.Services.Library;
@@ -90,6 +93,8 @@ internal sealed class SmokeScenario
     /// <summary>Datei, die der Ordnerüberwachungs-Schritt kopiert und wieder löscht (Rückstand nur nach einem Abbruch).</summary>
     private const string WatchedFileName = "smoke-watch.jpg";
 
+    private readonly IArchiveService _archives;
+
     private int _libraryId;
     private int _mediaCount;
     private readonly HashSet<int> _movedIds = new();
@@ -119,6 +124,7 @@ internal sealed class SmokeScenario
         _picker = services.GetRequiredService<SmokeFolderPickerService>();
         _paths = services.GetRequiredService<IAppDataPaths>();
         _watch = services.GetRequiredService<ILibraryWatchService>();
+        _archives = services.GetRequiredService<IArchiveService>();
         _messenger.Register<SmokeScenario, ScanCompletedMessage>(this, static (r, m) => r._lastScan = m.Result);
     }
 
@@ -166,6 +172,7 @@ internal sealed class SmokeScenario
         await StepAsync("Ordnerbaum-Seite", FolderPageAsync).ConfigureAwait(true);
         await StepAsync("Einstellungen + Theme", SettingsAsync).ConfigureAwait(true);
         await StepAsync("Aktualisieren (Incremental) + Neu aufbauen (ClearAndRescan)", RescanAsync).ConfigureAwait(true);
+        await StepAsync("Archiv: ZIP → Kachel → Inhaltsansicht → Entpacken → Katalog", ArchiveAsync).ConfigureAwait(true);
         await StepAsync("Ordnerüberwachung: Datei kopieren → automatischer Diff-Scan → Galerie", WatchAsync).ConfigureAwait(true);
         if (_cleanup)
         {
@@ -193,6 +200,7 @@ internal sealed class SmokeScenario
             _logger.LogInformation("Rauchtest   Rückstand entfernt: {Path}", leftover);
         }
 
+        RemoveArchiveLeftovers(unsorted);
         if (Directory.Exists(ParkingDir))
         {
             foreach (var parked in Directory.EnumerateFiles(ParkingDir))
@@ -864,6 +872,138 @@ internal sealed class SmokeScenario
             ShortWait,
             "„fehlt“-Badge nach dem automatischen Scan").ConfigureAwait(true);
         Check(_watch.Status.State is WatchState.Idle or WatchState.ChangesPending, $"Überwachung läuft weiter ({_watch.Status.State})");
+    }
+
+    // ---- Archive (ADR-0022) --------------------------------------------------------------------
+
+    /// <summary>Das ZIP, das der Archiv-Schritt in „Unsortiert“ anlegt; sein Zielordner heißt wie das Archiv ohne Endung.</summary>
+    private const string ArchiveFileName = "smoke-archiv.zip";
+
+    private void RemoveArchiveLeftovers(string unsorted)
+    {
+        var zip = Path.Combine(unsorted, ArchiveFileName);
+        if (File.Exists(zip))
+        {
+            File.Delete(zip);
+            _logger.LogInformation("Rauchtest   Rückstand entfernt: {Path}", zip);
+        }
+
+        var folder = Path.Combine(unsorted, Path.GetFileNameWithoutExtension(ArchiveFileName));
+        if (Directory.Exists(folder))
+        {
+            Directory.Delete(folder, recursive: true);
+            _logger.LogInformation("Rauchtest   Rückstand entfernt: {Path}", folder);
+        }
+    }
+
+    /// <summary>
+    /// ZIP (zwei JPGs, eine Textdatei, ein verschachteltes ZIP mit einem JPG) in „Unsortiert“ anlegen → Aktualisieren nimmt es als
+    /// Archiv auf (Kachel ohne Thumbnail, Badge ZIP, Filter „Archive“) → Lightbox zeigt die Inhaltsliste → Entpacken ohne
+    /// Dialog mit Papierkorb-Option → Dateien liegen im Unterordner, das Archiv ist weg, der Incremental-Scan hat die
+    /// Fotos in den Katalog gebracht.
+    /// </summary>
+    private async Task ArchiveAsync()
+    {
+        var unsorted = Path.Combine(_root, "Unsortiert");
+        var jpgs = Directory.EnumerateFiles(unsorted, "*.jpg")
+            .Where(f => !Path.GetFileName(f).Equals(AddedFileName, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        Check(jpgs.Count >= 2, $"„Unsortiert“ hat {jpgs.Count} JPGs für das Archiv (mindestens 2)");
+        var zipPath = Path.Combine(unsorted, ArchiveFileName);
+        byte[] nested;
+        using (var ms = new MemoryStream())
+        {
+            using (var inner = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true))
+            {
+                inner.CreateEntryFromFile(jpgs[0], "archiv-c.jpg");
+            }
+
+            nested = ms.ToArray();
+        }
+
+        using (var zip = ZipFile.Open(zipPath, ZipArchiveMode.Create))
+        {
+            zip.CreateEntryFromFile(jpgs[0], "archiv-a.jpg");
+            zip.CreateEntryFromFile(jpgs[1], "sub/archiv-b.jpg");
+            using (var text = new StreamWriter(zip.CreateEntry("liesmich.txt").Open()))
+            {
+                text.Write("Rauchtest");
+            }
+
+            using var innerStream = zip.CreateEntry("innen.zip").Open();
+            innerStream.Write(nested);
+        }
+
+        // (1) Aktualisieren nimmt das Archiv in den Katalog auf
+        _navigation.NavigateTo(NavigationTags.Library);
+        await WaitUntilAsync(() => _navigation.CurrentTag == NavigationTags.Library, ShortWait, "Bibliotheksseite").ConfigureAwait(true);
+        _lastScan = null;
+        await _library.RunSmokeScanAsync(_root).ConfigureAwait(true);
+        Check(_lastScan is { Mode: ScanMode.Incremental, Outcome: ScanOutcome.Completed, Added: 1 }, $"Incremental nimmt das ZIP auf (Added={_lastScan?.Added})");
+        _mediaCount++;
+        await WaitUntilAsync(
+            () => _navigation.CurrentTag == NavigationTags.Gallery && !_gallery.IsLoading && _gallery.TotalCount == _mediaCount
+                  && _gallery.CurrentPage.Any(i => i.Name == ArchiveFileName),
+            ShortWait,
+            "Galerie zeigt die Archiv-Kachel").ConfigureAwait(true);
+        var tile = _gallery.CurrentPage.First(i => i.Name == ArchiveFileName);
+        Check(tile.IsArchive && tile.MediaType == MediaType.Archive && tile.ArchiveBadge == "ZIP" && !tile.IsVideo, $"Kachel „{tile.Name}“ ist ein Archiv (Badge {tile.ArchiveBadge}, {tile.SizeDisplay})");
+        var mediaType = await DbScalarAsync<int>("SELECT MediaType FROM Files WHERE Id = $id", ("$id", tile.Id)).ConfigureAwait(true);
+        Check(mediaType == (int)MediaType.Archive, $"DB: Files.MediaType = {mediaType} (Archive)");
+        await Task.Delay(800).ConfigureAwait(true);
+        var thumbRows = await DbScalarAsync<int>("SELECT COUNT(*) FROM Thumbnails WHERE FileId = $id", ("$id", tile.Id)).ConfigureAwait(true);
+        Check(tile.Thumbnail is null && thumbRows == 0, "Archiv ohne Thumbnail (keine Thumbnails-Zeile, Kachel zeigt Icon)");
+
+        // (2) Filter „Archive“
+        _gallery.Filter = GalleryFilter.Archives;
+        await WaitForGalleryAsync("Filter Archive").ConfigureAwait(true);
+        Check(_gallery.TotalCount == 1 && _gallery.CurrentPage.Count == 1 && _gallery.CurrentPage[0].Id == tile.Id, $"Filter „Archive“: {_gallery.TotalCount} Treffer");
+        await SnapshotAsync("11-galerie-archive").ConfigureAwait(true);
+        _gallery.Filter = GalleryFilter.All;
+        await WaitForGalleryAsync("Filter Alle").ConfigureAwait(true);
+        tile = _gallery.CurrentPage.First(i => i.Id == tile.Id);
+
+        // (3) Lightbox: Inhaltsansicht statt Bild
+        _gallery.OpenInLightboxCommand.Execute(tile);
+        await WaitUntilAsync(() => _lightbox.IsOpen, ShortWait, "Lightbox geöffnet").ConfigureAwait(true);
+        var window = Application.Current.Windows.OfType<LightboxWindow>().First();
+        var vm = window.ViewModel;
+        await WaitUntilAsync(() => vm.IsArchive && !vm.IsLoading, ShortWait, "Archiv-Inhalt gelesen").ConfigureAwait(true);
+        Check(vm.ArchiveError is null && !vm.IsImage && !vm.IsVideo, $"Inhaltsansicht ohne Fehler ({vm.ArchiveSummary})");
+        Check(vm.ArchiveEntries.Count == 4 && vm.ArchiveEntries.Count(e => e.IsMedia) == 2 && vm.ArchiveEntries.Count(e => e.IsArchive) == 1,
+            $"Inhaltsliste: {vm.ArchiveEntries.Count} Einträge ({string.Join(", ", vm.ArchiveEntries.Select(e => e.Path))})");
+        Check(vm.FileInfoRows.Any(r => r.Label == "Typ" && r.Value == "Archiv"), "Info-Panel: Typ = Archiv");
+        await SnapshotAsync("12-lightbox-archiv", window).ConfigureAwait(true);
+        vm.CloseCommand.Execute(null);
+        await WaitUntilAsync(() => !_lightbox.IsOpen, ShortWait, "Lightbox geschlossen").ConfigureAwait(true);
+
+        // (4) Entpacken (ohne Dialog, mit Papierkorb) → Dateien im Unterordner, Archiv weg, Katalog aktualisiert
+        _gallery.ClearSelectionCommand.Execute(null);
+        tile.IsSelected = true;
+        Check(_gallery.SelectedArchiveCount == 1 && _gallery.CanExtractSelection, "Aktionsleiste bietet „Entpacken…“ für die Auswahl");
+        var results = await _gallery.ExtractArchivesHeadlessAsync([tile.Id], new ArchiveExtractOptions { RecycleArchiveAfterExtract = true }, _archives).ConfigureAwait(true);
+        var result = results.Single();
+        Check(result.Errors.Count == 0 && !result.Canceled, $"Entpacken ohne Fehler ({string.Join(" | ", result.Errors.Select(e => e.Message))})");
+        Check(result.FilesExtracted == 4 && result.NestedArchivesExtracted == 1 && result.Rounds == 2, $"Entpackt: {result.FilesExtracted} Dateien, {result.NestedArchivesExtracted} verschachtelt, {result.Rounds} Runden");
+        var target = Path.Combine(unsorted, Path.GetFileNameWithoutExtension(ArchiveFileName));
+        Check(result.TargetFolder.Equals(target, StringComparison.OrdinalIgnoreCase), $"Zielordner = {result.TargetFolder}");
+        Check(File.Exists(Path.Combine(target, "archiv-a.jpg")) && File.Exists(Path.Combine(target, "sub", "archiv-b.jpg")) && File.Exists(Path.Combine(target, "innen", "archiv-c.jpg")), "Dateien liegen im Zielordner (inkl. verschachteltem Archiv)");
+        Check(!File.Exists(Path.Combine(target, "liesmich.txt")) && !File.Exists(Path.Combine(target, "innen.zip")), "Nur Medien entpackt, inneres ZIP entfernt");
+        Check(result.ArchiveRecycled && !File.Exists(zipPath), "Archiv im Papierkorb");
+        Check(result.Scan is { Mode: ScanMode.Incremental, Added: 3 }, $"Incremental-Scan nach dem Entpacken: Added={result.Scan?.Added}");
+        _mediaCount += 3 - 1;
+        await WaitForGalleryAsync("Reload nach Entpacken").ConfigureAwait(true);
+        await WaitUntilAsync(
+            () => !_gallery.IsLoading && _gallery.TotalCount == _mediaCount && _gallery.CurrentPage.All(i => i.Id != tile.Id)
+                  && _gallery.CurrentPage.Any(i => i.Name == "archiv-c.jpg"),
+            ShortWait,
+            $"Galerie: {_mediaCount} Dateien, Archiv-Kachel weg, entpackte Fotos da").ConfigureAwait(true);
+        var archiveRows = await DbScalarAsync<int>("SELECT COUNT(*) FROM Files WHERE Id = $id", ("$id", tile.Id)).ConfigureAwait(true);
+        var extractedRows = await DbScalarAsync<int>("SELECT COUNT(*) FROM Files WHERE Name IN ('archiv-a.jpg', 'archiv-b.jpg', 'archiv-c.jpg')").ConfigureAwait(true);
+        Check(archiveRows == 0 && extractedRows == 3, $"DB: Archiv-Zeile entfernt, {extractedRows} entpackte Dateien im Katalog");
+        Check(_gallery.ErrorMessage is null, $"Galerie ohne Fehler ({_gallery.StatusText})");
+        await SnapshotAsync("13-galerie-nach-entpacken").ConfigureAwait(true);
     }
 
     private async Task CleanupAsync()

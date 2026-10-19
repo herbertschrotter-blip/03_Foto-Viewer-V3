@@ -40,6 +40,9 @@
     <PackageVersion Include="LibVLCSharp.WPF" Version="3.9.3" />
     <PackageVersion Include="VideoLAN.LibVLC.Windows" Version="3.0.21" />
 
+    <!-- Archive (ZIP/RAR/7z/TAR/GZ/BZ2/XZ) — PLAN Kap. 10, ADR-0022; nur im Services-Projekt -->
+    <PackageVersion Include="SharpCompress" Version="0.50.6" />
+
     <!-- Logging via Serilog -->
     <PackageVersion Include="Serilog.Extensions.Hosting" Version="9.0.0" />
     <PackageVersion Include="Serilog.Sinks.File" Version="6.0.0" />

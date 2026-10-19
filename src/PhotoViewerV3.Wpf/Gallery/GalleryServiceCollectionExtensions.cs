@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using PhotoViewerV3.Gallery.Archives;
 using PhotoViewerV3.Gallery.Data;
 using PhotoViewerV3.Gallery.Services;
 using PhotoViewerV3.Gallery.ViewModels;
@@ -22,6 +23,7 @@ public static class GalleryServiceCollectionExtensions
         services.AddTransient<GalleryView>();
         services.TryAddSingleton<IGalleryDialogService, GalleryDialogService>();
         services.TryAddSingleton<IFolderPickerService, FolderPickerService>();
+        services.AddGalleryArchives();
         return services;
     }
 }

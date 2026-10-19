@@ -18,6 +18,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using PhotoViewerV3.Lightbox.Controls;
 using PhotoViewerV3.Lightbox.Imaging;
+using PhotoViewerV3.Services.Archive;
 using PhotoViewerV3.Services.Catalog;
 using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Messaging;
@@ -43,6 +44,7 @@ public sealed partial class LightboxViewModel : ObservableObject, IDisposable
     private readonly ILibraryContextFactory _contextFactory;
     private readonly ICatalogUpdateService? _catalog;
     private readonly IFileOperationService? _fileOperations;
+    private readonly IArchiveService? _archives;
     private readonly ILogger<LightboxViewModel> _logger;
     private readonly Dispatcher _dispatcher;
     private readonly LightboxImageCache _cache = new(capacity: 4);
@@ -65,13 +67,15 @@ public sealed partial class LightboxViewModel : ObservableObject, IDisposable
         ILibraryContextFactory contextFactory,
         ILogger<LightboxViewModel> logger,
         ICatalogUpdateService? catalog = null,
-        IFileOperationService? fileOperations = null)
+        IFileOperationService? fileOperations = null,
+        IArchiveService? archives = null)
     {
         _vlc = vlc;
         _contextFactory = contextFactory;
         _logger = logger;
         _catalog = catalog;
         _fileOperations = fileOperations;
+        _archives = archives;
         _dispatcher = Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
         _volume = Math.Clamp(vlc.LastVolume, 0, 100);
         _isMuted = vlc.LastMuted;
@@ -119,6 +123,12 @@ public sealed partial class LightboxViewModel : ObservableObject, IDisposable
     [ObservableProperty] private BitmapSource? _imageSource;
     [ObservableProperty] private bool _isImage;
     [ObservableProperty] private bool _isVideo;
+
+    // Archiv-Inhaltsansicht (ADR-0022): statt Bild/Video die Einträge des Archivs.
+    [ObservableProperty] private bool _isArchive;
+    [ObservableProperty] private string _archiveSummary = string.Empty;
+    [ObservableProperty] private string? _archiveError;
+    public ObservableCollection<ArchiveEntryRow> ArchiveEntries { get; } = new();
     [ObservableProperty] private bool _isLoading;
     [ObservableProperty] private string? _errorMessage;
     [ObservableProperty] private string? _statusText;
@@ -277,6 +287,18 @@ public sealed partial class LightboxViewModel : ObservableObject, IDisposable
         var version = ++_showVersion;
         ErrorMessage = null;
 
+        if (item.IsArchive)
+        {
+            StopVideo();
+            ImageSource = null;
+            IsImage = false;
+            IsVideo = false;
+            IsArchive = true;
+            await ShowArchiveAsync(item, version).ConfigureAwait(true);
+            return;
+        }
+
+        IsArchive = false;
         if (item.IsVideo)
         {
             ImageSource = null;
@@ -290,6 +312,75 @@ public sealed partial class LightboxViewModel : ObservableObject, IDisposable
             IsVideo = false;
             IsImage = true;
             await ShowImageAsync(item, version).ConfigureAwait(true);
+        }
+    }
+
+    // ----- Archive (ADR-0022) -----
+
+    /// <summary>Liest das Inhaltsverzeichnis über IArchiveService (Thread-Pool) und füllt die Liste; Fehler (Passwort, kaputt) als Text.</summary>
+    private async Task ShowArchiveAsync(LightboxItem item, int version)
+    {
+        IsLoading = true;
+        ArchiveError = null;
+        ArchiveEntries.Clear();
+        ArchiveSummary = "Inhalt wird gelesen…";
+        BuildFileInfo(item);
+        MediaInfoHeader = "Archiv";
+        MediaInfoRows.Clear();
+        try
+        {
+            if (_archives is null)
+            {
+                throw new InvalidOperationException("Archiv-Dienst nicht verfügbar.");
+            }
+
+            var listing = await _archives.ListAsync(item.Path).ConfigureAwait(true);
+            if (version != _showVersion)
+            {
+                return;
+            }
+
+            foreach (var entry in listing.Entries)
+            {
+                ArchiveEntries.Add(new ArchiveEntryRow(entry));
+            }
+
+            ArchiveSummary = $"{listing.FileCount:N0} Datei(en) · {listing.MediaCount:N0} Fotos/Videos · {FormatSize(listing.TotalSize)} unkomprimiert"
+                             + (listing.NestedArchiveCount > 0 ? $" · {listing.NestedArchiveCount:N0} Archiv(e) darin" : string.Empty)
+                             + (listing.HasEncryptedEntries ? " · passwortgeschützt" : string.Empty);
+            MediaInfoRows.Add(new LightboxInfoRow("Dateien", listing.FileCount.ToString("N0", CultureInfo.CurrentCulture)));
+            MediaInfoRows.Add(new LightboxInfoRow("Fotos/Videos", listing.MediaCount.ToString("N0", CultureInfo.CurrentCulture)));
+            MediaInfoRows.Add(new LightboxInfoRow("Unkomprimiert", FormatSize(listing.TotalSize)));
+            if (listing.HasEncryptedEntries)
+            {
+                ArchiveError = "Das Archiv ist passwortgeschützt — es kann angezeigt, aber nicht entpackt werden.";
+            }
+        }
+        catch (Exception ex)
+        {
+            if (version == _showVersion)
+            {
+                ArchiveSummary = "Inhalt nicht lesbar";
+                ArchiveError = ex.Message;
+                _logger.LogWarning(ex, "Archiv-Inhalt nicht lesbar: {Path}", item.Path);
+            }
+        }
+        finally
+        {
+            if (version == _showVersion)
+            {
+                IsLoading = false;
+            }
+        }
+    }
+
+    /// <summary>„Entpacken…“: die Galerie öffnet den Dialog (Modul-Entkopplung über den Messenger, ADR-0017).</summary>
+    [RelayCommand]
+    private void ExtractArchive()
+    {
+        if (CurrentItem is { IsArchive: true } item)
+        {
+            WeakReferenceMessenger.Default.Send(new ExtractArchiveRequestedMessage(item.FileId, item.Path, item.Name));
         }
     }
 
@@ -1037,7 +1128,7 @@ public sealed partial class LightboxViewModel : ObservableObject, IDisposable
         FileInfoRows.Clear();
         FileInfoRows.Add(new LightboxInfoRow("Name", item.Name));
         FileInfoRows.Add(new LightboxInfoRow("Ordner", Path.GetDirectoryName(item.Path) ?? string.Empty));
-        FileInfoRows.Add(new LightboxInfoRow("Typ", item.IsVideo ? "Video" : "Bild"));
+        FileInfoRows.Add(new LightboxInfoRow("Typ", item.IsArchive ? "Archiv" : item.IsVideo ? "Video" : "Bild"));
         FileInfoRows.Add(new LightboxInfoRow("Größe", FormatSize(item.Size)));
         FileInfoRows.Add(new LightboxInfoRow("Geändert", item.ModifiedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm", CultureInfo.CurrentCulture)));
     }

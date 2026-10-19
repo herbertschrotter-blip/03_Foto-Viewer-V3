@@ -183,7 +183,7 @@ public sealed class FlattenService : IFlattenService
         foreach (var path in paths)
         {
             var name = Path.GetFileName(path);
-            var isMedia = _formats.IsSupported(Path.GetExtension(name));
+            var isMedia = _formats.IsMedia(Path.GetExtension(name)); // Archive (0.2.8) zählen nicht als Mediendatei
             if (!isMedia && !includeNonMedia)
             {
                 continue;

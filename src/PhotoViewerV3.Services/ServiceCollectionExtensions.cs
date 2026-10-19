@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using PhotoViewerV3.Data.RawSql;
+using PhotoViewerV3.Services.Archive;
 using PhotoViewerV3.Services.Catalog;
 using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Infrastructure;
@@ -55,6 +56,7 @@ public static class ServiceCollectionExtensions
         services.AddOperations();
         services.AddCatalog();
         services.AddSorter();
+        services.AddArchives();
 
         // Ordnerüberwachung (Services/Watch): FileSystemWatcher je Wurzel → Incremental-Scan nach Ruhezeit
         services.AddWatch();

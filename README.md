@@ -18,6 +18,9 @@ großer Foto- und Video-Bibliotheken (50 000–500 000 Dateien). Nachfolger der 
 - **Lightbox**: eigenes Fenster (auch auf einem zweiten Monitor) für Bilder mit Zoom/Pan und Info-Panel sowie Videos
   über LibVLC mit Transportleiste; Favorit, Bewertung, Papierkorb, „Im Explorer anzeigen“, „Mit Standardprogramm
   öffnen“.
+- **Archive** (0.2.8): ZIP, RAR, 7z, TAR, GZ/TGZ, BZ2 und XZ erscheinen als Kacheln im Katalog (Icon, Endung, Größe;
+  Filter „Archive“); die Lightbox zeigt ihren Inhalt, „Entpacken…“ legt die Dateien neben das Archiv und nimmt sie
+  sofort in den Katalog auf (siehe [Archive](#archive)).
 - **Ordner**: Ordnerbaum der Bibliothek mit Dateizählern, rechts die Galerie des gewählten Ordners (mit oder ohne
   Unterordner).
 - **Sortieren**: Pattern-basierter File Sorter (Regex-Profile, Multi-Level, Vorschau, Import/Export der V2-Profile)
@@ -67,7 +70,7 @@ Eine portable Auslieferung (`dotnet publish`) gibt es noch nicht; die App läuft
   [Als fehlend markieren] [Abbrechen]).
 
 ### Galerie
-Toolbar: Sortierung, Filter-Pills (Alle / Bilder / Videos / Favoriten), Suchfeld (Dateiname oder Endung; Wörter werden
+Toolbar: Sortierung, Filter-Pills (Alle / Bilder / Videos / Favoriten / Archive), Suchfeld (Dateiname oder Endung; Wörter werden
 als Präfix gesucht, Sonderzeichen sind erlaubt), Seitengröße, Pager, Aktualisieren. Ein Ordnerfilter erscheint als
 Chip und lässt sich dort wieder aufheben. Kacheln: Herz = Favorit, Sterne = Bewertung, Badge „fehlt“ bei Dateien, die
 beim letzten Scan nicht mehr auf der Platte lagen. Ordner ohne direkte Dateien zeigen ihre Unterordner als Kacheln.
@@ -109,6 +112,24 @@ Codec).
 | Strg+1 … Strg+5 | Bewertung 1–5 Sterne |
 | Strg+0 | Bewertung löschen |
 | Entf | In den Papierkorb (mit Bestätigung) |
+
+### Archive
+Archive (`.zip .rar .7z .tar .gz .tgz .bz2 .xz`) nimmt der Scan wie Fotos in den Katalog auf; sie bekommen kein
+Vorschaubild, die Kachel zeigt ein Archiv-Symbol mit Endung und Größe. Die Filter-Pill **Archive** zeigt nur sie.
+- **Inhalt ansehen:** Enter/Doppelklick (oder Kontextmenü „Inhalt anzeigen“) öffnet das Archiv in der Lightbox als Liste
+  der Einträge mit Größe, komprimierter Größe und Datum; Fotos/Videos und Archive im Archiv sind markiert. Knöpfe
+  **Entpacken…** und **Im Explorer anzeigen**.
+- **Entpacken…** (Aktionsleiste für alle ausgewählten Archive, Kontextmenü der Kachel oder Lightbox) öffnet einen Dialog:
+  Ziel (Standard: Unterordner mit dem Archivnamen neben dem Archiv, oder ein eigener Ordner), vorhandene Dateien
+  überspringen / überschreiben / umbenennen („Name (2).jpg“), nur Fotos und Videos (Standard) oder alles, Archive im
+  Archiv mitentpacken (bis 3 Ebenen, die Zwischen-Archive werden danach entfernt), Archiv danach in den Papierkorb
+  (nur wenn fehlerfrei; protokolliert wie jedes Löschen). Fortschritt mit Dateien und Bytes, **Abbrechen** jederzeit;
+  am Ende Zusammenfassung und Fehlerliste. Danach aktualisiert die App die Bibliothek (Incremental-Scan), die entpackten
+  Dateien erscheinen sofort in der Galerie.
+- Passwortgeschützte Archive werden angezeigt, aber mit klarer Meldung nicht entpackt (kein Passwort-Dialog); Einträge
+  mit Pfaden außerhalb des Zielordners („Zip-Slip“, `..\..\`) werden übersprungen und als Fehler gemeldet.
+- Entpackt wird in der App über SharpCompress (keine Installation von 7-Zip/WinRAR nötig, ADR-0022). Automatisches
+  Entpacken beim Scan gibt es noch nicht.
 
 ### Ordner
 Links der Ordnerbaum der aktiven Bibliothek (Dateizähler direkt / gesamt), rechts die Galerie. Umschalter „mit
@@ -205,9 +226,11 @@ Die Testbibliothek sollte Bilder (JPG/PNG), Videos (MP4/MOV), einen Ordner ohne 
 Unterordnern („Leer\Sub A“, „Leer\Sub B“), einen Ordner „Unsortiert“ mit mehreren JPGs sowie die Ordner
 „2024\Familie“ und „2025\Screenshots“ enthalten (das Szenario prüft diese Namen) — insgesamt mindestens sechs
 Mediendateien, damit der Mass-Missing-Guard beim Incremental-Schritt nicht greift. Der Schritt legt
-`Unsortiert\smoke-neu.jpg` an (bleibt liegen, wird beim nächsten Lauf vorab entfernt). Die Ordnerüberwachung ist
-während des Laufs ausgeschaltet und wird erst im letzten Schritt (Ruhezeit 1 s, `Unsortiert\smoke-watch.jpg` kopieren
-und löschen) eingeschaltet.
+`Unsortiert\smoke-neu.jpg` an (bleibt liegen, wird beim nächsten Lauf vorab entfernt); der Archiv-Schritt legt
+`Unsortiert\smoke-archiv.zip` an, entpackt es nach `Unsortiert\smoke-archiv\` und verschiebt das ZIP in den
+Windows-Papierkorb (der Ordner wird beim nächsten Lauf vorab entfernt). Die Ordnerüberwachung ist während des Laufs
+ausgeschaltet und wird erst im letzten Schritt (Ruhezeit 1 s, `Unsortiert\smoke-watch.jpg` kopieren und löschen)
+eingeschaltet.
 
 Spike- und Benchmark-Harness: `dotnet run --project tests/PhotoViewerV3.PerfTests -c Release -- <spike>` (siehe
 [docs/spikes/](docs/spikes/)).
@@ -222,7 +245,7 @@ src/
   PhotoViewerV3.Data/              # LibraryContext (EF Core), EntitiesMapping, Migrations,
                                    # RawSql (BulkScanWriter, FtsIndexer, FtsQueryBuilder)
   PhotoViewerV3.Services/          # WPF-frei: Catalog, Database, Infrastructure (AppDataPaths), Library, Media
-                                   # (Formatregister), Messaging, Operations, Scanning, Sorter, Thumbnails;
+                                   # (Formatregister), Messaging, Operations, Scanning, Sorter, Thumbnails, Archive;
                                    # AddPhotoViewerServices() + AddXyz() je Modul
   PhotoViewerV3.Wpf/               # App.xaml.cs (Host + DI), MainWindow (NavigationView);
                                    # Module Folders, Gallery, Library, Lightbox, Settings, Shell (+ Smoke), Sorter,

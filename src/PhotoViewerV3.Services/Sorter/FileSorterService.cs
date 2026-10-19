@@ -94,7 +94,7 @@ public sealed class FileSorterService : IFileSorterService
         foreach (var path in Directory.EnumerateFiles(folder))
         {
             var name = Path.GetFileName(path);
-            var isMedia = _formats.IsSupported(Path.GetExtension(name));
+            var isMedia = _formats.IsMedia(Path.GetExtension(name)); // Archive (0.2.8) zählen nicht als Mediendatei
             if (!isMedia && !includeNonMedia)
             {
                 continue;

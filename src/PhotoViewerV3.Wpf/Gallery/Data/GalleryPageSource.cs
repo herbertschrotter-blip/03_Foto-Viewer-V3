@@ -428,6 +428,7 @@ public sealed class GalleryPageSource : IDisposable
         GalleryFilter.Images => "AND f.MediaType = 0",
         GalleryFilter.Videos => "AND f.MediaType = 1",
         GalleryFilter.Favorites => "AND f.IsFavorite = 1",
+        GalleryFilter.Archives => "AND f.MediaType = 2",
         _ => string.Empty,
     };
 

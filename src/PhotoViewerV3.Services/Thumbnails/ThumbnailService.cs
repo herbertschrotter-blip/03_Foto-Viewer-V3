@@ -133,6 +133,12 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
         var toCheck = new List<ThumbnailRequest>(requests.Count);
         foreach (var req in requests)
         {
+            // Archive (ADR-0022) haben kein Vorschaubild: weder DB-Zeile noch Renderer noch Event — die Kachel zeigt ein Icon.
+            if (req.MediaType == MediaType.Archive)
+            {
+                continue;
+            }
+
             if (TryHandleKnown(req))
             {
                 continue;

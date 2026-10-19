@@ -175,7 +175,7 @@ FilesFts           -- FTS5 virtual table (Files.Name, Extension)
 - Plans / PlanFolders / PlanAssignments (V0.3)
 - FileHashes (V0.3+ separat von Files)
 - SorterProfiles / SorterTokens (Phase 8)
-- ExtractedArchives (Phase 8)
+- ~~ExtractedArchives (Phase 8)~~ — entfällt: Archive sind Files-Zeilen mit `MediaType = 2`, der Papierkorb protokolliert über OperationBatches (ADR-0022)
 - Persons / Faces (Phase 9 — eigene Migration)
 
 ### Pflicht-Indizes V0.1
@@ -262,7 +262,7 @@ Status (Stand 0.2.0): ✅ umgesetzt · 🟡 teilweise · ⬜ offen
 | ⬜ | Face Recognition |
 | 🟡 | Full-Recovery-Repair-UI — Hinweis in der Statusleiste + Undo, kein Reparatur-Dialog |
 | ✅ | File-Sorter (0.2.0 aus V2 portiert, Pattern-Engine + Multi-Level) |
-| ⬜ | Archive Auto-Extract |
+| 🟡 | Archive: im Katalog, Inhaltsansicht, manuelles Entpacken ✅ (0.2.8, ADR-0022); Auto-Extract beim Scan ⬜ |
 | ⬜ | pHash Duplikat-Erkennung |
 
 ---
@@ -275,7 +275,7 @@ Status (Stand 0.2.0): ✅ umgesetzt · 🟡 teilweise · ⬜ offen
 | ✅ | **V0.1** | Produktiver Viewer + Indexer (siehe Pflicht-Liste) | 60–90 PT |
 | 🟡 | **V0.2** | LibVLC-Lightbox produktiv ✅, Move/Rename ✅, OperationBatches voll ✅ (ADR-0018), Recovery-UI 🟡 (Statusleisten-Hinweis + Undo), Thumbnail-Priorities komplett ⬜ (zwei Worker-Pools, keine 4-Prio-Queue); dazu Incremental-Scan ✅ (ADR-0019), Bibliotheksverwaltung ✅, Ordnerbaum ✅, Einstellungen ✅ | 25–40 PT |
 | ⬜ | **V0.3** | Plan-Ordner: Plans/PlanFolders/PlanAssignments + Drag&Drop + Preflight + Apply Move-only + Block-Undo | 25–40 PT |
-| 🟡 | **V0.4 / Phase 8** | FTS5 erweitert (Tags) ⬜, Tags/Albums-UI ⬜, Rating ✅ (vorgezogen), Animated Hover ⬜, File-Sorter ✅ (vorgezogen: Regex-Profile, Multi-Level, Import/Export; Drag&Drop-Editor ⬜), Archive Auto-Extract ⬜, pHash Duplikate ⬜, Flatten & Move ✅ (vorgezogen) | 40–60 PT |
+| 🟡 | **V0.4 / Phase 8** | FTS5 erweitert (Tags) ⬜, Tags/Albums-UI ⬜, Rating ✅ (vorgezogen), Animated Hover ⬜, File-Sorter ✅ (vorgezogen: Regex-Profile, Multi-Level, Import/Export; Drag&Drop-Editor ⬜), Archive im Katalog + Entpacken ✅ (vorgezogen, ADR-0022; Auto-Extract beim Scan ⬜), pHash Duplikate ⬜, Flatten & Move ✅ (vorgezogen) | 40–60 PT |
 | ⬜ | **V0.5 / Phase 9** | Face Recognition (RetinaFace + ArcFace via ONNX), Auto-Clustering, Personen benennen | 30–50 PT |
 
 **Gesamt-V0.1 brutto:** 70–108 PT = **8–10 Wochen** für 1 erfahrenen Entwickler bei 5 PT/Woche.

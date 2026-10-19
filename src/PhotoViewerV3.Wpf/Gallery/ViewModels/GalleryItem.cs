@@ -24,6 +24,7 @@ public sealed partial class GalleryItem : ObservableObject
         Size = dto.Size;
         SizeDisplay = dto.SizeDisplay;
         IsVideo = dto.IsVideo;
+        IsArchive = dto.IsArchive;
         MediaType = (MediaType)dto.MediaType;
         FolderPath = dto.FolderPath;
         SourcePath = Path.Combine(dto.FolderPath, dto.Name);
@@ -41,6 +42,12 @@ public sealed partial class GalleryItem : ObservableObject
     public long Size { get; }
     public string SizeDisplay { get; }
     public bool IsVideo { get; }
+
+    /// <summary>Archiv-Kachel (ADR-0022): kein Thumbnail, Icon + Endung + Größe; Doppelklick öffnet die Inhaltsansicht.</summary>
+    public bool IsArchive { get; }
+
+    /// <summary>Endung ohne Punkt in Großbuchstaben für das Archiv-Badge („ZIP“).</summary>
+    public string ArchiveBadge => Extension.TrimStart('.').ToUpperInvariant();
     public MediaType MediaType { get; }
     public string FolderPath { get; }
     public string SourcePath { get; }

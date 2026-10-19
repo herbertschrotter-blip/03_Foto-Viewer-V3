@@ -82,6 +82,9 @@
                     <local:LightboxOverlay x:Name="VideoOverlay" IsSurfaceInteractive="True" />
                 </vlc:VideoView>
 
+                <!-- Archiv-Inhaltsansicht (ADR-0022) statt Bild/Video -->
+                <local:ArchiveContentView Visibility="{Binding IsArchive, Converter={StaticResource BoolToVis}}" />
+
                 <!-- Overlay für den Bild-Modus (direkt im Fenster, durchlässig für Rad/Drag) -->
                 <local:LightboxOverlay x:Name="ImageOverlay"
                                        IsSurfaceInteractive="False"

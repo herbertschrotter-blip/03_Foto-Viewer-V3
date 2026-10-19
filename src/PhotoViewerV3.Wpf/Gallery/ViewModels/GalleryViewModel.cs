@@ -17,9 +17,11 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using PhotoViewerV3.Data.RawSql;
 using PhotoViewerV3.Domain.Entities;
+using PhotoViewerV3.Gallery.Archives;
 using PhotoViewerV3.Gallery.Controls;
 using PhotoViewerV3.Gallery.Services;
 using PhotoViewerV3.Lightbox;
+using PhotoViewerV3.Services.Archive;
 using PhotoViewerV3.Services.Catalog;
 using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Messaging;
@@ -68,6 +70,7 @@ public sealed partial class GalleryViewModel : ObservableObject
     private readonly ILightboxService _lightbox;
     private readonly IGalleryDialogService _dialogs;
     private readonly IFolderPickerService _folderPicker;
+    private readonly IArchiveExtractDialogService _archiveDialog;
     private readonly ILogger<GalleryViewModel> _logger;
     private readonly IMessenger _messenger = WeakReferenceMessenger.Default;
 
@@ -106,6 +109,7 @@ public sealed partial class GalleryViewModel : ObservableObject
         ILightboxService lightbox,
         IGalleryDialogService dialogs,
         IFolderPickerService folderPicker,
+        IArchiveExtractDialogService archiveDialog,
         ILogger<GalleryViewModel> logger)
     {
         _contextFactory = contextFactory;
@@ -116,6 +120,7 @@ public sealed partial class GalleryViewModel : ObservableObject
         _lightbox = lightbox;
         _dialogs = dialogs;
         _folderPicker = folderPicker;
+        _archiveDialog = archiveDialog;
         _logger = logger;
 
         CurrentPage = new ObservableCollection<GalleryItem>();
@@ -205,22 +210,28 @@ public sealed partial class GalleryViewModel : ObservableObject
     private bool _showSubfolders;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasSelection), nameof(SelectionText), nameof(CanActOnSelection))]
+    [NotifyPropertyChangedFor(nameof(HasSelection), nameof(SelectionText), nameof(CanActOnSelection), nameof(CanExtractSelection))]
     [NotifyCanExecuteChangedFor(
         nameof(FavoriteSelectionCommand), nameof(UnfavoriteSelectionCommand),
         nameof(SetSelectionRatingCommand), nameof(ClearSelectionRatingCommand),
-        nameof(MoveSelectionCommand), nameof(RecycleSelectionCommand))]
+        nameof(MoveSelectionCommand), nameof(RecycleSelectionCommand), nameof(ExtractSelectionCommand))]
     private int _selectedCount;
+
+    /// <summary>Archive in der Auswahl (Aktionsleiste „Entpacken…“, ADR-0022).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanExtractSelection))]
+    [NotifyCanExecuteChangedFor(nameof(ExtractSelectionCommand))]
+    private int _selectedArchiveCount;
 
     /// <summary>Gemeinsame Bewertung aller ausgewählten Dateien (null, wenn unterschiedlich oder leer).</summary>
     [ObservableProperty] private byte? _selectionRating;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanActOnSelection), nameof(CanExecuteUndo))]
+    [NotifyPropertyChangedFor(nameof(CanActOnSelection), nameof(CanExecuteUndo), nameof(CanExtractSelection))]
     [NotifyCanExecuteChangedFor(
         nameof(FavoriteSelectionCommand), nameof(UnfavoriteSelectionCommand),
         nameof(SetSelectionRatingCommand), nameof(ClearSelectionRatingCommand),
-        nameof(MoveSelectionCommand), nameof(RecycleSelectionCommand), nameof(UndoCommand))]
+        nameof(MoveSelectionCommand), nameof(RecycleSelectionCommand), nameof(UndoCommand), nameof(ExtractSelectionCommand))]
     private bool _isOperationRunning;
 
     [ObservableProperty]
@@ -241,6 +252,7 @@ public sealed partial class GalleryViewModel : ObservableObject
     public bool HasSelection => SelectedCount > 0;
     public bool CanActOnSelection => SelectedCount > 0 && !IsOperationRunning;
     public bool CanExecuteUndo => CanUndo && !IsOperationRunning;
+    public bool CanExtractSelection => SelectedArchiveCount > 0 && !IsOperationRunning;
     public string SelectionText => SelectedCount == 1 ? "1 ausgewählt" : $"{SelectedCount:N0} ausgewählt";
 
     public bool ShowNoLibrary => !HasLibrary;
@@ -266,6 +278,7 @@ public sealed partial class GalleryViewModel : ObservableObject
                 GalleryFilter.Images => "Keine Bilder in dieser Bibliothek.",
                 GalleryFilter.Videos => "Keine Videos in dieser Bibliothek.",
                 GalleryFilter.Favorites => "Noch keine Favoriten — markiere Dateien mit dem Herz.",
+                GalleryFilter.Archives => "Keine Archive (ZIP, RAR, 7z …) in dieser Bibliothek.",
                 _ => "Diese Bibliothek enthält noch keine Dateien. Starte unter „Bibliothek“ einen Scan.",
             };
         }
@@ -413,6 +426,8 @@ public sealed partial class GalleryViewModel : ObservableObject
             this, static (r, m) => r.RunOnUi(() => r.HandleFolderSelectedAsync(m)));
         _messenger.Register<GalleryViewModel, FilesChangedMessage>(
             this, static (r, m) => r.RunOnUi(() => r.HandleFilesChangedAsync(m)));
+        _messenger.Register<GalleryViewModel, ExtractArchiveRequestedMessage>(
+            this, static (r, m) => r.RunOnUi(() => r.ExtractArchivesAsync([new ArchiveExtractTarget(m.FileId, m.Path, m.Name)], ActiveWindow())));
     }
 
     private Task HandleActiveLibraryChangedAsync(ActiveLibraryChangedMessage m)
@@ -1027,6 +1042,7 @@ public sealed partial class GalleryViewModel : ObservableObject
     private void UpdateSelectionSummary()
     {
         SelectedCount = _selectedIds.Count;
+        SelectedArchiveCount = _selectedIds.Count(id => _currentItems.TryGetValue(id, out var it) && it.IsArchive);
 
         byte? common = null;
         var first = true;
@@ -1487,6 +1503,106 @@ public sealed partial class GalleryViewModel : ObservableObject
         }
 
         await RefreshCanUndoAsync();
+    }
+
+    // ---- Archive (ADR-0022): Entpacken über den Dialog, Inhaltsansicht in der Lightbox ---------
+
+    /// <summary>Aktionsleiste: alle ausgewählten Archive entpacken (Dialog mit Ziel, Optionen, Fortschritt).</summary>
+    [RelayCommand(CanExecute = nameof(CanExtractSelection))]
+    private Task ExtractSelectionAsync()
+        => ExtractArchivesAsync(SelectedIdsSnapshot()
+            .Select(id => _currentItems.GetValueOrDefault(id))
+            .Where(it => it is { IsArchive: true })
+            .Select(it => new ArchiveExtractTarget(it!.Id, it.SourcePath, it.Name))
+            .ToList());
+
+    /// <summary>Kontextmenü der Kachel: dieses Archiv entpacken.</summary>
+    [RelayCommand]
+    private Task ExtractItemAsync(GalleryItem? item)
+        => item is { IsArchive: true }
+            ? ExtractArchivesAsync([new ArchiveExtractTarget(item.Id, item.SourcePath, item.Name)])
+            : Task.CompletedTask;
+
+    /// <param name="owner">Besitzer des Dialogs; null = Galerie-Fenster. Aus der Lightbox kommt deren Fenster, damit der Dialog davor liegt.</param>
+    private async Task ExtractArchivesAsync(IReadOnlyList<ArchiveExtractTarget> targets, Window? owner = null)
+    {
+        if (targets.Count == 0 || !HasLibrary || IsOperationRunning)
+        {
+            return;
+        }
+
+        await RunOperationAsync("Entpacken", async () =>
+        {
+            owner ??= OwnerWindowResolver?.Invoke() ?? Application.Current?.MainWindow;
+            var results = await _archiveDialog.ShowAsync(new ArchiveExtractDialogRequest(targets, _libraryId, _libraryRootPath), owner);
+            ReportExtractResults(results);
+        });
+    }
+
+    /// <summary>
+    /// Rauchtest/Tests: Archive ohne Dialog mit festen Optionen entpacken (derselbe Service, dieselbe Ergebnisauswertung).
+    /// <paramref name="options"/> ohne LibraryId/ArchiveFileId wird je Archiv ergänzt.
+    /// </summary>
+    internal async Task<IReadOnlyList<ArchiveExtractResult>> ExtractArchivesHeadlessAsync(IReadOnlyList<int> fileIds, ArchiveExtractOptions options, IArchiveService archives)
+    {
+        var results = new List<ArchiveExtractResult>();
+        await RunOperationAsync("Entpacken", async () =>
+        {
+            foreach (var id in fileIds)
+            {
+                if (!_currentItems.TryGetValue(id, out var item) || !item.IsArchive)
+                {
+                    continue;
+                }
+
+                var effective = options with { LibraryId = options.LibraryId ?? _libraryId, ArchiveFileId = options.ArchiveFileId ?? item.Id };
+                results.Add(await archives.ExtractAsync(item.SourcePath, effective));
+            }
+
+            ReportExtractResults(results);
+        });
+        return results;
+    }
+
+    /// <summary>Kontextmenü: Datei im Explorer markieren.</summary>
+    [RelayCommand]
+    private void ShowInExplorer(GalleryItem? item)
+    {
+        if (item is null)
+        {
+            return;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{item.SourcePath}\"") { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            SetResultStatus($"Explorer konnte nicht geöffnet werden: {ex.Message}");
+        }
+    }
+
+    private static Window? ActiveWindow()
+        => Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive);
+
+    private void ReportExtractResults(IReadOnlyList<ArchiveExtractResult> results)
+    {
+        if (results.Count == 0)
+        {
+            return;
+        }
+
+        var files = results.Sum(r => r.FilesExtracted);
+        var errors = results.Sum(r => r.Errors.Count);
+        var canceled = results.Any(r => r.Canceled);
+        SetResultStatus(canceled
+            ? $"Entpacken abgebrochen: {files:N0} Datei(en) entpackt."
+            : errors == 0
+                ? $"Entpacken: {files:N0} Datei(en) aus {results.Count:N0} Archiv(en) entpackt."
+                : $"Entpacken: {files:N0} Datei(en) entpackt, {errors:N0} Fehler.");
+        _logger.LogInformation("Entpacken: {Archives} Archive, {Files} Dateien, {Errors} Fehler, abgebrochen={Canceled}", results.Count, files, errors, canceled);
+        ScheduleReload();
     }
 
     // ---- Lightbox ------------------------------------------------------------------------------
