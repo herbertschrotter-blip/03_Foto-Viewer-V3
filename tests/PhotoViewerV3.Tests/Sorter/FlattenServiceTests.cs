@@ -154,12 +154,13 @@ public sealed class FlattenServiceTests
         analysis.Folders.Single(f => f.RelativePath == @"d\c").TargetName = @"..\raus";
         analysis.Folders.Single(f => f.RelativePath == @"test01\b").IsSelected = false;
 
-        var plan = s.Flatten.BuildPlan(analysis, new FlattenPlanOptions { TargetRoot = fx.OutsideDir });
+        var plan = s.Flatten.BuildPlan(analysis, new FlattenPlanOptions { TargetRoot = Path.Combine(fx.LibraryRoot, "ziel") });
 
-        plan.TargetInsideLibrary.Should().BeFalse();
+        plan.TargetInsideLibrary.Should().BeTrue();
+        plan.TargetError.Should().BeNull();
         plan.Items.Should().HaveCount(2);
         plan.Items.Single(i => i.FileName == "x.jpg" && i.GroupPath == @"d\c").Status.Should().Be(SorterPlanItemStatus.InvalidTarget);
-        plan.Items.Single(i => i.GroupPath == @"test01\test01\raw").DestPath.Should().Be(Path.Combine(fx.OutsideDir, "test01_raw", "x.jpg"));
+        plan.Items.Single(i => i.GroupPath == @"test01\test01\raw").DestPath.Should().Be(Path.Combine(fx.LibraryRoot, "ziel", "test01_raw", "x.jpg"));
         plan.SkippedCount.Should().Be(2);
     }
 

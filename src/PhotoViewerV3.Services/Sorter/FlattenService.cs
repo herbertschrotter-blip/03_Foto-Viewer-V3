@@ -77,23 +77,24 @@ public sealed class FlattenService : IFlattenService
             throw new DirectoryNotFoundException($"Der Ordner „{source}“ wurde nicht gefunden.");
         }
 
-        var library = await _catalog.RequireLibraryForFolderAsync(source, ct).ConfigureAwait(false);
+        var location = await _catalog.RequireLocationAsync(source, ct).ConfigureAwait(false);
         var separator = string.IsNullOrEmpty(options.Separator) ? "_" : options.Separator;
-        var catalog = await _catalog.GetFilesUnderFolderAsync(library.Id, source, ct).ConfigureAwait(false);
+        var catalog = await _catalog.GetFilesUnderFolderAsync(location.LibraryId, source, ct).ConfigureAwait(false);
 
         var analysis = new FlattenAnalysis
         {
             SourceFolder = source,
-            LibraryId = library.Id,
-            LibraryRoot = SorterPaths.NormalizeDirectory(library.RootPath),
+            LibraryId = location.LibraryId,
+            SourceRoot = location.Root,
+            Roots = location.Roots,
             Separator = separator,
         };
 
         await Task.Run(() => ScanFolders(analysis, catalog, options.IncludeNonMediaFiles, ct), ct).ConfigureAwait(false);
 
         _logger.LogInformation(
-            "Flatten-Analyse {Folder}: {Folders} Ordner, {Files} Dateien, {Unknown} nicht im Katalog",
-            source, analysis.TotalFolders, analysis.TotalFiles, analysis.NotInCatalog.Count);
+            "Flatten-Analyse {Folder} ({Role} „{Root}“): {Folders} Ordner, {Files} Dateien, {Unknown} nicht im Katalog",
+            source, location.Root.RoleText, location.Root.Name, analysis.TotalFolders, analysis.TotalFiles, analysis.NotInCatalog.Count);
         return analysis;
     }
 
@@ -224,6 +225,7 @@ public sealed class FlattenService : IFlattenService
         var targetRoot = string.IsNullOrWhiteSpace(options.TargetRoot)
             ? analysis.SourceFolder
             : SorterPaths.NormalizeDirectory(options.TargetRoot);
+        var targetError = SorterTargetCheck.Check(analysis.Roots, targetRoot, out var targetLibraryRoot);
 
         var items = new List<SorterPlanItem>();
         var claimed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -256,7 +258,12 @@ public sealed class FlattenService : IFlattenService
                 SorterPlanItemStatus status;
                 string? note = null;
 
-                if (error is not null)
+                if (targetError is not null)
+                {
+                    status = SorterPlanItemStatus.InvalidTarget;
+                    note = targetError;
+                }
+                else if (error is not null)
                 {
                     status = SorterPlanItemStatus.InvalidTarget;
                     note = error;
@@ -286,9 +293,10 @@ public sealed class FlattenService : IFlattenService
             }
 
             if (options.DeleteEmptySourceFolders
+                && targetError is null
                 && !folder.IsRoot
                 && !SorterPaths.PathEquals(folder.AbsolutePath, targetRoot)
-                && !SorterPaths.PathEquals(folder.AbsolutePath, analysis.LibraryRoot))
+                && !SorterTargetCheck.IsRootFolder(analysis.Roots, folder.AbsolutePath))
             {
                 cleanup.Add(folder.AbsolutePath);
             }
@@ -300,8 +308,10 @@ public sealed class FlattenService : IFlattenService
             SourceFolder = analysis.SourceFolder,
             TargetRoot = targetRoot,
             LibraryId = analysis.LibraryId,
-            LibraryRoot = analysis.LibraryRoot,
-            TargetInsideLibrary = SorterPaths.IsInsideRoot(targetRoot, analysis.LibraryRoot),
+            SourceRoot = analysis.SourceRoot,
+            Roots = analysis.Roots,
+            TargetLibraryRoot = targetLibraryRoot,
+            TargetError = targetError,
             DeleteEmptySourceFolders = options.DeleteEmptySourceFolders && cleanup.Count > 0,
             SourceFoldersToClean = cleanup,
             CleanupBoundary = analysis.SourceFolder,

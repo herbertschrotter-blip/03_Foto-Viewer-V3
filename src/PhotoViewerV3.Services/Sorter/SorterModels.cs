@@ -46,11 +46,12 @@ public sealed class SorterProfileException : Exception
     public IReadOnlyList<string> Errors { get; }
 }
 
-/// <summary>Der gewählte Ordner liegt in keiner Bibliothek — der Sortierer arbeitet nur im Katalog (ADR-0012).</summary>
+/// <summary>Der gewählte Ordner liegt unter keiner Wurzel einer Bibliothek — der Sortierer arbeitet nur im Katalog (ADR-0012, ADR-0020).</summary>
 public sealed class FolderNotInLibraryException : InvalidOperationException
 {
     public FolderNotInLibraryException(string folder)
-        : base($"Der Ordner „{folder}“ gehört zu keiner Bibliothek; bitte als Bibliothek anlegen und scannen.")
+        : base($"Der Ordner „{folder}“ gehört zu keiner Bibliothek (liegt unter keiner Eingangs- oder Archiv-Wurzel); "
+               + "bitte als Eingang hinzufügen oder als Bibliothek anlegen und scannen.")
     {
         Folder = folder;
     }
@@ -112,7 +113,7 @@ public sealed class SorterGroup
 
     public List<SorterGroup> SubGroups { get; } = new();
 
-    /// <summary>Zielordner existiert bereits im Quellordner und enthält Dateien.</summary>
+    /// <summary>Zielordner existiert bereits unter der Zielwurzel (<see cref="SorterAnalysis.TargetRoot"/>) und enthält Dateien.</summary>
     public bool FolderExists { get; set; }
 
     public int FolderFileCount { get; set; }
@@ -137,7 +138,18 @@ public sealed class SorterAnalysis
 {
     public required string SourceFolder { get; init; }
     public required int LibraryId { get; init; }
-    public required string LibraryRoot { get; init; }
+
+    /// <summary>Wurzel (Eingang oder Archiv), unter der der Quellordner liegt.</summary>
+    public required SorterRoot SourceRoot { get; init; }
+
+    /// <summary>Alle Wurzeln der Bibliothek zum Zeitpunkt der Analyse (Archiv zuerst) — erlaubte Ziele (ADR-0024).</summary>
+    public required IReadOnlyList<SorterRoot> Roots { get; init; }
+
+    /// <summary>
+    /// Zielwurzel, gegen die <see cref="SorterGroup.FolderExists"/> geprüft wird; null = Quellordner. Setzen über
+    /// <see cref="IFileSorterService.SetTargetRoot"/>.
+    /// </summary>
+    public string? TargetRoot { get; internal set; }
 
     /// <summary>Verwendete (aktive, kompilierbare) Sub-Level — leer = einstufig.</summary>
     public IReadOnlyList<SorterSubLevel> SubLevels { get; init; } = Array.Empty<SorterSubLevel>();
@@ -174,6 +186,9 @@ public sealed record SorterAnalyzeOptions
 
     /// <summary>null = Sub-Level aus dem Profil-Store.</summary>
     public IReadOnlyList<SorterSubLevel>? SubLevels { get; init; }
+
+    /// <summary>Zielwurzel für den Hinweis „Ordner existiert bereits“; null = Quellordner.</summary>
+    public string? TargetRoot { get; init; }
 }
 
 // ---------------------------------------------------------------- Plan
@@ -224,7 +239,7 @@ public enum SorterPlanItemStatus
     /// <summary>Datei ist nicht im Katalog — erst neu scannen.</summary>
     NotInCatalog = 2,
 
-    /// <summary>Zielordnername ungültig (Path-Traversal, ungültige Zeichen).</summary>
+    /// <summary>Zielordnername ungültig (Path-Traversal, ungültige Zeichen) oder Ziel gesperrt (außerhalb der Wurzeln, offline).</summary>
     InvalidTarget = 3,
 
     /// <summary>Datei liegt bereits im Zielordner.</summary>
@@ -274,11 +289,26 @@ public sealed class SorterPlan
     public required string SourceFolder { get; init; }
     public required string TargetRoot { get; init; }
     public required int LibraryId { get; init; }
-    public required string LibraryRoot { get; init; }
+
+    /// <summary>Wurzel, unter der der Quellordner liegt.</summary>
+    public required SorterRoot SourceRoot { get; init; }
+
+    /// <summary>Alle Wurzeln der Bibliothek; sie werden beim Aufräumen nie gelöscht.</summary>
+    public required IReadOnlyList<SorterRoot> Roots { get; init; }
+
     public required IReadOnlyList<SorterPlanItem> Items { get; init; }
 
-    /// <summary>Zielwurzel liegt in der Library-Root — sonst verlassen die Dateien den Katalog.</summary>
-    public bool TargetInsideLibrary { get; init; }
+    /// <summary>Wurzel, unter der die Zielwurzel liegt; null = außerhalb der Bibliothek (gesperrt, ADR-0024).</summary>
+    public SorterRoot? TargetLibraryRoot { get; init; }
+
+    /// <summary>Grund, warum das Ziel gesperrt ist (außerhalb der Wurzeln, Wurzel offline); null = Ziel in Ordnung.</summary>
+    public string? TargetError { get; init; }
+
+    /// <summary>Zielwurzel liegt unter einer Wurzel der Bibliothek.</summary>
+    public bool TargetInsideLibrary => TargetLibraryRoot is not null;
+
+    /// <summary>Quelle und Ziel liegen unter verschiedenen Wurzeln (z. B. Eingang → Archiv).</summary>
+    public bool CrossesRoots => TargetLibraryRoot is not null && TargetLibraryRoot.Id != SourceRoot.Id;
 
     public bool DeleteEmptySourceFolders { get; init; }
 

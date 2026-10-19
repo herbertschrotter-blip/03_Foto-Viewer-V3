@@ -8,6 +8,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Logging;
 using PhotoViewerV3.Gallery.Services;
 using PhotoViewerV3.Services.Sorter;
@@ -18,7 +19,8 @@ namespace PhotoViewerV3.Sorter.ViewModels;
 /// <summary>
 /// ViewModel der Seite „Sortieren“: Quellordner → Patterns/Sub-Level → Analyse (Gruppen) →
 /// Gruppen bearbeiten → Optionen → Vorschau → Sortieren → Rückgängig. Alle Fachlogik liegt im
-/// <see cref="IFileSorterService"/>; hier nur Zustand, Validierung der Eingaben und Dialoge.
+/// <see cref="IFileSorterService"/>; hier nur Zustand, Validierung der Eingaben und Dialoge. Quelle und Ziel wählt
+/// <see cref="Location"/> über die Wurzeln der Bibliothek (Standard: Eingang → Archiv, ADR-0020/ADR-0024).
 /// </summary>
 public sealed partial class FileSorterViewModel : ObservableObject
 {
@@ -27,9 +29,7 @@ public sealed partial class FileSorterViewModel : ObservableObject
     private readonly IFileSorterService _sorter;
     private readonly ISorterProfileStore _store;
     private readonly IGalleryDialogService _dialogs;
-    private readonly IFolderPickerService _folderPicker;
     private readonly ISorterFileDialogService _fileDialogs;
-    private readonly SorterLibraryLocator _libraries;
     private readonly ILogger<FileSorterViewModel> _logger;
 
     private SorterAnalysis? _analysis;
@@ -43,16 +43,27 @@ public sealed partial class FileSorterViewModel : ObservableObject
         IFolderPickerService folderPicker,
         ISorterFileDialogService fileDialogs,
         SorterLibraryLocator libraries,
-        ILogger<FileSorterViewModel> logger)
+        ILogger<FileSorterViewModel> logger,
+        IMessenger? messenger = null)
     {
         _sorter = sorter;
         _store = store;
         _dialogs = dialogs;
-        _folderPicker = folderPicker;
         _fileDialogs = fileDialogs;
-        _libraries = libraries;
         _logger = logger;
+        Location = new SorterRootSelection(
+            libraries,
+            folderPicker,
+            messenger ?? WeakReferenceMessenger.Default,
+            logger,
+            "Quellordner wählen (unter einer Wurzel der Bibliothek)",
+            "Zielwurzel wählen (unter einer Wurzel der Bibliothek)");
+        Location.PropertyChanged += OnLocationPropertyChanged;
+        Location.Reloaded += OnLocationReloaded;
     }
+
+    /// <summary>Quelle und Ziel über die Wurzeln der aktiven Bibliothek.</summary>
+    public SorterRootSelection Location { get; }
 
     // ---- Gebundene Sammlungen ------------------------------------------------------------------
 
@@ -64,20 +75,7 @@ public sealed partial class FileSorterViewModel : ObservableObject
 
     public ObservableCollection<PlanRowViewModel> PlanRows { get; } = new();
 
-    // ---- Quelle / Bibliothek -------------------------------------------------------------------
-
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(AnalyzeCommand))]
-    private string _sourceFolder = string.Empty;
-
-    [ObservableProperty]
-    private string? _libraryName;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasLibrary))]
-    private string? _libraryRootPath;
-
-    public bool HasLibrary => !string.IsNullOrEmpty(LibraryRootPath);
+    // ---- Quelle --------------------------------------------------------------------------------
 
     [ObservableProperty]
     private bool _isMultiLevel;
@@ -113,14 +111,6 @@ public sealed partial class FileSorterViewModel : ObservableObject
     // ---- Optionen --------------------------------------------------------------------------------
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(TargetRootDisplay), nameof(HasCustomTargetRoot))]
-    private string? _targetRoot;
-
-    public string TargetRootDisplay => string.IsNullOrWhiteSpace(TargetRoot) ? "= Quellordner" : TargetRoot;
-
-    public bool HasCustomTargetRoot => !string.IsNullOrWhiteSpace(TargetRoot);
-
-    [ObservableProperty]
     private bool _unsortedToFolder;
 
     [ObservableProperty]
@@ -140,8 +130,12 @@ public sealed partial class FileSorterViewModel : ObservableObject
     [ObservableProperty]
     private string? _planSummary;
 
+    /// <summary>Das Ziel des Plans ist gesperrt (außerhalb der Wurzeln oder offline, ADR-0024).</summary>
     [ObservableProperty]
-    private bool _planTargetOutsideLibrary;
+    private bool _planTargetBlocked;
+
+    [ObservableProperty]
+    private string? _planTargetError;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsIdle))]
@@ -149,8 +143,7 @@ public sealed partial class FileSorterViewModel : ObservableObject
         nameof(AnalyzeCommand), nameof(PreviewCommand), nameof(ExecuteCommand), nameof(UndoCommand),
         nameof(MergeMarkedGroupsCommand), nameof(IncludeAllGroupsCommand), nameof(ExcludeAllGroupsCommand),
         nameof(AddPatternCommand), nameof(SavePatternsCommand), nameof(ImportPatternsCommand), nameof(ExportPatternsCommand),
-        nameof(ResetPatternsCommand), nameof(AddSubLevelCommand), nameof(ResetSubLevelsCommand),
-        nameof(PickSourceFolderCommand), nameof(PickTargetRootCommand))]
+        nameof(ResetPatternsCommand), nameof(AddSubLevelCommand), nameof(ResetSubLevelsCommand))]
     private bool _isBusy;
 
     public bool IsIdle => !IsBusy;
@@ -183,7 +176,7 @@ public sealed partial class FileSorterViewModel : ObservableObject
     [ObservableProperty]
     private bool _isHelpOpen;
 
-    public bool CanAnalyze => !IsBusy && !string.IsNullOrWhiteSpace(SourceFolder);
+    public bool CanAnalyze => !IsBusy && !string.IsNullOrWhiteSpace(Location.SourceFolder);
 
     public bool CanWorkOnGroups => !IsBusy && HasGroups;
 
@@ -204,19 +197,60 @@ public sealed partial class FileSorterViewModel : ObservableObject
         await RunAsync("Initialisierung", async () =>
         {
             await LoadProfilesAsync();
-            var library = await _libraries.GetActiveAsync();
-            LibraryName = library?.Name;
-            LibraryRootPath = library?.RootPath;
-            if (string.IsNullOrWhiteSpace(SourceFolder) && library is not null)
-            {
-                SourceFolder = library.RootPath;
-            }
-
+            var library = await Location.LoadAsync();
             await RefreshLastRunAsync();
-            StatusText = library is null
-                ? "Keine Bibliothek vorhanden — bitte zuerst eine Bibliothek anlegen und scannen."
-                : $"Bibliothek „{library.Name}“ · {library.RootPath}";
+            StatusText = LibraryStatus(library);
         });
+    }
+
+    private static string LibraryStatus(SorterLibraryInfo? library) => library is null
+        ? "Keine Bibliothek vorhanden — bitte zuerst eine Bibliothek anlegen und scannen."
+        : $"Bibliothek „{library.Name}“ · {library.Roots.Count(r => r.IsInbox)} Eingang/Eingänge, Archiv {library.RootPath}";
+
+    partial void OnIsBusyChanged(bool value) => Location.IsEnabled = !value;
+
+    private void OnLocationPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        switch (e.PropertyName)
+        {
+            case nameof(SorterRootSelection.SourceFolder):
+                AnalyzeCommand.NotifyCanExecuteChanged();
+                break;
+            case nameof(SorterRootSelection.TargetRoot):
+                if (_analysis is not null)
+                {
+                    // „Ordner existiert bereits“ gilt für die neue Zielwurzel; Zeilen neu aufbauen verwirft auch den Plan.
+                    _sorter.SetTargetRoot(_analysis, Location.TargetRoot);
+                    RebuildGroupRows();
+                }
+                else
+                {
+                    InvalidatePlan();
+                }
+
+                break;
+        }
+    }
+
+    /// <summary>Bibliothek gewechselt oder Wurzeln geändert: die Analyse kennt die alten Wurzeln — verwerfen.</summary>
+    private void OnLocationReloaded(object? sender, SorterRootsReloadedEventArgs e)
+    {
+        if (!e.LibraryChanged && !e.RootsChanged)
+        {
+            return;
+        }
+
+        if (!IsBusy && _analysis is not null)
+        {
+            ClearResults();
+            StatusText = e.LibraryChanged
+                ? $"Bibliothek gewechselt ({Location.LibraryName}) — bitte neu analysieren."
+                : "Die Wurzeln der Bibliothek haben sich geändert — bitte neu analysieren.";
+        }
+        else if (e.LibraryChanged && !IsBusy)
+        {
+            StatusText = $"Bibliothek „{Location.LibraryName}“";
+        }
     }
 
     private async Task LoadProfilesAsync()
@@ -475,45 +509,6 @@ public sealed partial class FileSorterViewModel : ObservableObject
         StatusText = "Sub-Level auf Standard („Variante“) zurückgesetzt.";
     });
 
-    // ---- Ordnerwahl ------------------------------------------------------------------------------
-
-    [RelayCommand(CanExecute = nameof(IsIdle))]
-    private void PickSourceFolder()
-    {
-        var folder = _folderPicker.PickFolder("Quellordner wählen (innerhalb der Bibliothek)", FirstExisting(SourceFolder, LibraryRootPath));
-        if (!string.IsNullOrWhiteSpace(folder))
-        {
-            SourceFolder = folder;
-        }
-    }
-
-    [RelayCommand]
-    private void UseLibraryRoot()
-    {
-        if (!string.IsNullOrEmpty(LibraryRootPath))
-        {
-            SourceFolder = LibraryRootPath;
-        }
-    }
-
-    [RelayCommand(CanExecute = nameof(IsIdle))]
-    private void PickTargetRoot()
-    {
-        var folder = _folderPicker.PickFolder("Zielwurzel wählen (Sort-to-Root)", FirstExisting(TargetRoot, SourceFolder, LibraryRootPath));
-        if (!string.IsNullOrWhiteSpace(folder))
-        {
-            TargetRoot = folder;
-            InvalidatePlan();
-        }
-    }
-
-    [RelayCommand]
-    private void ClearTargetRoot()
-    {
-        TargetRoot = null;
-        InvalidatePlan();
-    }
-
     // ---- Analyse ---------------------------------------------------------------------------------
 
     [RelayCommand(CanExecute = nameof(CanAnalyze))]
@@ -529,8 +524,9 @@ public sealed partial class FileSorterViewModel : ObservableObject
         {
             MultiLevel = IsMultiLevel,
             IncludeNonMediaFiles = IncludeNonMedia,
+            TargetRoot = Location.TargetRoot,
         };
-        _analysis = await _sorter.AnalyzeAsync(SourceFolder, options);
+        _analysis = await _sorter.AnalyzeAsync(Location.SourceFolder, options);
         RebuildGroupRows();
         AnalysisWarnings = _analysis.Warnings.Count == 0 ? null : string.Join(Environment.NewLine, _analysis.Warnings);
         StatusText = _analysis.Groups.Count == 0
@@ -655,7 +651,7 @@ public sealed partial class FileSorterViewModel : ObservableObject
         var mappings = _analysis.Groups.ToDictionary(g => g.Key, g => g.TargetFolder, StringComparer.Ordinal);
         var options = new SorterPlanOptions
         {
-            TargetRoot = string.IsNullOrWhiteSpace(TargetRoot) ? null : TargetRoot,
+            TargetRoot = string.IsNullOrWhiteSpace(Location.TargetRoot) ? null : Location.TargetRoot,
             Unsorted = UnsortedToFolder ? UnsortedHandling.MoveToUnsortedFolder : UnsortedHandling.Skip,
             DeleteEmptySourceFolders = DeleteEmptySource,
             Layout = UseFlatLayout ? SubLevelLayout.Flat : SubLevelLayout.Nested,
@@ -672,7 +668,8 @@ public sealed partial class FileSorterViewModel : ObservableObject
         }
 
         PlanCount = PlanRows.Count;
-        PlanTargetOutsideLibrary = !plan.TargetInsideLibrary;
+        PlanTargetBlocked = plan.TargetError is not null;
+        PlanTargetError = plan.TargetError;
         PlanSummary = $"{plan.ReadyCount:N0} bereit · {plan.ConflictCount:N0} Konflikte · {plan.NotInCatalogCount:N0} nicht im Katalog · "
                       + $"{plan.InvalidCount:N0} ungültige Ziele · {plan.AlreadyInTargetCount:N0} bereits im Ziel · "
                       + $"{plan.SkippedCount:N0} übersprungen · {plan.TargetFolders.Count:N0} Zielordner unter „{plan.TargetRoot}“";
@@ -683,7 +680,8 @@ public sealed partial class FileSorterViewModel : ObservableObject
         PlanRows.Clear();
         PlanCount = 0;
         PlanSummary = null;
-        PlanTargetOutsideLibrary = false;
+        PlanTargetBlocked = false;
+        PlanTargetError = null;
     }
 
     [RelayCommand(CanExecute = nameof(CanWorkOnGroups))]
@@ -712,6 +710,13 @@ public sealed partial class FileSorterViewModel : ObservableObject
         }
 
         ShowPlan(plan);
+        if (plan.TargetError is not null)
+        {
+            ErrorMessage = plan.TargetError;
+            StatusText = "Nicht sortiert — das Ziel ist gesperrt.";
+            return;
+        }
+
         if (plan.ReadyCount == 0)
         {
             StatusText = "Nichts zu verschieben — keine Datei ist bereit (siehe Vorschau).";
@@ -720,14 +725,14 @@ public sealed partial class FileSorterViewModel : ObservableObject
 
         var skipped = plan.ConflictCount + plan.NotInCatalogCount + plan.InvalidCount + plan.AlreadyInTargetCount;
         var message = $"{plan.ReadyCount:N0} Datei(en) werden in {plan.TargetFolders.Count:N0} Ordner unter\n{plan.TargetRoot}\nverschoben.";
+        if (plan.CrossesRoots)
+        {
+            message += $"\n\nSie wechseln von {plan.SourceRoot.RoleText} „{plan.SourceRoot.Name}“ nach {plan.TargetLibraryRoot!.RoleText} „{plan.TargetLibraryRoot.Name}“.";
+        }
+
         if (skipped > 0)
         {
             message += $"\n\n{skipped:N0} Datei(en) werden übersprungen (Konflikt, nicht im Katalog, ungültiges Ziel — siehe Vorschau).";
-        }
-
-        if (!plan.TargetInsideLibrary)
-        {
-            message += "\n\nAchtung: Die Zielwurzel liegt außerhalb der Bibliothek — die Dateien verlassen den Katalog.";
         }
 
         if (plan.DeleteEmptySourceFolders)
@@ -884,7 +889,4 @@ public sealed partial class FileSorterViewModel : ObservableObject
             ProgressText = null;
         }
     }
-
-    private static string? FirstExisting(params string?[] candidates)
-        => candidates.FirstOrDefault(c => !string.IsNullOrWhiteSpace(c) && Directory.Exists(c));
 }

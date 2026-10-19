@@ -53,7 +53,13 @@ public sealed class FlattenAnalysis
 {
     public required string SourceFolder { get; init; }
     public required int LibraryId { get; init; }
-    public required string LibraryRoot { get; init; }
+
+    /// <summary>Wurzel (Eingang oder Archiv), unter der der Quellordner liegt.</summary>
+    public required SorterRoot SourceRoot { get; init; }
+
+    /// <summary>Alle Wurzeln der Bibliothek zum Zeitpunkt der Analyse (Archiv zuerst) — erlaubte Ziele (ADR-0024).</summary>
+    public required IReadOnlyList<SorterRoot> Roots { get; init; }
+
     public required string Separator { get; init; }
 
     public List<FlattenFolder> Folders { get; } = new();
@@ -91,7 +97,7 @@ public sealed record FlattenPlanOptions
 {
     public static FlattenPlanOptions Default { get; } = new();
 
-    /// <summary>Zielwurzel; null = Quellordner.</summary>
+    /// <summary>Zielwurzel; null = Quellordner. Muss unter einer Wurzel der Bibliothek liegen (ADR-0024).</summary>
     public string? TargetRoot { get; init; }
 
     /// <summary>Alle Dateien direkt in die Zielwurzel (ohne Ordner-Ebene).</summary>

@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using PhotoViewerV3.Services.Database;
-using LibraryEntity = PhotoViewerV3.Domain.Entities.Library; // „Library“ allein wäre der Namespace Services.Library
 
 namespace PhotoViewerV3.Services.Sorter;
 
@@ -9,7 +8,7 @@ namespace PhotoViewerV3.Services.Sorter;
 public readonly record struct CatalogFileEntry(int Id, long Size, bool Missing);
 
 /// <summary>
-/// Katalog-Zugriff des Sortierers: Library zu einem Ordner finden, Dateien eines Ordners (bzw. aller
+/// Katalog-Zugriff des Sortierers: Wurzel und Library zu einem Ordner finden, Dateien eines Ordners (bzw. aller
 /// Unterordner) nach Name auflösen und leere Folders-Zeilen nach dem Löschen eines Ordners entfernen.
 /// Ordnervergleich ASCII-case-insensitiv wie SQLite <c>lower()</c>. Öffentlich nur für DI und Tests.
 /// </summary>
@@ -26,18 +25,50 @@ public sealed class SorterCatalog
         _logger = logger;
     }
 
-    /// <summary>Library, deren Root den Ordner enthält (bei Verschachtelung die längste Root); sonst <see cref="FolderNotInLibraryException"/>.</summary>
-    public async Task<LibraryEntity> RequireLibraryForFolderAsync(string normalizedFolder, CancellationToken ct)
+    /// <summary>
+    /// Wurzel (Eingang oder Archiv, ADR-0020), unter der der Ordner liegt — über alle Bibliotheken, bei
+    /// Verschachtelung die längste —, samt allen Wurzeln derselben Bibliothek (Archiv zuerst, dann SortOrder);
+    /// sonst <see cref="FolderNotInLibraryException"/>.
+    /// </summary>
+    public async Task<SorterLocation> RequireLocationAsync(string normalizedFolder, CancellationToken ct)
     {
         await using var ctx = _factory.Create();
-        var libraries = await ctx.Libraries.AsNoTracking().ToListAsync(ct).ConfigureAwait(false);
-        var library = libraries
-            .Where(l => !string.IsNullOrWhiteSpace(l.RootPath)
-                        && SorterPaths.IsInsideRoot(normalizedFolder, SorterPaths.NormalizeDirectory(l.RootPath)))
-            .OrderByDescending(l => l.RootPath.Length)
-            .FirstOrDefault();
+        var rows = await ctx.LibraryRoots.AsNoTracking().ToListAsync(ct).ConfigureAwait(false);
+        var roots = new List<(int LibraryId, int SortOrder, SorterRoot Root)>(rows.Count);
+        foreach (var r in rows)
+        {
+            if (string.IsNullOrWhiteSpace(r.Path))
+            {
+                continue;
+            }
 
-        return library ?? throw new FolderNotInLibraryException(normalizedFolder);
+            try
+            {
+                roots.Add((r.LibraryId, r.SortOrder, new SorterRoot(r.Id, SorterPaths.NormalizeDirectory(r.Path), r.Role, r.Name)));
+            }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+            {
+                _logger.LogWarning(ex, "Wurzel {Id} mit ungültigem Pfad übersprungen: {Path}", r.Id, r.Path);
+            }
+        }
+
+        var match = roots
+            .Where(r => SorterPaths.IsInsideRoot(normalizedFolder, r.Root.Path))
+            .OrderByDescending(r => r.Root.Path.Length)
+            .FirstOrDefault();
+        if (match.Root is null)
+        {
+            throw new FolderNotInLibraryException(normalizedFolder);
+        }
+
+        var libraryRoots = roots
+            .Where(r => r.LibraryId == match.LibraryId)
+            .OrderBy(r => r.Root.IsArchive ? 0 : 1)
+            .ThenBy(r => r.SortOrder)
+            .ThenBy(r => r.Root.Id)
+            .Select(r => r.Root)
+            .ToList();
+        return new SorterLocation(match.LibraryId, match.Root, libraryRoots);
     }
 
     /// <summary>Dateien (Name → Eintrag) der Folders-Zeile mit genau diesem Pfad; leer, wenn der Ordner nicht gescannt ist.</summary>

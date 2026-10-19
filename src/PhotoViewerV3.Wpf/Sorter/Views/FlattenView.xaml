@@ -6,6 +6,7 @@
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:vm="clr-namespace:PhotoViewerV3.Sorter.ViewModels"
              xmlns:conv="clr-namespace:PhotoViewerV3.Sorter.Converters"
+             xmlns:views="clr-namespace:PhotoViewerV3.Sorter.Views"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=vm:FlattenViewModel, IsDesignTimeCreatable=False}"
              d:DesignWidth="1000"
@@ -119,36 +120,13 @@
                                Text="Alle Mediendateien aus Unterordnern beliebiger Tiefe werden nach Ziel\Ebenenname\Datei verschoben. Der Ebenenname entsteht aus den Pfad-Ebenen (Duplikate entfernt, mit Separator verbunden: test01\test01\raw → test01_raw); Dateien direkt in der Quellwurzel heißen „_root“. Namenskonflikte im Ziel erhalten „_1“, „_2“, …" />
                     <Grid Margin="0,0,0,8">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="Quellordner:" VerticalAlignment="Center" Width="90" />
-                        <ui:TextBox Grid.Column="1"
-                                    Icon="{ui:SymbolIcon Folder24}"
-                                    PlaceholderText="Ordner innerhalb der Bibliothek"
-                                    Text="{Binding SourceFolder, UpdateSourceTrigger=PropertyChanged}"
-                                    AutomationProperties.AutomationId="FlattenSourceFolder" />
-                        <ui:Button Grid.Column="2" Content="Wählen…" Icon="{ui:SymbolIcon FolderOpen24}" Command="{Binding PickSourceFolderCommand}" Margin="8,0,0,0" />
-                        <ui:Button Grid.Column="3" Content="Bibliotheksordner" ToolTip="{Binding LibraryRootPath}" Command="{Binding UseLibraryRootCommand}" Margin="8,0,0,0" />
-                        <ui:Button Grid.Column="4" Appearance="Primary" Content="Analysieren" Icon="{ui:SymbolIcon Search24}"
-                                   Command="{Binding AnalyzeCommand}" Margin="8,0,0,0"
+                        <views:SorterLocationView Grid.Column="0" DataContext="{Binding Location}" AutomationProperties.AutomationId="FlattenLocation" />
+                        <ui:Button Grid.Column="1" Appearance="Primary" Content="Analysieren" Icon="{ui:SymbolIcon Search24}"
+                                   Command="{Binding AnalyzeCommand}" Margin="8,0,0,0" VerticalAlignment="Top"
                                    AutomationProperties.AutomationId="FlattenAnalyze" />
-                    </Grid>
-                    <Grid Margin="0,0,0,8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="Zielwurzel:" VerticalAlignment="Center" Width="90" />
-                        <TextBlock Grid.Column="1" Text="{Binding TargetRootDisplay}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                        <ui:Button Grid.Column="2" Content="Zielordner wählen…" Icon="{ui:SymbolIcon FolderArrowRight24}" Command="{Binding PickTargetRootCommand}" Margin="8,0,0,0" />
-                        <ui:Button Grid.Column="3" Content="Quellordner" ToolTip="Zurück auf Standard (Quellordner)" Command="{Binding ClearTargetRootCommand}" Margin="8,0,0,0"
-                                   Visibility="{Binding HasCustomTargetRoot, Converter={StaticResource BoolToVis}}" />
                     </Grid>
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="Separator:" VerticalAlignment="Center" Margin="0,0,6,0" />
@@ -239,11 +217,11 @@
                 <StackPanel>
                     <ui:TextBlock FontTypography="BodyStrong" Text="Vorschau: Quelle → Ziel" />
                     <TextBlock Text="{Binding PlanSummary}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,2,0,6" />
-                    <ui:InfoBar Severity="Warning"
+                    <ui:InfoBar Severity="Error"
                                 IsClosable="False"
-                                Title="Zielwurzel außerhalb der Bibliothek"
-                                Message="Die Dateien verlassen den Katalog (sie erscheinen nicht mehr in der Galerie), bleiben aber per „Rückgängig“ zurückholbar."
-                                IsOpen="{Binding PlanTargetOutsideLibrary, Mode=OneWay}"
+                                Title="Ziel gesperrt"
+                                Message="{Binding PlanTargetError}"
+                                IsOpen="{Binding PlanTargetBlocked, Mode=OneWay}"
                                 Margin="0,0,0,6" />
                     <ListBox ItemsSource="{Binding PlanRows}"
                              ItemTemplate="{StaticResource PlanRowTemplate}"

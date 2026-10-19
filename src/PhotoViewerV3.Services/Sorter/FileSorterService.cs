@@ -44,13 +44,13 @@ public sealed class FileSorterService : IFileSorterService
             throw new DirectoryNotFoundException($"Der Ordner „{folder}“ wurde nicht gefunden.");
         }
 
-        var library = await _catalog.RequireLibraryForFolderAsync(folder, ct).ConfigureAwait(false);
+        var location = await _catalog.RequireLocationAsync(folder, ct).ConfigureAwait(false);
         var patterns = options.Patterns ?? await _store.GetPatternsAsync(ct).ConfigureAwait(false);
         IReadOnlyList<SorterSubLevel> subLevels = options.MultiLevel
             ? options.SubLevels ?? await _store.GetSubLevelsAsync(ct).ConfigureAwait(false)
             : Array.Empty<SorterSubLevel>();
 
-        var catalogFiles = await _catalog.GetFilesInFolderAsync(library.Id, folder, ct).ConfigureAwait(false);
+        var catalogFiles = await _catalog.GetFilesInFolderAsync(location.LibraryId, folder, ct).ConfigureAwait(false);
         var files = await Task.Run(() => EnumerateFiles(folder, catalogFiles, options.IncludeNonMediaFiles), ct).ConfigureAwait(false);
 
         var warnings = new List<string>();
@@ -70,9 +70,11 @@ public sealed class FileSorterService : IFileSorterService
         var analysis = new SorterAnalysis
         {
             SourceFolder = folder,
-            LibraryId = library.Id,
-            LibraryRoot = SorterPaths.NormalizeDirectory(library.RootPath),
+            LibraryId = location.LibraryId,
+            SourceRoot = location.Root,
+            Roots = location.Roots,
             SubLevels = usedLevels,
+            TargetRoot = NormalizeTargetRoot(options.TargetRoot),
         };
         analysis.Groups.AddRange(groups);
         analysis.NotInCatalog.AddRange(files.Where(f => !f.IsInCatalog));
@@ -83,8 +85,8 @@ public sealed class FileSorterService : IFileSorterService
         }
 
         _logger.LogInformation(
-            "Sortierer-Analyse {Folder}: {Files} Dateien, {Groups} Gruppen, {Unknown} nicht im Katalog, MultiLevel={Multi}",
-            folder, files.Count, groups.Count, analysis.NotInCatalog.Count, analysis.IsMultiLevel);
+            "Sortierer-Analyse {Folder} ({Role} „{Root}“): {Files} Dateien, {Groups} Gruppen, {Unknown} nicht im Katalog, MultiLevel={Multi}",
+            folder, location.Root.RoleText, location.Root.Name, files.Count, groups.Count, analysis.NotInCatalog.Count, analysis.IsMultiLevel);
         return analysis;
     }
 
@@ -133,7 +135,7 @@ public sealed class FileSorterService : IFileSorterService
             return;
         }
 
-        var path = Path.Combine(analysis.SourceFolder, group.TargetFolder);
+        var path = Path.Combine(analysis.TargetRoot ?? analysis.SourceFolder, group.TargetFolder);
         if (!Directory.Exists(path))
         {
             return;
@@ -150,7 +152,20 @@ public sealed class FileSorterService : IFileSorterService
         }
     }
 
+    private static string? NormalizeTargetRoot(string? targetRoot)
+        => string.IsNullOrWhiteSpace(targetRoot) ? null : SorterPaths.NormalizeDirectory(targetRoot);
+
     // ------------------------------------------------------------------ In-Memory-Operationen
+
+    public void SetTargetRoot(SorterAnalysis analysis, string? targetRoot)
+    {
+        ArgumentNullException.ThrowIfNull(analysis);
+        analysis.TargetRoot = NormalizeTargetRoot(targetRoot);
+        foreach (var group in analysis.Groups)
+        {
+            RefreshFolderInfo(analysis, group);
+        }
+    }
 
     public void MoveFile(SorterAnalysis analysis, string fileName, string targetKey)
     {
@@ -284,8 +299,9 @@ public sealed class FileSorterService : IFileSorterService
         var targetRoot = string.IsNullOrWhiteSpace(options.TargetRoot)
             ? analysis.SourceFolder
             : SorterPaths.NormalizeDirectory(options.TargetRoot);
+        var targetError = SorterTargetCheck.Check(analysis.Roots, targetRoot, out var targetLibraryRoot);
 
-        var ctx = new PlanContext(targetRoot, options);
+        var ctx = new PlanContext(targetRoot, options, targetError);
         foreach (var group in analysis.Groups)
         {
             if (!group.IsSelected)
@@ -318,8 +334,9 @@ public sealed class FileSorterService : IFileSorterService
 
         var targetInsideSource = SorterPaths.IsInsideRoot(targetRoot, analysis.SourceFolder);
         var cleanup = options.DeleteEmptySourceFolders
+                      && targetError is null
                       && !targetInsideSource
-                      && !SorterPaths.PathEquals(analysis.SourceFolder, analysis.LibraryRoot);
+                      && !SorterTargetCheck.IsRootFolder(analysis.Roots, analysis.SourceFolder);
 
         return new SorterPlan
         {
@@ -327,8 +344,10 @@ public sealed class FileSorterService : IFileSorterService
             SourceFolder = analysis.SourceFolder,
             TargetRoot = targetRoot,
             LibraryId = analysis.LibraryId,
-            LibraryRoot = analysis.LibraryRoot,
-            TargetInsideLibrary = SorterPaths.IsInsideRoot(targetRoot, analysis.LibraryRoot),
+            SourceRoot = analysis.SourceRoot,
+            Roots = analysis.Roots,
+            TargetLibraryRoot = targetLibraryRoot,
+            TargetError = targetError,
             DeleteEmptySourceFolders = cleanup,
             SourceFoldersToClean = cleanup ? [analysis.SourceFolder] : [],
             CleanupBoundary = cleanup ? Path.GetDirectoryName(analysis.SourceFolder) : null,
@@ -337,10 +356,13 @@ public sealed class FileSorterService : IFileSorterService
         };
     }
 
-    private sealed class PlanContext(string targetRoot, SorterPlanOptions options)
+    private sealed class PlanContext(string targetRoot, SorterPlanOptions options, string? targetError)
     {
         public string TargetRoot { get; } = targetRoot;
         public SorterPlanOptions Options { get; } = options;
+
+        /// <summary>Ziel gesperrt (ADR-0024) — alle Einträge werden „ungültiges Ziel“.</summary>
+        public string? TargetError { get; } = targetError;
         public List<SorterPlanItem> Items { get; } = new();
         public HashSet<string> Claimed { get; } = new(StringComparer.OrdinalIgnoreCase);
         public int Skipped { get; set; }
@@ -384,7 +406,12 @@ public sealed class FileSorterService : IFileSorterService
             SorterPlanItemStatus status;
             string? note = null;
 
-            if (error is not null)
+            if (ctx.TargetError is not null)
+            {
+                status = SorterPlanItemStatus.InvalidTarget;
+                note = ctx.TargetError;
+            }
+            else if (error is not null)
             {
                 status = SorterPlanItemStatus.InvalidTarget;
                 note = error;

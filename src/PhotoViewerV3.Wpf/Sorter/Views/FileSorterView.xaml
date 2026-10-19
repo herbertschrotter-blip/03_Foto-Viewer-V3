@@ -6,6 +6,7 @@
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:vm="clr-namespace:PhotoViewerV3.Sorter.ViewModels"
              xmlns:conv="clr-namespace:PhotoViewerV3.Sorter.Converters"
+             xmlns:views="clr-namespace:PhotoViewerV3.Sorter.Views"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=vm:FileSorterViewModel, IsDesignTimeCreatable=False}"
              d:DesignWidth="1000"
@@ -247,30 +248,24 @@
                         IsOpen="{Binding HasError, Mode=OneWay}"
                         Margin="0,0,0,8" />
 
-            <!-- Quelle -->
+            <!-- Quelle + Ziel (Wurzeln der Bibliothek: Eingang → Archiv) -->
             <ui:Card Margin="0,0,0,8" Padding="12">
                 <StackPanel>
-                    <ui:TextBlock FontTypography="BodyStrong" Text="Quellordner" Margin="0,0,0,6" />
-                    <Grid>
+                    <Grid Margin="0,0,0,6">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <ui:TextBox Grid.Column="0"
-                                    Icon="{ui:SymbolIcon Folder24}"
-                                    PlaceholderText="Ordner innerhalb der Bibliothek (nur direkte Dateien werden sortiert)"
-                                    Text="{Binding SourceFolder, UpdateSourceTrigger=PropertyChanged}"
-                                    AutomationProperties.AutomationId="SorterSourceFolder" />
-                        <ui:Button Grid.Column="1" Content="Wählen…" Icon="{ui:SymbolIcon FolderOpen24}"
-                                   Command="{Binding PickSourceFolderCommand}" Margin="8,0,0,0" />
-                        <ui:Button Grid.Column="2" Content="Bibliotheksordner" ToolTip="{Binding LibraryRootPath}"
-                                   Command="{Binding UseLibraryRootCommand}" IsEnabled="{Binding HasLibrary}" Margin="8,0,0,0" />
-                        <ui:Button Grid.Column="3" Appearance="Primary" Content="Analysieren" Icon="{ui:SymbolIcon Search24}"
-                                   Command="{Binding AnalyzeCommand}" Margin="8,0,0,0"
+                        <StackPanel Grid.Column="0">
+                            <ui:TextBlock FontTypography="BodyStrong" Text="Quelle und Ziel" />
+                            <TextBlock Style="{StaticResource HintText}" TextWrapping="Wrap"
+                                       Text="Sortiert werden die Dateien direkt im Quellordner; die Gruppenordner entstehen unter dem Ziel (Standard: Eingang → Archiv-Wurzel)." />
+                        </StackPanel>
+                        <ui:Button Grid.Column="1" Appearance="Primary" Content="Analysieren" Icon="{ui:SymbolIcon Search24}"
+                                   Command="{Binding AnalyzeCommand}" Margin="8,0,0,0" VerticalAlignment="Top"
                                    AutomationProperties.AutomationId="SorterAnalyze" />
                     </Grid>
+                    <views:SorterLocationView DataContext="{Binding Location}" AutomationProperties.AutomationId="SorterLocation" />
                     <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                         <ui:ToggleSwitch IsChecked="{Binding IsMultiLevel}" Content="Multi-Level (Sub-Level-Patterns teilen jede Gruppe weiter)" />
                         <CheckBox IsChecked="{Binding IncludeNonMedia}" Content="Auch Nicht-Medien-Dateien anzeigen" Margin="24,0,0,0" VerticalAlignment="Center" />
@@ -442,22 +437,12 @@
             <ui:Card Margin="0,0,0,8" Padding="12">
                 <StackPanel>
                     <ui:TextBlock FontTypography="BodyStrong" Text="Optionen" Margin="0,0,0,6" />
-                    <Grid Margin="0,0,0,8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="Zielwurzel:" VerticalAlignment="Center" Margin="0,0,8,0" />
-                        <TextBlock Grid.Column="1" Text="{Binding TargetRootDisplay}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                                   ToolTip="Standard: die Gruppenordner entstehen im Quellordner. „Sort-to-Root“: frei wählbarer Zielordner." />
-                        <ui:Button Grid.Column="2" Content="Zielordner wählen…" Icon="{ui:SymbolIcon FolderArrowRight24}"
-                                   Command="{Binding PickTargetRootCommand}" Margin="8,0,0,0" />
-                        <ui:Button Grid.Column="3" Content="Quellordner" ToolTip="Zurück auf Standard (Quellordner)"
-                                   Command="{Binding ClearTargetRootCommand}" Margin="8,0,0,0"
-                                   Visibility="{Binding HasCustomTargetRoot, Converter={StaticResource BoolToVis}}" />
-                    </Grid>
+                    <TextBlock Margin="0,0,0,8" TextTrimming="CharacterEllipsis" ToolTip="{Binding Location.TargetRootDisplay}">
+                        <Run Text="Ziel:" />
+                        <Run Text="{Binding Location.TargetFolderDisplay, Mode=OneWay}" />
+                        <Run Text="·" Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                        <Run Text="{Binding Location.TargetHint, Mode=OneWay}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    </TextBlock>
                     <StackPanel Orientation="Horizontal">
                         <CheckBox IsChecked="{Binding UnsortedToFolder}" Content="„_unsorted“ in Ordner „_unsorted“ verschieben (sonst bleibt es liegen)" />
                         <CheckBox IsChecked="{Binding DeleteEmptySource}" Margin="24,0,0,0"
@@ -494,11 +479,11 @@
                 <StackPanel>
                     <ui:TextBlock FontTypography="BodyStrong" Text="Vorschau: Quelle → Ziel" />
                     <TextBlock Text="{Binding PlanSummary}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,2,0,6" />
-                    <ui:InfoBar Severity="Warning"
+                    <ui:InfoBar Severity="Error"
                                 IsClosable="False"
-                                Title="Zielwurzel außerhalb der Bibliothek"
-                                Message="Die Dateien verlassen den Katalog (sie erscheinen nicht mehr in der Galerie), bleiben aber per „Rückgängig“ zurückholbar."
-                                IsOpen="{Binding PlanTargetOutsideLibrary, Mode=OneWay}"
+                                Title="Ziel gesperrt"
+                                Message="{Binding PlanTargetError}"
+                                IsOpen="{Binding PlanTargetBlocked, Mode=OneWay}"
                                 Margin="0,0,0,6" />
                     <ListBox ItemsSource="{Binding PlanRows}"
                              ItemTemplate="{StaticResource PlanRowTemplate}"

@@ -3,6 +3,40 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.16] — 2026-10-19
+
+### Neu
+- **Sortierer und Flatten & Move über alle Wurzeln** (ADR-0020, ADR-0024): Quelle ist jede Wurzel der Bibliothek
+  (Eingang oder Archiv) bzw. ein Ordner darunter, Ziel standardmäßig die Archiv-Wurzel (bzw. ein Ordner darunter) oder
+  „Quellordner“. Gemeinsame Auswahl `Sorter/Views/SorterLocationView` + `SorterRootSelection` für beide Bereiche:
+  ComboBox je Quelle/Ziel mit Rolle „Eingang“/„Archiv“, Name und Pfad, Offline-Wurzeln ausgegraut und nicht wählbar,
+  Vorbelegung erster erreichbarer Eingang → Archiv, Hinweis „unter Archiv „…““ bzw. „gesperrt“. Lädt bei
+  `ActiveLibraryChangedMessage`/`LibraryRootsChangedMessage` neu, behält gültige Auswahlen und verwirft eine Analyse,
+  deren Wurzeln sich geändert haben. Der Bestätigungsdialog nennt den Wechsel „von Eingang … nach Archiv …“.
+- Services: `SorterCatalog.RequireLocationAsync` findet die Wurzel (über `LibraryRoots`, längster Pfad) statt
+  `Libraries.RootPath`; Analyse und Plan tragen `SourceRoot`, `Roots`, `TargetLibraryRoot`, `CrossesRoots`.
+  `IFileSorterService.SetTargetRoot` prüft „Ordner existiert bereits“ gegen die Zielwurzel statt gegen den Quellordner.
+  Die Katalog-Nachführung läuft unverändert über `IFileOperationService` (Zielordner-Kette mit `Folders.RootId` der
+  Zielwurzel, FileIds stabil, FTS gepflegt, OperationBatch/FileOperation, Rückgängig).
+
+### Geändert
+- **Ziele außerhalb aller Wurzeln sind gesperrt** (ADR-0024), ebenso Ziele unter einer Offline-Wurzel: alle
+  Plan-Einträge „ungültiges Ziel“ mit Begründung (`SorterPlan.TargetError`), Fehlerleiste statt Warnung, „Sortieren“/
+  „Ausführen“ verschiebt nichts. Bisher nur Warnung — die Dateien fielen aus dem Katalog, Rückgängig vergab neue FileIds.
+- Beim Aufräumen leerer Quellordner werden alle Wurzeln geschützt (Eingang wie Archiv), nicht nur die Archiv-Wurzel.
+- Knopf „Bibliotheksordner“ entfällt (ersetzt durch die Wurzel-Auswahl); `SorterLibraryLocator` liefert die Wurzeln.
+
+### Tests
+- `tests/PhotoViewerV3.Tests`: 351 (+7 `Sorter/SorterRootsTests` — Analyse im Eingang, Zielwurzel-Prüfung für
+  „Ordner existiert“, Sortieren Eingang → Archiv mit RootId/Zwischenordnern/Status-Filter/FTS/Protokoll/Undo, Flatten
+  im Eingang + Undo, Ziel außerhalb gesperrt, Offline-Wurzel gesperrt, `SorterTargetCheck`).
+- `tests/PhotoViewerV3.Wpf.Tests`: 126 (+5 `Sorter/SorterRootSelectionTests` — Vorbelegung, ohne Eingang, ohne
+  Bibliothek, Synchronisation Auswahl/Pfad mit Sperre, Neuladen über Nachrichten).
+- Rauchtest: neuer Schritt „Sortierer: Eingang → Archiv“ vor „Ordnerüberwachung“ (eigener Eingang
+  `<Bibliothek>-Sortierer-Eingang`, Vorbelegung, gesperrtes Ziel, Sortieren nach `Archiv\Smoke-Sortiert` mit DB-/FTS-/
+  Filter-Prüfung, Rückgängig, Flatten im Eingang + Rückgängig, Eingang entfernen → Auswahl lädt neu); 20/20 OK,
+  0 WPF-Binding-Fehler.
+
 ## [0.2.15] — 2026-10-19
 
 ### Geändert

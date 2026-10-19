@@ -7,6 +7,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Logging;
 using PhotoViewerV3.Gallery.Services;
 using PhotoViewerV3.Services.Sorter;
@@ -16,14 +17,13 @@ namespace PhotoViewerV3.Sorter.ViewModels;
 
 /// <summary>
 /// ViewModel von „Flatten &amp; Move“: Quellordner → Analyse (Ordner mit Mediendateien, Zielname
-/// nach V2-Regel) → Zielwurzel/Optionen → Vorschau → Ausführen → Rückgängig.
+/// nach V2-Regel) → Zielwurzel/Optionen → Vorschau → Ausführen → Rückgängig. Quelle und Ziel wählt
+/// <see cref="Location"/> über die Wurzeln der Bibliothek (wie der Sortierer, ADR-0024).
 /// </summary>
 public sealed partial class FlattenViewModel : ObservableObject
 {
     private readonly IFlattenService _flatten;
     private readonly IGalleryDialogService _dialogs;
-    private readonly IFolderPickerService _folderPicker;
-    private readonly SorterLibraryLocator _libraries;
     private readonly ILogger<FlattenViewModel> _logger;
 
     private FlattenAnalysis? _analysis;
@@ -34,33 +34,29 @@ public sealed partial class FlattenViewModel : ObservableObject
         IGalleryDialogService dialogs,
         IFolderPickerService folderPicker,
         SorterLibraryLocator libraries,
-        ILogger<FlattenViewModel> logger)
+        ILogger<FlattenViewModel> logger,
+        IMessenger? messenger = null)
     {
         _flatten = flatten;
         _dialogs = dialogs;
-        _folderPicker = folderPicker;
-        _libraries = libraries;
         _logger = logger;
+        Location = new SorterRootSelection(
+            libraries,
+            folderPicker,
+            messenger ?? WeakReferenceMessenger.Default,
+            logger,
+            "Quellordner wählen (unter einer Wurzel der Bibliothek)",
+            "Zielwurzel wählen (unter einer Wurzel der Bibliothek)");
+        Location.PropertyChanged += OnLocationPropertyChanged;
+        Location.Reloaded += OnLocationReloaded;
     }
+
+    /// <summary>Quelle und Ziel über die Wurzeln der aktiven Bibliothek.</summary>
+    public SorterRootSelection Location { get; }
 
     public ObservableCollection<FlattenFolderRowViewModel> Folders { get; } = new();
 
     public ObservableCollection<PlanRowViewModel> PlanRows { get; } = new();
-
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(AnalyzeCommand))]
-    private string _sourceFolder = string.Empty;
-
-    [ObservableProperty]
-    private string? _libraryRootPath;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(TargetRootDisplay), nameof(HasCustomTargetRoot))]
-    private string? _targetRoot;
-
-    public string TargetRootDisplay => string.IsNullOrWhiteSpace(TargetRoot) ? "= Quellordner" : TargetRoot;
-
-    public bool HasCustomTargetRoot => !string.IsNullOrWhiteSpace(TargetRoot);
 
     [ObservableProperty]
     private string _separator = "_";
@@ -93,14 +89,18 @@ public sealed partial class FlattenViewModel : ObservableObject
     [ObservableProperty]
     private string? _planSummary;
 
+    /// <summary>Das Ziel des Plans ist gesperrt (außerhalb der Wurzeln oder offline, ADR-0024).</summary>
     [ObservableProperty]
-    private bool _planTargetOutsideLibrary;
+    private bool _planTargetBlocked;
+
+    [ObservableProperty]
+    private string? _planTargetError;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsIdle))]
     [NotifyCanExecuteChangedFor(
         nameof(AnalyzeCommand), nameof(PreviewCommand), nameof(ExecuteCommand), nameof(UndoCommand),
-        nameof(IncludeAllCommand), nameof(ExcludeAllCommand), nameof(PickSourceFolderCommand), nameof(PickTargetRootCommand))]
+        nameof(IncludeAllCommand), nameof(ExcludeAllCommand))]
     private bool _isBusy;
 
     public bool IsIdle => !IsBusy;
@@ -130,7 +130,7 @@ public sealed partial class FlattenViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(UndoCommand))]
     private bool _canUndo;
 
-    public bool CanAnalyze => !IsBusy && !string.IsNullOrWhiteSpace(SourceFolder);
+    public bool CanAnalyze => !IsBusy && !string.IsNullOrWhiteSpace(Location.SourceFolder);
 
     public bool CanWorkOnFolders => !IsBusy && HasFolders;
 
@@ -148,13 +148,7 @@ public sealed partial class FlattenViewModel : ObservableObject
         _isInitialized = true;
         await RunAsync("Initialisierung", async () =>
         {
-            var library = await _libraries.GetActiveAsync();
-            LibraryRootPath = library?.RootPath;
-            if (string.IsNullOrWhiteSpace(SourceFolder) && library is not null)
-            {
-                SourceFolder = library.RootPath;
-            }
-
+            var library = await Location.LoadAsync();
             await RefreshLastRunAsync();
             StatusText = library is null
                 ? "Keine Bibliothek vorhanden — bitte zuerst eine Bibliothek anlegen und scannen."
@@ -162,43 +156,33 @@ public sealed partial class FlattenViewModel : ObservableObject
         });
     }
 
-    // ---- Ordnerwahl ------------------------------------------------------------------------------
+    partial void OnIsBusyChanged(bool value) => Location.IsEnabled = !value;
 
-    [RelayCommand(CanExecute = nameof(IsIdle))]
-    private void PickSourceFolder()
+    private void OnLocationPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        var folder = _folderPicker.PickFolder("Quellordner wählen (innerhalb der Bibliothek)", FirstExisting(SourceFolder, LibraryRootPath));
-        if (!string.IsNullOrWhiteSpace(folder))
+        switch (e.PropertyName)
         {
-            SourceFolder = folder;
+            case nameof(SorterRootSelection.SourceFolder):
+                AnalyzeCommand.NotifyCanExecuteChanged();
+                break;
+            case nameof(SorterRootSelection.TargetRoot):
+                InvalidatePlan();
+                break;
         }
     }
 
-    [RelayCommand]
-    private void UseLibraryRoot()
+    /// <summary>Bibliothek gewechselt oder Wurzeln geändert: die Analyse kennt die alten Wurzeln — verwerfen.</summary>
+    private void OnLocationReloaded(object? sender, SorterRootsReloadedEventArgs e)
     {
-        if (!string.IsNullOrEmpty(LibraryRootPath))
+        if ((e.LibraryChanged || e.RootsChanged) && !IsBusy && _analysis is not null)
         {
-            SourceFolder = LibraryRootPath;
+            _analysis = null;
+            RebuildFolderRows();
+            AnalysisWarnings = null;
+            StatusText = e.LibraryChanged
+                ? $"Bibliothek gewechselt ({Location.LibraryName}) — bitte neu analysieren."
+                : "Die Wurzeln der Bibliothek haben sich geändert — bitte neu analysieren.";
         }
-    }
-
-    [RelayCommand(CanExecute = nameof(IsIdle))]
-    private void PickTargetRoot()
-    {
-        var folder = _folderPicker.PickFolder("Zielwurzel wählen", FirstExisting(TargetRoot, SourceFolder, LibraryRootPath));
-        if (!string.IsNullOrWhiteSpace(folder))
-        {
-            TargetRoot = folder;
-            InvalidatePlan();
-        }
-    }
-
-    [RelayCommand]
-    private void ClearTargetRoot()
-    {
-        TargetRoot = null;
-        InvalidatePlan();
     }
 
     // ---- Analyse ---------------------------------------------------------------------------------
@@ -214,7 +198,7 @@ public sealed partial class FlattenViewModel : ObservableObject
         {
             Separator = string.IsNullOrEmpty(Separator) ? "_" : Separator,
         };
-        _analysis = await _flatten.AnalyzeAsync(SourceFolder, options);
+        _analysis = await _flatten.AnalyzeAsync(Location.SourceFolder, options);
         RebuildFolderRows();
         AnalysisWarnings = _analysis.Warnings.Count == 0 ? null : string.Join(Environment.NewLine, _analysis.Warnings);
         StatusText = _analysis.Folders.Count == 0
@@ -293,7 +277,7 @@ public sealed partial class FlattenViewModel : ObservableObject
 
         return _flatten.BuildPlan(_analysis, new FlattenPlanOptions
         {
-            TargetRoot = string.IsNullOrWhiteSpace(TargetRoot) ? null : TargetRoot,
+            TargetRoot = string.IsNullOrWhiteSpace(Location.TargetRoot) ? null : Location.TargetRoot,
             DirectToTargetRoot = DirectToTargetRoot,
             DeleteEmptySourceFolders = DeleteEmptySource,
         });
@@ -308,7 +292,8 @@ public sealed partial class FlattenViewModel : ObservableObject
         }
 
         PlanCount = PlanRows.Count;
-        PlanTargetOutsideLibrary = !plan.TargetInsideLibrary;
+        PlanTargetBlocked = plan.TargetError is not null;
+        PlanTargetError = plan.TargetError;
         var renamed = plan.Items.Count(i => i.IsReady && i.RenameTo is not null);
         PlanSummary = $"{plan.ReadyCount:N0} bereit ({renamed:N0} mit Dedup-Namen) · {plan.NotInCatalogCount:N0} nicht im Katalog · "
                       + $"{plan.InvalidCount:N0} ungültige Ziele · {plan.AlreadyInTargetCount:N0} bereits im Ziel · "
@@ -320,7 +305,8 @@ public sealed partial class FlattenViewModel : ObservableObject
         PlanRows.Clear();
         PlanCount = 0;
         PlanSummary = null;
-        PlanTargetOutsideLibrary = false;
+        PlanTargetBlocked = false;
+        PlanTargetError = null;
     }
 
     [RelayCommand(CanExecute = nameof(CanWorkOnFolders))]
@@ -349,6 +335,13 @@ public sealed partial class FlattenViewModel : ObservableObject
         }
 
         ShowPlan(plan);
+        if (plan.TargetError is not null)
+        {
+            ErrorMessage = plan.TargetError;
+            StatusText = "Nicht ausgeführt — das Ziel ist gesperrt.";
+            return;
+        }
+
         if (plan.ReadyCount == 0)
         {
             StatusText = "Nichts zu verschieben — keine Datei ist bereit (siehe Vorschau).";
@@ -357,15 +350,15 @@ public sealed partial class FlattenViewModel : ObservableObject
 
         var sourceFolders = plan.Items.Where(i => i.IsReady).Select(i => i.GroupPath).Distinct(StringComparer.OrdinalIgnoreCase).Count();
         var message = $"{plan.ReadyCount:N0} Datei(en) aus {sourceFolders:N0} Ordner(n) werden nach\n{plan.TargetRoot}\nverschoben.";
+        if (plan.CrossesRoots)
+        {
+            message += $"\n\nSie wechseln von {plan.SourceRoot.RoleText} „{plan.SourceRoot.Name}“ nach {plan.TargetLibraryRoot!.RoleText} „{plan.TargetLibraryRoot.Name}“.";
+        }
+
         var skipped = plan.NotInCatalogCount + plan.InvalidCount + plan.AlreadyInTargetCount;
         if (skipped > 0)
         {
             message += $"\n\n{skipped:N0} Datei(en) werden übersprungen (siehe Vorschau).";
-        }
-
-        if (!plan.TargetInsideLibrary)
-        {
-            message += "\n\nAchtung: Die Zielwurzel liegt außerhalb der Bibliothek — die Dateien verlassen den Katalog.";
         }
 
         if (plan.DeleteEmptySourceFolders)
@@ -506,7 +499,4 @@ public sealed partial class FlattenViewModel : ObservableObject
             ProgressText = null;
         }
     }
-
-    private static string? FirstExisting(params string?[] candidates)
-        => candidates.FirstOrDefault(c => !string.IsNullOrWhiteSpace(c) && Directory.Exists(c));
 }

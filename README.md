@@ -185,7 +185,14 @@ behält Aufklapp-Zustand und Auswahl. Oberste Knoten sind die Wurzeln mit Rolle 
 werden protokolliert umbenannt und lassen sich mit Rückgängig zurücknehmen).
 
 ### Sortieren
-- **Sortieren**: Quellordner innerhalb der Bibliothek wählen, Patterns (Regex auf den Dateinamen ohne Endung, nach
+- **Quelle und Ziel** (beide Bereiche): je eine Auswahl der Wurzeln der aktiven Bibliothek mit Rolle („Eingang“ /
+  „Archiv“) und Pfad, darunter ein frei wählbarer Ordner. Vorbelegt ist der erste erreichbare Eingang als Quelle und
+  die Archiv-Wurzel als Ziel — der Normalfall „aus dem Eingang ins Archiv sortieren“. Als Ziel geht auch
+  „Quellordner“ (die Ordner entstehen an Ort und Stelle). Offline-Wurzeln sind ausgegraut; Ziele außerhalb aller
+  Wurzeln sind gesperrt, weil die Dateien sonst aus dem Katalog fielen und Bewertung, Favorit und Tags verlören
+  (ADR-0024). Die Auswahl folgt Bibliothekswechseln und geänderten Wurzeln. Verschobene Dateien behalten ihre FileId
+  und wechseln im Katalog zur Zielwurzel (Galerie-Filter „Nicht archiviert“ / „Archiviert“).
+- **Sortieren**: Quellordner unter einer Wurzel der Bibliothek wählen, Patterns (Regex auf den Dateinamen ohne Endung, nach
   Priorität) und optional Sub-Level-Patterns (auf den vollen Dateinamen) pflegen — Profile liegen in der Datenbank,
   Import/Export im V2-JSON-Format. **Analysieren** zeigt die Gruppen (Zielordner änderbar, Gruppen zusammenführbar),
   **Vorschau** die Quelle → Ziel-Liste, **Sortieren** führt aus; Dateien ohne Treffer landen in `_unsorted`.

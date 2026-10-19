@@ -38,7 +38,10 @@ public sealed class SorterMoveExecutor
         ArgumentNullException.ThrowIfNull(plan);
 
         var result = new SorterExecutionResult();
-        var ready = plan.Items.Where(i => i.IsReady && i.FileId.HasValue).ToList();
+        // Gesperrtes Ziel (ADR-0024): der Plan hat dann keine bereiten Einträge — hier nur zur Sicherheit erneut geprüft.
+        var ready = plan.TargetError is null
+            ? plan.Items.Where(i => i.IsReady && i.FileId.HasValue).ToList()
+            : new List<SorterPlanItem>();
         result.Skipped = plan.SkippedCount + (plan.Items.Count - ready.Count);
         foreach (var item in plan.Items.Where(i => !i.IsReady || !i.FileId.HasValue))
         {
@@ -247,7 +250,8 @@ public sealed class SorterMoveExecutor
 
     private async Task DeleteEmptySourceFoldersAsync(SorterPlan plan, SorterExecutionResult result, CancellationToken ct)
     {
-        var protectedFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { plan.LibraryRoot, plan.TargetRoot };
+        // Wurzeln (Eingang wie Archiv, ADR-0020) und die Zielwurzel werden nie gelöscht.
+        var protectedFolders = new HashSet<string>(plan.Roots.Select(r => r.Path), StringComparer.OrdinalIgnoreCase) { plan.TargetRoot };
         var boundary = plan.CleanupBoundary;
 
         foreach (var folder in plan.SourceFoldersToClean.OrderByDescending(SorterPaths.Depth))

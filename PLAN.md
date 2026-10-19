@@ -267,7 +267,7 @@ Status (Stand 0.2.0): ✅ umgesetzt · 🟡 teilweise · ⬜ offen
 | ✅ | Rating (0.2.0: 1–5 Sterne in Galerie und Lightbox) |
 | ⬜ | Face Recognition |
 | 🟡 | Full-Recovery-Repair-UI — Hinweis in der Statusleiste + Undo, kein Reparatur-Dialog |
-| ✅ | File-Sorter (0.2.0 aus V2 portiert, Pattern-Engine + Multi-Level) |
+| ✅ | File-Sorter (0.2.0 aus V2 portiert, Pattern-Engine + Multi-Level; ab 0.2.16 über alle Wurzeln: Eingang → Archiv, Ziele nur unter den Wurzeln, ADR-0024) |
 | 🟡 | Archive: im Katalog, Inhaltsansicht, manuelles Entpacken ✅ (0.2.8, ADR-0022); Auto-Extract beim Scan ⬜ |
 | ⬜ | pHash Duplikat-Erkennung |
 

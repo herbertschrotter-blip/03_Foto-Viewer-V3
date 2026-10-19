@@ -33,6 +33,7 @@ using PhotoViewerV3.Gallery.ListView;
 using PhotoViewerV3.Gallery.Tags;
 using PhotoViewerV3.Services.Tags;
 using PhotoViewerV3.Settings.TagManagement;
+using PhotoViewerV3.Sorter.ViewModels;
 using Wpf.Ui.Appearance;
 
 namespace PhotoViewerV3.Shell.Smoke;
@@ -104,6 +105,7 @@ internal sealed class SmokeScenario
     private readonly ITagService _tags;
     private readonly SmokeTagPickerService? _tagPicker;
     private readonly TagManagementViewModel _tagManagement;
+    private readonly SorterPageViewModel _sorterPage;
 
     private int _libraryId;
     private int _mediaCount;
@@ -140,6 +142,7 @@ internal sealed class SmokeScenario
         _tags = services.GetRequiredService<ITagService>();
         _tagPicker = services.GetService<SmokeTagPickerService>();
         _tagManagement = services.GetRequiredService<TagManagementViewModel>();
+        _sorterPage = services.GetRequiredService<SorterPageViewModel>();
         _messenger.Register<SmokeScenario, ScanCompletedMessage>(this, static (r, m) => r._lastScan = m.Result);
     }
 
@@ -193,6 +196,7 @@ internal sealed class SmokeScenario
         await StepAsync("Archiv: ZIP → Kachel → Inhaltsansicht → Entpacken → Katalog", ArchiveAsync).ConfigureAwait(true);
         await StepAsync("Eingang → Archiv (zweite Wurzel, Status-Filter, Ins Archiv, Rückgängig, Ordner anlegen/umbenennen)", InboxArchiveAsync).ConfigureAwait(true);
         await StepAsync("Tags (Zuweisen, Filter, Suche, Verwaltung) + Listenansicht", TagsAndListViewAsync).ConfigureAwait(true);
+        await StepAsync("Sortierer: Eingang → Archiv (Wurzel-Auswahl, gesperrtes Ziel, Katalog, Rückgängig, Flatten im Eingang)", SorterInboxToArchiveAsync).ConfigureAwait(true);
         await StepAsync("Ordnerüberwachung: Datei kopieren → automatischer Diff-Scan → Galerie", WatchAsync).ConfigureAwait(true);
         if (_cleanup)
         {
@@ -382,6 +386,144 @@ internal sealed class SmokeScenario
         await WaitUntilAsync(() => !_gallery.IsLoading && _gallery.TotalCount == _mediaCount, ShortWait, $"Galerie nach Entfernen des Eingangs: {_mediaCount}").ConfigureAwait(true);
         var rootsLeft = await DbScalarAsync<int>("SELECT COUNT(*) FROM LibraryRoots WHERE LibraryId = $lib", ("$lib", _libraryId)).ConfigureAwait(true);
         Check(rootsLeft == 1, "nur noch die Archiv-Wurzel");
+        Directory.Delete(inbox, recursive: true);
+    }
+
+    // ---- Sortierer: Eingang → Archiv (0.2.16, ADR-0024) ----------------------------------------
+
+    /// <summary>Eingangs-Ordner des Sortierer-Schritts — Geschwisterordner der Testbibliothek, eigener Name.</summary>
+    private string SorterInboxDir => Path.Combine(Path.GetDirectoryName(_root) ?? _root, Path.GetFileName(_root) + "-Sortierer-Eingang");
+
+    /// <summary>
+    /// Sortierer und Flatten über Wurzelgrenzen (ADR-0020/ADR-0024): Geschwisterordner als Eingang (Handy\sm01_0001.jpg,
+    /// sm01_0002.jpg, sm02_0001.jpg, Handy\Reise\Tag1\sm03_0001.jpg), Incremental über 2 Wurzeln, Vorbelegung der
+    /// Wurzel-Auswahl (Quelle = Eingang, Ziel = Archiv), gesperrtes Ziel außerhalb, Sortieren nach
+    /// <c>Archiv\Smoke-Sortiert</c> (Dateien, Folders.RootId, stabile FileIds, FTS, Filter „Nicht archiviert“),
+    /// Rückgängig, Flatten im Eingang + Rückgängig, Eingang entfernen (Auswahl lädt neu).
+    /// </summary>
+    private async Task SorterInboxToArchiveAsync()
+    {
+        var inbox = SorterInboxDir;
+        var target = Path.Combine(_root, "Smoke-Sortiert");
+        foreach (var leftover in new[] { inbox, target })
+        {
+            if (Directory.Exists(leftover))
+            {
+                Directory.Delete(leftover, recursive: true);
+                _logger.LogInformation("Rauchtest   Rückstand eines früheren Laufs entfernt: {Path}", leftover);
+            }
+        }
+
+        // (1) Eingang mit 4 Dateien anlegen, als Wurzel aufnehmen und scannen
+        var handy = Path.Combine(inbox, "Handy");
+        var deep = Path.Combine(handy, "Reise", "Tag1");
+        Directory.CreateDirectory(deep);
+        var sources = Directory.EnumerateFiles(Path.Combine(_root, "Unsortiert"), "*.jpg").OrderBy(f => f, StringComparer.OrdinalIgnoreCase).Take(3).ToList();
+        Check(sources.Count == 3, "3 JPGs aus „Unsortiert“ als Eingangs-Material");
+        var names = new[] { "sm01_0001.jpg", "sm01_0002.jpg", "sm02_0001.jpg" };
+        for (var i = 0; i < names.Length; i++)
+        {
+            File.Copy(sources[i], Path.Combine(handy, names[i]), overwrite: true);
+        }
+
+        File.Copy(sources[0], Path.Combine(deep, "sm03_0001.jpg"), overwrite: true);
+        var inboxRoot = await _libraries.AddRootAsync(_libraryId, inbox, LibraryRootRole.Inbox).ConfigureAwait(true);
+        _navigation.NavigateTo(NavigationTags.Library);
+        await WaitUntilAsync(() => _navigation.CurrentTag == NavigationTags.Library, ShortWait, "Bibliotheksseite").ConfigureAwait(true);
+        _lastScan = null;
+        await _library.RunSmokeScanAsync(_root).ConfigureAwait(true);
+        Check(_lastScan is { Mode: ScanMode.Incremental, Outcome: ScanOutcome.Completed, Added: 4, RootsScanned: 2 },
+            $"Incremental über 2 Wurzeln: Added={_lastScan?.Added}, RootsScanned={_lastScan?.RootsScanned}");
+        _mediaCount += 4;
+        await WaitUntilAsync(
+            () => _navigation.CurrentTag == NavigationTags.Gallery && !_gallery.IsLoading && _gallery.TotalCount == _mediaCount,
+            ShortWait,
+            $"Galerie zeigt {_mediaCount} Dateien inkl. Eingang").ConfigureAwait(true);
+        var archiveRootId = await DbScalarAsync<int>("SELECT Id FROM LibraryRoots WHERE LibraryId = $lib AND Role = 1", ("$lib", _libraryId)).ConfigureAwait(true);
+        var ids = new List<int>();
+        foreach (var name in names)
+        {
+            ids.Add(await DbScalarAsync<int>("SELECT Id FROM Files WHERE Name = $n", ("$n", name)).ConfigureAwait(true));
+        }
+
+        Check(ids.All(id => id > 0), $"FileIds im Katalog: {string.Join(", ", ids)}");
+        var idList = string.Join(",", ids.Select(id => id.ToString(CultureInfo.InvariantCulture)));
+
+        // (2) Sortieren-Seite: Vorbelegung der Wurzel-Auswahl
+        _navigation.NavigateTo("sorter");
+        await WaitUntilAsync(() => _navigation.CurrentTag == "sorter", ShortWait, "Sortieren-Seite").ConfigureAwait(true);
+        await _sorterPage.EnsureInitializedAsync().ConfigureAwait(true);
+        var sort = _sorterPage.Sort;
+        var flatten = _sorterPage.Flatten;
+        await WaitUntilAsync(() => !sort.IsBusy && sort.Location.SourceRoots.Count == 2 && flatten.Location.SourceRoots.Count == 2, ShortWait, "Wurzel-Auswahl mit 2 Wurzeln").ConfigureAwait(true);
+        Check(sort.Location.SelectedSourceRoot?.RootId == inboxRoot.Id && PathEquals(sort.Location.SourceFolder, inbox),
+            $"Quelle vorbelegt mit dem Eingang: {sort.Location.SourceFolder}");
+        Check(sort.Location.SelectedTargetRoot?.RootId == archiveRootId && PathEquals(sort.Location.TargetRoot ?? string.Empty, _root),
+            $"Ziel vorbelegt mit der Archiv-Wurzel: {sort.Location.TargetRoot}");
+        Check(flatten.Location.SelectedSourceRoot?.RootId == inboxRoot.Id, "Flatten: Quelle ebenfalls der Eingang");
+
+        // (3) Analyse im Eingang; Ziel außerhalb der Bibliothek ist gesperrt
+        sort.Location.SourceFolder = handy;
+        sort.Location.TargetRoot = _paths.AppDataRoot;
+        Check(sort.Location.IsTargetBlocked, $"Ziel außerhalb gesperrt: {sort.Location.TargetHint}");
+        await sort.AnalyzeCommand.ExecuteAsync(null).ConfigureAwait(true);
+        Check(sort.ErrorMessage is null && sort.Groups.Count == 2 && sort.Groups.Any(g => g.Key == "sm01" && g.FileCount == 2),
+            $"Analyse: {sort.AnalysisSummary} ({sort.ErrorMessage})");
+        await sort.ExecuteCommand.ExecuteAsync(null).ConfigureAwait(true);
+        Check(sort.PlanTargetBlocked && sort.ErrorMessage is not null && names.All(n => File.Exists(Path.Combine(handy, n))),
+            $"Gesperrt, nichts verschoben: {sort.ErrorMessage}");
+
+        // (4) Sortieren Eingang → Archiv\Smoke-Sortiert
+        sort.Location.TargetRoot = target;
+        Check(!sort.Location.IsTargetBlocked && sort.Location.SelectedTargetRoot?.RootId == archiveRootId, $"Ziel unter dem Archiv: {sort.Location.TargetHint}");
+        sort.PreviewCommand.Execute(null);
+        Check(!sort.PlanTargetBlocked && sort.PlanCount == 3, $"Vorschau: {sort.PlanSummary}");
+        await SnapshotAsync("14-sortierer-eingang-archiv").ConfigureAwait(true);
+        await sort.ExecuteCommand.ExecuteAsync(null).ConfigureAwait(true);
+        Check(sort.ErrorMessage is null && sort.CanUndo, $"Sortiert: {sort.StatusText}");
+        Check(File.Exists(Path.Combine(target, "sm01", "sm01_0001.jpg")) && File.Exists(Path.Combine(target, "sm02", "sm02_0001.jpg"))
+              && !names.Any(n => File.Exists(Path.Combine(handy, n))), "Dateien liegen unter Archiv\\Smoke-Sortiert");
+        var underArchive = await DbScalarAsync<int>(
+            $"SELECT COUNT(*) FROM Files f JOIN Folders d ON d.Id = f.FolderId WHERE f.Id IN ({idList}) AND d.RootId = $r", ("$r", archiveRootId)).ConfigureAwait(true);
+        Check(underArchive == 3, $"DB: dieselben FileIds unter der Archiv-Wurzel ({underArchive}/3)");
+        var ftsHits = await DbScalarAsync<int>($"SELECT COUNT(*) FROM FilesFts WHERE FilesFts MATCH '\"sm01\"' AND rowid IN ({idList})").ConfigureAwait(true);
+        Check(ftsHits == 2, $"FTS findet die verschobenen Dateien ({ftsHits}/2)");
+        _navigation.NavigateTo(NavigationTags.Gallery);
+        await WaitUntilAsync(() => _navigation.CurrentTag == NavigationTags.Gallery, ShortWait, "Galerie aktiv").ConfigureAwait(true);
+        _gallery.Filter = GalleryFilter.NotArchived;
+        await WaitForGalleryAsync("Filter Nicht archiviert nach Sortieren").ConfigureAwait(true);
+        Check(_gallery.TotalCount == 1, $"„Nicht archiviert“ nach dem Sortieren: {_gallery.TotalCount} (nur Handy\\Reise\\Tag1)");
+
+        // (5) Rückgängig → zurück in den Eingang
+        await sort.UndoCommand.ExecuteAsync(null).ConfigureAwait(true);
+        Check(names.All(n => File.Exists(Path.Combine(handy, n))) && !Directory.Exists(target), $"Rückgängig: {sort.StatusText}");
+        var backInInbox = await DbScalarAsync<int>(
+            $"SELECT COUNT(*) FROM Files f JOIN Folders d ON d.Id = f.FolderId WHERE f.Id IN ({idList}) AND d.RootId = $r", ("$r", inboxRoot.Id)).ConfigureAwait(true);
+        Check(backInInbox == 3, $"DB: FileIds wieder unter der Eingangs-Wurzel ({backInInbox}/3)");
+        await WaitUntilAsync(() => !_gallery.IsLoading && _gallery.TotalCount == 4, ShortWait, "„Nicht archiviert“ nach Rückgängig: 4 Dateien").ConfigureAwait(true);
+
+        // (6) Flatten im Eingang (Ziel = Quellordner) + Rückgängig
+        flatten.Location.SourceFolder = handy;
+        flatten.Location.SelectedTargetRoot = SorterRootOption.SourceFolderOption;
+        await flatten.AnalyzeCommand.ExecuteAsync(null).ConfigureAwait(true);
+        Check(flatten.ErrorMessage is null && flatten.Folders.Count == 2, $"Flatten-Analyse: {flatten.AnalysisSummary} ({flatten.ErrorMessage})");
+        await flatten.ExecuteCommand.ExecuteAsync(null).ConfigureAwait(true);
+        var flattened = Path.Combine(handy, "Reise_Tag1", "sm03_0001.jpg");
+        Check(flatten.ErrorMessage is null && File.Exists(flattened) && !Directory.Exists(Path.Combine(handy, "Reise")), $"Flatten: {flatten.StatusText}");
+        var flatRoot = await DbScalarAsync<int>(
+            "SELECT d.RootId FROM Files f JOIN Folders d ON d.Id = f.FolderId WHERE f.Name = $n", ("$n", "sm03_0001.jpg")).ConfigureAwait(true);
+        Check(flatRoot == inboxRoot.Id, "DB: Flatten bleibt unter der Eingangs-Wurzel");
+        await flatten.UndoCommand.ExecuteAsync(null).ConfigureAwait(true);
+        Check(File.Exists(Path.Combine(deep, "sm03_0001.jpg")) && !File.Exists(flattened), $"Flatten rückgängig: {flatten.StatusText}");
+
+        // (7) Eingang entfernen (nur Katalog) — die Wurzel-Auswahl lädt über LibraryRootsChangedMessage neu
+        _gallery.Filter = GalleryFilter.All;
+        await WaitForGalleryAsync("Filter Alle").ConfigureAwait(true);
+        await _libraries.RemoveRootAsync(inboxRoot.Id).ConfigureAwait(true);
+        _mediaCount -= 4;
+        await WaitUntilAsync(() => !_gallery.IsLoading && _gallery.TotalCount == _mediaCount, ShortWait, $"Galerie nach Entfernen des Eingangs: {_mediaCount}").ConfigureAwait(true);
+        await WaitUntilAsync(() => sort.Location.SourceRoots.Count == 1 && flatten.Location.SourceRoots.Count == 1, ShortWait, "Wurzel-Auswahl ohne Eingang").ConfigureAwait(true);
+        Check(PathEquals(sort.Location.SourceFolder, _root), $"Quelle fällt auf die Archiv-Wurzel zurück: {sort.Location.SourceFolder}");
         Directory.Delete(inbox, recursive: true);
     }
 

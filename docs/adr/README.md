@@ -42,6 +42,7 @@ Wenn eine ADR-Entscheidung revidiert wird: **neues ADR anlegen** + altes auf "Su
 | [0021](0021-tags-eigene-tabellen.md) | Tags als eigene Tabellen mit Katalog-Zuweisung | Accepted |
 | [0022](0022-archive-als-katalog-eintraege.md) | Archive als Katalog-Einträge, Entpacken über SharpCompress | Accepted |
 | [0023](0023-neu-aufbauen-uebernimmt-benutzerdaten.md) | „Neu aufbauen“ übernimmt Favoriten, Bewertungen und Tags über den Pfad | Accepted |
+| [0024](0024-sortierer-ziel-nur-unter-bibliothekswurzeln.md) | Sortierer und Flatten: Quelle und Ziel nur unter den Wurzeln der Bibliothek | Accepted |
 
 ## Quellen der Entscheidungen
 

@@ -47,7 +47,9 @@ public sealed class FileSorterServiceTests
         var analysis = await s.Sorter.AnalyzeAsync(inbox);
 
         analysis.SourceFolder.Should().Be(inbox);
-        analysis.LibraryRoot.Should().Be(fx.LibraryRoot);
+        analysis.SourceRoot.Path.Should().Be(fx.LibraryRoot);
+        analysis.SourceRoot.IsArchive.Should().BeTrue();
+        analysis.Roots.Should().ContainSingle();
         analysis.IsMultiLevel.Should().BeFalse();
         analysis.Groups.Select(g => g.Key).Should().Equal("p006", "p020", "p030", SorterGroup.UnsortedKey);
         analysis.TotalFiles.Should().Be(5, "notizen.txt ist kein Medium");
@@ -222,6 +224,10 @@ public sealed class FileSorterServiceTests
         var outside = s.Sorter.BuildPlan(analysis, Mappings(("p006", "p006")), new SorterPlanOptions { TargetRoot = fx.OutsideDir });
         outside.TargetInsideLibrary.Should().BeFalse();
         outside.Items[0].DestPath.Should().Be(Path.Combine(fx.OutsideDir, "p006", "p006_0001.jpg"));
+        outside.TargetError.Should().Contain("außerhalb der Wurzeln");
+        outside.ReadyCount.Should().Be(0, "Ziele außerhalb der Bibliothek sind gesperrt (ADR-0024)");
+        outside.Items.Should().OnlyContain(i => i.Status == SorterPlanItemStatus.InvalidTarget && i.Note == outside.TargetError);
+        outside.DeleteEmptySourceFolders.Should().BeFalse();
     }
 
     [Theory]

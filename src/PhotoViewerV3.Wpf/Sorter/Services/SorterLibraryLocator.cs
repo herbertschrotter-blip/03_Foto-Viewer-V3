@@ -1,58 +1,36 @@
 using System;
-using System.Linq;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Library;
 
 namespace PhotoViewerV3.Sorter.Services;
 
-public sealed record SorterLibraryInfo(int Id, string Name, string RootPath);
+/// <summary>Aktive Bibliothek mit ihren Wurzeln (ADR-0020: Archiv zuerst, dann die Eingänge; je mit Erreichbarkeit).</summary>
+public sealed record SorterLibraryInfo(int Id, string Name, string RootPath, IReadOnlyList<LibraryRootInfo> Roots);
 
 /// <summary>
-/// Liefert die aktive Bibliothek (Name + Root) als Vorbelegung für den Quellordner. Nutzt
-/// <see cref="ILibraryService"/>, sobald er registriert ist; bis dahin (Welle 1 läuft parallel)
-/// die Library mit dem jüngsten LastOpenedAt direkt aus der DB.
+/// Liefert die aktive Bibliothek samt Wurzeln als Vorbelegung für Quelle und Ziel des Sortierers
+/// (über <see cref="ILibraryService"/>; Fehler werden geloggt und als „keine Bibliothek“ gemeldet).
 /// </summary>
 public sealed class SorterLibraryLocator
 {
-    private readonly ILibraryContextFactory _factory;
+    private readonly ILibraryService _libraries;
     private readonly ILogger<SorterLibraryLocator> _logger;
-    private readonly ILibraryService? _libraryService;
 
-    public SorterLibraryLocator(
-        ILibraryContextFactory factory,
-        ILogger<SorterLibraryLocator> logger,
-        ILibraryService? libraryService = null)
+    public SorterLibraryLocator(ILibraryService libraries, ILogger<SorterLibraryLocator> logger)
     {
-        _factory = factory;
+        _libraries = libraries;
         _logger = logger;
-        _libraryService = libraryService;
     }
 
     public async Task<SorterLibraryInfo?> GetActiveAsync(CancellationToken ct = default)
     {
         try
         {
-            if (_libraryService is not null)
-            {
-                var info = await _libraryService.GetActiveAsync(ct).ConfigureAwait(true);
-                return info is null ? null : new SorterLibraryInfo(info.Id, info.Name, info.RootPath);
-            }
-
-            await using var ctx = _factory.Create();
-            var rows = await ctx.Libraries
-                .AsNoTracking()
-                .Select(l => new { l.Id, l.Name, l.RootPath, l.LastOpenedAt, l.CreatedAt })
-                .ToListAsync(ct)
-                .ConfigureAwait(true);
-            var active = rows
-                .OrderByDescending(l => l.LastOpenedAt ?? DateTime.MinValue)
-                .ThenByDescending(l => l.CreatedAt)
-                .FirstOrDefault();
-            return active is null ? null : new SorterLibraryInfo(active.Id, active.Name, active.RootPath);
+            var info = await _libraries.GetActiveAsync(ct).ConfigureAwait(true);
+            return info is null ? null : new SorterLibraryInfo(info.Id, info.Name, info.RootPath, info.Roots);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

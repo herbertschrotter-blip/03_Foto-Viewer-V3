@@ -4,14 +4,18 @@ namespace PhotoViewerV3.Services.Sorter;
 /// Pattern-basierter File Sorter (Port von V2 <c>Lib_FileSorter.ps1</c>): Analyse eines Ordners
 /// (nicht rekursiv) → Gruppen, In-Memory-Nachbearbeitung, Plan (Quelle → Ziel) und Ausführung über
 /// den <c>IFileOperationService</c> mit Lauf-Protokoll und „Rückgängig (letzter Lauf)“.
-/// Arbeitet nur in Ordnern einer Bibliothek: Dateien werden über den Katalog (Pfad → FileId) verschoben;
-/// Dateien ohne Katalogeintrag werden markiert und übersprungen.
+/// Arbeitet nur in Ordnern einer Bibliothek: Quelle unter irgendeiner Wurzel (Eingang oder Archiv, ADR-0020), Ziel
+/// unter einer Wurzel derselben Bibliothek (ADR-0024, Ziele außerhalb sind gesperrt). Dateien werden über den Katalog
+/// (Pfad → FileId) verschoben; Dateien ohne Katalogeintrag werden markiert und übersprungen.
 /// </summary>
 public interface IFileSorterService
 {
     /// <exception cref="FolderNotInLibraryException">Der Ordner gehört zu keiner Bibliothek.</exception>
     /// <exception cref="DirectoryNotFoundException">Der Ordner existiert nicht.</exception>
     Task<SorterAnalysis> AnalyzeAsync(string folderPath, SorterAnalyzeOptions? options = null, CancellationToken ct = default);
+
+    /// <summary>Zielwurzel für den Hinweis „Ordner existiert bereits“ setzen (null = Quellordner) und die Gruppen neu prüfen.</summary>
+    void SetTargetRoot(SorterAnalysis analysis, string? targetRoot);
 
     /// <summary>Datei in eine andere (ggf. neue) Gruppe verschieben — nur im Analyse-Ergebnis.</summary>
     void MoveFile(SorterAnalysis analysis, string fileName, string targetKey);

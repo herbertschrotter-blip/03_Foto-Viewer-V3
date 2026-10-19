@@ -6,7 +6,8 @@ namespace PhotoViewerV3.Services.Sorter;
 /// <c>Ziel\&lt;deduplizierte Pfad-Ebenen&gt;\datei</c> geplant (Wurzel-Dateien → „_root“),
 /// Namenskonflikte erhalten „_1“, „_2“, … Ausführung über den <c>IFileOperationService</c>
 /// (Rename + Move je Datei im Protokoll), optional leere Quellordner löschen, Undo des letzten Laufs.
-/// Gleiche Katalog-Regel wie der Sortierer: nur Ordner innerhalb einer Bibliothek.
+/// Gleiche Katalog-Regel wie der Sortierer: Quelle unter irgendeiner Wurzel der Bibliothek (Eingang oder Archiv), Ziel
+/// unter einer Wurzel derselben Bibliothek (ADR-0024).
 /// </summary>
 public interface IFlattenService
 {
