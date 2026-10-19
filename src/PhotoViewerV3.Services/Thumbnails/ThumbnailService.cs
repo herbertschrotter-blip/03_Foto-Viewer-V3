@@ -272,7 +272,9 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
             return;
         }
 
-        var imageWorkers = Math.Max(1, Environment.ProcessorCount - 2);
+        // UI-Reaktion vor Durchsatz: höchstens die Hälfte der logischen Kerne, maximal 6 (PLAN Kap. 11 nennt
+        // CPU-2 für SSD-Profile; damit war der UI-Thread beim Erstaufbau von 500 großen JPEGs ausgehungert).
+        var imageWorkers = Math.Clamp(Environment.ProcessorCount / 2, 2, 6);
         for (var i = 0; i < imageWorkers; i++)
         {
             _workers.Add(Task.Run(() => WorkerLoopAsync(_imageChannel.Reader)));
@@ -392,7 +394,7 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
     /// </summary>
     private async Task<ThumbnailRenderResult> RenderImageWithFallbackAsync(ThumbnailRequest req, string cachePath)
     {
-        var result = _imageRenderer.Render(req.SourcePath, cachePath, Size);
+        var result = RenderImageLowPriority(req.SourcePath, cachePath);
         if (result.Success
             || result.ErrorCode != ThumbnailErrorCodes.WicDecodeFailed
             || _fallbackRenderer is not { IsAvailable: true })
@@ -530,6 +532,22 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
         catch (Exception ex)
         {
             _logger.LogDebug(ex, "Thumbnail-.tmp-Bereinigung übersprungen");
+        }
+    }
+
+    /// <summary>WIC-Decode ist CPU-lastig: während des Renderns läuft der Thread mit niedriger Priorität, damit UI und Eingabe Vorrang haben.</summary>
+    private ThumbnailRenderResult RenderImageLowPriority(string sourcePath, string cachePath)
+    {
+        var thread = Thread.CurrentThread;
+        var previous = thread.Priority;
+        try
+        {
+            thread.Priority = ThreadPriority.BelowNormal;
+            return _imageRenderer.Render(sourcePath, cachePath, Size);
+        }
+        finally
+        {
+            thread.Priority = previous;
         }
     }
 

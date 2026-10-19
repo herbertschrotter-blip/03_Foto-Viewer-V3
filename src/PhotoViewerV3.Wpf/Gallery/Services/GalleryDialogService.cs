@@ -2,72 +2,32 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Controls;
-using Wpf.Ui.Controls;
+using PhotoViewerV3.Shell;
+using PhotoViewerV3.Shell.Dialogs;
 
 namespace PhotoViewerV3.Gallery.Services;
 
-/// <summary>Wpf.Ui-MessageBox-Implementierung von <see cref="IGalleryDialogService"/>.</summary>
+/// <summary>Implementierung von <see cref="IGalleryDialogService"/> über das eigene <see cref="AppDialogWindow"/>.</summary>
 public sealed class GalleryDialogService : IGalleryDialogService
 {
-    public async Task<bool> ConfirmAsync(string title, string message, string primaryButtonText, bool isDestructive = false)
+    public Task<bool> ConfirmAsync(string title, string message, string primaryButtonText, bool isDestructive = false)
     {
-        var box = new Wpf.Ui.Controls.MessageBox
+        var outcome = AppDialogWindow.Show(ResolveOwner(), new DialogRequest(title, message)
         {
-            Title = title,
-            Content = new System.Windows.Controls.TextBlock
-            {
-                Text = message,
-                TextWrapping = TextWrapping.Wrap,
-                MaxWidth = 420,
-            },
-            PrimaryButtonText = primaryButtonText,
-            PrimaryButtonAppearance = isDestructive ? ControlAppearance.Danger : ControlAppearance.Primary,
-            CloseButtonText = "Abbrechen",
-            IsSecondaryButtonEnabled = false,
-            Owner = ResolveOwner(),
-        };
-
-        var result = await box.ShowDialogAsync().ConfigureAwait(true);
-        return result == Wpf.Ui.Controls.MessageBoxResult.Primary;
+            PrimaryText = primaryButtonText,
+            PrimaryIsDestructive = isDestructive,
+        });
+        return Task.FromResult(outcome.Choice == DialogChoice.Primary);
     }
 
-    public async Task ShowErrorsAsync(string title, string message, IReadOnlyList<string> details)
+    public Task ShowErrorsAsync(string title, string message, IReadOnlyList<string> details)
     {
-        var panel = new StackPanel { MaxWidth = 520 };
-        panel.Children.Add(new System.Windows.Controls.TextBlock
+        _ = AppDialogWindow.Show(ResolveOwner(), new DialogRequest(title, message)
         {
-            Text = message,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 8),
+            CloseText = "Schließen",
+            Details = details.Count > 0 ? string.Join("\n", details) : null,
         });
-
-        if (details.Count > 0)
-        {
-            panel.Children.Add(new ScrollViewer
-            {
-                MaxHeight = 260,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                Content = new System.Windows.Controls.TextBlock
-                {
-                    Text = string.Join("\n", details),
-                    TextWrapping = TextWrapping.Wrap,
-                    FontSize = 12,
-                },
-            });
-        }
-
-        var box = new Wpf.Ui.Controls.MessageBox
-        {
-            Title = title,
-            Content = panel,
-            CloseButtonText = "Schließen",
-            IsPrimaryButtonEnabled = false,
-            IsSecondaryButtonEnabled = false,
-            Owner = ResolveOwner(),
-        };
-
-        await box.ShowDialogAsync().ConfigureAwait(true);
+        return Task.CompletedTask;
     }
 
     private static Window? ResolveOwner()

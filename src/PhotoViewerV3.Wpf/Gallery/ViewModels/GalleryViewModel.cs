@@ -26,6 +26,8 @@ using PhotoViewerV3.Services.Messaging;
 using PhotoViewerV3.Services.Operations;
 using PhotoViewerV3.Services.Thumbnails;
 using PhotoViewerV3.Gallery.Data;
+using System.Collections.Concurrent;
+using System.Windows.Threading;
 
 namespace PhotoViewerV3.Gallery.ViewModels;
 
@@ -78,6 +80,8 @@ public sealed partial class GalleryViewModel : ObservableObject
     /// dort nicht nebenläufig gelesen werden. Wird nach jeder Änderung durch eine neue Instanz ersetzt.
     /// </summary>
     private volatile HashSet<int> _currentIdsSnapshot = new();
+    private readonly ConcurrentQueue<(int FileId, ImageSource Image)> _readyThumbnails = new();
+    private int _thumbnailFlushScheduled;
 
     private CancellationTokenSource? _activeLoadCts;
     private CancellationTokenSource? _reloadDebounceCts;
@@ -872,13 +876,34 @@ public sealed partial class GalleryViewModel : ObservableObject
             return;
         }
 
-        Application.Current?.Dispatcher.InvokeAsync(() =>
+        // Gebündelt und mit Background-Priorität auf den UI-Thread: beim Erstaufbau treffen hunderte
+        // Thumbnails in Sekunden ein; je ein Dispatcher-Aufruf pro Bild ließ Eingabe und Rendering verhungern.
+        _readyThumbnails.Enqueue((args.FileId, image));
+        if (Interlocked.CompareExchange(ref _thumbnailFlushScheduled, 1, 0) != 0)
         {
-            if (_currentItems.TryGetValue(args.FileId, out var item))
+            return;
+        }
+
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher is null)
+        {
+            Interlocked.Exchange(ref _thumbnailFlushScheduled, 0);
+            return;
+        }
+
+        _ = dispatcher.InvokeAsync(FlushReadyThumbnails, DispatcherPriority.Background);
+    }
+
+    private void FlushReadyThumbnails()
+    {
+        Interlocked.Exchange(ref _thumbnailFlushScheduled, 0);
+        while (_readyThumbnails.TryDequeue(out var entry))
+        {
+            if (_currentItems.TryGetValue(entry.FileId, out var item))
             {
-                item.Thumbnail = image;
+                item.Thumbnail = entry.Image;
             }
-        });
+        }
     }
 
     private static ImageSource? TryLoadThumbnail(string path)

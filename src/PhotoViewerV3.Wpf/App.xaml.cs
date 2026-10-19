@@ -16,6 +16,7 @@ using PhotoViewerV3.Thumbnails;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Serilog;
+using Serilog.Events;
 
 namespace PhotoViewerV3;
 
@@ -36,6 +37,8 @@ public partial class App : Application
 
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Information()
+            // EF Core protokolliert sonst jeden SQL-Befehl (tausende Zeilen pro Sitzung, I/O auf den Thumbnail-Workern)
+            .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Warning)
             .WriteTo.File(
                 path: Path.Combine(paths.LogsRoot, "photoviewer-.log"),
                 rollingInterval: RollingInterval.Day,

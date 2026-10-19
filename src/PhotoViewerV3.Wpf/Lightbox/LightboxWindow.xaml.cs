@@ -9,8 +9,9 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Microsoft.Extensions.Logging;
+using PhotoViewerV3.Shell;
+using PhotoViewerV3.Shell.Dialogs;
 using Wpf.Ui.Controls;
-using UiMessageBox = Wpf.Ui.Controls.MessageBox;
 
 namespace PhotoViewerV3.Lightbox;
 
@@ -482,19 +483,15 @@ public partial class LightboxWindow : FluentWindow
         }
     }
 
-    private async Task<bool> ConfirmAsync(string title, string message, string primaryButtonText)
+    private Task<bool> ConfirmAsync(string title, string message, string primaryButtonText)
     {
-        var box = new UiMessageBox
+        // Eigenes Dialogfenster statt Wpf.Ui MessageBox (deren Größenlogik hängt bei umbrechendem Text).
+        var outcome = AppDialogWindow.Show(this, new DialogRequest(title, message)
         {
-            Title = title,
-            Content = message,
-            PrimaryButtonText = primaryButtonText,
-            PrimaryButtonAppearance = ControlAppearance.Danger,
-            CloseButtonText = "Abbrechen",
-            Owner = this,
-        };
-        var result = await box.ShowDialogAsync().ConfigureAwait(true);
-        return result == Wpf.Ui.Controls.MessageBoxResult.Primary;
+            PrimaryText = primaryButtonText,
+            PrimaryIsDestructive = true,
+        });
+        return Task.FromResult(outcome.Choice == DialogChoice.Primary);
     }
 
     private static class NativeMethods

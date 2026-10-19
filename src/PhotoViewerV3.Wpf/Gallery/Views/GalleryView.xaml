@@ -4,6 +4,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:controls="clr-namespace:PhotoViewerV3.Gallery.Controls"
              xmlns:data="clr-namespace:PhotoViewerV3.Gallery.Data"
              xmlns:vm="clr-namespace:PhotoViewerV3.Gallery.ViewModels"
              xmlns:conv="clr-namespace:PhotoViewerV3.Gallery.Converters"
@@ -424,7 +425,7 @@
                 Background="{DynamicResource LayerFillColorDefaultBrush}">
             <Grid>
                 <!-- Kachel-Grid: eine Page (≤ 1000 Items), Mehrfachauswahl -->
-                <ListBox x:Name="GalleryList"
+                <controls:GalleryListBox x:Name="GalleryList"
                          AutomationProperties.AutomationId="GalleryList"
                          ItemsSource="{Binding CurrentPage}"
                          ItemTemplate="{StaticResource TileTemplate}"
@@ -439,17 +440,17 @@
                          KeyboardNavigation.DirectionalNavigation="Contained"
                          KeyDown="OnListKeyDown"
                          Visibility="{Binding ShowGrid, Converter={StaticResource BoolToVis}}">
-                    <ListBox.ItemsPanel>
+                    <controls:GalleryListBox.ItemsPanel>
                         <ItemsPanelTemplate>
                             <WrapPanel ItemWidth="180" ItemHeight="160" />
                         </ItemsPanelTemplate>
-                    </ListBox.ItemsPanel>
-                    <ListBox.InputBindings>
+                    </controls:GalleryListBox.ItemsPanel>
+                    <controls:GalleryListBox.InputBindings>
                         <KeyBinding Key="Delete" Command="{Binding RecycleSelectionCommand}" />
                         <KeyBinding Key="Escape" Command="{Binding ClearSelectionCommand}" />
                         <KeyBinding Modifiers="Ctrl" Key="A" Command="{Binding SelectAllCommand}" />
-                    </ListBox.InputBindings>
-                </ListBox>
+                    </controls:GalleryListBox.InputBindings>
+                </controls:GalleryListBox>
 
                 <!-- Container-State: Unterordner-Kacheln -->
                 <ScrollViewer VerticalScrollBarVisibility="Auto"
