@@ -23,6 +23,11 @@ namespace PhotoViewerV3.Services.Watch;
 /// sie zurück. Ereignisse während eines Scans werden nach dessen Ende erneut geprüft (neue Ruhezeit). Zusätzlich
 /// erkennt der Dienst fremde Scans an <see cref="ScanProgressMessage"/>/<see cref="ScanCompletedMessage"/>/
 /// <see cref="ScanAbortedMessage"/> der Bibliothek.</item>
+/// <item>Eigene Schreibvorgänge der App (Datei-Batches des FileOperationService, Ordner-Aufräumen des Sortierers) stehen
+/// kurzzeitig in der <see cref="IOwnChangeRegistry"/>; ihre Ereignisse zählen nicht, denn der Katalog ist dafür schon
+/// gebucht (kein leerer Scan nach Verschieben, Papierkorb oder „Ins Archiv…“). Ein Renamed zählt nur dann nicht, wenn
+/// alter und neuer Pfad eigen sind. Nimmt die Operation einen Pfad zurück (Katalog nicht gebucht), zählt er nachträglich
+/// als Ereignis.</item>
 /// <item>Endet der automatische Scan mit <see cref="ScanOutcome.MassMissingBlocked"/> oder <see cref="ScanOutcome.LibraryOffline"/>,
 /// wird nicht automatisch wiederholt (<see cref="WatchState.Blocked"/>, Hinweis in der Statusleiste); ein erfolgreicher
 /// manueller Scan, ein Bibliothekswechsel oder das Umschalten der Einstellung hebt die Sperre auf.</item>
@@ -53,6 +58,7 @@ public sealed class LibraryWatchService : ILibraryWatchService
     private readonly ILogger<LibraryWatchService> _logger;
     private readonly IMessenger _messenger;
     private readonly IScanGate _scanGate;
+    private readonly IOwnChangeRegistry _ownChanges;
     private readonly TimeSpan _rootRetryInterval;
 
     private readonly object _gate = new();
@@ -90,6 +96,7 @@ public sealed class LibraryWatchService : ILibraryWatchService
     /// <param name="messenger">Optional (Tests); produktiv WeakReferenceMessenger.Default.</param>
     /// <param name="rootRetryInterval">Optional (Tests); produktiv <see cref="RootRetryInterval"/>.</param>
     /// <param name="scanGate">Optional (Tests); produktiv der Singleton, den auch der ScanService belegt.</param>
+    /// <param name="ownChanges">Optional (Tests); produktiv der Singleton, in den der FileOperationService schreibt.</param>
     public LibraryWatchService(
         ILibraryService libraries,
         IScanService scans,
@@ -99,7 +106,8 @@ public sealed class LibraryWatchService : ILibraryWatchService
         ILogger<LibraryWatchService> logger,
         IMessenger? messenger = null,
         TimeSpan? rootRetryInterval = null,
-        IScanGate? scanGate = null)
+        IScanGate? scanGate = null,
+        IOwnChangeRegistry? ownChanges = null)
     {
         _libraries = libraries;
         _scans = scans;
@@ -108,6 +116,7 @@ public sealed class LibraryWatchService : ILibraryWatchService
         _logger = logger;
         _messenger = messenger ?? WeakReferenceMessenger.Default;
         _scanGate = scanGate ?? new ScanGate();
+        _ownChanges = ownChanges ?? new OwnChangeRegistry();
         _rootRetryInterval = rootRetryInterval ?? RootRetryInterval;
         _quietTimer = new Timer(_ => OnQuietElapsed(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
         _retryTimer = new Timer(_ => OnRetryTick(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
@@ -203,6 +212,7 @@ public sealed class LibraryWatchService : ILibraryWatchService
         _messenger.Register<LibraryWatchService, ScanCompletedMessage>(this, static (r, m) => r.OnExternalScanFinished(m.LibraryId, m.Result.Outcome == ScanOutcome.Completed));
         _messenger.Register<LibraryWatchService, ScanAbortedMessage>(this, static (r, m) => r.OnExternalScanFinished(m.LibraryId, completedOk: false));
         _scanGate.Acquired += OnScanGateAcquired;
+        _ownChanges.Revoked += OnOwnChangeRevoked;
 
         _logger.LogInformation("Ordnerüberwachung: {State}, Ruhezeit {Quiet} s", settings.Enabled ? "an" : "aus", (int)_quietPeriod.TotalSeconds);
         await AttachToActiveLibraryAsync(ct).ConfigureAwait(false);
@@ -238,6 +248,7 @@ public sealed class LibraryWatchService : ILibraryWatchService
         }
 
         _scanGate.Acquired -= OnScanGateAcquired;
+        _ownChanges.Revoked -= OnOwnChangeRevoked;
         _messenger.UnregisterAll(this);
         _logger.LogInformation("Ordnerüberwachung beendet");
         Publish();
@@ -520,10 +531,30 @@ public sealed class LibraryWatchService : ILibraryWatchService
             return;
         }
 
+        if (_ownChanges.IsOwn(fullPath) && (oldPath is null || _ownChanges.IsOwn(oldPath)))
+        {
+            _logger.LogDebug("Ordnerüberwachung: eigene Änderung ignoriert — {Change} {Path}", change, fullPath);
+            return;
+        }
+
+        CountEvent(change.ToString(), fullPath, requireRoot: false);
+    }
+
+    /// <summary>Eine Operation der App hat einen Pfad zurückgenommen (Katalog nicht gebucht): zählt wie ein Ereignis.</summary>
+    private void OnOwnChangeRevoked(string path) => CountEvent("zurückgenommen", path, requireRoot: true);
+
+    /// <param name="requireRoot">true: nur zählen, wenn der Pfad unter einer überwachten Wurzel liegt (Ereignisse der Watcher tun das immer).</param>
+    private void CountEvent(string what, string fullPath, bool requireRoot)
+    {
         var publishNow = false;
         lock (_gate)
         {
             if (!_started || !_enabled || _libraryId is null || _blocked)
+            {
+                return;
+            }
+
+            if (requireRoot && !_roots.Any(root => IsUnderRoot(fullPath, root)))
             {
                 return;
             }
@@ -538,11 +569,20 @@ public sealed class LibraryWatchService : ILibraryWatchService
             }
         }
 
-        _logger.LogDebug("Ordnerüberwachung: {Change} {Path}", change, fullPath);
+        _logger.LogDebug("Ordnerüberwachung: {Change} {Path}", what, fullPath);
         if (publishNow)
         {
             Publish();
         }
+    }
+
+    private static bool IsUnderRoot(string path, string root)
+    {
+        var full = OwnChangeRegistry.Normalize(path);
+        var normalizedRoot = OwnChangeRegistry.Normalize(root);
+        return full is not null && normalizedRoot is not null
+               && (full.Equals(normalizedRoot, StringComparison.OrdinalIgnoreCase)
+                   || full.StartsWith(Path.EndsInDirectorySeparator(normalizedRoot) ? normalizedRoot : normalizedRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase));
     }
 
     private void OnWatcherError(string root, Exception? error)

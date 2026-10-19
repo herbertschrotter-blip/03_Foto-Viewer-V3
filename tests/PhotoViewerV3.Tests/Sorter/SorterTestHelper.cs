@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using PhotoViewerV3.Services.Operations;
+using PhotoViewerV3.Services.Scanning;
 using PhotoViewerV3.Services.Sorter;
+using PhotoViewerV3.Services.Watch;
 using PhotoViewerV3.Tests.Fixtures;
 
 namespace PhotoViewerV3.Tests.Sorter;
@@ -8,13 +10,15 @@ namespace PhotoViewerV3.Tests.Sorter;
 /// <summary>Baut die Sorter-Services gegen eine <see cref="TempLibraryFixture"/> (echte DB, echter FileOperationService).</summary>
 internal sealed class SorterServices : IDisposable
 {
-    public SorterServices(TempLibraryFixture fx)
+    /// <param name="scanGate">Gemeinsame Scan-Sperre (Tests mit Scan nach dem Lauf).</param>
+    /// <param name="ownChanges">Gemeinsame Liste eigener Pfade (Tests mit Ordnerüberwachung).</param>
+    public SorterServices(TempLibraryFixture fx, IScanGate? scanGate = null, IOwnChangeRegistry? ownChanges = null)
     {
-        FileOps = fx.CreateFileOperationService();
+        FileOps = fx.CreateFileOperationService(scanGate: scanGate, ownChanges: ownChanges);
         Store = new SorterProfileStore(fx.ContextFactory, NullLogger<SorterProfileStore>.Instance);
         var catalog = new SorterCatalog(fx.ContextFactory, NullLogger<SorterCatalog>.Instance);
         var runLog = new SorterRunLog(fx.ContextFactory, NullLogger<SorterRunLog>.Instance);
-        var executor = new SorterMoveExecutor(FileOps, runLog, catalog, NullLogger<SorterMoveExecutor>.Instance);
+        var executor = new SorterMoveExecutor(FileOps, runLog, catalog, NullLogger<SorterMoveExecutor>.Instance, ownChanges);
         Sorter = new FileSorterService(Store, catalog, executor, fx.Formats, NullLogger<FileSorterService>.Instance);
         Flatten = new FlattenService(catalog, executor, fx.Formats, NullLogger<FlattenService>.Instance);
     }

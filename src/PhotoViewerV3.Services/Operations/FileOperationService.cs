@@ -9,6 +9,8 @@ using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Infrastructure;
 using PhotoViewerV3.Services.Media;
 using PhotoViewerV3.Services.Messaging;
+using PhotoViewerV3.Services.Scanning;
+using PhotoViewerV3.Services.Watch;
 using LibraryEntity = PhotoViewerV3.Domain.Entities.Library; // „Library“ allein wäre der Namespace Services.Library
 
 namespace PhotoViewerV3.Services.Operations;
@@ -28,6 +30,14 @@ namespace PhotoViewerV3.Services.Operations;
 /// Single-Writer: alle Aufrufe laufen nacheinander durch ein SemaphoreSlim; gegenüber anderen
 /// Schreibern (ThumbnailService) fängt busy_timeout=5000 SQLITE_BUSY ab (Transaktionen sind
 /// BEGIN IMMEDIATE, Microsoft.Data.Sqlite-Standard).
+/// Scan-Sperre (0.2.17): jeder Batch belegt über <see cref="IScanGate"/> die beteiligten Bibliotheken (Dateien, Ziel,
+/// bei Undo die Wurzeln der protokollierten Pfade), bevor er den Katalog liest — ein Scan derselben Bibliothek wartet
+/// auf das Batch-Ende und umgekehrt. Die Sperre ist vor der Rückkehr wieder frei; Aufrufer, die danach scannen
+/// (Entpacken), halten sie nie selbst.
+/// Eigene Pfade (0.2.17): vor jedem Dateisystem-Schritt kommen Quelle, Ziel und neu angelegte Ordner in die
+/// <see cref="IOwnChangeRegistry"/>, damit die Ordnerüberwachung keinen leeren Scan auslöst. Nur Pfade, deren Katalog
+/// mitgebucht wird — ein Ziel außerhalb der Bibliothek der Datei bleibt fremd. Scheitert der Schritt oder die Buchung,
+/// wird der Pfad zurückgenommen (die Überwachung zählt ihn dann).
 /// Nachrichten: <see cref="FilesChangedMessage"/> (Moved/Removed/Added) je Library nach Batch-Ende —
 /// auch nach einem Abbruch für die bereits verarbeiteten Dateien.
 /// </summary>
@@ -50,18 +60,24 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
     private readonly IMediaFormatRegistry _formats;
     private readonly ILogger<FileOperationService> _logger;
     private readonly IMessenger _messenger;
+    private readonly IScanGate _scanGate;
+    private readonly IOwnChangeRegistry _ownChanges;
     private readonly SemaphoreSlim _writeLock = new(1, 1);
 
     /// <summary>Ein FTS-'delete' ist gescheitert; nach dem nächsten SaveChanges wird der Index neu aufgebaut (nur unter _writeLock).</summary>
     private bool _ftsRebuildPending;
 
+    /// <param name="scanGate">Optional (Tests); produktiv der Singleton, den auch ScanService und Ordnerüberwachung nutzen.</param>
+    /// <param name="ownChanges">Optional (Tests); produktiv der Singleton, den die Ordnerüberwachung abfragt.</param>
     public FileOperationService(
         ILibraryContextFactory factory,
         IAppDataPaths paths,
         IRecycleBin recycleBin,
         IMediaFormatRegistry formats,
         ILogger<FileOperationService> logger,
-        IMessenger? messenger = null)
+        IMessenger? messenger = null,
+        IScanGate? scanGate = null,
+        IOwnChangeRegistry? ownChanges = null)
     {
         _factory = factory;
         _paths = paths;
@@ -69,6 +85,8 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
         _formats = formats;
         _logger = logger;
         _messenger = messenger ?? WeakReferenceMessenger.Default;
+        _scanGate = scanGate ?? new ScanGate();
+        _ownChanges = ownChanges ?? new OwnChangeRegistry();
     }
 
     // ------------------------------------------------------------------ Verträge
@@ -104,7 +122,8 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
             destOf: cf => Path.Combine(target, cf.File.Name),
             prepare: (ctx, run, token) => PrepareMoveAsync(ctx, run, target, token),
             executeItem: (ctx, run, cf, op, token) => ExecuteMoveItemAsync(ctx, run, cf, op, target, targetFolders, token),
-            ct);
+            ct,
+            gateDirectory: target);
     }
 
     public Task<FileOperationBatchResult> RenameAsync(int fileId, string newName, CancellationToken ct = default)
@@ -129,6 +148,8 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
         await _writeLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
+            using var lease = await AcquireLibrariesAsync([libraryId], ct).ConfigureAwait(false);
+            using var own = _ownChanges.Begin();
             await using var ctx = _factory.Create();
             var root = await FindRootContainingAsync(ctx, libraryId, parent, ct).ConfigureAwait(false)
                 ?? throw new InvalidOperationException($"„{parent}“ liegt unter keiner Wurzel der Bibliothek.");
@@ -160,12 +181,15 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
             batch.Status = BatchStatus.Applying;
             await MarkApplyingAsync(ctx, op, ct).ConfigureAwait(false);
 
+            var created = MissingDirectoryChain(full);
+            AddAll(own, created);
             try
             {
                 Directory.CreateDirectory(full);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
+                RevokeAll(own, created);
                 op.Status = FileOperationStatus.Failed;
                 op.Error = Truncate($"Ordner konnte nicht angelegt werden: {ex.Message}");
                 op.ExecutedAtUtc = DateTime.UtcNow;
@@ -181,6 +205,10 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
             {
                 folder = await EnsureFolderChainAsync(ctx, root, full, token).ConfigureAwait(false);
             }).ConfigureAwait(false);
+            if (error is not null)
+            {
+                RevokeAll(own, created);
+            }
 
             batch.Status = BatchStatus.Applied;
             batch.CompletedAtUtc = DateTime.UtcNow;
@@ -203,6 +231,14 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
         try
         {
             await using var ctx = _factory.Create();
+            var folderLibraryId = await ctx.Folders.AsNoTracking()
+                .Where(f => f.Id == folderId)
+                .Select(f => (int?)f.LibraryId)
+                .FirstOrDefaultAsync(ct)
+                .ConfigureAwait(false)
+                ?? throw new InvalidOperationException($"Ordner Id={folderId} nicht im Katalog.");
+            using var lease = await AcquireLibrariesAsync([folderLibraryId], ct).ConfigureAwait(false);
+            using var own = _ownChanges.Begin();
             var folder = await ctx.Folders.FirstOrDefaultAsync(f => f.Id == folderId, ct).ConfigureAwait(false)
                 ?? throw new InvalidOperationException($"Ordner Id={folderId} nicht im Katalog.");
             var oldPath = NormalizeDirectoryPath(folder.Path);
@@ -306,12 +342,15 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
             batch.Status = BatchStatus.Applying;
             await MarkApplyingAsync(ctx, folderOp, ct).ConfigureAwait(false);
 
+            string[] ownPaths = [oldPath, newPath]; // ein Renamed-Ereignis für den Ordner, keines je Datei darin
+            AddAll(own, ownPaths);
             try
             {
                 Directory.Move(oldPath, newPath);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
+                RevokeAll(own, ownPaths);
                 var now = DateTime.UtcNow;
                 var message = Truncate($"Umbenennen fehlgeschlagen: {ex.Message}");
                 foreach (var op in fileOps.Prepend(folderOp))
@@ -338,6 +377,10 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
 
                 return Task.CompletedTask;
             }).ConfigureAwait(false);
+            if (error is not null)
+            {
+                RevokeAll(own, ownPaths);
+            }
 
             batch.Status = BatchStatus.Applied;
             batch.CompletedAtUtc = DateTime.UtcNow;
@@ -395,7 +438,7 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
 
             return batchId is null
                 ? null
-                : await UndoCoreAsync(ctx, batchId.Value, ct).ConfigureAwait(false);
+                : await UndoLockedAsync(ctx, batchId.Value, ct).ConfigureAwait(false);
         }
         finally
         {
@@ -409,12 +452,38 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
         try
         {
             await using var ctx = _factory.Create();
-            return await UndoCoreAsync(ctx, batchId, ct).ConfigureAwait(false);
+            return await UndoLockedAsync(ctx, batchId, ct).ConfigureAwait(false);
         }
         finally
         {
             _writeLock.Release();
         }
+    }
+
+    /// <summary>
+    /// Undo unter der Scan-Sperre: belegt werden die Bibliotheken, unter deren Wurzeln die protokollierten Quell- und
+    /// Zielpfade liegen (die Katalogzeilen können seit dem Batch die Bibliothek verlassen haben).
+    /// </summary>
+    private async Task<FileOperationBatchResult?> UndoLockedAsync(LibraryContext ctx, int batchId, CancellationToken ct)
+    {
+        var paths = await ctx.FileOperations.AsNoTracking()
+            .Where(o => o.BatchId == batchId)
+            .Select(o => new { o.SourcePath, o.DestPath })
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        var directories = paths
+            .SelectMany(p => new[] { p.SourcePath, p.DestPath })
+            .Where(p => !string.IsNullOrEmpty(p))
+            .Select(p => Path.GetDirectoryName(p!))
+            .Where(d => !string.IsNullOrEmpty(d))
+            .Select(d => d!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var libraries = await LibrariesContainingAsync(ctx, directories, ct).ConfigureAwait(false);
+
+        using var lease = await AcquireLibrariesAsync(libraries, ct).ConfigureAwait(false);
+        using var own = _ownChanges.Begin();
+        return await UndoCoreAsync(ctx, batchId, own, ct).ConfigureAwait(false);
     }
 
     public async Task<IReadOnlyList<OperationBatchInfo>> GetRecentBatchesAsync(int take = 50, CancellationToken ct = default)
@@ -490,6 +559,12 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
         /// <summary>Wurzeln der beteiligten Libraries (ADR-0020) — für „Ziel innerhalb der Bibliothek?“.</summary>
         public required List<LibraryRoot> Roots { get; init; }
 
+        /// <summary>Eigene Pfade des Batches für die Ordnerüberwachung.</summary>
+        public required IOwnChangeScope Own { get; init; }
+
+        /// <summary>Vom Batch neu angelegte Ordner (Move-Ziel); werden zurückgenommen, wenn kein Item gelingt.</summary>
+        public List<string> CreatedDirectories { get; } = new();
+
         public List<FileOperationItemResult> Results { get; } = new();
         public ChangeSet Changes { get; } = new();
     }
@@ -497,8 +572,9 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
     private delegate Task ItemExecutor(LibraryContext ctx, BatchRun run, CatalogFile cf, FileOperation op, CancellationToken ct);
 
     /// <summary>
-    /// Gemeinsamer Rahmen: Lock → Dateien laden → Batch + Items (Pending) persistieren →
-    /// Applying → prepare → Items ausführen → Batch abschließen → Nachrichten senden.
+    /// Gemeinsamer Rahmen: Lock → Bibliotheken belegen (Scan-Sperre) → Dateien laden → Batch + Items (Pending)
+    /// persistieren → Applying → prepare → Items ausführen → Batch abschließen → Nachrichten senden.
+    /// <paramref name="gateDirectory"/>: zusätzlich zu sperrender Ordner (Ziel eines Move).
     /// </summary>
     private async Task<FileOperationBatchResult> RunBatchAsync(
         OperationType type,
@@ -507,12 +583,22 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
         Func<CatalogFile, string?> destOf,
         Func<LibraryContext, BatchRun, CancellationToken, Task<bool>>? prepare,
         ItemExecutor executeItem,
-        CancellationToken ct)
+        CancellationToken ct,
+        string? gateDirectory = null)
     {
         await _writeLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
             await using var ctx = _factory.Create();
+            var gateLibraries = await LoadLibraryIdsAsync(ctx, ids, ct).ConfigureAwait(false);
+            if (gateDirectory is not null)
+            {
+                gateLibraries.AddRange(await LibrariesContainingAsync(ctx, [gateDirectory], ct).ConfigureAwait(false));
+            }
+
+            // Erst nach der Sperre laden: ein Scan, auf den gewartet wurde, kann Zeilen verändert haben.
+            using var lease = await AcquireLibrariesAsync(gateLibraries, ct).ConfigureAwait(false);
+            using var own = _ownChanges.Begin();
             var (known, unknown) = await LoadFilesAsync(ctx, ids, ct).ConfigureAwait(false);
             if (known.Count == 0)
             {
@@ -531,6 +617,7 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
                 describe(known),
                 known.Select(cf => (cf, cf.FullPath, destOf(cf))),
                 roots,
+                own,
                 ct).ConfigureAwait(false);
 
             try
@@ -546,6 +633,11 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
             }
             catch (Exception ex)
             {
+                if (!run.Results.Any(r => r.Success))
+                {
+                    RevokeAll(run.Own, run.CreatedDirectories);
+                }
+
                 await FinalizeAfterAbortAsync(run, ex).ConfigureAwait(false);
                 throw;
             }
@@ -564,6 +656,7 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
         string description,
         IEnumerable<(CatalogFile File, string Source, string? Dest)> items,
         List<LibraryRoot> roots,
+        IOwnChangeScope own,
         CancellationToken ct)
     {
         var batch = new OperationBatch
@@ -603,7 +696,7 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
         batch.Status = BatchStatus.Applying;
         await ctx.SaveChangesAsync(ct).ConfigureAwait(false);
 
-        return new BatchRun { Batch = batch, Items = list, Roots = roots };
+        return new BatchRun { Batch = batch, Items = list, Roots = roots, Own = own };
     }
 
     /// <summary>Batch-Abschluss ohne CancellationToken: die Dateisystem-Schritte sind erfolgt, die Buchung muss zu Ende laufen.</summary>
@@ -616,6 +709,10 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
         run.Batch.Status = succeeded > 0 ? BatchStatus.Applied : BatchStatus.Failed;
         run.Batch.CompletedAtUtc = DateTime.UtcNow;
         await ctx.SaveChangesAsync(CancellationToken.None).ConfigureAwait(false);
+        if (succeeded == 0)
+        {
+            RevokeAll(run.Own, run.CreatedDirectories); // leere Zielordner ohne Folders-Zeile: der nächste Scan bucht sie
+        }
 
         Publish(run.Changes);
 
@@ -688,6 +785,7 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
         if (File.Exists(op.SourcePath))
         {
             await MarkApplyingAsync(ctx, op, ct).ConfigureAwait(false);
+            run.Own.Add(op.SourcePath);
             try
             {
                 _recycleBin.MoveToRecycleBin(op.SourcePath);
@@ -696,6 +794,7 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
             {
                 // Auch OperationCanceledException: die kommt hier von der Shell (Benutzer-Abbruch im
                 // Fehlerdialog), nicht vom CancellationToken — nur dieses Item scheitert.
+                run.Own.Revoke(op.SourcePath);
                 await FailItemAsync(ctx, run, cf, op, $"Papierkorb: {ex.Message}", ct).ConfigureAwait(false);
                 return;
             }
@@ -708,7 +807,11 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
         var error = await CommitItemAsync(ctx, op, undo: false, hint,
             token => RemoveCatalogEntryAsync(ctx, cf.File, token)).ConfigureAwait(false);
 
-        if (error is null)
+        if (error is not null)
+        {
+            run.Own.Revoke(op.SourcePath);
+        }
+        else
         {
             DeleteThumbnailFiles(cf.Library.Id, cf.File.Id);
             run.Changes.Add(cf.Library.Id, FilesChangeKind.Removed, cf.File.Id);
@@ -720,6 +823,13 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
     /// <summary>Zielordner im Dateisystem anlegen; scheitert das, sind alle Items Failed.</summary>
     private async Task<bool> PrepareMoveAsync(LibraryContext ctx, BatchRun run, string target, CancellationToken ct)
     {
+        // Neue Ordner unter einer Wurzel der beteiligten Bibliotheken bucht der Batch selbst (Folders-Kette je Item).
+        if (FindRootContaining(run.Roots, null, target) is not null)
+        {
+            run.CreatedDirectories.AddRange(MissingDirectoryChain(target));
+            AddAll(run.Own, run.CreatedDirectories);
+        }
+
         try
         {
             Directory.CreateDirectory(target);
@@ -786,13 +896,18 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
             }
         }
 
+        // Eigene Pfade: die Quelle immer (Zeile wird verschoben oder entfernt), das Ziel nur innerhalb der Bibliothek der
+        // Datei — außerhalb bucht der Katalog es nicht, eine andere überwachte Bibliothek muss es selbst einlesen.
+        string[] own = targetFolder is not null ? [op.SourcePath, dest] : [op.SourcePath];
         await MarkApplyingAsync(ctx, op, ct).ConfigureAwait(false);
+        AddAll(run.Own, own);
         try
         {
             File.Move(op.SourcePath, dest);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            RevokeAll(run.Own, own);
             await FailItemAsync(ctx, run, cf, op, $"Verschieben fehlgeschlagen: {ex.Message}", ct).ConfigureAwait(false);
             return;
         }
@@ -809,7 +924,11 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
             }
         }).ConfigureAwait(false);
 
-        if (error is null)
+        if (error is not null)
+        {
+            RevokeAll(run.Own, own);
+        }
+        else
         {
             if (targetFolder is not null)
             {
@@ -867,13 +986,16 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
             }
         }
 
+        string[] own = [op.SourcePath, dest];
         await MarkApplyingAsync(ctx, op, ct).ConfigureAwait(false);
+        AddAll(run.Own, own);
         try
         {
             File.Move(op.SourcePath, dest);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            RevokeAll(run.Own, own);
             await FailItemAsync(ctx, run, cf, op, $"Umbenennen fehlgeschlagen: {ex.Message}", ct).ConfigureAwait(false);
             return;
         }
@@ -894,13 +1016,17 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
         {
             run.Changes.Add(cf.Library.Id, FilesChangeKind.Moved, cf.File.Id);
         }
+        else
+        {
+            RevokeAll(run.Own, own);
+        }
 
         run.Results.Add(new FileOperationItemResult(cf.File.Id, op.SourcePath, dest, error is null, error));
     }
 
     // ------------------------------------------------------------------ Undo
 
-    private async Task<FileOperationBatchResult?> UndoCoreAsync(LibraryContext ctx, int batchId, CancellationToken ct)
+    private async Task<FileOperationBatchResult?> UndoCoreAsync(LibraryContext ctx, int batchId, IOwnChangeScope own, CancellationToken ct)
     {
         var batch = await ctx.OperationBatches.FirstOrDefaultAsync(b => b.Id == batchId, ct).ConfigureAwait(false);
         if (batch is null)
@@ -935,7 +1061,7 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
         {
             if (batch.OperationType == OperationType.RenameFolder)
             {
-                results.AddRange(await UndoRenameFolderAsync(ctx, ops, changes, ct).ConfigureAwait(false));
+                results.AddRange(await UndoRenameFolderAsync(ctx, ops, changes, own, ct).ConfigureAwait(false));
             }
             else
             {
@@ -947,7 +1073,7 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
                         continue; // Failed/Undone: nichts zurückzunehmen
                     }
 
-                    results.Add(await UndoItemAsync(ctx, op, changes, ct).ConfigureAwait(false));
+                    results.Add(await UndoItemAsync(ctx, op, changes, own, ct).ConfigureAwait(false));
                 }
             }
         }
@@ -972,7 +1098,7 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
         return new FileOperationBatchResult(batch.Id, batch.OperationType, undone, results.Count - undone, results);
     }
 
-    private async Task<FileOperationItemResult> UndoItemAsync(LibraryContext ctx, FileOperation op, ChangeSet changes, CancellationToken ct)
+    private async Task<FileOperationItemResult> UndoItemAsync(LibraryContext ctx, FileOperation op, ChangeSet changes, IOwnChangeScope own, CancellationToken ct)
     {
         var source = op.SourcePath;
         var dest = op.DestPath;
@@ -1024,6 +1150,16 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
             folder = await EnsureFolderChainAsync(ctx, sourceRoot, sourceDir, ct).ConfigureAwait(false);
         }
 
+        // Eigene Pfade: der Zielort wird geräumt (die Zeile zieht mit oder es gab keine); Ursprungsort und neu angelegte
+        // Ordner nur, wenn der Katalog sie bucht (Ursprung unter einer Wurzel).
+        var ownPaths = new List<string> { dest };
+        if (folder is not null)
+        {
+            ownPaths.AddRange(MissingDirectoryChain(sourceDir));
+            ownPaths.Add(source);
+        }
+
+        AddAll(own, ownPaths);
         try
         {
             Directory.CreateDirectory(sourceDir);
@@ -1031,6 +1167,7 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            RevokeAll(own, ownPaths);
             return await UndoFailAsync(ctx, op, $"Zurückverschieben fehlgeschlagen: {ex.Message}", ct).ConfigureAwait(false);
         }
 
@@ -1079,6 +1216,11 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
             }
         }).ConfigureAwait(false);
 
+        if (error is not null)
+        {
+            RevokeAll(own, ownPaths); // Katalog nicht gebucht: die Ordnerüberwachung soll nachsehen
+        }
+
         if (error is null)
         {
             if (movedId is int m)
@@ -1106,7 +1248,7 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
     /// Undo eines RenameFolder-Batches: der Ordner wird in einem Schritt zurückbenannt (Dateisystem), danach die
     /// Pfade der Folders-Zeilen; alle Operationen des Batches (Ordner + Dateien) werden Undone.
     /// </summary>
-    private async Task<List<FileOperationItemResult>> UndoRenameFolderAsync(LibraryContext ctx, List<FileOperation> ops, ChangeSet changes, CancellationToken ct)
+    private async Task<List<FileOperationItemResult>> UndoRenameFolderAsync(LibraryContext ctx, List<FileOperation> ops, ChangeSet changes, IOwnChangeScope own, CancellationToken ct)
     {
         var folderOp = ops.FirstOrDefault(o => o.FileId is null && o.Action == OperationType.RenameFolder);
         var fileOps = ops.Where(o => !ReferenceEquals(o, folderOp)).ToList();
@@ -1138,12 +1280,16 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
             ? new List<Folder>()
             : await ctx.Folders.Where(f => f.LibraryId == folder.LibraryId && f.Path.ToLower().StartsWith(lowerPrefix)).ToListAsync(ct).ConfigureAwait(false);
 
+        // Ohne Katalogzeile bucht das Undo nichts — dann bleibt das Ereignis fremd und die Überwachung liest neu ein.
+        string[] ownPaths = folder is not null ? [newPath, oldPath] : [];
+        AddAll(own, ownPaths);
         try
         {
             Directory.Move(newPath, oldPath);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            RevokeAll(own, ownPaths);
             return new List<FileOperationItemResult> { await UndoFailAsync(ctx, folderOp, $"Zurückbenennen fehlgeschlagen: {ex.Message}", ct).ConfigureAwait(false) };
         }
 
@@ -1164,6 +1310,10 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
 
             return Task.CompletedTask;
         }).ConfigureAwait(false);
+        if (error is not null)
+        {
+            RevokeAll(own, ownPaths);
+        }
 
         var results = new List<FileOperationItemResult>(ops.Count)
         {
@@ -1604,6 +1754,128 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
             .Where(r => (libraryId is null || r.LibraryId == libraryId) && IsInsideRoot(dir, NormalizeDirectoryPath(r.Path)))
             .OrderByDescending(r => r.Path.Length)
             .FirstOrDefault();
+    }
+
+    // ------------------------------------------------------------------ Scan-Sperre und eigene Pfade
+
+    /// <summary>
+    /// Belegt die Bibliotheken für die Dauer eines Batches (aufsteigend nach Id, feste Reihenfolge). Wartet, solange ein
+    /// Scan einer davon läuft (abbrechbar). Dispose gibt alle wieder frei.
+    /// </summary>
+    private async Task<IDisposable> AcquireLibrariesAsync(IEnumerable<int> libraryIds, CancellationToken ct)
+    {
+        var leases = new List<IDisposable>();
+        try
+        {
+            foreach (var libraryId in libraryIds.Distinct().Order())
+            {
+                if (_scanGate.IsBusy(libraryId))
+                {
+                    _logger.LogInformation("Datei-Operation wartet auf den laufenden Scan der Bibliothek {LibraryId}", libraryId);
+                }
+
+                leases.Add(await _scanGate.AcquireForFileOperationAsync(libraryId, ct).ConfigureAwait(false));
+            }
+        }
+        catch
+        {
+            ReleaseAll(leases);
+            throw;
+        }
+
+        return new Leases(leases);
+    }
+
+    private static void ReleaseAll(List<IDisposable> leases)
+    {
+        for (var i = leases.Count - 1; i >= 0; i--)
+        {
+            leases[i].Dispose();
+        }
+    }
+
+    private sealed class Leases(List<IDisposable> leases) : IDisposable
+    {
+        public void Dispose() => ReleaseAll(leases);
+    }
+
+    /// <summary>Bibliotheken der Katalogzeilen (unbekannte Ids zählen nicht).</summary>
+    private static async Task<List<int>> LoadLibraryIdsAsync(LibraryContext ctx, IReadOnlyList<int> ids, CancellationToken ct)
+    {
+        var result = new List<int>();
+        foreach (var chunk in ids.Chunk(QueryChunkSize))
+        {
+            result.AddRange(await ctx.Files.AsNoTracking()
+                .Where(f => chunk.Contains(f.Id))
+                .Select(f => f.LibraryId)
+                .Distinct()
+                .ToListAsync(ct)
+                .ConfigureAwait(false));
+        }
+
+        return result;
+    }
+
+    /// <summary>Alle Bibliotheken, unter deren Wurzeln (ADR-0020) einer der Ordner liegt — auch bei verschachtelten Wurzeln.</summary>
+    private static async Task<List<int>> LibrariesContainingAsync(LibraryContext ctx, IReadOnlyCollection<string> directories, CancellationToken ct)
+    {
+        if (directories.Count == 0)
+        {
+            return new List<int>();
+        }
+
+        var roots = await ctx.LibraryRoots.AsNoTracking().ToListAsync(ct).ConfigureAwait(false);
+        var normalizedRoots = roots.Select(r => (r.LibraryId, Path: NormalizeDirectoryPath(r.Path))).ToList();
+        var result = new HashSet<int>();
+        foreach (var directory in directories)
+        {
+            var dir = NormalizeDirectoryPath(directory);
+            foreach (var (libraryId, rootPath) in normalizedRoots)
+            {
+                if (IsInsideRoot(dir, rootPath))
+                {
+                    result.Add(libraryId);
+                }
+            }
+        }
+
+        return result.ToList();
+    }
+
+    /// <summary>Noch nicht vorhandene Ordner vom Pfad aufwärts bis zum ersten vorhandenen (die <c>Directory.CreateDirectory</c> anlegen wird).</summary>
+    private static List<string> MissingDirectoryChain(string directory)
+    {
+        var chain = new List<string>();
+        var current = directory;
+        while (!string.IsNullOrEmpty(current) && !Directory.Exists(current))
+        {
+            chain.Add(current);
+            var parent = Path.GetDirectoryName(current);
+            if (string.IsNullOrEmpty(parent) || PathEquals(parent, current))
+            {
+                break;
+            }
+
+            current = parent;
+        }
+
+        return chain;
+    }
+
+    private static void AddAll(IOwnChangeScope own, IEnumerable<string> paths)
+    {
+        foreach (var path in paths)
+        {
+            own.Add(path);
+        }
+    }
+
+    private static void RevokeAll(IOwnChangeScope own, IEnumerable<string> paths)
+    {
+        foreach (var path in paths)
+        {
+            own.Revoke(path);
+        }
     }
 
     private void PublishFoldersChanged(int libraryId)

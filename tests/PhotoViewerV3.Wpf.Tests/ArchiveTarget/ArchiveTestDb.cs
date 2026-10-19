@@ -112,13 +112,15 @@ internal sealed class ArchiveTestDb : IDisposable
         return fullPath;
     }
 
-    public FileOperationService CreateFileOperationService() => new(
+    /// <param name="scanGate">Gemeinsame Scan-Sperre wie in der App (sonst eine eigene).</param>
+    public FileOperationService CreateFileOperationService(PhotoViewerV3.Services.Scanning.IScanGate? scanGate = null) => new(
         Factory,
         Paths,
         new NoRecycleBin(),
         new MediaFormatRegistry(),
         NullLogger<FileOperationService>.Instance,
-        new CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger());
+        new CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger(),
+        scanGate);
 
     public void Dispose()
     {

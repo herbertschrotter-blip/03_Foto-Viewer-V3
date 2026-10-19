@@ -12,6 +12,7 @@ using PhotoViewerV3.Services.Media;
 using PhotoViewerV3.Services.Operations;
 using PhotoViewerV3.Services.Scanning;
 using PhotoViewerV3.Services.Tags;
+using PhotoViewerV3.Services.Watch;
 
 namespace PhotoViewerV3.Tests.Fixtures;
 
@@ -144,17 +145,21 @@ public sealed class TempLibraryFixture : IDisposable
         => CreateScanService().ScanAsync(libraryId, ScanMode.Fresh, null, CancellationToken.None);
 
     /// <summary>ScanService mit dem Messenger der Fixture (Enumerator + BulkWriter + FTS + LibraryService).</summary>
-    public ScanService CreateScanService() => new(
+    /// <param name="scanGate">Gemeinsame Scan-Sperre wie in der App (sonst eine eigene).</param>
+    public ScanService CreateScanService(IScanGate? scanGate = null) => new(
         ContextFactory,
         new FolderEnumerator(Formats, NullLogger<FolderEnumerator>.Instance),
         new BulkScanWriter(),
         new FtsIndexer(),
         CreateLibraryService(),
         NullLogger<ScanService>.Instance,
-        Messenger);
+        Messenger,
+        scanGate);
 
-    public FileOperationService CreateFileOperationService(IRecycleBin? recycleBin = null)
-        => new(ContextFactory, Paths, recycleBin ?? new FakeRecycleBin(), Formats, NullLogger<FileOperationService>.Instance, Messenger);
+    /// <param name="scanGate">Gemeinsame Scan-Sperre wie in der App (sonst eine eigene).</param>
+    /// <param name="ownChanges">Gemeinsame Liste eigener Pfade wie in der App (sonst eine eigene).</param>
+    public FileOperationService CreateFileOperationService(IRecycleBin? recycleBin = null, IScanGate? scanGate = null, IOwnChangeRegistry? ownChanges = null)
+        => new(ContextFactory, Paths, recycleBin ?? new FakeRecycleBin(), Formats, NullLogger<FileOperationService>.Instance, Messenger, scanGate, ownChanges);
 
     public CatalogUpdateService CreateCatalogUpdateService()
         => new(ContextFactory, NullLogger<CatalogUpdateService>.Instance, Messenger);

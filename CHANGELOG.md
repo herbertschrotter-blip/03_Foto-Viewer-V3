@@ -3,6 +3,41 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.17] — 2026-10-19
+
+### Behoben (offene Punkte aus 0.2.14, ADR-0025)
+- **Scan und Datei-Operation derselben Bibliothek schließen sich aus**: jeder Batch des `FileOperationService`
+  (Verschieben, Papierkorb, Umbenennen, Ordner anlegen/umbenennen, Rückgängig) belegt über
+  `IScanGate.AcquireForFileOperationAsync` die beteiligten Bibliotheken (Dateien und Move-Ziel; bei Undo die Wurzeln der
+  protokollierten Pfade), bevor er den Katalog liest, und gibt sie vor der Rückkehr frei. Ein Scan wartet auf das
+  Batch-Ende, ein Batch auf das Scan-Ende (abbrechbar); kein Scan sieht mehr eine verschobene Datei als „fehlt“ + „neu“.
+  Die Datei-Variante löst `IScanGate.Acquired` nicht aus. Entpacken (Papierkorb, dann Scan), Sortierer und
+  „Ins Archiv…“ halten die Sperre beim Scan-Aufruf nie — kein Deadlock.
+- **Kein leerer automatischer Scan nach eigenen Operationen**: neu `Services/Watch/OwnChangeRegistry`
+  (`IOwnChangeRegistry`, Singleton). Vor jedem Dateisystem-Schritt trägt der Batch Quelle, Ziel und neu angelegte
+  Ordner ein — nur Pfade, deren Katalog er mitbucht (ein Ziel außerhalb der Bibliothek der Datei bleibt fremd). Die
+  Ordnerüberwachung verwirft Ereignisse dieser Pfade (bei „Renamed“ nur, wenn beide Pfade eigen sind) bis 10 s nach
+  Batch-Ende. Scheitert Dateisystem- oder Katalog-Schritt, wird der Pfad zurückgenommen und zählt nachträglich als
+  Ereignis; externe Änderungen an anderen Pfaden zählen weiter, auch mitten im Batch. Der Sortierer trägt gelöschte
+  leere Quellordner ebenfalls ein.
+
+### Tests
+- `tests/PhotoViewerV3.Tests`: 394 (+16): `Operations/FileOperationScanGateTests` (7: Move wartet auf laufenden Scan,
+  Scan wartet auf Papierkorb-Batch und sieht sein Ergebnis, Abbruch beim Warten, Ordner-Operationen/Undo/Umbenennen
+  warten, Eingang → Archiv neben parallelen Scans, Entpacken mit Papierkorb + Scan, Sortierer-Lauf + Undo + Scans —
+  jeweils ohne Deadlock und mit konsistentem Katalog), `Watch/LibraryWatchServiceTests.OwnChanges` (4: kein Scan nach
+  eigenem Verschieben in neue Ordner, nach Papierkorb/Umbenennen/Ordner-Operationen/Verschieben aus der Bibliothek/
+  Undo; fremde Datei danach bzw. während des Batches wird erkannt; zurückgenommener Pfad zählt nur unter einer Wurzel),
+  `Watch/OwnChangeRegistryTests` (5). Die beiden „kein Scan“-Tests scheitern ohne die Unterdrückung (gegengeprüft).
+- `tests/PhotoViewerV3.Wpf.Tests`: 140 (+1 `ArchiveTarget/ArchiveMoveServiceGateTests`: „Ins Archiv…“ wartet auf den
+  Scan und gibt die Bibliothek frei).
+- Rauchtest 20/20 OK, 0 WPF-Binding-Fehler; die Ordnerüberwachung scannte im ganzen Lauf nur einmal (Schritt
+  „Datei kopieren“), nicht mehr nach Verschieben, Papierkorb, „Ins Archiv…“ und Sortierer.
+
+### Offen
+- Ein Batch, der auf einen langen Scan wartet, zeigt in der Galerie keinen Hinweis aufs Warten (nur der laufende Scan
+  in der Statusleiste; im Log „Datei-Operation wartet auf den laufenden Scan“).
+
 ## [0.2.16] — 2026-10-19
 
 ### Neu

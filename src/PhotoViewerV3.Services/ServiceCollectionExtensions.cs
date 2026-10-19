@@ -43,7 +43,8 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<BulkScanWriter>();
         services.TryAddSingleton<FtsIndexer>();
         services.TryAddSingleton<FolderEnumerator>();
-        services.TryAddSingleton<IScanGate, ScanGate>(); // nie zwei Scans derselben Bibliothek (ScanService + Ordnerüberwachung)
+        services.TryAddSingleton<IScanGate, ScanGate>(); // nie zwei Scans derselben Bibliothek, nie Scan neben Datei-Batch
+        services.TryAddSingleton<IOwnChangeRegistry>(_ => new OwnChangeRegistry()); // eigene Schreibvorgänge für die Ordnerüberwachung
         services.TryAddSingleton<IScanService, ScanService>();
 
         // Thumbnails — Video-Renderer (FFmpeg) ist WPF-frei und lebt hier; derselbe FFmpeg-Wrapper

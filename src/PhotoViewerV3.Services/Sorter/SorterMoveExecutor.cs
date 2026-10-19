@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using PhotoViewerV3.Services.Operations;
+using PhotoViewerV3.Services.Watch;
 
 namespace PhotoViewerV3.Services.Sorter;
 
@@ -8,7 +9,9 @@ namespace PhotoViewerV3.Services.Sorter;
 /// (ADR-0012: Protokoll + Undo): je Zielordner ein <c>MoveAsync</c>, Dedup-Umbenennungen (Flatten) als
 /// vorgeschaltetes <c>RenameAsync</c>. Angelegte Zielordner und gelöschte leere Quellordner werden im
 /// Lauf-Protokoll festgehalten; „Rückgängig“ nimmt alle Batches in umgekehrter Reihenfolge zurück und
-/// entfernt leer gewordene angelegte Ordner.
+/// entfernt leer gewordene angelegte Ordner. Gelöschte leere Ordner stehen kurz in der <see cref="IOwnChangeRegistry"/>
+/// (kein automatischer Scan der Ordnerüberwachung dafür). Der Executor hält nie die Scan-Sperre selbst — die belegt der
+/// <see cref="IFileOperationService"/> je Batch und gibt sie vor der Rückkehr frei.
 /// </summary>
 public sealed class SorterMoveExecutor
 {
@@ -16,17 +19,21 @@ public sealed class SorterMoveExecutor
     private readonly SorterRunLog _runLog;
     private readonly SorterCatalog _catalog;
     private readonly ILogger<SorterMoveExecutor> _logger;
+    private readonly IOwnChangeRegistry _ownChanges;
 
+    /// <param name="ownChanges">Optional (Tests); produktiv der Singleton, den die Ordnerüberwachung abfragt.</param>
     public SorterMoveExecutor(
         IFileOperationService fileOps,
         SorterRunLog runLog,
         SorterCatalog catalog,
-        ILogger<SorterMoveExecutor> logger)
+        ILogger<SorterMoveExecutor> logger,
+        IOwnChangeRegistry? ownChanges = null)
     {
         _fileOps = fileOps;
         _runLog = runLog;
         _catalog = catalog;
         _logger = logger;
+        _ownChanges = ownChanges ?? new OwnChangeRegistry();
     }
 
     public async Task<SorterExecutionResult> ExecuteAsync(
@@ -285,12 +292,15 @@ public sealed class SorterMoveExecutor
             return false;
         }
 
+        using var own = _ownChanges.Begin();
+        own.Add(folder);
         try
         {
             Directory.Delete(folder);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            own.Revoke(folder);
             _logger.LogWarning(ex, "Leerer Ordner konnte nicht gelöscht werden: {Folder}", folder);
             return false;
         }

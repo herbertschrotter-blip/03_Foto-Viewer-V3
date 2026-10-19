@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Logging.Abstractions;
 using PhotoViewerV3.Services.Library;
 using PhotoViewerV3.Services.Messaging;
+using PhotoViewerV3.Services.Operations;
 using PhotoViewerV3.Services.Scanning;
 using PhotoViewerV3.Services.Watch;
 using PhotoViewerV3.Tests.Fixtures;
@@ -31,6 +32,9 @@ public sealed partial class LibraryWatchServiceTests
 
         /// <summary>Gemeinsame Scan-Sperre wie in der App (ScanService-Singleton und Ordnerüberwachung).</summary>
         public ScanGate Gate { get; } = new();
+
+        /// <summary>Gemeinsame Liste eigener Pfade wie in der App (FileOperationService und Ordnerüberwachung).</summary>
+        public OwnChangeRegistry OwnChanges { get; } = new();
 
         public IReadOnlyList<WatchStatus> Statuses
         {
@@ -72,7 +76,11 @@ public sealed partial class LibraryWatchServiceTests
             NullLogger<LibraryWatchService>.Instance,
             Fixture.Messenger,
             rootRetryInterval: TimeSpan.FromMilliseconds(400),
-            scanGate: Gate);
+            scanGate: Gate,
+            ownChanges: OwnChanges);
+
+        /// <summary>FileOperationService wie in der App: dieselbe Scan-Sperre und dieselbe Liste eigener Pfade.</summary>
+        public FileOperationService CreateFileOperations() => Fixture.CreateFileOperationService(scanGate: Gate, ownChanges: OwnChanges);
 
         public string WriteFile(string relativePath) => Fixture.WriteLibraryFile(relativePath);
 
