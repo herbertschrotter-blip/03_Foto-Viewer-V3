@@ -42,7 +42,8 @@ internal sealed record ScanRoot(int Id, string Path, LibraryRootRole Role);
 /// (PLAN Kap. 12), dann je nach Modus
 /// <list type="bullet">
 /// <item>Fresh/ClearAndRescan: alle Wurzeln müssen erreichbar sein (ein Offline-Laufwerk darf den Katalog nie
-/// leeren); (optional Katalog leeren,) jede Wurzel traversieren, Folders (mit RootId) + Files via Raw-SQLite
+/// leeren); (optional Katalog leeren — Favoriten, Bewertungen und Tags übernimmt <see cref="UserDataCarryOver"/>,
+/// ADR-0023,) jede Wurzel traversieren, Folders (mit RootId) + Files via Raw-SQLite
 /// Bulk-Insert persistieren, FTS5 komplett aufbauen;</item>
 /// <item>Incremental: je Wurzel ein Diff gegen den Katalog mit stabilen FileIds, Offline- und Mass-Missing-Guard
 /// je Wurzel (<see cref="IncrementalScanRunner"/>); eine nicht erreichbare Wurzel wird übersprungen, die übrigen
@@ -262,7 +263,9 @@ public sealed class ScanService : IScanService
             }
         }
 
-        // 3) ClearAndRescan: bestehende Katalogdaten dieser Library löschen (FileIds werden neu vergeben)
+        // 3) ClearAndRescan: Favoriten/Bewertungen/Tags sichern (ADR-0023), dann bestehende Katalogdaten dieser
+        //    Library löschen (FileIds werden neu vergeben)
+        using var carryOver = mode == ScanMode.ClearAndRescan ? CaptureUserData(libraryId) : null;
         if (mode == ScanMode.ClearAndRescan)
         {
             reporter.Report(new ScanProgress(0, 0, 0, null) { Phase = ScanPhase.Clearing }, force: true);
@@ -399,6 +402,11 @@ public sealed class ScanService : IScanService
                     "Files insert: {In}/{At} in {Sec:N2} s",
                     fileReport.Inserted, fileReport.Attempted, fileReport.Duration.TotalSeconds);
 
+                if (carryOver is not null)
+                {
+                    RestoreUserData(carryOver, libraryId);
+                }
+
                 reporter.Report(new ScanProgress(folderRows.Count, fileRows.Count, totalBytes, null) { Phase = ScanPhase.Indexing }, force: true);
                 ftsReport = _ftsIndexer.PopulateAll(connection);
                 ftsPopulated = true;
@@ -433,6 +441,26 @@ public sealed class ScanService : IScanService
             Mode = mode,
             RootsScanned = roots.Count,
         };
+    }
+
+    // ---- Neu aufbauen: Benutzerdaten übernehmen (ADR-0023) ---------------------------------------
+
+    private UserDataCarryOver CaptureUserData(int libraryId)
+    {
+        var carry = UserDataCarryOver.Capture(_contextFactory, libraryId);
+        _logger.LogInformation(
+            "Benutzerdaten gesichert: Library={LibraryId} — {Files} Dateien mit Favorit/Bewertung/Tags, {Tags} Tag-Zuweisungen in {Ms:N0} ms",
+            libraryId, carry.CapturedFiles, carry.CapturedTagAssignments, carry.CaptureDuration.TotalMilliseconds);
+        return carry;
+    }
+
+    /// <summary>Direkt nach dem Bulk-Insert, vor dem FTS-Aufbau; ein Fehler rollt den Scan wie jeder Persistenzfehler zurück.</summary>
+    private void RestoreUserData(UserDataCarryOver carry, int libraryId)
+    {
+        var report = carry.Restore();
+        _logger.LogInformation(
+            "Benutzerdaten übernommen: Library={LibraryId} — {Restored}/{Captured} Dateien ({Values} mit Favorit/Bewertung, {Tags} Tag-Zuweisungen), {Lost} nicht mehr vorhanden, in {Ms:N0} ms",
+            libraryId, report.RestoredFiles, report.CapturedFiles, report.FavoritesOrRatingsRestored, report.TagAssignmentsRestored, report.LostFiles, report.Duration.TotalMilliseconds);
     }
 
     // ---- Gemeinsame Helfer ----------------------------------------------------------------------

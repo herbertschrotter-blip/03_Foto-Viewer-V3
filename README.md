@@ -63,8 +63,9 @@ Eine portable Auslieferung (`dotnet publish`) gibt es noch nicht; die App läuft
 ### Bibliothek
 - **Neue Bibliothek…** → Foto-Ordner wählen, Namen vergeben, auf Nachfrage sofort scannen.
 - Je Bibliothek: **Scannen** (leerer Katalog) bzw. **Aktualisieren** (Incremental: neue, geänderte, fehlende und wieder
-  vorhandene Dateien; Ids, Favoriten, Bewertungen, Vorschaubilder bleiben), **Neu aufbauen** (Katalog komplett neu,
-  Favoriten und Bewertungen gehen verloren), **Aktiv setzen**, Umbenennen, Entfernen (löscht keine Dateien auf der
+  vorhandene Dateien; Ids, Favoriten, Bewertungen, Vorschaubilder bleiben), **Neu aufbauen** (Katalog komplett neu mit
+  neuen Ids und Vorschaubildern; Favoriten, Bewertungen und Tags werden für Dateien übernommen, die noch am selben Ort
+  liegen — gelöschte, verschobene oder umbenannte Dateien verlieren sie), **Aktiv setzen**, Umbenennen, Entfernen (löscht keine Dateien auf der
   Platte).
 - Während eines Scans: Fortschrittspanel (Ordner, Dateien, Größe, Pfad, Dauer) mit **Abbrechen**; danach eine
   Zusammenfassung. Bei nicht erreichbarem Ordner: Dialog „Bibliothek offline“ ([Erneut prüfen] [Andere Bibliothek
@@ -120,7 +121,7 @@ Knopf **Tags** in der Aktionsleiste oder Rechtsklick — Häkchen = alle ausgew�
 Häkchen für eine gemischte Auswahl. Die Kachel zeigt je Tag einen farbigen Punkt (Hover = Namen). Das Dropdown **Tags**
 neben den Filter-Pills filtert nach einem oder mehreren Tags — „mindestens eines“ (ODER), „alle“ (UND) oder „nur
 Dateien ohne Tag“. Die Suche findet neben Dateinamen auch Dateien, deren Tag-Name den Suchtext enthält. Tags hängen am
-Katalog-Eintrag: „Aktualisieren“ behält sie, „Neu aufbauen“ und der Papierkorb entfernen die Zuweisungen.
+Katalog-Eintrag: „Aktualisieren“ und „Neu aufbauen“ (über den Pfad) behalten sie, der Papierkorb entfernt die Zuweisungen.
 
 #### Listenansicht
 Der Umschalter rechts in der Kopfzeile wechselt zwischen Kachel-Grid und Liste (die Wahl bleibt gespeichert). Die

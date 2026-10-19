@@ -239,9 +239,9 @@ public sealed partial class LibraryViewModel : ObservableObject
 
         var ok = await _dialogs.ConfirmAsync(
             "Bibliothek neu aufbauen?",
-            "Alle Katalogdaten dieser Bibliothek werden gelöscht und neu aufgebaut; Favoriten, Bewertungen und " +
-            "Vorschaubilder gehen dabei verloren.\n\n" +
-            "Tipp: „Aktualisieren“ übernimmt nur Änderungen und behält Favoriten und Bewertungen.",
+            "Der Katalog dieser Bibliothek wird gelöscht und neu aufgebaut; Vorschaubilder werden neu erzeugt. " +
+            "Favoriten, Bewertungen und Tags bleiben für Dateien erhalten, die noch am selben Ort liegen.\n\n" +
+            "Tipp: „Aktualisieren“ übernimmt nur Änderungen und ist deutlich schneller.",
             "Neu aufbauen",
             isDestructive: true).ConfigureAwait(true);
         if (!ok)

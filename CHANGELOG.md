@@ -3,6 +3,39 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.12] — 2026-10-19
+
+### Behoben
+- **„Neu aufbauen“ übernimmt Favoriten, Bewertungen und Tags** (ADR-0023): `Services/Scanning/UserDataCarryOver`
+  sichert vor dem Leeren alle Dateien mit Favorit, Bewertung oder Tag in TEMP-Tabellen einer eigenen Verbindung und
+  schreibt sie nach dem Bulk-Insert (vor dem FTS-Aufbau, eine Schreibtransaktion) auf die neuen FileIds zurück —
+  mengenbasiert per INSERT…SELECT / UPDATE…FROM. Schlüssel wie beim Incremental-Scan (ADR-0019): voller Ordnerpfad +
+  Dateiname ohne Groß-/Kleinschreibung (Unicode), damit über alle Wurzeln eindeutig; keine Prüfung von
+  Größe/Änderungszeit (eine nachbearbeitete Datei behält ihre Daten wie beim Aktualisieren). Dateien, die nach dem
+  Neuscan nicht mehr am selben Pfad liegen, verlieren ihre Daten; die Tabelle `Tags` bleibt unberührt, Thumbnails und
+  Suchindex werden wie bisher neu aufgebaut. Ein Fehler beim Zurückschreiben rollt den Scan wie jeder Persistenzfehler
+  zurück. `ScanService` ruft die Klasse mit wenigen Zeilen im ClearAndRescan-Pfad auf und protokolliert beide Schritte.
+- Bestätigungsdialog und Tooltip „Neu aufbauen“ (Bibliotheksseite) nennen jetzt, was erhalten bleibt.
+- ADR-0019 (Punkt „Neu aufbauen“) und ADR-0021 (Konsequenz „Tags gehen verloren“) mit Statusvermerk auf ADR-0023.
+
+### Messung
+- Synthetischer Katalog, schlechtester Fall (jede Datei mit Bewertung, jede zweite Favorit, jede zehnte zwei Tags,
+  jede hundertste in anderer Schreibweise zurück): **500 000 Dateien — Sichern 1,9 s, Zurückschreiben 2,6–3,9 s**;
+  200 000 Dateien — 0,8 s / 1,0 s (`PV3_CARRYOVER_ROWS=500000 dotnet test … --filter Mengen_Messung`). Ein Filter auf
+  `Files.LibraryId` in der Zuordnung lenkte den Planer auf `IX_Files_Library_Folder` (7,6 s bei 200k) — entfernt.
+
+### Tests
+- `tests/PhotoViewerV3.Tests`: +5 `Scanning/ClearAndRescanUserDataTests` (zwei Wurzeln + gleichnamige Dateien in
+  verschiedenen Ordnern, entfernte Datei verliert ihre Daten und Tags bleiben, Umbenennung nur in
+  Groß-/Kleinschreibung, FTS-/Thumbnail-Konsistenz, Mengen-Messung mit 20 000 Dateien).
+- Rauchtest, Schritt „Aktualisieren + Neu aufbauen“: prüft, dass Favoriten und Bewertungen (Pfad + Werte) nach
+  ClearAndRescan identisch sind (statt bisher „Favoriten verworfen“).
+
+### Offen
+- Abbruch während der Enumeration von „Neu aufbauen“ hinterlässt wie bisher einen leeren Katalog — jetzt samt
+  verlorener Benutzerdaten (die Sicherung lebt nur in der Verbindung). Besser: erst nach der Enumeration sichern und
+  leeren (Start-Ids vorher lesen); betrifft die Reihenfolge in `ScanService.RunFullScanAsync`.
+
 ## [0.2.11] — 2026-10-19
 
 ### Geändert

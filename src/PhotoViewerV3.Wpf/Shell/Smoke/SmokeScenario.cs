@@ -51,7 +51,7 @@ internal sealed class SmokeCheckException : Exception
 /// Verschieben/Rückgängig, Papierkorb), Lightbox (Bild + Video), Ordnerbaum, Einstellungen (Cache, Theme), zum
 /// Schluss der zweite Scan: „Aktualisieren“ = Incremental mit stabilen FileIds (ohne Änderung, mit neuer und
 /// fehlender Datei, wieder vorhanden) und „Neu aufbauen“ = ClearAndRescan über
-/// <see cref="LibraryViewModel.RunSmokeRebuildAsync"/> (neue FileIds, Favoriten weg, Thumbnails neu).
+/// <see cref="LibraryViewModel.RunSmokeRebuildAsync"/> (neue FileIds, Favoriten/Bewertungen übernommen, Thumbnails neu).
 /// Läuft auf dem UI-Thread (alle awaits bleiben im Dispatcher-Kontext) und steuert ausschließlich ViewModels,
 /// Commands und Messenger — keine Maus-/Tastatureingaben. Jeder Schritt prüft Dateisystem und DB; Dialoge und
 /// Ordnerauswahl sind Fakes (<see cref="SmokeTestRunner.ConfigureServices"/>), das Scan-Ergebnis kommt als
@@ -871,7 +871,7 @@ internal sealed class SmokeScenario
     /// Zweiter Scan einer bestehenden Bibliothek ist „Aktualisieren“ (Incremental, stabile FileIds): (1) ohne Änderung
     /// auf der Platte, (2) mit einer neuen und einer vorübergehend entfernten Datei (Added + MarkedMissing, „fehlt“-Badge,
     /// Favoriten bleiben), (3) Datei wieder da (Reappeared). Danach „Neu aufbauen“ (ClearAndRescan über
-    /// <see cref="LibraryViewModel.RunSmokeRebuildAsync"/>): neue FileIds, Favoriten weg, Thumbnails neu.
+    /// <see cref="LibraryViewModel.RunSmokeRebuildAsync"/>): neue FileIds, Favoriten/Bewertungen übernommen, Thumbnails neu.
     /// </summary>
     private async Task RescanAsync()
     {
@@ -950,6 +950,11 @@ internal sealed class SmokeScenario
             "„fehlt“-Badge nach Rückkehr der Datei weg").ConfigureAwait(true);
 
         // (4) Neu aufbauen: ClearAndRescan vergibt neue FileIds (sqlite_sequence) — erst wenn die Galerie die neuen Ids zeigt, ist sie umgestellt.
+        //     Favoriten und Bewertungen hängen am Pfad und werden übernommen (ADR-0023).
+        const string userDataSql = "SELECT d.Path, f.Name, f.IsFavorite, f.Rating FROM Files f JOIN Folders d ON d.Id = f.FolderId " +
+                                   "WHERE f.LibraryId = $lib AND (f.IsFavorite = 1 OR f.Rating IS NOT NULL) ORDER BY d.Path, f.Name";
+        var userDataBefore = await DbRowsAsync(userDataSql, ("$lib", _libraryId)).ConfigureAwait(true);
+        Check(userDataBefore.Count > 0, $"vor ClearAndRescan: {userDataBefore.Count} Dateien mit Favorit/Bewertung");
         var previousMaxId = await DbScalarAsync<int>("SELECT COALESCE(MAX(Id), 0) FROM Files").ConfigureAwait(true);
         _navigation.NavigateTo(NavigationTags.Library);
         await WaitUntilAsync(() => _navigation.CurrentTag == NavigationTags.Library, ShortWait, "Bibliotheksseite").ConfigureAwait(true);
@@ -965,9 +970,9 @@ internal sealed class SmokeScenario
             $"Galerie nach ClearAndRescan: {_mediaCount} Dateien mit neuen Ids (> {previousMaxId})").ConfigureAwait(true);
         var files = await DbScalarAsync<int>("SELECT COUNT(*) FROM Files WHERE LibraryId = $lib", ("$lib", _libraryId)).ConfigureAwait(true);
         var fts = await DbScalarAsync<int>("SELECT COUNT(*) FROM FilesFts").ConfigureAwait(true);
-        var favorites = await DbScalarAsync<int>("SELECT COUNT(*) FROM Files WHERE IsFavorite = 1").ConfigureAwait(true);
         Check(files == _mediaCount && fts == files, $"DB nach ClearAndRescan: {files} Files, {fts} FTS-Zeilen");
-        Check(favorites == 0, "ClearAndRescan hat Favoriten verworfen (Katalog komplett neu — „Aktualisieren“ behält sie)");
+        var userDataAfter = await DbRowsAsync(userDataSql, ("$lib", _libraryId)).ConfigureAwait(true);
+        Check(userDataAfter.SequenceEqual(userDataBefore), $"ClearAndRescan hat Favoriten/Bewertungen übernommen ({userDataAfter.Count}/{userDataBefore.Count} Dateien, gleiche Werte)");
 
         await WaitUntilAsync(
             () => _gallery.CurrentPage.Count > 0 && _gallery.CurrentPage.All(i => i.Thumbnail is not null),

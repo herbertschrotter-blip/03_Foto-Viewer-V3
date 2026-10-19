@@ -1,6 +1,6 @@
 # ADR-0019: Incremental-Scan — Identität Ordner+Name, Missing statt Löschen, Mass-Missing-Guard
 
-- **Status:** Accepted
+- **Status:** Accepted (Punkt „ClearAndRescan … Favoriten und Bewertungen gehen verloren“ abgelöst durch ADR-0023, 0.2.14)
 - **Datum:** 2026-10-19
 - **Entscheider:** Herbert Schrotter, Claude
 - **Bezogen auf:** ADR-0003 (Catalog-Modell), ADR-0007 (Thumbnail-Scheduling), ADR-0009 (Cache-Strategie), ADR-0011 (FTS-Pflege), PLAN Kap. 12
