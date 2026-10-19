@@ -164,6 +164,29 @@
                 </Grid>
             </Border>
 
+            <!-- Ordnerüberwachung (Services/Watch) -->
+            <Border Style="{StaticResource SectionCard}">
+                <StackPanel>
+                    <ui:TextBlock Style="{StaticResource SectionTitle}" Text="Ordnerüberwachung" />
+                    <ui:ToggleSwitch Content="Bibliotheksordner überwachen"
+                                     IsChecked="{Binding IsWatchEnabled, Mode=TwoWay}"
+                                     AutomationProperties.Name="Bibliotheksordner überwachen" />
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0" IsEnabled="{Binding IsWatchEnabled}">
+                        <TextBlock Style="{StaticResource Label}" Text="Ruhezeit" />
+                        <ui:NumberBox Value="{Binding WatchQuietSeconds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                      Minimum="{Binding WatchQuietMinSeconds, Mode=OneTime}"
+                                      Maximum="{Binding WatchQuietMaxSeconds, Mode=OneTime}"
+                                      SmallChange="1" LargeChange="5" MaxDecimalPlaces="0"
+                                      SpinButtonPlacementMode="Inline" Width="140"
+                                      AutomationProperties.Name="Ruhezeit in Sekunden" />
+                        <TextBlock Style="{StaticResource Label}" Text="Sekunden (1–60)" Margin="8,0,0,0" />
+                    </StackPanel>
+                    <TextBlock Margin="0,8,0,0" FontSize="12" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Text="Änderungen in den Bibliotheksordnern (neue, gelöschte, umbenannte Fotos und Videos) lösen nach der Ruhezeit ohne weitere Änderungen automatisch „Aktualisieren“ aus. Läuft bereits ein Scan, wird danach erneut geprüft. Meldet der Scan eine Bestätigung (viele fehlende Dateien) oder eine Bibliothek offline, bleibt die Automatik bis zum nächsten manuellen „Aktualisieren“ angehalten." />
+                </StackPanel>
+            </Border>
+
             <!-- Über -->
             <Border Style="{StaticResource SectionCard}">
                 <StackPanel>

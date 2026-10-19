@@ -8,6 +8,7 @@ using PhotoViewerV3.Services;
 using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Infrastructure;
 using PhotoViewerV3.Services.Thumbnails;
+using PhotoViewerV3.Services.Watch;
 using PhotoViewerV3.Lightbox;
 using PhotoViewerV3.Settings;
 using PhotoViewerV3.Shell;
@@ -131,6 +132,16 @@ public partial class App : Application
             catch (Exception themeEx)
             {
                 Log.Warning(themeEx, "Theme konnte nicht angewendet werden — Standard-Theme bleibt aktiv");
+            }
+
+            // Ordnerüberwachung (Services/Watch): Einstellungen lesen, aktive Bibliothek überwachen; Stop über Dispose beim Beenden
+            try
+            {
+                await _host.Services.GetRequiredService<ILibraryWatchService>().StartAsync().ConfigureAwait(true);
+            }
+            catch (Exception watchEx)
+            {
+                Log.Warning(watchEx, "Ordnerüberwachung konnte nicht gestartet werden");
             }
 
             var mainWindow = _host.Services.GetRequiredService<MainWindow>();

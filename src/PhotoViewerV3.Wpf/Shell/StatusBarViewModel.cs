@@ -13,6 +13,7 @@ using PhotoViewerV3.Services.Messaging;
 using PhotoViewerV3.Services.Operations;
 using PhotoViewerV3.Services.Scanning;
 using PhotoViewerV3.Services.Thumbnails;
+using PhotoViewerV3.Services.Watch;
 
 namespace PhotoViewerV3.Shell;
 
@@ -79,6 +80,9 @@ public sealed partial class StatusBarViewModel : ObservableObject, IDisposable
         _resultTimer = new DispatcherTimer(ResultDisplayDuration, DispatcherPriority.Background, OnResultTick, dispatcher);
         _resultTimer.Stop();
         _recoveryTimer = new DispatcherTimer(RecoveryPollInterval, DispatcherPriority.Background, (_, _) => _ = RefreshRecoveryAsync(), dispatcher);
+        _watchTimer = new DispatcherTimer(WatchTickInterval, DispatcherPriority.Background, OnWatchTick, dispatcher);
+        _watchTimer.Stop();
+        _messenger.Register<StatusBarViewModel, WatchStatusChangedMessage>(this, static (r, m) => UiThread.Post(() => r.OnWatchStatus(m.Status)));
 
         _messenger.Register<StatusBarViewModel, ScanProgressMessage>(this, static (r, m) => UiThread.Post(() => r.OnScanProgress(m)));
         _messenger.Register<StatusBarViewModel, ScanCompletedMessage>(this, static (r, m) => UiThread.Post(() => r.OnScanCompleted(m)));
@@ -270,11 +274,78 @@ public sealed partial class StatusBarViewModel : ObservableObject, IDisposable
         BackgroundActivityText = IsBackgroundActive ? "Hintergrund: " + string.Join(" · ", parts) : null;
     }
 
+    // ---- Ordnerüberwachung (Services/Watch): Hinweis „Änderungen erkannt — Aktualisierung in n s“ ------------------
+
+    private static readonly TimeSpan WatchTickInterval = TimeSpan.FromSeconds(1);
+    private readonly DispatcherTimer _watchTimer;
+    private WatchStatus _watchStatus = WatchStatus.Off;
+    private DateTime? _watchClearAtUtc;
+
+    /// <summary>Hinweis der Ordnerüberwachung (Countdown, laufender/abgeschlossener automatischer Scan, Sperre); null = nichts.</summary>
+    [ObservableProperty] private string? _watchText;
+
+    /// <summary>true bei angehaltener Automatik (Warnsymbol statt Sync-Symbol).</summary>
+    [ObservableProperty] private bool _watchIsWarning;
+
+    private void OnWatchStatus(WatchStatus status)
+    {
+        _watchStatus = status;
+        _watchClearAtUtc = null;
+        _watchTimer.Stop();
+        WatchIsWarning = status.State == WatchState.Blocked;
+        switch (status.State)
+        {
+            case WatchState.ChangesPending:
+                UpdateWatchCountdown();
+                _watchTimer.Start();
+                break;
+            case WatchState.Scanning:
+                WatchText = "Automatische Aktualisierung läuft…";
+                break;
+            case WatchState.Blocked:
+                WatchText = $"Automatische Aktualisierung angehalten: {status.Reason}";
+                break;
+            case WatchState.Idle when status.LastAutoScan is { } r:
+                WatchText = r.HasChanges
+                    ? $"Automatisch aktualisiert: {r.Added:N0} neu · {r.Modified:N0} geändert · {r.MarkedMissing:N0} fehlend · {r.Reappeared:N0} wieder da"
+                    : "Automatisch aktualisiert: keine Änderungen";
+                _watchClearAtUtc = DateTime.UtcNow + ResultDisplayDuration;
+                _watchTimer.Start();
+                break;
+            default:
+                WatchText = null;
+                break;
+        }
+    }
+
+    private void OnWatchTick(object? sender, EventArgs e)
+    {
+        if (_watchStatus.State == WatchState.ChangesPending)
+        {
+            UpdateWatchCountdown();
+            return;
+        }
+
+        if (_watchClearAtUtc is { } clearAt && DateTime.UtcNow >= clearAt)
+        {
+            _watchTimer.Stop();
+            _watchClearAtUtc = null;
+            WatchText = null;
+        }
+    }
+
+    private void UpdateWatchCountdown()
+    {
+        var remaining = _watchStatus.ScanDueAtUtc is { } due ? Math.Max(0, (int)Math.Ceiling((due - DateTime.UtcNow).TotalSeconds)) : 0;
+        WatchText = $"Änderungen erkannt — Aktualisierung in {remaining} s";
+    }
+
     public void Dispose()
     {
         _thumbnailTimer.Stop();
         _resultTimer.Stop();
         _recoveryTimer.Stop();
+        _watchTimer.Stop();
         _messenger.UnregisterAll(this);
     }
 }

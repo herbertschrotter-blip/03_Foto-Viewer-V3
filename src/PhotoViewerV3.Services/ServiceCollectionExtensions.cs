@@ -10,6 +10,7 @@ using PhotoViewerV3.Services.Operations;
 using PhotoViewerV3.Services.Scanning;
 using PhotoViewerV3.Services.Sorter;
 using PhotoViewerV3.Services.Thumbnails;
+using PhotoViewerV3.Services.Watch;
 
 namespace PhotoViewerV3.Services;
 
@@ -54,6 +55,9 @@ public static class ServiceCollectionExtensions
         services.AddOperations();
         services.AddCatalog();
         services.AddSorter();
+
+        // Ordnerüberwachung (Services/Watch): FileSystemWatcher je Wurzel → Incremental-Scan nach Ruhezeit
+        services.AddWatch();
 
         return services;
     }

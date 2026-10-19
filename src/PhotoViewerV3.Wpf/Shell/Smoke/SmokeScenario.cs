@@ -21,6 +21,7 @@ using PhotoViewerV3.Services.Media;
 using PhotoViewerV3.Services.Messaging;
 using PhotoViewerV3.Services.Scanning;
 using PhotoViewerV3.Services.Thumbnails;
+using PhotoViewerV3.Services.Watch;
 using PhotoViewerV3.Settings;
 using PhotoViewerV3.Gallery.Data;
 using PhotoViewerV3.Gallery.ViewModels;
@@ -84,6 +85,10 @@ internal sealed class SmokeScenario
     private readonly StatusBarViewModel _statusBar;
     private readonly SmokeFolderPickerService _picker;
     private readonly IAppDataPaths _paths;
+    private readonly ILibraryWatchService _watch;
+
+    /// <summary>Datei, die der Ordnerüberwachungs-Schritt kopiert und wieder löscht (Rückstand nur nach einem Abbruch).</summary>
+    private const string WatchedFileName = "smoke-watch.jpg";
 
     private int _libraryId;
     private int _mediaCount;
@@ -113,6 +118,7 @@ internal sealed class SmokeScenario
         _statusBar = services.GetRequiredService<StatusBarViewModel>();
         _picker = services.GetRequiredService<SmokeFolderPickerService>();
         _paths = services.GetRequiredService<IAppDataPaths>();
+        _watch = services.GetRequiredService<ILibraryWatchService>();
         _messenger.Register<SmokeScenario, ScanCompletedMessage>(this, static (r, m) => r._lastScan = m.Result);
     }
 
@@ -126,6 +132,25 @@ internal sealed class SmokeScenario
     public async Task RunAsync()
     {
         RemoveLeftovers();
+        // Ordnerüberwachung (Services/Watch) erst im eigenen Schritt am Ende: die manuellen Scans und Datei-Operationen der
+        // übrigen Schritte dürfen keinen automatischen Diff-Scan auslösen (Zähler-Prüfungen, kein paralleler Scan).
+        // Die Einstellungen des Benutzers werden am Ende wiederhergestellt (der Rauchtest läuft ohnehin gegen ein eigenes AppData).
+        var watchEnabledBefore = _watch.IsEnabled;
+        var watchQuietBefore = _watch.QuietPeriod;
+        await _watch.SetEnabledAsync(false).ConfigureAwait(true);
+        try
+        {
+            await RunStepsAsync().ConfigureAwait(true);
+        }
+        finally
+        {
+            await _watch.SetQuietPeriodAsync(watchQuietBefore).ConfigureAwait(true);
+            await _watch.SetEnabledAsync(watchEnabledBefore).ConfigureAwait(true);
+        }
+    }
+
+    private async Task RunStepsAsync()
+    {
         await StepAsync("Start → Startseite", StartPageAsync).ConfigureAwait(true);
         await StepAsync("Bibliothek anlegen + Fresh-Scan", FreshScanAsync).ConfigureAwait(true);
         await StepAsync("Thumbnails JPG/PNG/MP4/MOV", ThumbnailsAsync).ConfigureAwait(true);
@@ -141,6 +166,7 @@ internal sealed class SmokeScenario
         await StepAsync("Ordnerbaum-Seite", FolderPageAsync).ConfigureAwait(true);
         await StepAsync("Einstellungen + Theme", SettingsAsync).ConfigureAwait(true);
         await StepAsync("Aktualisieren (Incremental) + Neu aufbauen (ClearAndRescan)", RescanAsync).ConfigureAwait(true);
+        await StepAsync("Ordnerüberwachung: Datei kopieren → automatischer Diff-Scan → Galerie", WatchAsync).ConfigureAwait(true);
         if (_cleanup)
         {
             await StepAsync("Cleanup", CleanupAsync).ConfigureAwait(true);
@@ -154,6 +180,12 @@ internal sealed class SmokeScenario
     private void RemoveLeftovers()
     {
         var unsorted = Path.Combine(_root, "Unsortiert");
+        var watched = Path.Combine(unsorted, WatchedFileName);
+        if (File.Exists(watched))
+        {
+            File.Delete(watched); // Rückstand des Ordnerüberwachungs-Schritts nach einem Abbruch
+        }
+
         var leftover = Path.Combine(unsorted, AddedFileName);
         if (File.Exists(leftover))
         {
@@ -764,6 +796,74 @@ internal sealed class SmokeScenario
             "Thumbnails nach ClearAndRescan (neue FileIds)").ConfigureAwait(true);
         var generated = await DbScalarAsync<int>("SELECT COUNT(*) FROM Thumbnails WHERE Status = 2").ConfigureAwait(true);
         Check(generated == _mediaCount, $"Thumbnails neu erzeugt: {generated}/{_mediaCount}");
+    }
+
+    /// <summary>
+    /// Ordnerüberwachung (Services/Watch): Ruhezeit 1 s, einschalten, Datei nach „Unsortiert“ kopieren → Statusleiste
+    /// „Änderungen erkannt — Aktualisierung in n s“ → automatischer Incremental-Scan (Added 1) → Galerie zeigt die Datei;
+    /// danach löschen → automatischer Scan (MarkedMissing 1) → „fehlt“-Badge. Einstellungen bleiben gespeichert (an, 1 s).
+    /// </summary>
+    private async Task WatchAsync()
+    {
+        await _watch.SetQuietPeriodAsync(TimeSpan.FromSeconds(1)).ConfigureAwait(true);
+        await _watch.SetEnabledAsync(true).ConfigureAwait(true);
+        await WaitUntilAsync(() => _watch.Status is { State: WatchState.Idle } s && s.LibraryId == _libraryId, ShortWait, "Überwachung der aktiven Bibliothek aktiv").ConfigureAwait(true);
+        Check(_watch.IsEnabled && _watch.QuietPeriod == TimeSpan.FromSeconds(1), "Einstellungen gespeichert: an, Ruhezeit 1 s");
+
+        var unsorted = Path.Combine(_root, "Unsortiert");
+        var source = Directory.EnumerateFiles(unsorted, "*.jpg")
+            .Where(f => !PathEquals(Path.GetFileName(f), WatchedFileName) && !PathEquals(Path.GetFileName(f), AddedFileName))
+            .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
+            .First();
+        var target = Path.Combine(unsorted, WatchedFileName);
+
+        // (1) Kopie → Countdown → automatischer Diff-Scan → Galerie
+        var sawCountdown = false;
+        var sawResult = false;
+        _lastScan = null;
+        File.Copy(source, target, overwrite: true);
+        await WaitUntilAsync(
+            () =>
+            {
+                sawCountdown |= _statusBar.WatchText?.StartsWith("Änderungen erkannt", StringComparison.Ordinal) == true;
+                return _lastScan is { Mode: ScanMode.Incremental, Outcome: ScanOutcome.Completed, Added: 1 };
+            },
+            ShortWait,
+            "automatischer Incremental-Scan nach der Kopie").ConfigureAwait(true);
+        Check(sawCountdown, "Statusleiste zeigte „Änderungen erkannt — Aktualisierung in n s“");
+        _mediaCount++;
+        await WaitUntilAsync(
+            () =>
+            {
+                sawResult |= _statusBar.WatchText?.StartsWith("Automatisch aktualisiert", StringComparison.Ordinal) == true;
+                return !_gallery.IsLoading && _gallery.TotalCount == _mediaCount
+                       && _gallery.CurrentPage.Any(i => i.Name == WatchedFileName && !i.Missing);
+            },
+            ShortWait,
+            $"Galerie zeigt {WatchedFileName} ({_mediaCount} Dateien)").ConfigureAwait(true);
+        await WaitUntilAsync(
+            () =>
+            {
+                sawResult |= _statusBar.WatchText?.StartsWith("Automatisch aktualisiert", StringComparison.Ordinal) == true;
+                return _watch.Status.State == WatchState.Idle && sawResult;
+            },
+            ShortWait,
+            "Statusleiste meldet den abgeschlossenen automatischen Scan").ConfigureAwait(true);
+        await SnapshotAsync("11-galerie-ordnerueberwachung").ConfigureAwait(true);
+
+        // (2) Löschen → automatischer Scan → „fehlt“-Badge (Zeile bleibt, Missing statt Löschen)
+        var watchedId = _gallery.CurrentPage.First(i => i.Name == WatchedFileName).Id;
+        _lastScan = null;
+        File.Delete(target);
+        await WaitUntilAsync(
+            () => _lastScan is { Mode: ScanMode.Incremental, Outcome: ScanOutcome.Completed, MarkedMissing: 1, Added: 0 },
+            ShortWait,
+            "automatischer Incremental-Scan nach dem Löschen").ConfigureAwait(true);
+        await WaitUntilAsync(
+            () => !_gallery.IsLoading && _gallery.CurrentPage.Any(i => i.Id == watchedId && i.Missing),
+            ShortWait,
+            "„fehlt“-Badge nach dem automatischen Scan").ConfigureAwait(true);
+        Check(_watch.Status.State is WatchState.Idle or WatchState.ChangesPending, $"Überwachung läuft weiter ({_watch.Status.State})");
     }
 
     private async Task CleanupAsync()

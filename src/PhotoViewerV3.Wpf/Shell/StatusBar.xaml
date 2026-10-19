@@ -93,6 +93,21 @@
                     <Border Style="{StaticResource StatusSeparator}" />
                 </StackPanel>
 
+                <!-- Ordnerüberwachung (Services/Watch): Countdown bis zur automatischen Aktualisierung bzw. Hinweis -->
+                <StackPanel Orientation="Horizontal"
+                            AutomationProperties.Name="Ordnerüberwachung"
+                            Visibility="{Binding WatchText, Converter={StaticResource NullToVis}}">
+                    <ui:SymbolIcon Symbol="ArrowSync16"
+                                   Style="{StaticResource StatusIcon}"
+                                   Visibility="{Binding WatchIsWarning, Converter={StaticResource InvBoolToVis}}" />
+                    <ui:SymbolIcon Symbol="Warning16"
+                                   Style="{StaticResource StatusIcon}"
+                                   Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                   Visibility="{Binding WatchIsWarning, Converter={StaticResource BoolToVis}}" />
+                    <TextBlock Style="{StaticResource StatusText}" Text="{Binding WatchText}" />
+                    <Border Style="{StaticResource StatusSeparator}" />
+                </StackPanel>
+
                 <StackPanel Orientation="Horizontal"
                             Visibility="{Binding HintText, Converter={StaticResource NullToVis}}">
                     <ui:SymbolIcon Symbol="Warning16"

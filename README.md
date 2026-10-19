@@ -130,11 +130,31 @@ behält Aufklapp-Zustand und Auswahl.
 ### Einstellungen
 Farbschema (Hell/Dunkel/System folgt Windows live), Speicherorte mit „Ordner öffnen“, Thumbnail-Cache (Belegung,
 **Cache leeren** — Vorschaubilder werden bei Bedarf neu erzeugt), FFmpeg-Status mit kopierbarem winget-Befehl,
-unterstützte Bild- und Videoformate, Version und Build-Datum.
+unterstützte Bild- und Videoformate, Ordnerüberwachung (Schalter, Ruhezeit), Version und Build-Datum.
+
+### Ordnerüberwachung
+Die Bibliotheksordner der aktiven Bibliothek werden im Hintergrund überwacht (`FileSystemWatcher` je Wurzel, rekursiv).
+Neue, gelöschte, umbenannte oder geänderte Fotos und Videos (nur Formate aus dem Formatregister; `.tmp`/`.part`,
+`~`-Dateien, `Thumbs.db`, `.thumbnails`, `@eaDir` und der eigene Thumbnail-Cache werden ignoriert) starten eine
+**Ruhezeit** (Standard 3 s, einstellbar 1–60 s). Erst wenn in dieser Zeit nichts mehr passiert, läuft automatisch
+„Aktualisieren“ (Incremental-Scan, stabile FileIds) — die Statusleiste zeigt vorher „Änderungen erkannt —
+Aktualisierung in n s“, danach „Automatisch aktualisiert: …“. Regeln:
+
+- Nie parallel zu einem laufenden Scan: läuft gerade „Aktualisieren“ oder „Neu aufbauen“, wartet die Automatik und prüft
+  die gesammelten Änderungen danach erneut.
+- Meldet der automatische Scan **viele fehlende Dateien** (Mass-Missing-Guard) oder eine **Bibliothek offline**, wird nicht
+  automatisch wiederholt; die Statusleiste zeigt „Automatische Aktualisierung angehalten: …“, bis ein manuelles
+  „Aktualisieren“ auf der Bibliotheksseite erfolgreich war (oder die Bibliothek gewechselt bzw. die Überwachung
+  umgeschaltet wird).
+- Nicht erreichbare Wurzeln (USB/NAS) werden alle 30 s erneut versucht; kommt die Wurzel zurück, folgt ein Scan nach der
+  Ruhezeit. Ein Pufferüberlauf des Watchers startet ihn neu und plant ebenfalls einen Scan ein.
+- Einstellungen „Bibliotheksordner überwachen“ (Standard: an) und „Ruhezeit“ liegen in der Settings-Tabelle
+  (`watch.enabled`, `watch.quietSeconds`) und wirken sofort.
 
 ### Statusleiste
 Links: aktive Bibliothek, Scan-Fortschritt bzw. -Ergebnis, Vorschaubilder in der Warteschlange. Rechts: Hinweise
-(unvollständige oder fehlgeschlagene Dateivorgänge mit Details im Tooltip, Bibliothek offline) und die
+(Ordnerüberwachung: Countdown, laufende/abgeschlossene automatische Aktualisierung, angehaltene Automatik;
+unvollständige oder fehlgeschlagene Dateivorgänge mit Details im Tooltip; Bibliothek offline) und die
 Hintergrund-Aktivität („Bereit“, wenn nichts läuft).
 
 ## Datenablage
@@ -178,14 +198,16 @@ $env:PHOTOVIEWERV3_SMOKE_ROOT  = $lib
 $env:PHOTOVIEWERV3_SMOKE_SHOTS = "$env:TEMP\pv3-smoke-shots"
 $env:PHOTOVIEWERV3_SMOKE_EXIT  = '1'
 dotnet run --project src/PhotoViewerV3.Wpf -c Debug
-Get-Content "$env:PHOTOVIEWERV3_APPDATA\smoke-result.txt"   # Erwartung: 15 OK, 0 FAIL
+Get-Content "$env:PHOTOVIEWERV3_APPDATA\smoke-result.txt"   # Erwartung: 16 OK, 0 FAIL
 ```
 
 Die Testbibliothek sollte Bilder (JPG/PNG), Videos (MP4/MOV), einen Ordner ohne direkte Dateien mit zwei
 Unterordnern („Leer\Sub A“, „Leer\Sub B“), einen Ordner „Unsortiert“ mit mehreren JPGs sowie die Ordner
 „2024\Familie“ und „2025\Screenshots“ enthalten (das Szenario prüft diese Namen) — insgesamt mindestens sechs
 Mediendateien, damit der Mass-Missing-Guard beim Incremental-Schritt nicht greift. Der Schritt legt
-`Unsortiert\smoke-neu.jpg` an (bleibt liegen, wird beim nächsten Lauf vorab entfernt).
+`Unsortiert\smoke-neu.jpg` an (bleibt liegen, wird beim nächsten Lauf vorab entfernt). Die Ordnerüberwachung ist
+während des Laufs ausgeschaltet und wird erst im letzten Schritt (Ruhezeit 1 s, `Unsortiert\smoke-watch.jpg` kopieren
+und löschen) eingeschaltet.
 
 Spike- und Benchmark-Harness: `dotnet run --project tests/PhotoViewerV3.PerfTests -c Release -- <spike>` (siehe
 [docs/spikes/](docs/spikes/)).

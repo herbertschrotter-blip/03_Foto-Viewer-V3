@@ -12,13 +12,14 @@ using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Infrastructure;
 using PhotoViewerV3.Services.Media;
 using PhotoViewerV3.Services.Thumbnails;
+using PhotoViewerV3.Services.Watch;
 using PhotoViewerV3.Shell;
 
 namespace PhotoViewerV3.Settings;
 
 /// <summary>
 /// Einstellungen: Farbschema, Speicherorte (DB, Logs), Thumbnail-Cache (Größe, Leeren), FFmpeg-Status,
-/// unterstützte Formate und App-Version.
+/// unterstützte Formate, Ordnerüberwachung (Schalter, Ruhezeit) und App-Version.
 /// </summary>
 public sealed partial class SettingsViewModel : ObservableObject
 {
@@ -31,6 +32,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     private readonly IMediaFormatRegistry _formats;
     private readonly IThemeService _theme;
     private readonly IDialogService _dialogs;
+    private readonly ILibraryWatchService _watch;
     private readonly ILogger<SettingsViewModel> _logger;
 
     public SettingsViewModel(
@@ -41,6 +43,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         IMediaFormatRegistry formats,
         IThemeService theme,
         IDialogService dialogs,
+        ILibraryWatchService watch,
         ILogger<SettingsViewModel> logger)
     {
         _factory = factory;
@@ -50,7 +53,69 @@ public sealed partial class SettingsViewModel : ObservableObject
         _formats = formats;
         _theme = theme;
         _dialogs = dialogs;
+        _watch = watch;
         _logger = logger;
+    }
+
+    // ---- Ordnerüberwachung (Services/Watch) ---------------------------------------------------------
+
+    [ObservableProperty] private bool _isWatchEnabled = true;
+    [ObservableProperty] private int _watchQuietSeconds = WatchSettings.DefaultQuietSeconds;
+    private bool _watchLoading;
+
+    public int WatchQuietMinSeconds => WatchSettings.MinQuietSeconds;
+
+    public int WatchQuietMaxSeconds => WatchSettings.MaxQuietSeconds;
+
+    private void LoadWatchSettings()
+    {
+        _watchLoading = true;
+        try
+        {
+            IsWatchEnabled = _watch.IsEnabled;
+            WatchQuietSeconds = (int)_watch.QuietPeriod.TotalSeconds;
+        }
+        finally
+        {
+            _watchLoading = false;
+        }
+    }
+
+    partial void OnIsWatchEnabledChanged(bool value)
+    {
+        if (!_watchLoading)
+        {
+            _ = ApplyWatchAsync(() => _watch.SetEnabledAsync(value), "Ordnerüberwachung");
+        }
+    }
+
+    partial void OnWatchQuietSecondsChanged(int value)
+    {
+        var clamped = Math.Clamp(value, WatchSettings.MinQuietSeconds, WatchSettings.MaxQuietSeconds);
+        if (clamped != value)
+        {
+            WatchQuietSeconds = clamped; // löst diesen Handler erneut mit dem gültigen Wert aus
+            return;
+        }
+
+        if (!_watchLoading)
+        {
+            _ = ApplyWatchAsync(() => _watch.SetQuietPeriodAsync(TimeSpan.FromSeconds(value)), "Ruhezeit");
+        }
+    }
+
+    /// <summary>Einstellung sofort anwenden und speichern; Fehler landen in der Fehler-InfoBar.</summary>
+    private async Task ApplyWatchAsync(Func<Task> apply, string what)
+    {
+        try
+        {
+            await apply().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"{what} konnte nicht gespeichert werden: {ex.Message}";
+            _logger.LogError(ex, "Ordnerüberwachung: {What} konnte nicht gespeichert werden", what);
+        }
     }
 
     [ObservableProperty] private string _databasePath = string.Empty;
@@ -111,6 +176,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         VideoFormatsText = string.Join("  ", _formats.VideoExtensions.OrderBy(e => e, StringComparer.Ordinal));
         AppVersionText = BuildVersionText();
         NotifyThemeChanged();
+        LoadWatchSettings();
 
         await RefreshCacheStatsAsync().ConfigureAwait(true);
     }
