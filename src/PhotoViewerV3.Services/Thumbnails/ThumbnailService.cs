@@ -67,6 +67,7 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
     private int _ffmpegMissingLogged;
     private readonly object _pauseLock = new();
     private TaskCompletionSource? _resumed; // gesetzt, solange pausiert (ADR-0026)
+    private readonly Dictionary<int, ThumbnailRequest> _deferred = new(); // während der Pause angefordert; unter _pauseLock
     private int _activeJobs;
 
     private enum JobOutcome { Queued, Done, Failed }
@@ -127,27 +128,62 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
     public void Resume()
     {
         TaskCompletionSource? resumed;
+        List<ThumbnailRequest> deferred;
         lock (_pauseLock)
         {
             resumed = _resumed;
             _resumed = null;
+            deferred = [.. _deferred.Values];
+            _deferred.Clear();
         }
 
         if (resumed is not null)
         {
             resumed.TrySetResult();
-            _logger.LogInformation("ThumbnailService fortgesetzt");
+            _logger.LogInformation("ThumbnailService fortgesetzt ({Deferred} zurückgestellte Anforderungen)", deferred.Count);
+        }
+
+        if (deferred.Count > 0)
+        {
+            // Nach der Rücknahme eines Umzugs sofort nachholen — nicht erst mit dem nächsten Seitenwechsel der Galerie.
+            _ = Task.Run(() => ResubmitDeferredAsync(deferred));
         }
     }
 
-    private bool IsPaused
+    private async Task ResubmitDeferredAsync(IReadOnlyList<ThumbnailRequest> deferred)
     {
-        get
+        try
         {
-            lock (_pauseLock)
+            await RequestThumbnailsAsync(deferred).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Zurückgestellte Thumbnail-Anforderungen konnten nicht nachgeholt werden");
+        }
+    }
+
+    /// <summary>
+    /// Pausiert: Anforderungen je FileId (die neueste gewinnt) zurückstellen statt sie zu verwerfen; <see cref="Resume"/>
+    /// reicht sie nach. Unter derselben Sperre wie <see cref="Resume"/>, damit keine zwischen Prüfen und Merken verloren geht.
+    /// </summary>
+    private bool TryDefer(IReadOnlyList<ThumbnailRequest> requests)
+    {
+        lock (_pauseLock)
+        {
+            if (_resumed is null)
             {
-                return _resumed is not null;
+                return false;
             }
+
+            foreach (var req in requests)
+            {
+                if (req.MediaType != MediaType.Archive)
+                {
+                    _deferred[req.FileId] = req;
+                }
+            }
+
+            return true;
         }
     }
 
@@ -194,10 +230,11 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
             return;
         }
 
-        if (IsPaused)
+        if (TryDefer(requests))
         {
-            // Katalog-DB zieht um (ADR-0026): sie ist gesperrt; die Galerie fordert nach Neustart bzw. Rücknahme neu an.
-            _logger.LogDebug("ThumbnailService pausiert — {Count} Anforderungen verworfen", requests.Count);
+            // Katalog-DB zieht um (ADR-0026): sie ist gesperrt. Nach einer Rücknahme reicht Resume die Anforderungen
+            // nach; nach Erfolg startet die App neu und die Galerie fordert ohnehin neu an.
+            _logger.LogDebug("ThumbnailService pausiert — {Count} Anforderungen zurückgestellt", requests.Count);
             return;
         }
 

@@ -106,7 +106,7 @@ src/
   PhotoViewerV3.Services/                # → Domain + Data, WPF-frei; AddPhotoViewerServices()
     Catalog/                          # CatalogUpdateService (Favorit/Bewertung)
     Database/                         # LibraryContextFactory (+ IDatabaseAccessGate), DatabaseInitializer, SqlitePragmaInterceptor
-      Relocation/                     # DatabaseRelocationService, StorageProbe — Katalog + Thumbnails umziehen (ADR-0026)
+      Relocation/                     # DatabaseRelocationService, StorageProbe, ThumbnailInventory — Katalog + Thumbnails umziehen (ADR-0026)
     Infrastructure/                   # AppDataPaths, DatabaseLocationStore (database-location.json, ADR-0026)
     Library/                          # LibraryService, LibraryCatalogCleanup
     Media/                            # MediaFormatRegistry (ADR-0016)
@@ -623,7 +623,7 @@ Fehler: <Message>
 | **Memory-Leaks bei langer Laufzeit** | Niemals `ImageSource` in Services, `BitmapCacheOption.OnLoad`, `Freeze()`, EF ChangeTracker.Clear() |
 | **Concurrent SQLite-Writes** | WAL + Single-Writer-Pattern via Channel oder `SemaphoreSlim` |
 | **FFmpeg hängt bei kaputten Videos** | `CancellationTokenSource.CancelAfter(3s/8s)` + Process.Kill |
-| **Katalog-Umzug verliert Daten** | Kopie per Backup-API, `integrity_check` + Zeilenzahlen, Umschalten erst danach; Scans/Batches/Überwachung/Thumbnails ruhig, Factory gesperrt; Neustart statt Laufzeit-Umschaltung (ADR-0026) |
+| **Katalog-Umzug verliert Daten** | Kopie per Backup-API, `integrity_check` + Zeilenzahlen, Umschalten erst danach; Scans/Batches/Überwachung/Thumbnails ruhig, Factory gesperrt (auch für ältere Kontexte), Schreibsperre der alten DB gehalten; Neustart statt Laufzeit-Umschaltung (ADR-0026) |
 | **Background-Worker blockiert UI** | WorkBudgetService mit StorageProfile-Limits + UI-Activity-Delay |
 
 ---

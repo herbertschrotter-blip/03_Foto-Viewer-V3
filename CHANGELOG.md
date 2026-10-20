@@ -3,6 +3,45 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.21] — 2026-10-20
+
+### Behoben (offene Punkte aus 0.2.18, ADR-0026 ergänzt)
+- **Kein Schreiben mehr in die alte DB während und nach dem Umzug**: Kontexte der `LibraryContextFactory` tragen einen
+  Gate-Interceptor, der bei gesetzter Sperre `SaveChanges`, neue Transaktionen und Non-Query-Befehle mit
+  `DatabaseSuspendedException` abweist — auch bei Kontexten, die vor der Sperre erzeugt wurden (Favorit im selben
+  Augenblick); Lesen bleibt für sie erlaubt. Zusätzlich hält der Umzug die `BEGIN IMMEDIATE`-Schreibsperre der alten Datei bis zur Rücknahme bzw. nach
+  Erfolg bis zum Prozessende; damit scheitern auch rohe Verbindungen, die schon vor der Sperre offen waren, mit
+  `SQLITE_BUSY`. Leser (Galerie, Backup-API) arbeiten im WAL-Modus weiter. Der Checkpoint vor der Kopie ist deshalb
+  `PASSIVE` (die Backup-API kopiert den WAL-Inhalt ohnehin mit). `DatabaseRelocationService` ist jetzt `IDisposable`
+  (gibt die gehaltene Sperre beim Beenden frei).
+- **Vorschaubilder nach einer Rücknahme sofort**: während der Pause angeforderte Vorschaubilder werden je FileId
+  zurückgestellt (neueste Anforderung gilt, Archive ausgenommen) und von `IThumbnailService.Resume` sofort nachgereicht,
+  nicht erst beim nächsten Seitenwechsel.
+- **Thumbnail-Ordner nur einmal durchlaufen** (`Relocation/ThumbnailInventory`): die Prüfung erstellt die Dateiliste,
+  der Umzug übernimmt sie (ohne vorherige Prüfung: ein eigener Durchlauf) und kopiert danach statt erneut aufzuzählen —
+  bisher drei Durchläufe (Prüfung, erneute Prüfung im Umzug, Kopie). Die Prüfung bleibt so streng wie bisher: nach der
+  Pause der Thumbnail-Worker werden seither erzeugte Vorschaubilder aus der DB ergänzt (`GeneratedAtUtc` bzw.
+  `LastAttemptAtUtc` ab Beginn des Durchlaufs − 2 s) und der Platz mit der endgültigen Liste und frisch gelesenem freiem
+  Platz erneut geprüft. „Übernehmen“ durchläuft den Ordner gar nicht. `RelocationTargetCheck.ThumbnailFiles` zählt jetzt
+  nur die zu kopierenden Dateien (ohne `.tmp`), wie dokumentiert; der Platzbedarf rechnet `.tmp` weiter mit.
+- Annahmen: Vorschaubild-Dateien entstehen nur über den Thumbnail-Dienst (Datei vor DB-Zeile); eine fremde Datei, die
+  nach der Prüfung ohne DB-Zeile in den Ordner gelegt wird, zieht nicht mit. Seit der Prüfung entfernte Dateien gelten
+  beim Kopieren nicht als „übersprungen“.
+
+### Tests
+- `tests/PhotoViewerV3.Tests`: 430 (+6): `Database/DatabaseRelocationServiceTests` (+5: älterer Kontext — `SaveChanges`,
+  Non-Query über offene Verbindung und rohe Verbindung — schreibt weder während noch nach dem Umzug in die alte DB;
+  nach der Rücknahme speichert derselbe Kontext wieder normal; Kopie nach der Liste der Prüfung mit ergänztem neuem
+  Vorschaubild und ohne nachträglich abgelegte fremde Datei; Platz wird nach dem Abgleich erneut geprüft und bricht mit
+  Rücknahme ab; Umzug ohne vorherige Prüfung), `Thumbnails/ThumbnailServicePauseTests` (+1: zurückgestellte
+  Anforderungen kommen nach `Resume` ohne neue Anforderung, je Datei einmal). Ohne die drei Korrekturen scheitern
+  5 der 6 neuen Tests (gegengeprüft; der sechste deckt den Umzug ohne vorherige Prüfung ab). Bestehende Tests: „Neustart“ gibt vorher die gehaltene
+  Sperre frei (`Service.Dispose` = Prozessende), `ThumbnailFiles` erwartet 2 statt 3 (ohne `.tmp`).
+- `tests/PhotoViewerV3.Wpf.Tests`: 168 (unverändert), grün. Unter Last durch parallele Läufe scheiterte im Standardlauf
+  wechselnd je 1 Fenster-Test (`Shell/EarlyCloseWindowTests`, `Shell/AppDialogWindowTests`, UI-Timeout) — ebenso auf
+  dem unveränderten Stand 0.2.20 (dort 3); mit `xUnit.ParallelizeTestCollections=false` 168/168.
+- Rauchtest 21/21 OK, 0 WPF-Binding-Fehler (kein eigener Umzugs-Schritt; Umzug ist durch die Unit-Tests abgedeckt).
+
 ## [0.2.20] — 2026-10-20
 
 ### Neu (ADR-0027)

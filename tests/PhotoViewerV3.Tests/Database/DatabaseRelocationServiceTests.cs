@@ -77,8 +77,12 @@ public sealed class DatabaseRelocationServiceTests
             return new Env(fx, lib.Id);
         }
 
+        /// <summary>„Prozessende“: gibt die nach Erfolg gehaltene Schreibsperre der alten DB frei.</summary>
+        public void EndProcess() => Service.Dispose();
+
         public void Dispose()
         {
+            Service.Dispose();
             SqliteConnection.ClearAllPools();
             Fx.Dispose();
         }
@@ -119,7 +123,7 @@ public sealed class DatabaseRelocationServiceTests
 
         var check = await env.Service.CheckTargetAsync(env.Target);
         check.State.Should().Be(RelocationTargetState.Ready);
-        check.ThumbnailFiles.Should().Be(3);
+        check.ThumbnailFiles.Should().Be(2, "zu kopieren sind nur fertige Vorschaubilder, keine .tmp-Dateien");
 
         var result = await env.Service.RelocateAsync(env.Target, RelocationMode.Move, new SyncProgress(p => stages.Add(p.Stage)));
 
@@ -166,6 +170,7 @@ public sealed class DatabaseRelocationServiceTests
         var oldDb = env.Fx.Paths.LibraryDatabasePath;
         var oldThumbs = env.Fx.Paths.ThumbnailsRoot;
         (await env.Service.RelocateAsync(env.Target, RelocationMode.Move)).Success.Should().BeTrue();
+        env.EndProcess();
         SqliteConnection.ClearAllPools();
 
         // „Neustart“: Pfade neu auflösen wie App.xaml.cs
@@ -197,12 +202,13 @@ public sealed class DatabaseRelocationServiceTests
     {
         using var env = await Env.CreateAsync();
         (await env.Service.RelocateAsync(env.Target, RelocationMode.Move)).Success.Should().BeTrue();
+        env.EndProcess();
         SqliteConnection.ClearAllPools();
         var moved = AppDataPaths.Resolve(env.AppRoot);
         await DatabaseLocationStore.RunPendingDeletesAsync(moved, NullLogger.Instance, attempts: 1);
 
         var factory = new LibraryContextFactory(moved, new SqlitePragmaInterceptor());
-        var back = new DatabaseRelocationService(
+        using var back = new DatabaseRelocationService(
             moved, factory, new ScanGate(), new PausableThumbnailServiceFake(), new WatchServiceFake(), new StorageProbeFake(),
             NullLogger<DatabaseRelocationService>.Instance);
         back.DefaultFolder.Should().Be(env.AppRoot);
@@ -294,6 +300,209 @@ public sealed class DatabaseRelocationServiceTests
 
         batch.Dispose();
         (await relocation).Success.Should().BeTrue();
+    }
+
+    // ---- Schreiber, die vor der Sperre angefangen haben ------------------------------------------
+
+    private static long CountFavorites(string databasePath)
+    {
+        using var conn = new SqliteConnection($"Data Source={databasePath};Mode=ReadOnly;Pooling=False");
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT count(*) FROM Files WHERE IsFavorite = 1 OR Rating IS NOT NULL;";
+        return (long)cmd.ExecuteScalar()!;
+    }
+
+    [Fact]
+    public async Task Kontext_von_vor_der_Sperre_schreibt_waehrend_und_nach_dem_Umzug_nicht_in_die_alte_DB()
+    {
+        using var env = await Env.CreateAsync();
+        var oldDb = env.Fx.Paths.LibraryDatabasePath;
+
+        // Favorit „im selben Augenblick“: Kontext und Entität geladen, bevor der Umzug sperrt, gespeichert erst danach
+        await using var favorite = env.Fx.CreateContext();
+        var file = await favorite.Files.OrderBy(f => f.Id).FirstAsync();
+        file.IsFavorite = true;
+
+        // Kontext mit schon offener Verbindung (Non-Query) und rohe Verbindung von vor der Sperre
+        await using var openCtx = env.Fx.CreateContext();
+        await openCtx.Database.OpenConnectionAsync();
+        using var raw = env.Fx.ContextFactory.OpenSqliteConnection();
+        using (var fast = raw.CreateCommand())
+        {
+            fast.CommandText = "PRAGMA busy_timeout=100;";
+            fast.ExecuteNonQuery();
+        }
+
+        Exception? saveDuring = null;
+        Exception? nonQueryDuring = null;
+        Exception? rawDuring = null;
+        var progress = new SyncProgress(p =>
+        {
+            if (p.Stage != "Datenbank kopieren")
+            {
+                return;
+            }
+
+            saveDuring = Record.Exception(() => favorite.SaveChanges());
+            nonQueryDuring = Record.Exception(() => openCtx.Database.ExecuteSqlRaw("UPDATE Files SET Rating = 5;"));
+            rawDuring = Record.Exception(() =>
+            {
+                using var cmd = raw.CreateCommand();
+                cmd.CommandTimeout = 1;
+                cmd.CommandText = "UPDATE Files SET Rating = 4;";
+                cmd.ExecuteNonQuery();
+            });
+        });
+
+        var result = await env.Service.RelocateAsync(env.Target, RelocationMode.Move, progress);
+
+        result.Success.Should().BeTrue(result.Error);
+        saveDuring.Should().BeOfType<DatabaseSuspendedException>("SaveChanges eines älteren Kontexts wird abgewiesen");
+        nonQueryDuring.Should().BeOfType<DatabaseSuspendedException>();
+        rawDuring.Should().BeOfType<SqliteException>("die gehaltene Schreibsperre hält auch rohe Verbindungen fern")
+            .Which.SqliteErrorCode.Should().Be(5, "SQLITE_BUSY");
+
+        // Nach dem Umschalten (bis zum Neustart) ebenso
+        var saveAfter = async () => await favorite.SaveChangesAsync();
+        await saveAfter.Should().ThrowAsync<DatabaseSuspendedException>();
+        var rawAfter = () =>
+        {
+            using var cmd = raw.CreateCommand();
+            cmd.CommandTimeout = 1;
+            cmd.CommandText = "UPDATE Files SET IsFavorite = 1;";
+            cmd.ExecuteNonQuery();
+        };
+        rawAfter.Should().Throw<SqliteException>().Which.SqliteErrorCode.Should().Be(5);
+
+        // Lesen bleibt erlaubt — es verändert die alte DB nicht
+        (await favorite.Files.AsNoTracking().CountAsync()).Should().Be(3);
+
+        CountFavorites(oldDb).Should().Be(0, "die alte DB bleibt unverändert");
+        CountFavorites(result.DatabasePath).Should().Be(0, "die Kopie entspricht dem Stand beim Sperren");
+    }
+
+    [Fact]
+    public async Task Nach_der_Ruecknahme_speichert_ein_Kontext_von_vor_der_Sperre_wieder_normal()
+    {
+        using var env = await Env.CreateAsync();
+        await using var favorite = env.Fx.CreateContext();
+        var file = await favorite.Files.OrderBy(f => f.Id).FirstAsync();
+        file.IsFavorite = true;
+        using var cts = new CancellationTokenSource();
+        Exception? saveDuring = null;
+        var progress = new SyncProgress(p =>
+        {
+            if (p.Stage == "Kopie prüfen")
+            {
+                saveDuring = Record.Exception(() => favorite.SaveChanges());
+                cts.Cancel();
+            }
+        });
+
+        var result = await env.Service.RelocateAsync(env.Target, RelocationMode.Move, progress, cts.Token);
+
+        result.Success.Should().BeFalse();
+        saveDuring.Should().BeOfType<DatabaseSuspendedException>();
+        AssertRolledBack(env);
+
+        // Sperre und Schreibsperre sind aufgehoben: der geänderte Favorit landet in der (weiter aktiven) alten DB
+        (await favorite.SaveChangesAsync()).Should().Be(1);
+        CountFavorites(env.Fx.Paths.LibraryDatabasePath).Should().Be(1);
+    }
+
+    // ---- Thumbnail-Ordner: ein Durchlauf -----------------------------------------------------------
+
+    /// <summary>Legt ein Vorschaubild samt Thumbnails-Zeile an, wie es der Thumbnail-Dienst nach der Prüfung täte.</summary>
+    private static async Task<string> AddGeneratedThumbnailAsync(Env env, int fileId, int bytes)
+    {
+        var path = Path.Combine(env.Fx.Paths.GetLibraryThumbnailsPath(env.LibraryId), $"{fileId}_320_still.jpg");
+        TempLibraryFixture.WriteFile(path, bytes);
+        await using var ctx = env.Fx.CreateContext();
+        ctx.Thumbnails.Add(new PhotoViewerV3.Domain.Entities.Thumbnail
+        {
+            FileId = fileId,
+            Size = 320,
+            Kind = PhotoViewerV3.Domain.Enums.ThumbnailKind.Still,
+            Format = "jpg",
+            CachePath = path,
+            SourceModifiedAtUtc = DateTime.UtcNow,
+            GeneratedAtUtc = DateTime.UtcNow,
+            ByteSize = bytes,
+            Status = PhotoViewerV3.Domain.Enums.ThumbnailStatus.Generated,
+            AttemptCount = 1,
+        });
+        await ctx.SaveChangesAsync();
+        return path;
+    }
+
+    [Fact]
+    public async Task Umzug_kopiert_nach_der_Dateiliste_der_Pruefung_und_ergaenzt_seither_erzeugte_Vorschaubilder()
+    {
+        using var env = await Env.CreateAsync();
+        var check = await env.Service.CheckTargetAsync(env.Target);
+        check.ThumbnailFiles.Should().Be(2);
+
+        // Nach der Prüfung: ein neues Vorschaubild des Dienstes (mit DB-Zeile) und eine fremde Datei ohne Zeile
+        int thirdId;
+        await using (var ctx = env.Fx.CreateContext())
+        {
+            thirdId = await ctx.Files.OrderBy(f => f.Id).Skip(2).Select(f => f.Id).FirstAsync();
+        }
+
+        await AddGeneratedThumbnailAsync(env, thirdId, 500);
+        var stray = Path.Combine(env.Fx.Paths.GetLibraryThumbnailsPath(env.LibraryId), "fremd.jpg");
+        TempLibraryFixture.WriteFile(stray, 50);
+        long total = 0;
+
+        var result = await env.Service.RelocateAsync(env.Target, RelocationMode.Move, new SyncProgress(p =>
+        {
+            if (p.Stage == "Vorschaubilder kopieren")
+            {
+                total = p.Total;
+            }
+        }));
+
+        result.Success.Should().BeTrue(result.Error);
+        result.ThumbnailsCopied.Should().Be(3, "Liste der Prüfung plus das seither erzeugte Vorschaubild");
+        total.Should().Be(3);
+        File.ReadAllBytes(Path.Combine(env.Target, "thumbs", env.LibraryId.ToString(), $"{thirdId}_320_still.jpg")).Should().HaveCount(500);
+        File.Exists(Path.Combine(env.Target, "thumbs", env.LibraryId.ToString(), "fremd.jpg")).Should()
+            .BeFalse("kein zweiter Durchlauf durch den Ordner — die Liste der Prüfung gilt");
+    }
+
+    [Fact]
+    public async Task Platz_wird_nach_dem_Abgleich_mit_der_endgueltigen_Liste_erneut_geprueft()
+    {
+        using var env = await Env.CreateAsync();
+        var check = await env.Service.CheckTargetAsync(env.Target);
+        check.State.Should().Be(RelocationTargetState.Ready);
+        env.Storage.AvailableBytes = check.RequiredBytes + 1024 * 1024; // reicht für die Liste der Prüfung …
+
+        int thirdId;
+        await using (var ctx = env.Fx.CreateContext())
+        {
+            thirdId = await ctx.Files.OrderBy(f => f.Id).Skip(2).Select(f => f.Id).FirstAsync();
+        }
+
+        await AddGeneratedThumbnailAsync(env, thirdId, 4 * 1024 * 1024); // … aber nicht mehr für das neue Vorschaubild
+
+        var result = await env.Service.RelocateAsync(env.Target, RelocationMode.Move);
+
+        result.Success.Should().BeFalse();
+        result.Error.Should().Contain("Nicht genug Platz");
+        AssertRolledBack(env);
+    }
+
+    [Fact]
+    public async Task Umzug_ohne_vorherige_Pruefung_durchlaeuft_den_Ordner_selbst()
+    {
+        using var env = await Env.CreateAsync();
+
+        var result = await env.Service.RelocateAsync(env.Target, RelocationMode.Move);
+
+        result.Success.Should().BeTrue(result.Error);
+        result.ThumbnailsCopied.Should().Be(2);
     }
 
     private static void AssertRolledBack(Env env)

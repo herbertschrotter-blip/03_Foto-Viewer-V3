@@ -12,7 +12,7 @@ namespace PhotoViewerV3.Services.Database.Relocation;
 /// Umzug von Katalog-DB und Thumbnail-Cache (ADR-0026). Umschalten erst nach geprüfter Kopie; der neue Ort gilt ab dem
 /// nächsten Start (kein Umschalten zur Laufzeit), die alten Dateien löscht der nächste Start.
 /// </summary>
-public sealed class DatabaseRelocationService : IDatabaseRelocationService
+public sealed class DatabaseRelocationService : IDatabaseRelocationService, IDisposable
 {
     /// <summary>Reserve über dem reinen Platzbedarf: 10 % plus 50 MB.</summary>
     private const long SpaceReserveBytes = 50L * 1024 * 1024;
@@ -28,6 +28,12 @@ public sealed class DatabaseRelocationService : IDatabaseRelocationService
     private readonly IStorageProbe _storage;
     private readonly ILogger<DatabaseRelocationService> _logger;
     private int _running;
+
+    /// <summary>Dateiliste der letzten <see cref="CheckTargetAsync"/>; <see cref="RelocateAsync"/> übernimmt sie (einmal).</summary>
+    private ThumbnailInventory? _lastInventory;
+
+    /// <summary>Nach Erfolg: hält Factory-Sperre und Schreibsperre der alten DB bis zum Neustart.</summary>
+    private Quiescence? _heldUntilRestart;
 
     public DatabaseRelocationService(
         IAppDataPaths paths,
@@ -58,9 +64,27 @@ public sealed class DatabaseRelocationService : IDatabaseRelocationService
 
     public async Task<RelocationTargetCheck> CheckTargetAsync(string targetFolder, CancellationToken ct = default)
     {
+        var location = await CheckLocationAsync(targetFolder, ct).ConfigureAwait(false);
+        if (location.Invalid is not null)
+        {
+            return location.Invalid;
+        }
+
+        // Der einzige Durchlauf durch den Thumbnail-Ordner: die Liste dient der Platzprüfung hier und — falls der
+        // Umzug gleich folgt — als Kopierliste (RelocateAsync gleicht sie nach der Pause mit der DB ab).
+        var inventory = await Task.Run(() => ThumbnailInventory.Take(_paths.ThumbnailsRoot, ct), ct).ConfigureAwait(false);
+        Volatile.Write(ref _lastInventory, inventory);
+        return Evaluate(location.Target, location.Existing, inventory);
+    }
+
+    /// <summary>Alle Prüfungen außer dem Platz: Pfad, Laufwerk, Bibliothekswurzeln, Schreibprobe, vorhandener Katalog.</summary>
+    private async Task<(RelocationTargetCheck? Invalid, string Target, ExistingCatalogInfo? Existing)> CheckLocationAsync(
+        string targetFolder,
+        CancellationToken ct)
+    {
         if (string.IsNullOrWhiteSpace(targetFolder) || !Path.IsPathFullyQualified(targetFolder))
         {
-            return Invalid(targetFolder, "Bitte einen vollständigen Ordnerpfad wählen.");
+            return (Invalid(targetFolder, "Bitte einen vollständigen Ordnerpfad wählen."), targetFolder, null);
         }
 
         string target;
@@ -70,57 +94,60 @@ public sealed class DatabaseRelocationService : IDatabaseRelocationService
         }
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
         {
-            return Invalid(targetFolder, $"Der Pfad ist ungültig: {ex.Message}");
+            return (Invalid(targetFolder, $"Der Pfad ist ungültig: {ex.Message}"), targetFolder, null);
         }
 
         if (AppDataPaths.PathsEqual(target, CurrentFolder))
         {
-            return Invalid(target, "Katalog und Vorschaubilder liegen bereits in diesem Ordner.");
+            return (Invalid(target, "Katalog und Vorschaubilder liegen bereits in diesem Ordner."), target, null);
         }
 
         if (_storage.IsNetworkLocation(target))
         {
-            return Invalid(target,
+            return (Invalid(target,
                 "Netzlaufwerke und Freigaben (\\\\Server\\…) eignen sich nicht: SQLite braucht für den Katalog ein lokales " +
-                "Laufwerk (interne Platte, SSD oder USB-Laufwerk).");
+                "Laufwerk (interne Platte, SSD oder USB-Laufwerk)."), target, null);
         }
 
         if (AppDataPaths.IsSameOrInside(target, _paths.ThumbnailsRoot) || AppDataPaths.IsSameOrInside(target, _paths.LogsRoot))
         {
-            return Invalid(target, "Der Zielordner liegt im bisherigen Vorschaubild- oder Protokollordner.");
+            return (Invalid(target, "Der Zielordner liegt im bisherigen Vorschaubild- oder Protokollordner."), target, null);
         }
 
         var libraryRoot = await FindEnclosingLibraryRootAsync(target, ct).ConfigureAwait(false);
         if (libraryRoot is not null)
         {
-            return Invalid(target,
+            return (Invalid(target,
                 $"Der Zielordner liegt in der Bibliothekswurzel „{libraryRoot}“ — die Vorschaubilder würden dort als " +
-                "Fotos eingelesen. Bitte einen Ordner außerhalb der Bibliotheken wählen.");
+                "Fotos eingelesen. Bitte einen Ordner außerhalb der Bibliotheken wählen."), target, null);
         }
 
         var writeProblem = ProbeWritable(target);
         if (writeProblem is not null)
         {
-            return Invalid(target, writeProblem);
+            return (Invalid(target, writeProblem), target, null);
         }
 
         var targetDb = Path.Combine(target, AppDataPaths.DatabaseFileName);
         var targetThumbs = Path.Combine(target, AppDataPaths.ThumbnailsFolderName);
-        var (thumbCount, thumbBytes, existing) = await Task.Run(() =>
-        {
-            var (count, bytes) = MeasureDirectory(_paths.ThumbnailsRoot);
-            var info = File.Exists(targetDb) || HasAnyFile(targetThumbs) ? InspectExisting(targetDb) : null;
-            return (count, bytes, info);
-        }, ct).ConfigureAwait(false);
+        var existing = await Task.Run(
+            () => File.Exists(targetDb) || HasAnyFile(targetThumbs) ? InspectExisting(targetDb) : null,
+            ct).ConfigureAwait(false);
+        return (null, target, existing);
+    }
 
+    /// <summary>Platzprüfung: (DB + WAL + alle Dateien im Thumbnail-Ordner) × 1,1 + 50 MB gegen den freien Platz.</summary>
+    private RelocationTargetCheck Evaluate(string target, ExistingCatalogInfo? existing, ThumbnailInventory inventory)
+    {
         var dbBytes = FileLength(_paths.LibraryDatabasePath) + FileLength(_paths.LibraryDatabasePath + "-wal");
-        var required = (long)((dbBytes + thumbBytes) * 1.1) + SpaceReserveBytes;
+        var required = (long)((dbBytes + inventory.Bytes) * 1.1) + SpaceReserveBytes;
         var available = _storage.GetAvailableFreeSpace(target);
         var enough = available is null || available.Value >= required;
         var spaceProblem = enough
             ? null
             : $"Nicht genug Platz im Ziel: benötigt etwa {FormatBytes(required)}, frei sind {FormatBytes(available!.Value)}.";
         var cloud = _storage.IsCloudSynced(target);
+        var thumbCount = inventory.Files.Count;
 
         if (existing is not null)
         {
@@ -233,9 +260,29 @@ public sealed class DatabaseRelocationService : IDatabaseRelocationService
     {
         progress?.Report(new RelocationProgress("Zielordner prüfen"));
         RelocationTargetCheck check;
+        ThumbnailInventory? inventory = null;
+        var cached = Interlocked.Exchange(ref _lastInventory, null);
         try
         {
-            check = await CheckTargetAsync(targetFolder, ct).ConfigureAwait(false);
+            var location = await CheckLocationAsync(targetFolder, ct).ConfigureAwait(false);
+            if (location.Invalid is not null)
+            {
+                check = location.Invalid;
+            }
+            else
+            {
+                // „Übernehmen“ kopiert keine Vorschaubilder — dann kein Durchlauf. Sonst die Liste der vorausgegangenen
+                // Prüfung weiterverwenden (nach der Pause mit der DB abgeglichen); nur ohne sie den Ordner einmal selbst
+                // durchlaufen.
+                if (mode != RelocationMode.AdoptExisting)
+                {
+                    inventory = cached is not null && AppDataPaths.PathsEqual(cached.Root, _paths.ThumbnailsRoot)
+                        ? cached
+                        : await Task.Run(() => ThumbnailInventory.Take(_paths.ThumbnailsRoot, ct), ct).ConfigureAwait(false);
+                }
+
+                check = Evaluate(location.Target, location.Existing, inventory ?? ThumbnailInventory.Empty(_paths.ThumbnailsRoot));
+            }
         }
         catch (Exception ex)
         {
@@ -275,6 +322,15 @@ public sealed class DatabaseRelocationService : IDatabaseRelocationService
             }
             else
             {
+                // Die Liste stammt von vor der Pause: inzwischen erzeugte Vorschaubilder ergänzen, dann den Platz mit
+                // der endgültigen Liste und frischem freiem Platz erneut prüfen.
+                await Task.Run(() => inventory!.CatchUp(oldDb, ct), ct).ConfigureAwait(false);
+                var finalProblem = ValidateMode(Evaluate(target, check.Existing, inventory!), mode);
+                if (finalProblem is not null)
+                {
+                    throw new RelocationException(finalProblem);
+                }
+
                 // Ersetzen: vorhandenen Katalog beiseitelegen. Auch beim Umzug in einen „leeren“ Ordner: verwaiste
                 // -wal/-shm einer früheren library.db würde SQLite sonst auf die Kopie anwenden.
                 var asideCandidates = mode == RelocationMode.ReplaceExisting
@@ -290,7 +346,7 @@ public sealed class DatabaseRelocationService : IDatabaseRelocationService
                 }
 
                 (copied, skipped) = await Task.Run(
-                    () => CopyCatalog(oldDb, oldThumbs, targetDb, targetThumbs, check.ThumbnailFiles, rollback, progress, ct),
+                    () => CopyCatalog(oldDb, oldThumbs, targetDb, targetThumbs, inventory!, rollback, progress, ct),
                     ct).ConfigureAwait(false);
 
                 pendingDeletes.AddRange([oldDb, oldDb + "-wal", oldDb + "-shm", oldThumbs]);
@@ -303,7 +359,9 @@ public sealed class DatabaseRelocationService : IDatabaseRelocationService
                 "DB-Umzug abgeschlossen: {Db} ({Copied} Vorschaubilder kopiert, {Skipped} übersprungen) — Neustart nötig",
                 targetDb, copied, skipped);
 
-            // Erfolg: DB bleibt gesperrt, Scans/Überwachung/Thumbnails bleiben angehalten — die App startet neu.
+            // Erfolg: DB bleibt gesperrt (Factory-Sperre und gehaltene Schreibsperre), Scans/Überwachung/Thumbnails
+            // bleiben angehalten — die App startet neu. Die Referenz hält die Schreibsperre bis zum Prozessende.
+            _heldUntilRestart = quiet;
             return new RelocationResult(true, null, targetDb, copied, skipped);
         }
         catch (Exception ex)
@@ -358,7 +416,7 @@ public sealed class DatabaseRelocationService : IDatabaseRelocationService
         string oldThumbs,
         string targetDb,
         string targetThumbs,
-        int thumbnailTotal,
+        ThumbnailInventory inventory,
         Stack<(string What, Action Undo)> rollback,
         IProgress<RelocationProgress>? progress,
         CancellationToken ct)
@@ -392,7 +450,7 @@ public sealed class DatabaseRelocationService : IDatabaseRelocationService
 
         rollback.Push(("Vorschaubilder im Ziel", () => DeleteDirectory(targetThumbs)));
         Directory.CreateDirectory(targetThumbs);
-        return CopyThumbnails(oldThumbs, targetThumbs, thumbnailTotal, progress, ct);
+        return CopyThumbnails(inventory, targetThumbs, progress, ct);
     }
 
     /// <summary>
@@ -414,18 +472,21 @@ public sealed class DatabaseRelocationService : IDatabaseRelocationService
         _logger.LogInformation("DB-Umzug: {Rows} Vorschaubild-Pfade auf {Thumbs} umgeschrieben", rows, newThumbs);
     }
 
-    /// <summary>WAL in die DB zurückschreiben, Zeilen zählen und per SQLite-Backup-API in <paramref name="destination"/> kopieren.</summary>
+    /// <summary>
+    /// WAL soweit möglich in die DB zurückschreiben, Zeilen zählen und per SQLite-Backup-API in
+    /// <paramref name="destination"/> kopieren. Der Checkpoint ist <c>PASSIVE</c>: die gehaltene Schreibsperre
+    /// (<see cref="AcquireWriteLock"/>) ließe <c>TRUNCATE</c> warten; die Backup-API liest den WAL-Inhalt ohnehin mit.
+    /// </summary>
     private Dictionary<string, long> BackupDatabase(string source, string destination)
     {
         using var src = OpenRaw(source, SqliteOpenMode.ReadWrite);
-        SqlitePragmaInterceptor.ApplyPragmas(src);
         using (var cmd = src.CreateCommand())
         {
-            cmd.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";
+            cmd.CommandText = "PRAGMA wal_checkpoint(PASSIVE);";
             using var reader = cmd.ExecuteReader();
             if (reader.Read() && reader.GetInt32(0) != 0)
             {
-                _logger.LogWarning("DB-Umzug: WAL-Checkpoint nicht vollständig (busy) — die Backup-API kopiert den WAL-Inhalt mit");
+                _logger.LogDebug("DB-Umzug: WAL-Checkpoint nicht vollständig — die Backup-API kopiert den WAL-Inhalt mit");
             }
         }
 
@@ -501,28 +562,25 @@ public sealed class DatabaseRelocationService : IDatabaseRelocationService
         }
     }
 
+    /// <summary>Kopiert nach der Liste aus <see cref="ThumbnailInventory"/> — kein weiterer Durchlauf durch den Ordner.</summary>
     private (int Copied, int Skipped) CopyThumbnails(
-        string source,
+        ThumbnailInventory inventory,
         string destination,
-        int total,
         IProgress<RelocationProgress>? progress,
         CancellationToken ct)
     {
         const string stage = "Vorschaubilder kopieren";
+        var total = inventory.Files.Count;
         progress?.Report(new RelocationProgress(stage, 0, total));
         var copied = 0;
         var skipped = 0;
+        var vanished = 0;
         var createdDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var options = new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true };
-        foreach (var file in Directory.EnumerateFiles(source, "*", options))
+        foreach (var relative in inventory.Files)
         {
             ct.ThrowIfCancellationRequested();
-            if (file.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase))
-            {
-                continue; // halb geschriebene Thumbnails (atomarer Write) — der Dienst erzeugt sie neu
-            }
-
-            var dest = Path.Combine(destination, Path.GetRelativePath(source, file));
+            var file = Path.Combine(inventory.Root, relative);
+            var dest = Path.Combine(destination, relative);
             try
             {
                 var dir = Path.GetDirectoryName(dest)!;
@@ -538,22 +596,32 @@ public sealed class DatabaseRelocationService : IDatabaseRelocationService
             {
                 throw new RelocationException("Der Zielordner ist voll — die Vorschaubilder passen nicht mehr hinein.", ex);
             }
+            catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+            {
+                vanished++; // seit der Liste entfernt (Papierkorb, Cache geleert) — gehört nicht mehr zum Katalog
+                _logger.LogDebug(ex, "DB-Umzug: Vorschaubild {File} existiert nicht mehr", file);
+            }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 skipped++;
                 _logger.LogDebug(ex, "DB-Umzug: Vorschaubild {File} nicht kopiert", file);
             }
 
-            if ((copied + skipped) % 250 == 0)
+            if ((copied + skipped + vanished) % 250 == 0)
             {
-                progress?.Report(new RelocationProgress(stage, copied + skipped, total));
+                progress?.Report(new RelocationProgress(stage, copied + skipped + vanished, total));
             }
         }
 
-        progress?.Report(new RelocationProgress(stage, copied + skipped, Math.Max(total, copied + skipped)));
+        progress?.Report(new RelocationProgress(stage, total, total));
         if (skipped > 0)
         {
             _logger.LogWarning("DB-Umzug: {Skipped} Vorschaubilder nicht kopiert — werden bei Bedarf neu erzeugt", skipped);
+        }
+
+        if (vanished > 0)
+        {
+            _logger.LogInformation("DB-Umzug: {Vanished} Vorschaubilder waren seit der Prüfung entfernt worden", vanished);
         }
 
         return (copied, skipped);
@@ -582,8 +650,9 @@ public sealed class DatabaseRelocationService : IDatabaseRelocationService
 
     /// <summary>
     /// Ordnerüberwachung stoppen, alle Bibliotheken über <see cref="IScanGate"/> belegen (wartet auf laufende Scans
-    /// und Datei-Batches), Thumbnail-Worker anhalten, DB für neue Verbindungen sperren und auf laufende Schreiber
-    /// warten (<c>BEGIN IMMEDIATE</c>).
+    /// und Datei-Batches), Thumbnail-Worker anhalten, DB sperren (Factory: neue Verbindungen und Saves auch älterer
+    /// EF-Kontexte) und die Schreibsperre der alten DB übernehmen (<c>BEGIN IMMEDIATE</c>, wartet auf laufende Schreiber
+    /// und bleibt bis zur Rücknahme bzw. zum Neustart gehalten).
     /// </summary>
     private async Task<Quiescence> QuiesceAsync(string databasePath, CancellationToken ct)
     {
@@ -620,7 +689,7 @@ public sealed class DatabaseRelocationService : IDatabaseRelocationService
 
             quiet.Suspension = (_factory as IDatabaseAccessGate)?.Suspend("Speicherort wird umgezogen");
             SqliteConnection.ClearAllPools();
-            WaitForWriters(databasePath);
+            quiet.WriteLock = AcquireWriteLock(databasePath);
             return quiet;
         }
         catch
@@ -630,20 +699,53 @@ public sealed class DatabaseRelocationService : IDatabaseRelocationService
         }
     }
 
-    /// <summary>Wartet (busy_timeout) auf eine laufende Schreib-Transaktion — danach kann keine neue mehr beginnen.</summary>
-    private static void WaitForWriters(string databasePath)
+    /// <summary>
+    /// Wartet (busy_timeout) auf eine laufende Schreib-Transaktion und hält danach selbst die Schreibsperre der Datei
+    /// (<c>BEGIN IMMEDIATE</c> ohne Ende). So erreicht kein Schreiber mehr die alte DB — auch keiner, der seine
+    /// Verbindung schon vor der Factory-Sperre geöffnet hatte; er bekommt nach busy_timeout <c>SQLITE_BUSY</c>.
+    /// Leser (Galerie, Backup-API) arbeiten im WAL-Modus weiter.
+    /// </summary>
+    private static SqliteConnection AcquireWriteLock(string databasePath)
     {
+        SqliteConnection? connection = null;
         try
         {
-            using var connection = OpenRaw(databasePath, SqliteOpenMode.ReadWrite);
+            connection = OpenRaw(databasePath, SqliteOpenMode.ReadWrite);
             using var cmd = connection.CreateCommand();
-            cmd.CommandText = "BEGIN IMMEDIATE; ROLLBACK;";
+            cmd.CommandText = "BEGIN IMMEDIATE;";
             cmd.ExecuteNonQuery();
+            return connection;
         }
         catch (SqliteException ex)
         {
+            connection?.Dispose();
             throw new RelocationException($"Die Datenbank wird noch beschrieben ({ex.Message}). Bitte später erneut versuchen.", ex);
         }
+    }
+
+    private static void ReleaseWriteLock(SqliteConnection connection)
+    {
+        try
+        {
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = "ROLLBACK;";
+            cmd.ExecuteNonQuery();
+        }
+        catch (SqliteException)
+        {
+            // Verbindung wird ohnehin geschlossen — SQLite verwirft die offene Transaktion dabei.
+        }
+        finally
+        {
+            connection.Dispose();
+        }
+    }
+
+    /// <summary>Gibt die nach einem erfolgreichen Umzug gehaltene Schreibsperre frei (Prozessende; Tests: „Neustart“).</summary>
+    public void Dispose()
+    {
+        var held = Interlocked.Exchange(ref _heldUntilRestart, null);
+        held?.ReleaseWriteLockOnly();
     }
 
     private sealed class Quiescence(DatabaseRelocationService owner)
@@ -656,8 +758,21 @@ public sealed class DatabaseRelocationService : IDatabaseRelocationService
 
         public IDisposable? Suspension { get; set; }
 
+        /// <summary>Verbindung mit offener <c>BEGIN IMMEDIATE</c>-Transaktion auf der alten DB.</summary>
+        public SqliteConnection? WriteLock { get; set; }
+
+        public void ReleaseWriteLockOnly()
+        {
+            if (WriteLock is { } connection)
+            {
+                WriteLock = null;
+                ReleaseWriteLock(connection);
+            }
+        }
+
         public async Task ResumeAsync()
         {
+            ReleaseWriteLockOnly();
             Suspension?.Dispose();
             Suspension = null;
             if (ThumbnailsPaused)
@@ -815,24 +930,6 @@ public sealed class DatabaseRelocationService : IDatabaseRelocationService
     private static bool HasAnyFile(string folder)
         => Directory.Exists(folder)
            && Directory.EnumerateFiles(folder, "*", new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true }).Any();
-
-    private static (int Count, long Bytes) MeasureDirectory(string root)
-    {
-        if (!Directory.Exists(root))
-        {
-            return (0, 0);
-        }
-
-        var count = 0;
-        long bytes = 0;
-        foreach (var file in new DirectoryInfo(root).EnumerateFiles("*", new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true }))
-        {
-            count++;
-            bytes += file.Length;
-        }
-
-        return (count, bytes);
-    }
 
     private static long FileLength(string path) => File.Exists(path) ? new FileInfo(path).Length : 0;
 

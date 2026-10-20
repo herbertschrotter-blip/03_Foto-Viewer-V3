@@ -69,13 +69,13 @@ public interface IThumbnailService
     }
 
     /// <summary>
-    /// Hält die Worker an (Umzug der Katalog-DB, ADR-0026): kein neuer Auftrag beginnt, neue Requests werden verworfen;
-    /// kehrt zurück, sobald die laufenden Aufträge fertig sind. Eingereihte Aufträge bleiben in der Queue.
-    /// Standard: keine Wirkung.
+    /// Hält die Worker an (Umzug der Katalog-DB, ADR-0026): kein neuer Auftrag beginnt, neue Requests werden ohne
+    /// DB-Zugriff zurückgestellt; kehrt zurück, sobald die laufenden Aufträge fertig sind. Eingereihte Aufträge bleiben
+    /// in der Queue. Standard: keine Wirkung.
     /// </summary>
     Task PauseAsync(CancellationToken ct = default) => Task.CompletedTask;
 
-    /// <summary>Hebt <see cref="PauseAsync"/> auf. Standard: keine Wirkung.</summary>
+    /// <summary>Hebt <see cref="PauseAsync"/> auf und reicht die zurückgestellten Requests sofort nach. Standard: keine Wirkung.</summary>
     void Resume()
     {
     }

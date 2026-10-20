@@ -51,7 +51,7 @@ public sealed class ThumbnailServicePauseTests
 
         await svc.RequestThumbnailsAsync([Request(2)]);
         await Task.Delay(100);
-        renderer.Calls.Should().Be(1, "pausiert: keine DB-Zugriffe, Anforderungen werden verworfen");
+        renderer.Calls.Should().Be(1, "pausiert: keine DB-Zugriffe, Anforderungen werden zurückgestellt");
 
         svc.Resume();
         await svc.RequestThumbnailsAsync([Request(2)]);
@@ -61,6 +61,40 @@ public sealed class ThumbnailServicePauseTests
             await Task.Delay(10);
         }
 
+        renderer.Calls.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task Waehrend_der_Pause_angeforderte_Vorschaubilder_kommen_nach_Resume_ohne_neue_Anforderung()
+    {
+        using var fx = await TempLibraryFixture.CreateAsync();
+        var renderer = new FakeImageRenderer();
+        using var svc = new ThumbnailService(fx.ContextFactory, fx.Paths, renderer, new FakeVideoRenderer(), NullLogger<ThumbnailService>.Instance);
+        var ready = new System.Collections.Concurrent.ConcurrentBag<int>();
+        svc.ThumbnailReady += e => ready.Add(e.FileId);
+        ThumbnailRequest Request(int id, DateTime modified) => new(1, id, fx.WriteLibraryFile($"img{id}.jpg"), MediaType.Image, modified);
+
+        await svc.PauseAsync();
+        await svc.RequestThumbnailsAsync([Request(1, Modified.AddDays(-1)), Request(2, Modified)]);
+        await svc.RequestThumbnailsAsync([Request(1, Modified)]); // dieselbe Datei erneut: die neueste Anforderung gilt
+        await svc.RequestThumbnailsAsync([new ThumbnailRequest(1, 3, "archiv.zip", MediaType.Archive, Modified)]);
+        await Task.Delay(100);
+        renderer.Calls.Should().Be(0, "pausiert: zurückgestellt, nicht gerendert");
+
+        svc.Resume(); // Rücknahme des Umzugs — die Galerie fordert nichts neu an
+
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while ((renderer.Calls < 2 || ready.Count < 2) && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(10);
+        }
+
+        renderer.Calls.Should().Be(2, "je Datei genau ein Auftrag, Archive haben kein Vorschaubild");
+        ready.Should().BeEquivalentTo([1, 2]);
+
+        // Nachgeholt heißt erledigt: eine weitere Anforderung trifft den Cache statt neu zu rendern
+        await svc.RequestThumbnailsAsync([Request(1, Modified)]);
+        await Task.Delay(100);
         renderer.Calls.Should().Be(2);
     }
 }

@@ -1,5 +1,7 @@
+using System.Data.Common;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging;
 using PhotoViewerV3.Data;
 using PhotoViewerV3.Services.Infrastructure;
@@ -26,9 +28,11 @@ public interface ILibraryContextFactory
 }
 
 /// <summary>
-/// Sperrt neue Verbindungen zur Katalog-DB, solange sie umzieht (ADR-0026): wer danach <c>Create</c> oder
-/// <c>OpenSqliteConnection</c> aufruft, bekommt eine <see cref="DatabaseSuspendedException"/> statt in eine DB zu
-/// schreiben, die gerade kopiert wird. Bereits offene Verbindungen bleiben unberührt.
+/// Sperrt die Katalog-DB, solange sie umzieht (ADR-0026): wer danach <c>Create</c> oder <c>OpenSqliteConnection</c>
+/// aufruft, bekommt eine <see cref="DatabaseSuspendedException"/> statt in eine DB zu schreiben, die gerade kopiert
+/// wird. Das gilt auch für EF-Kontexte, die <em>vor</em> der Sperre erzeugt wurden: ihr Interceptor weist danach
+/// <c>SaveChanges</c>, neue Transaktionen und Non-Query-Befehle ab (Lesen bleibt erlaubt). Rohe Verbindungen, die schon offen sind, hält die Schreibsperre des Umzugs fern
+/// (<c>BEGIN IMMEDIATE</c> bleibt bis zur Rücknahme bzw. zum Neustart gehalten).
 /// </summary>
 public interface IDatabaseAccessGate
 {
@@ -48,6 +52,7 @@ public sealed class LibraryContextFactory : ILibraryContextFactory, IDatabaseAcc
     private readonly SqlitePragmaInterceptor _pragmaInterceptor;
     private readonly ILoggerFactory? _loggerFactory;
     private readonly string _connectionString;
+    private readonly AccessGateInterceptor _gateInterceptor;
     private string? _suspendReason;
 
     public LibraryContextFactory(
@@ -58,6 +63,7 @@ public sealed class LibraryContextFactory : ILibraryContextFactory, IDatabaseAcc
         _paths = paths;
         _pragmaInterceptor = pragmaInterceptor;
         _loggerFactory = loggerFactory;
+        _gateInterceptor = new AccessGateInterceptor(this);
         _connectionString = new SqliteConnectionStringBuilder
         {
             DataSource = _paths.LibraryDatabasePath,
@@ -87,7 +93,7 @@ public sealed class LibraryContextFactory : ILibraryContextFactory, IDatabaseAcc
         ThrowIfSuspended();
         var optionsBuilder = new DbContextOptionsBuilder<LibraryContext>()
             .UseSqlite(_connectionString)
-            .AddInterceptors(_pragmaInterceptor);
+            .AddInterceptors(_gateInterceptor, _pragmaInterceptor);
 
         if (_loggerFactory is not null)
         {
@@ -111,6 +117,57 @@ public sealed class LibraryContextFactory : ILibraryContextFactory, IDatabaseAcc
         if (Volatile.Read(ref _suspendReason) is { } reason)
         {
             throw new DatabaseSuspendedException(reason);
+        }
+    }
+
+    /// <summary>
+    /// Hängt an jedem Kontext dieser Factory und prüft die Sperre erst beim Zugriff — so erreicht sie auch Kontexte,
+    /// die vor <see cref="Suspend"/> erzeugt wurden und erst danach speichern (ADR-0026). Lesen bleibt für solche
+    /// Kontexte erlaubt (auch mit neu geöffneter Verbindung); es verändert die alte DB nicht.
+    /// </summary>
+    private sealed class AccessGateInterceptor(LibraryContextFactory owner)
+        : ISaveChangesInterceptor, IDbTransactionInterceptor, IDbCommandInterceptor
+    {
+        public InterceptionResult<int> SavingChanges(DbContextEventData eventData, InterceptionResult<int> result)
+        {
+            owner.ThrowIfSuspended();
+            return result;
+        }
+
+        public ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            owner.ThrowIfSuspended();
+            return ValueTask.FromResult(result);
+        }
+
+        public InterceptionResult<DbTransaction> TransactionStarting(
+            DbConnection connection, TransactionStartingEventData eventData, InterceptionResult<DbTransaction> result)
+        {
+            owner.ThrowIfSuspended();
+            return result;
+        }
+
+        public ValueTask<InterceptionResult<DbTransaction>> TransactionStartingAsync(
+            DbConnection connection, TransactionStartingEventData eventData, InterceptionResult<DbTransaction> result,
+            CancellationToken cancellationToken = default)
+        {
+            owner.ThrowIfSuspended();
+            return ValueTask.FromResult(result);
+        }
+
+        // ExecuteSqlRaw, ExecuteUpdate/ExecuteDelete laufen als Non-Query.
+        public InterceptionResult<int> NonQueryExecuting(DbCommand command, CommandEventData eventData, InterceptionResult<int> result)
+        {
+            owner.ThrowIfSuspended();
+            return result;
+        }
+
+        public ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            owner.ThrowIfSuspended();
+            return ValueTask.FromResult(result);
         }
     }
 

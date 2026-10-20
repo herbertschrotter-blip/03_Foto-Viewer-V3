@@ -42,6 +42,29 @@ mehr in die alte DB schreiben, sonst gehen Änderungen verloren.
    (`IAppRestartService`). Die alten Dateien (DB, `-wal`, `-shm`, alter `thumbs\`) löscht der nächste Start im
    Hintergrund (`DatabaseLocationStore.RunPendingDeletesAsync`, mit Wiederholung, nie etwas vom aktiven Ort).
 
+### Ergänzung 0.2.21 (2026-10-20): Schreiber vor der Sperre, eine Dateiliste, zurückgestellte Vorschaubilder
+
+7. **Sperre greift beim Zugriff, nicht nur beim Erzeugen:** jeder Kontext der `LibraryContextFactory` trägt einen
+   Gate-Interceptor, der bei gesetzter Sperre `SaveChanges`, neue Transaktionen und Non-Query-Befehle
+   (`ExecuteSqlRaw`, `ExecuteUpdate/Delete`) mit `DatabaseSuspendedException` abweist — auch für Kontexte, die vor der
+   Sperre erzeugt wurden (Favorit im selben Augenblick). Lesen bleibt für solche Kontexte erlaubt; neue Kontexte
+   verweigert `Create` wie bisher.
+8. **Schreibsperre wird gehalten:** die `BEGIN IMMEDIATE`-Barriere wird nicht mehr sofort zurückgerollt, sondern bleibt
+   auf einer eigenen Verbindung offen — bis zur Rücknahme bzw. nach Erfolg bis zum Prozessende (der Dienst hält die
+   Referenz; `Dispose` gibt sie frei). Damit erreicht auch eine rohe Verbindung, die schon vor der Sperre offen war,
+   die alte Datei nicht mehr (`SQLITE_BUSY` nach busy_timeout). Leser und die Backup-API arbeiten im WAL-Modus weiter.
+   Der Checkpoint vor der Kopie ist deshalb `PASSIVE` statt `TRUNCATE` (TRUNCATE würde auf die eigene Sperre warten);
+   die Backup-API kopiert den WAL-Inhalt ohnehin mit.
+9. **Thumbnail-Ordner einmal durchlaufen:** `CheckTargetAsync` erstellt die Dateiliste (`ThumbnailInventory`) und
+   merkt sie sich; `RelocateAsync` übernimmt sie (ohne vorherige Prüfung: ein eigener Durchlauf), gleicht sie nach der
+   Pause der Thumbnail-Worker mit der DB ab (Zeilen mit `GeneratedAtUtc`/`LastAttemptAtUtc` ab Beginn des Durchlaufs
+   − 2 s, deren Datei existiert) und prüft den Platz mit der endgültigen Liste und frisch gelesenem freiem Platz erneut.
+   Kopiert wird nach der Liste; seither entfernte Dateien gelten nicht als Fehler. „Übernehmen“ durchläuft den Ordner
+   gar nicht. Annahme: Vorschaubild-Dateien entstehen nur über den Thumbnail-Dienst (der die Zeile nach der Datei
+   schreibt); eine fremde Datei, die nach der Prüfung ohne Zeile in den Ordner gelegt wird, zieht nicht mit.
+10. **Vorschaubilder nach Rücknahme:** während der Pause angeforderte Vorschaubilder werden je FileId zurückgestellt
+    (die neueste Anforderung gilt) und von `Resume` sofort nachgereicht — nicht erst mit dem nächsten Seitenwechsel.
+
 ## Begründung
 
 - Neustart ist die einfachere, robuste Variante: jeder Dienst startet sauber mit dem neuen Pfad; keine Invalidierung
@@ -82,7 +105,8 @@ mehr in die alte DB schreiben, sonst gehen Änderungen verloren.
 ## Referenzen
 
 - `src/PhotoViewerV3.Services/Infrastructure/AppDataPaths.cs`, `DatabaseLocationStore.cs`
-- `src/PhotoViewerV3.Services/Database/Relocation/*`, `LibraryContextFactory.cs` (`IDatabaseAccessGate`)
+- `src/PhotoViewerV3.Services/Database/Relocation/*` (ab 0.2.21 mit `ThumbnailInventory.cs`), `LibraryContextFactory.cs`
+  (`IDatabaseAccessGate`, Gate-Interceptor), `Thumbnails/ThumbnailService.cs` (zurückgestellte Anforderungen)
 - `src/PhotoViewerV3.Wpf/Settings/SettingsViewModel.cs`, `Shell/AppRestartService.cs`, `App.xaml.cs`
 - Tests: `tests/PhotoViewerV3.Tests/Database/DatabaseRelocationServiceTests.cs`, `DatabaseLocationStoreTests.cs`,
   `tests/PhotoViewerV3.Wpf.Tests/Settings/SettingsRelocationTests.cs`
