@@ -61,7 +61,7 @@ internal sealed class SmokeCheckException : Exception
 /// Ordnerauswahl sind Fakes (<see cref="SmokeTestRunner.ConfigureServices"/>), das Scan-Ergebnis kommt als
 /// <see cref="ScanCompletedMessage"/> vom Messenger.
 /// </summary>
-internal sealed class SmokeScenario
+internal sealed partial class SmokeScenario
 {
     private static readonly TimeSpan ShortWait = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan LongWait = TimeSpan.FromSeconds(120);
@@ -150,6 +150,7 @@ internal sealed class SmokeScenario
         _categories = services.GetRequiredService<ICategoryService>();
         _categoryManagement = services.GetRequiredService<CategoryManagementViewModel>();
         _sorterPage = services.GetRequiredService<SorterPageViewModel>();
+        _scanGate = services.GetRequiredService<IScanGate>();
         _messenger.Register<SmokeScenario, ScanCompletedMessage>(this, static (r, m) => r._lastScan = m.Result);
     }
 
@@ -205,6 +206,7 @@ internal sealed class SmokeScenario
         await StepAsync("Tags (Zuweisen, Filter, Suche, Verwaltung) + Listenansicht", TagsAndListViewAsync).ConfigureAwait(true);
         await StepAsync("Kategorien (Anlegen, Zuweisen, Filter, Listenspalte, Verwaltung)", CategoriesAsync).ConfigureAwait(true);
         await StepAsync("Sortierer: Eingang → Archiv (Wurzel-Auswahl, gesperrtes Ziel, Katalog, Rückgängig, Flatten im Eingang)", SorterInboxToArchiveAsync).ConfigureAwait(true);
+        await StepAsync("Wartezustände: Datei-Operation wartet auf Scan (Statusleiste, Abbrechen), Scan wartet auf Datei-Batch (Bibliotheksseite)", GateWaitAsync).ConfigureAwait(true);
         await StepAsync("Ordnerüberwachung: Datei kopieren → automatischer Diff-Scan → Galerie", WatchAsync).ConfigureAwait(true);
         if (_cleanup)
         {

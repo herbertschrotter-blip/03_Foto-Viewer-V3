@@ -3,6 +3,52 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.22] — 2026-10-20
+
+### Neu (offene Punkte aus 0.2.14 und 0.2.17, ADR-0025 Nachtrag)
+- **Wartezustände der Scan-Sperre sichtbar**: `ScanGate` meldet über den Messenger, wenn ein Scan oder Datei-Batch auf
+  eine belegte Bibliothek warten muss — `ScanGateWaitStartedMessage` / `ScanGateWaitEndedMessage`
+  (`Services/Messaging/ScanGateMessages.cs`, `ScanGateWait` mit Wartendem und Belegung Scan/Datei-Batch). Wer die
+  Sperre sofort bekommt, meldet nichts. Neu in `IScanGate`: `GetWaits()` (Momentaufnahme) und `CancelWait(id)` — der
+  Wartende bekommt eine `ScanGateWaitCanceledException` (ein `OperationCanceledException`), bevor der Batch etwas
+  protokolliert oder ändert; die Abbruch-Fortsetzungen laufen nicht auf dem UI-Thread.
+- **Statusleiste**: solange eine Datei-Operation (Verschieben, Papierkorb, Ins Archiv, Umbenennen, Ordner
+  anlegen/umbenennen, Rückgängig, Sortierer-Lauf) auf einen laufenden Scan derselben Bibliothek wartet, steht links
+  „Wartet auf laufenden Scan…“ (Uhr-Symbol, Tooltip) mit **Abbrechen**; danach kurz „Wartende Datei-Operation
+  abgebrochen“. Anzeige-Modell `Shell/ScanGateWaitIndicator` (Filter je Verwender, UI-Thread-Dispatch).
+- **Bibliotheksseite**: ein manueller Scan, der auf einen anderen Scan oder einen Datei-Batch wartet, zeigt im
+  Scan-Panel „Wartet auf laufenden Scan…“ bzw. „Wartet auf laufende Datei-Operation…“ statt „Ordner werden
+  durchsucht…“, bis er die Sperre hat (`LibraryViewModel.IsWaitingForGate`). **Abbrechen** während des Wartens meldet
+  „Der Scan wurde abgebrochen, bevor er begann; der Katalog ist unverändert.“
+- `StatusBarViewModel` und `LibraryViewModel` nehmen optional einen `IMessenger` (Tests); `StatusBarViewModel` bekommt
+  `IScanGate` per DI. Die Galerie bleibt unverändert (sie verwirft den Abbruch wie bisher still).
+
+### Tests
+- `tests/PhotoViewerV3.Tests`: 432 (+8 `Watch/ScanGateWaitTests`: keine Meldung ohne Warten, Beginn/Ende mit Wartendem
+  und Belegung, Scan wartet auf Datei-Batch, `CancelWait` mit eigener Ausnahme ohne Belegung, Abbruch über das Token des
+  Aufrufers zählt nicht als Benutzer-Abbruch, unbekannte Id, mehrere Bibliotheken, `MoveAsync` beim Warten abgebrochen —
+  nichts verschoben, kein Batch protokolliert, danach normal).
+- `tests/PhotoViewerV3.Wpf.Tests`: 175 (+7 `Shell/ScanGateWaitViewModelTests`: Indikator zeigt/abbricht, filtert,
+  übernimmt ein schon laufendes Warten; Statusleiste mit Bestätigung; Bibliotheksseite wartet auf Datei-Batch, Abbruch
+  während des Wartens, kein Hinweis ohne Konkurrenz) mit `Fixtures/NullService` (DispatchProxy-Leerdienste).
+- Rauchtest: neuer Schritt „Wartezustände“ (belegt die Sperre selbst: Statusleiste + Abbrechen, Scan-Panel wartet auf
+  Datei-Batch, Screenshots `12-statusleiste-wartet`, `12-bibliothek-wartet`). Rauchtest 22/22 OK, 0 WPF-Binding-Fehler
+  (ein erster Lauf scheiterte einmal an „Thumbnails neu erzeugt: 43/42“ im Schritt „Neu aufbauen“ — Zeitverhalten der
+  Vorschaubilder, nicht berührt; Wiederholung grün).
+- Die neue Wpf-Testklasse läuft in einer eigenen, nicht parallelen Collection (teilt den Test-UI-Thread mit den
+  Fenster-Tests). Unter hoher Rechnerlast (sechs Agenten parallel) schlagen die zeitkritischen Fenster-Tests
+  (`EarlyCloseWindowTests`, `AppDialogWindowTests` „< 10 s“, `GalleryToolbarLayoutTests`) im parallelen Lauf
+  sporadisch fehl — auch ohne die neuen Tests; seriell (`-- xUnit.ParallelizeTestCollections=false`) 175/175 grün.
+
+### Offen
+- Die Bibliotheksseite ordnet ein Warten ihrem Scan über Bibliothek und Zeitpunkt zu (erster wartender Scan vor dem
+  ersten eigenen Fortschritt): wartet gleichzeitig ein automatischer Scan der Ordnerüberwachung, kann sie den falschen
+  erwischen. Abhilfe wäre eine Kennung des Aufrufers in `IScanGate.AcquireAsync`.
+- Die Ruhephase beim Umzug der Katalog-DB belegt die Sperre wie ein Datei-Batch; wartet sie, erscheint der Hinweis
+  ebenfalls in der Statusleiste (der Umzug läuft ohnehin modal mit eigenem Zeitlimit).
+- Eine Datei-Operation, die hinter einer anderen auf den internen Schreib-Lock des `FileOperationService` wartet, zeigt
+  keinen Hinweis (nur das Warten auf die Scan-Sperre wird gemeldet).
+
 ## [0.2.21] — 2026-10-20
 
 ### Behoben (offene Punkte aus 0.2.18, ADR-0026 ergänzt)

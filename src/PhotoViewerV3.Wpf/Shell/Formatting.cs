@@ -45,4 +45,9 @@ public static class Formatting
         Services.Scanning.ScanPhase.Indexing => "Suchindex wird erstellt…",
         _ => "Ordner werden durchsucht…",
     };
+
+    /// <summary>Hinweis, solange ein Scan oder eine Datei-Operation auf die Sperre der Bibliothek wartet (0.2.22).</summary>
+    public static string GateWait(ScanGateUse holder) => holder == ScanGateUse.Scan
+        ? "Wartet auf laufenden Scan…"
+        : "Wartet auf laufende Datei-Operation…";
 }

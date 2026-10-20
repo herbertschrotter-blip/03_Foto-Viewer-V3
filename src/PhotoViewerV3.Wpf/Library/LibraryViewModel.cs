@@ -8,9 +8,11 @@ using System.Windows;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Logging;
 using PhotoViewerV3.Domain.Enums;
 using PhotoViewerV3.Services.Library;
+using PhotoViewerV3.Services.Messaging;
 using PhotoViewerV3.Services.Scanning;
 using PhotoViewerV3.Shell;
 
@@ -24,6 +26,8 @@ namespace PhotoViewerV3.Libraries;
 /// <see cref="ScanOutcome.MassMissingBlocked"/> Rückfrage [Erneut prüfen] [Als fehlend markieren] [Abbrechen],
 /// bei <see cref="ScanOutcome.LibraryOffline"/> [Erneut prüfen] [Andere Bibliothek wählen].
 /// Nach einem Scan mit Änderungen wird automatisch zur Galerie gewechselt.
+/// Wartet der Scan auf einen anderen Scan oder Datei-Batch derselben Bibliothek (Scan-Sperre, ADR-0025), zeigt das
+/// Panel bis zum Start „Wartet auf laufenden Scan…“ bzw. „Wartet auf laufende Datei-Operation…“ (0.2.22).
 /// </summary>
 public sealed partial class LibraryViewModel : ObservableObject
 {
@@ -38,12 +42,23 @@ public sealed partial class LibraryViewModel : ObservableObject
     private readonly Stopwatch _scanStopwatch = new();
     private CancellationTokenSource? _scanCts;
 
+    /// <summary>Bibliothek des eigenen Scans, solange er noch keinen Fortschritt gemeldet hat (nur dann zählt ein Warten).</summary>
+    private int? _gateWatchLibraryId;
+
+    /// <summary>Das Warten auf die Scan-Sperre, das das Panel gerade anzeigt.</summary>
+    private long? _gateWaitId;
+
+    /// <summary>Das angezeigte Warten endete ohne Sperre (Abbruch) — der Scan hat nichts angefasst.</summary>
+    private bool _gateWaitAborted;
+
+    /// <param name="messenger">Optional (Tests); produktiv WeakReferenceMessenger.Default.</param>
     public LibraryViewModel(
         ILibraryService libraries,
         IScanService scanner,
         IDialogService dialogs,
         INavigationService navigation,
-        ILogger<LibraryViewModel> logger)
+        ILogger<LibraryViewModel> logger,
+        IMessenger? messenger = null)
     {
         _libraries = libraries;
         _scanner = scanner;
@@ -54,6 +69,10 @@ public sealed partial class LibraryViewModel : ObservableObject
         var dispatcher = Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
         _elapsedTimer = new DispatcherTimer(ElapsedTickInterval, DispatcherPriority.Background, OnElapsedTick, dispatcher);
         _elapsedTimer.Stop();
+
+        var bus = messenger ?? WeakReferenceMessenger.Default;
+        bus.Register<LibraryViewModel, ScanGateWaitStartedMessage>(this, static (r, m) => UiThread.Post(() => r.OnGateWaitStarted(m.Wait)));
+        bus.Register<LibraryViewModel, ScanGateWaitEndedMessage>(this, static (r, m) => UiThread.Post(() => r.OnGateWaitEnded(m)));
     }
 
     public ObservableCollection<LibraryListItem> Libraries { get; } = new();
@@ -85,6 +104,10 @@ public sealed partial class LibraryViewModel : ObservableObject
 
     [ObservableProperty]
     private string _scanPhaseText = string.Empty;
+
+    /// <summary>true, solange der eigene Scan auf die Sperre der Bibliothek wartet (ScanPhaseText = „Wartet auf …“).</summary>
+    [ObservableProperty]
+    private bool _isWaitingForGate;
 
     [ObservableProperty]
     private int _scanFolders;
@@ -600,6 +623,7 @@ public sealed partial class LibraryViewModel : ObservableObject
         ScanElapsedText = Formatting.Duration(TimeSpan.Zero);
 
         _scanCts = new CancellationTokenSource();
+        ResetGateWait(item.Id);
         IsScanning = true;
         _scanStopwatch.Restart();
         _elapsedTimer.Start();
@@ -617,6 +641,11 @@ public sealed partial class LibraryViewModel : ObservableObject
                 "Scan beendet: {Name} — {Outcome}: {Added} neu, {Modified} geändert, {Missing} fehlend ({Detected} erkannt), {Reappeared} wieder da, {Folders} neue Ordner in {Sec:N1} s",
                 item.Name, result.Outcome, result.Added, result.Modified, result.MarkedMissing, result.MissingDetected, result.Reappeared, result.FoldersAdded, result.TotalDuration.TotalSeconds);
             return result;
+        }
+        catch (OperationCanceledException) when (IsWaitingForGate || _gateWaitAborted)
+        {
+            ShowSummary("Scan abgebrochen", "Der Scan wurde abgebrochen, bevor er begann; der Katalog ist unverändert.", warning: true);
+            return null;
         }
         catch (OperationCanceledException)
         {
@@ -638,6 +667,7 @@ public sealed partial class LibraryViewModel : ObservableObject
         {
             _elapsedTimer.Stop();
             _scanStopwatch.Stop();
+            ResetGateWait(null);
             IsScanning = false;
             _scanCts.Dispose();
             _scanCts = null;
@@ -697,8 +727,57 @@ public sealed partial class LibraryViewModel : ObservableObject
             string.Equals(LibraryService.NormalizeRootPath(l.RootPath), normalized, StringComparison.OrdinalIgnoreCase));
     }
 
+    // ---- Warten auf die Scan-Sperre (0.2.22) ------------------------------------------------------
+
+    private void ResetGateWait(int? libraryId)
+    {
+        _gateWatchLibraryId = libraryId;
+        _gateWaitId = null;
+        _gateWaitAborted = false;
+        IsWaitingForGate = false;
+    }
+
+    /// <summary>
+    /// Ein Scan der Bibliothek des eigenen Scans wartet, bevor der eigene Fortschritt meldet → das ist (fast sicher) der
+    /// eigene. Nur der erste zählt; wartet zugleich ein automatischer Scan der Ordnerüberwachung, kann die Anzeige den
+    /// falschen erwischen (siehe CHANGELOG 0.2.22, „Offen“).
+    /// </summary>
+    private void OnGateWaitStarted(ScanGateWait wait)
+    {
+        if (wait.Waiter != ScanGateUse.Scan || _gateWatchLibraryId != wait.LibraryId || _gateWaitId is not null || !IsScanning)
+        {
+            return;
+        }
+
+        _gateWaitId = wait.WaitId;
+        IsWaitingForGate = true;
+        ScanPhaseText = Formatting.GateWait(wait.Holder);
+        _logger.LogInformation("Scan wartet auf die Bibliothek {LibraryId} ({Holder} läuft)", wait.LibraryId, wait.Holder);
+    }
+
+    private void OnGateWaitEnded(ScanGateWaitEndedMessage message)
+    {
+        if (_gateWaitId != message.Wait.WaitId)
+        {
+            return;
+        }
+
+        _gateWaitId = null;
+        IsWaitingForGate = false;
+        if (message.Acquired)
+        {
+            _gateWatchLibraryId = null; // der eigene Scan läuft — weitere Wartende gehören anderen
+            ScanPhaseText = Formatting.ScanPhase(ScanPhase.Enumerating);
+        }
+        else
+        {
+            _gateWaitAborted = true; // die Abbruch-Ausnahme des Scans kommt gleich hinterher
+        }
+    }
+
     private void ApplyProgress(ScanProgress p)
     {
+        ResetGateWait(null);
         ScanFolders = p.FoldersDiscovered;
         ScanFiles = p.FilesDiscovered;
         ScanSizeText = Formatting.Bytes(p.TotalBytesDiscovered);

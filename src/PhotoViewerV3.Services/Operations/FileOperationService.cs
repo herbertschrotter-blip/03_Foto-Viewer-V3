@@ -1777,6 +1777,13 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
                 leases.Add(await _scanGate.AcquireForFileOperationAsync(libraryId, ct).ConfigureAwait(false));
             }
         }
+        catch (ScanGateWaitCanceledException ex)
+        {
+            // „Abbrechen“ in der Statusleiste (0.2.22): der Batch hat noch nichts protokolliert oder geändert.
+            _logger.LogInformation("Datei-Operation beim Warten auf die Bibliothek {LibraryId} abgebrochen", ex.Wait.LibraryId);
+            ReleaseAll(leases);
+            throw;
+        }
         catch
         {
             ReleaseAll(leases);

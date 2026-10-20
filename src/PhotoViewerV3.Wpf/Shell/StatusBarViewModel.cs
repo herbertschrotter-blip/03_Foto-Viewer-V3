@@ -22,7 +22,8 @@ namespace PhotoViewerV3.Shell;
 /// Statusleiste gemäß ADR-0013 mit den vier Indikatoren: (1) Scan-Fortschritt (ScanProgress-/ScanCompleted-/
 /// ScanAbortedMessage), (2) Thumbnail-Warteschlange (IThumbnailService.PendingCount, alle 500 ms),
 /// (3) Hintergrund-Aktivität und (4) Recovery-Hinweise: unvollständige oder fehlgeschlagene OperationBatches
-/// (IFileOperationService.GetRecentBatchesAsync — nur Anzeige) sowie „Bibliothek offline“.
+/// (IFileOperationService.GetRecentBatchesAsync — nur Anzeige) sowie „Bibliothek offline“. Dazu (0.2.22) der Hinweis
+/// „Wartet auf laufenden Scan…“ mit „Abbrechen“, solange eine Datei-Operation auf die Scan-Sperre wartet (ADR-0025).
 /// Alle Messenger-Nachrichten werden auf den UI-Thread dispatcht.
 /// </summary>
 public sealed partial class StatusBarViewModel : ObservableObject, IDisposable
@@ -42,7 +43,7 @@ public sealed partial class StatusBarViewModel : ObservableObject, IDisposable
     private readonly ILibraryService _libraries;
     private readonly IFileOperationService _fileOperations;
     private readonly ILogger<StatusBarViewModel> _logger;
-    private readonly IMessenger _messenger = WeakReferenceMessenger.Default;
+    private readonly IMessenger _messenger;
     private readonly DispatcherTimer _thumbnailTimer;
     private readonly DispatcherTimer _resultTimer;
     private readonly DispatcherTimer _recoveryTimer;
@@ -65,16 +66,22 @@ public sealed partial class StatusBarViewModel : ObservableObject, IDisposable
     /// <summary>Tooltip zum Recovery-Hinweis: die betroffenen Batches.</summary>
     [ObservableProperty] private string? _recoveryDetails;
 
+    /// <param name="messenger">Optional (Tests); produktiv WeakReferenceMessenger.Default.</param>
     public StatusBarViewModel(
         IThumbnailService thumbnails,
         ILibraryService libraries,
         IFileOperationService fileOperations,
-        ILogger<StatusBarViewModel> logger)
+        IScanGate scanGate,
+        ILogger<StatusBarViewModel> logger,
+        IMessenger? messenger = null)
     {
+        _messenger = messenger ?? WeakReferenceMessenger.Default;
         _thumbnails = thumbnails;
         _libraries = libraries;
         _fileOperations = fileOperations;
         _logger = logger;
+        FileOperationWait = new ScanGateWaitIndicator(scanGate, static w => w.Waiter == ScanGateUse.FileOperation, _messenger);
+        FileOperationWait.Ended += OnFileOperationWaitEnded;
 
         var dispatcher = Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
         _thumbnailTimer = new DispatcherTimer(ThumbnailPollInterval, DispatcherPriority.Background, OnThumbnailTick, dispatcher);
@@ -92,6 +99,9 @@ public sealed partial class StatusBarViewModel : ObservableObject, IDisposable
         // Jede Datei-Operation endet mit einer FilesChangedMessage → Batch-Status neu prüfen (billig: 50 Zeilen).
         _messenger.Register<StatusBarViewModel, FilesChangedMessage>(this, static (r, m) => UiThread.Post(() => { _ = r.RefreshRecoveryAsync(); }));
     }
+
+    /// <summary>Datei-Operationen, die auf einen laufenden Scan derselben Bibliothek warten (Hinweis + „Abbrechen“).</summary>
+    public ScanGateWaitIndicator FileOperationWait { get; }
 
     /// <summary>Einmal nach dem Laden des Hauptfensters: aktive Bibliothek, Offline-Hinweis und Batch-Status ermitteln.</summary>
     public async Task InitializeAsync()
@@ -239,6 +249,21 @@ public sealed partial class StatusBarViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>Nach „Abbrechen“ kurz bestätigen — die Galerie verwirft den Abbruch still (der wartende Batch hat noch nichts geändert).</summary>
+    private void OnFileOperationWaitEnded(ScanGateWaitEndedMessage message)
+    {
+        if (!message.CanceledByUser)
+        {
+            return;
+        }
+
+        _logger.LogInformation("Statusleiste: wartende Datei-Operation abgebrochen (Bibliothek {LibraryId})", message.Wait.LibraryId);
+        ScanResultIsError = false;
+        ScanResultText = "Wartende Datei-Operation abgebrochen";
+        _resultTimer.Stop();
+        _resultTimer.Start();
+    }
+
     private void OnResultTick(object? sender, EventArgs e)
     {
         _resultTimer.Stop();
@@ -381,6 +406,8 @@ public sealed partial class StatusBarViewModel : ObservableObject, IDisposable
         _resultTimer.Stop();
         _recoveryTimer.Stop();
         _watchTimer.Stop();
+        FileOperationWait.Ended -= OnFileOperationWaitEnded;
+        FileOperationWait.Dispose();
         _messenger.UnregisterAll(this);
     }
 }

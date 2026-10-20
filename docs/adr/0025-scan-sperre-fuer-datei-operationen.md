@@ -61,6 +61,17 @@ nicht umgesetzt“). Ein pauschales Ignorieren aller Ereignisse während eines B
   vermieden werden soll.
 - **Eigene Sperre im FileOperationService, Scan prüft sie** → verworfen: zwei Sperren mit Reihenfolgeregel statt einer.
 
+## Nachtrag 2026-10-20 (0.2.22): Wartezustände sichtbar
+
+Ergänzt die Entscheidung, ändert sie nicht. Muss ein Aufrufer auf die Sperre warten, sendet `ScanGate`
+`ScanGateWaitStartedMessage` und am Ende `ScanGateWaitEndedMessage` (Services/Messaging, `ScanGateWait` mit Wartendem
+und Belegung: Scan oder Datei-Batch); wer die Sperre sofort bekommt, meldet nichts. `IScanGate.GetWaits()` liefert eine
+Momentaufnahme, `IScanGate.CancelWait(id)` bricht ein Warten ab — der Aufrufer bekommt eine
+`ScanGateWaitCanceledException` (ein `OperationCanceledException`), bevor der Batch etwas protokolliert oder ändert.
+Die Statusleiste zeigt wartende Datei-Operationen („Wartet auf laufenden Scan…“, **Abbrechen**), die Bibliotheksseite
+einen wartenden manuellen Scan („Wartet auf laufende Datei-Operation…“ bzw. „… laufenden Scan…“). Damit entfällt der
+erste Punkt unter „Negativ“ („die Galerie zeigt dabei nur den laufenden Scan“).
+
 ## Referenzen
 
 - `src/PhotoViewerV3.Services/Scanning/ScanGate.cs`, `src/PhotoViewerV3.Services/Watch/OwnChangeRegistry.cs`,
@@ -68,4 +79,7 @@ nicht umgesetzt“). Ein pauschales Ignorieren aller Ereignisse während eines B
 - Tests: `tests/PhotoViewerV3.Tests/Operations/FileOperationScanGateTests.cs`,
   `tests/PhotoViewerV3.Tests/Watch/LibraryWatchServiceTests.OwnChanges.cs`, `tests/PhotoViewerV3.Tests/Watch/OwnChangeRegistryTests.cs`,
   `tests/PhotoViewerV3.Wpf.Tests/ArchiveTarget/ArchiveMoveServiceGateTests.cs`
-- CHANGELOG 0.2.14 („Offen“, „Geprüft, nicht umgesetzt“) und 0.2.17
+- CHANGELOG 0.2.14 („Offen“, „Geprüft, nicht umgesetzt“), 0.2.17 und 0.2.22 (Wartezustände:
+  `src/PhotoViewerV3.Services/Scanning/ScanGateWait.cs`, `src/PhotoViewerV3.Services/Messaging/ScanGateMessages.cs`,
+  `src/PhotoViewerV3.Wpf/Shell/ScanGateWaitIndicator.cs`; Tests `tests/PhotoViewerV3.Tests/Watch/ScanGateWaitTests.cs`,
+  `tests/PhotoViewerV3.Wpf.Tests/Shell/ScanGateWaitViewModelTests.cs`)

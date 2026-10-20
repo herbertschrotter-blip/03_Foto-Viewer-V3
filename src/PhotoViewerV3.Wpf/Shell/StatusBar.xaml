@@ -58,6 +58,27 @@
                     <TextBlock Style="{StaticResource StatusText}" Text="{Binding ScanText}" />
                 </StackPanel>
 
+                <!-- Datei-Operation wartet auf einen laufenden Scan derselben Bibliothek (ADR-0025, 0.2.22) -->
+                <StackPanel Orientation="Horizontal"
+                            AutomationProperties.Name="Wartende Datei-Operation"
+                            ToolTip="{Binding FileOperationWait.ToolTip}"
+                            Visibility="{Binding FileOperationWait.IsWaiting, Converter={StaticResource BoolToVis}}">
+                    <Border Style="{StaticResource StatusSeparator}" />
+                    <ui:SymbolIcon Symbol="Clock16"
+                                   Style="{StaticResource StatusIcon}"
+                                   Foreground="{DynamicResource SystemFillColorCautionBrush}" />
+                    <TextBlock Style="{StaticResource StatusText}" Text="{Binding FileOperationWait.Text}" />
+                    <ui:Button Content="Abbrechen"
+                               Appearance="Transparent"
+                               Command="{Binding FileOperationWait.CancelCommand}"
+                               AutomationProperties.Name="Wartende Datei-Operation abbrechen"
+                               FontSize="12"
+                               Height="22"
+                               Padding="8,0"
+                               Margin="8,0,0,0"
+                               VerticalAlignment="Center" />
+                </StackPanel>
+
                 <StackPanel Orientation="Horizontal"
                             Visibility="{Binding ScanResultText, Converter={StaticResource NullToVis}}">
                     <Border Style="{StaticResource StatusSeparator}" />

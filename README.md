@@ -30,7 +30,7 @@ großer Foto- und Video-Bibliotheken (50 000–500 000 Dateien). Nachfolger der 
 - **Einstellungen**: Speicherorte (Katalog samt Vorschaubildern umziehbar), Thumbnail-Cache, FFmpeg-Status, unterstützte Formate, Farbschema (Hell/Dunkel/System),
   Version.
 - **Statusleiste**: Scan-Fortschritt und -Ergebnis, Thumbnail-Warteschlange, Hintergrund-Aktivität, Hinweise
-  (Bibliothek offline, unvollständige Dateivorgänge).
+  (Bibliothek offline, unvollständige Dateivorgänge, Datei-Operation wartet auf laufenden Scan — mit **Abbrechen**).
 - **Sicherheit der Daten**: Löschen geht immer in den Windows-Papierkorb (nie still hart löschen); Verschieben,
   Umbenennen und Löschen werden in `OperationBatches`/`FileOperations` protokolliert; Move/Rename sind rückgängig
   machbar.
@@ -68,7 +68,9 @@ Eine portable Auslieferung (`dotnet publish`) gibt es noch nicht; die App läuft
   liegen — gelöschte, verschobene oder umbenannte Dateien verlieren sie), **Aktiv setzen**, Umbenennen, Entfernen (löscht keine Dateien auf der
   Platte).
 - Während eines Scans: Fortschrittspanel (Ordner, Dateien, Größe, Pfad, Dauer) mit **Abbrechen**; danach eine
-  Zusammenfassung. Bei nicht erreichbarem Ordner: Dialog „Bibliothek offline“ ([Erneut prüfen] [Andere Bibliothek
+  Zusammenfassung. Läuft gerade ein anderer Scan derselben Bibliothek (z. B. die automatische Aktualisierung) oder eine
+  Datei-Operation (Verschieben, Sortierer …), zeigt das Panel bis zum Start „Wartet auf laufenden Scan…“ bzw. „Wartet auf
+  laufende Datei-Operation…“; **Abbrechen** beendet das Warten, der Katalog bleibt unverändert. Bei nicht erreichbarem Ordner: Dialog „Bibliothek offline“ ([Erneut prüfen] [Andere Bibliothek
   wählen]); bei ungewöhnlich vielen fehlenden Dateien (> 10 000 oder > 20 %): Dialog ([Erneut prüfen]
   [Als fehlend markieren] [Abbrechen]).
 - Je Bibliothek die Liste ihrer Wurzelordner mit Rolle (siehe „Eingang und Archiv“): **Eingang hinzufügen…**,
@@ -284,7 +286,11 @@ Aktualisierung in n s“, danach „Automatisch aktualisiert: …“. Regeln:
   Meldungen je Sekunde (gebündelt, Background-Priorität).
 
 ### Statusleiste
-Links: aktive Bibliothek, Scan-Fortschritt bzw. -Ergebnis, Vorschaubilder in der Warteschlange. Rechts: Hinweise
+Links: aktive Bibliothek, Scan-Fortschritt bzw. -Ergebnis, Vorschaubilder in der Warteschlange und — solange eine
+Datei-Operation (Verschieben, Papierkorb, Ins Archiv, Umbenennen, Ordner anlegen/umbenennen, Rückgängig, Sortierer-Lauf)
+auf einen laufenden Scan derselben Bibliothek wartet — „Wartet auf laufenden Scan…“ mit **Abbrechen**: die Operation
+wird dann verworfen, bevor sie etwas ändert (beim Sortierer entfallen die restlichen Ziele; schon verschobene Dateien
+bleiben verschoben und sind rückgängig machbar). Rechts: Hinweise
 (Ordnerüberwachung: Countdown, laufende/abgeschlossene automatische Aktualisierung, angehaltene Automatik;
 unvollständige oder fehlgeschlagene Dateivorgänge mit Details im Tooltip; Bibliothek offline) und die
 Hintergrund-Aktivität („Bereit“, wenn nichts läuft).
