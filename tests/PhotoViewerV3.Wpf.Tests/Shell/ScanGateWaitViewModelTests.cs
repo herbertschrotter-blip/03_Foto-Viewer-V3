@@ -158,7 +158,7 @@ public sealed class ScanGateWaitViewModelTests
         public Task<ScanResult> ScanAsync(int libraryId, ScanMode mode, ScanOptions options, IProgress<ScanProgress>? progress, CancellationToken cancellationToken)
             => Task.Run(async () =>
             {
-                using var lease = await gate.AcquireAsync(libraryId, cancellationToken).ConfigureAwait(false);
+                using var lease = await gate.AcquireAsync(libraryId, options.GateCallerId, cancellationToken).ConfigureAwait(false);
                 progress?.Report(new ScanProgress(1, 1, 1024, @"C:\Fotos"));
                 return new ScanResult(libraryId, @"C:\Fotos", 0, 0, 0, 0, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero, TimeSpan.Zero) { Mode = mode };
             });

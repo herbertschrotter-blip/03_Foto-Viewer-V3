@@ -79,6 +79,18 @@
                                VerticalAlignment="Center" />
                 </StackPanel>
 
+                <!-- Schreibvorgänge warten auf die Katalog-DB, z. B. während „Neu aufbauen“ schreibt (ADR-0030, 0.2.29) -->
+                <StackPanel Orientation="Horizontal"
+                            AutomationProperties.Name="Wartende Änderung"
+                            ToolTip="Ein anderer Vorgang (z. B. „Neu aufbauen“) schreibt gerade den Katalog. Die Änderung wird danach automatisch gespeichert — die App bitte bis dahin nicht schließen."
+                            Visibility="{Binding CatalogWriteWaitText, Converter={StaticResource NullToVis}}">
+                    <Border Style="{StaticResource StatusSeparator}" />
+                    <ui:SymbolIcon Symbol="Clock16"
+                                   Style="{StaticResource StatusIcon}"
+                                   Foreground="{DynamicResource SystemFillColorCautionBrush}" />
+                    <TextBlock Style="{StaticResource StatusText}" Text="{Binding CatalogWriteWaitText}" />
+                </StackPanel>
+
                 <StackPanel Orientation="Horizontal"
                             Visibility="{Binding ScanResultText, Converter={StaticResource NullToVis}}">
                     <Border Style="{StaticResource StatusSeparator}" />

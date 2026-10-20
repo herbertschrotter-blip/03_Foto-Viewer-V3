@@ -61,6 +61,9 @@ public sealed class LibraryWatchService : ILibraryWatchService
     private readonly IOwnChangeRegistry _ownChanges;
     private readonly TimeSpan _rootRetryInterval;
 
+    /// <summary>Kennung der automatischen Scans für die Scan-Sperre (0.2.29): ihr Warten ist nie das der Bibliotheksseite.</summary>
+    private readonly ScanOptions _autoScanOptions = new() { GateCallerId = Guid.NewGuid() };
+
     private readonly object _gate = new();
     private readonly object _sendGate = new();
     private readonly SemaphoreSlim _saveLock = new(1, 1);
@@ -662,7 +665,7 @@ public sealed class LibraryWatchService : ILibraryWatchService
         string? blockReason = null;
         try
         {
-            result = await _scans.ScanAsync(libraryId, ScanMode.Incremental, ScanOptions.Default, null, token).ConfigureAwait(false);
+            result = await _scans.ScanAsync(libraryId, ScanMode.Incremental, _autoScanOptions, null, token).ConfigureAwait(false);
             switch (result.Outcome)
             {
                 case ScanOutcome.MassMissingBlocked:

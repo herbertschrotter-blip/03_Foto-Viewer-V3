@@ -48,6 +48,7 @@ Wenn eine ADR-Entscheidung revidiert wird: **neues ADR anlegen** + altes auf "Su
 | [0027](0027-kategorien-mit-festen-werten.md) | Frei konfigurierbare Kategorien mit festen Werten: ein Wert je Datei, Filter und Listenspalte | Accepted (Nachtrag 0.2.23: Strg+K, Lightbox, Suche per Join, serverseitige Sortierung) |
 | [0028](0028-neu-aufbauen-in-einer-transaktion.md) | „Neu aufbauen“ ersetzt den Katalog in einer Transaktion nach der Enumeration — kein Verlust von Katalog und Benutzerdaten bei Abbruch oder Absturz | Accepted |
 | [0029](0029-portable-auslieferung-self-contained.md) | Portable Auslieferung als self-contained Ordner (win-x64) mit Version aus dem CHANGELOG | Accepted |
+| [0030](0030-schreiber-warten-auf-gesperrten-katalog.md) | Schreiber warten asynchron auf einen gesperrten Katalog (zentrale Wiederholung, FileIds nach „Neu aufbauen“ umgesetzt) — keine verlorene Benutzeraktion | Accepted |
 | [0032](0032-archive-automatisch-entpacken.md) | Neue Archive in Eingangsordnern optional automatisch entpacken (nach dem Scan, Standard aus) | Accepted |
 
 ## Quellen der Entscheidungen

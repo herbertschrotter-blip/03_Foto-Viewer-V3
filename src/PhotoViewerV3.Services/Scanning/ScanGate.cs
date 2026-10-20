@@ -26,6 +26,13 @@ public interface IScanGate
     Task<IDisposable> AcquireAsync(int libraryId, CancellationToken ct);
 
     /// <summary>
+    /// Wie <see cref="AcquireAsync(int, CancellationToken)"/>; <paramref name="callerId"/> landet in
+    /// <see cref="ScanGateWait.CallerId"/> der Wartenachrichten, damit der Aufrufer sein eigenes Warten von dem anderer
+    /// Scans derselben Bibliothek (z. B. der Ordnerüberwachung) unterscheiden kann (0.2.29).
+    /// </summary>
+    Task<IDisposable> AcquireAsync(int libraryId, Guid? callerId, CancellationToken ct);
+
+    /// <summary>
     /// Wie <see cref="AcquireAsync"/>, aber für einen Datei-Batch: löst <see cref="Acquired"/> nicht aus — ein Batch liest
     /// das Dateisystem nicht neu ein und deckt keine gesammelten Ereignisse der Ordnerüberwachung ab.
     /// </summary>
@@ -65,17 +72,19 @@ public sealed class ScanGate : IScanGate
 
     public event Action<int>? Acquired;
 
-    public Task<IDisposable> AcquireAsync(int libraryId, CancellationToken ct) => AcquireCoreAsync(libraryId, ScanGateUse.Scan, ct);
+    public Task<IDisposable> AcquireAsync(int libraryId, CancellationToken ct) => AcquireCoreAsync(libraryId, ScanGateUse.Scan, null, ct);
 
-    public Task<IDisposable> AcquireForFileOperationAsync(int libraryId, CancellationToken ct) => AcquireCoreAsync(libraryId, ScanGateUse.FileOperation, ct);
+    public Task<IDisposable> AcquireAsync(int libraryId, Guid? callerId, CancellationToken ct) => AcquireCoreAsync(libraryId, ScanGateUse.Scan, callerId, ct);
 
-    private async Task<IDisposable> AcquireCoreAsync(int libraryId, ScanGateUse use, CancellationToken ct)
+    public Task<IDisposable> AcquireForFileOperationAsync(int libraryId, CancellationToken ct) => AcquireCoreAsync(libraryId, ScanGateUse.FileOperation, null, ct);
+
+    private async Task<IDisposable> AcquireCoreAsync(int libraryId, ScanGateUse use, Guid? callerId, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
         var slot = _gates.GetOrAdd(libraryId, static _ => new Slot());
         if (!slot.Semaphore.Wait(0))
         {
-            await WaitAsync(slot, libraryId, use, ct).ConfigureAwait(false);
+            await WaitAsync(slot, libraryId, use, callerId, ct).ConfigureAwait(false);
         }
 
         slot.Holder = use;
@@ -95,9 +104,9 @@ public sealed class ScanGate : IScanGate
     }
 
     /// <summary>Wartet auf die belegte Bibliothek und meldet Beginn und Ende des Wartens.</summary>
-    private async Task WaitAsync(Slot slot, int libraryId, ScanGateUse use, CancellationToken ct)
+    private async Task WaitAsync(Slot slot, int libraryId, ScanGateUse use, Guid? callerId, CancellationToken ct)
     {
-        var wait = new ScanGateWait(Interlocked.Increment(ref _nextWaitId), libraryId, use, slot.Holder);
+        var wait = new ScanGateWait(Interlocked.Increment(ref _nextWaitId), libraryId, use, slot.Holder, callerId);
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var pending = new PendingWait(wait, cts);
         _waits[wait.WaitId] = pending;

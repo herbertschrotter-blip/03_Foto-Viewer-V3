@@ -1,20 +1,16 @@
 using CommunityToolkit.Mvvm.Messaging;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Query;
 using Microsoft.Extensions.Logging;
-using PhotoViewerV3.Domain.Entities;
 using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Messaging;
 
 namespace PhotoViewerV3.Services.Catalog;
 
 /// <summary>
-/// Schreibpfad für Benutzer-Metadaten (Favorit, Bewertung). Set-basiertes
-/// <c>ExecuteUpdateAsync</c> in Chunks zu je <see cref="ChunkSize"/> Ids (SQLite-Parameterlimit,
-/// kurze Schreibläufe), eigener Single-Writer-Lock. Nach dem Update eine
-/// <see cref="FilesChangedMessage"/> (Kind = Metadata) je betroffener Library — auch für die
-/// bereits geschriebenen Chunks, wenn ein späterer Chunk scheitert oder abgebrochen wird
-/// (die UI soll nie hinter der DB zurückbleiben). Ausnahmen von Empfängern werden geloggt.
+/// Schreibpfad für Benutzer-Metadaten (Favorit, Bewertung). Set-basiertes <c>UPDATE</c> in Chunks zu je
+/// <see cref="ChunkSize"/> Ids (SQLite-Parameterlimit) in EINER Transaktion, eigener Single-Writer-Lock. Wartet eine
+/// belegte Schreibsperre asynchron ab und setzt Ziele nach einem Neuaufbau auf die neuen FileIds um (ADR-0030).
+/// Nach dem Commit eine <see cref="FilesChangedMessage"/> (Kind = Metadata) je betroffener Library; scheitert oder endet
+/// der Vorgang vorher, ist nichts geschrieben und es kommt keine Nachricht. Ausnahmen von Empfängern werden geloggt.
 /// </summary>
 public sealed class CatalogUpdateService : ICatalogUpdateService, IDisposable
 {
@@ -36,7 +32,7 @@ public sealed class CatalogUpdateService : ICatalogUpdateService, IDisposable
     }
 
     public Task SetFavoriteAsync(IReadOnlyList<int> fileIds, bool isFavorite, CancellationToken ct = default)
-        => UpdateAsync(fileIds, s => s.SetProperty(f => f.IsFavorite, isFavorite), ct);
+        => UpdateAsync(fileIds, "IsFavorite", isFavorite, ct);
 
     public Task SetRatingAsync(IReadOnlyList<int> fileIds, byte? rating, CancellationToken ct = default)
     {
@@ -45,13 +41,15 @@ public sealed class CatalogUpdateService : ICatalogUpdateService, IDisposable
             throw new ArgumentOutOfRangeException(nameof(rating), rating, "Die Bewertung muss zwischen 1 und 5 liegen oder null sein.");
         }
 
-        return UpdateAsync(fileIds, s => s.SetProperty(f => f.Rating, rating), ct);
+        return UpdateAsync(fileIds, "Rating", rating, ct);
     }
 
-    private async Task UpdateAsync(
-        IReadOnlyList<int> fileIds,
-        Action<UpdateSettersBuilder<MediaFile>> setters,
-        CancellationToken ct)
+    /// <summary>
+    /// Seit 0.2.29 (ADR-0030) über <see cref="CatalogFileTargets.WriteAsync"/>: eine Transaktion auf dem Thread-Pool, die
+    /// asynchron auf eine belegte Schreibsperre wartet (z. B. „Neu aufbauen“) und Ziele nach einem Neuaufbau auf die neuen
+    /// FileIds umsetzt. Die Nachricht nennt die tatsächlich geschriebenen Ids.
+    /// </summary>
+    private async Task UpdateAsync(IReadOnlyList<int> fileIds, string column, object? value, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(fileIds);
         var ids = fileIds.Distinct().ToArray();
@@ -65,41 +63,38 @@ public sealed class CatalogUpdateService : ICatalogUpdateService, IDisposable
         await _writeLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            await using var ctx = _factory.Create();
-            foreach (var chunk in ids.Chunk(ChunkSize))
+            await CatalogFileTargets.WriteAsync(_factory, ids, _logger, (connection, tx, files) =>
             {
-                ct.ThrowIfCancellationRequested();
-
-                // LibraryId der Dateien ermitteln (für die Nachricht), dann set-basiert schreiben.
-                var affected = await ctx.Files
-                    .AsNoTracking()
-                    .Where(f => chunk.Contains(f.Id))
-                    .Select(f => new { f.Id, f.LibraryId })
-                    .ToListAsync(ct)
-                    .ConfigureAwait(false);
-
-                await ctx.Files
-                    .Where(f => chunk.Contains(f.Id))
-                    .ExecuteUpdateAsync(setters, ct)
-                    .ConfigureAwait(false);
-
-                foreach (var row in affected)
+                foreach (var chunk in files.Chunk(ChunkSize))
                 {
-                    if (!byLibrary.TryGetValue(row.LibraryId, out var list))
+                    ct.ThrowIfCancellationRequested();
+                    using var cmd = connection.CreateCommand();
+                    cmd.Transaction = tx;
+                    cmd.Parameters.AddWithValue("$v", value ?? DBNull.Value);
+                    cmd.CommandText = $"UPDATE Files SET {column} = $v WHERE Id IN ({CatalogFileTargets.BindIds(cmd, chunk.Select(f => f.FileId).ToArray(), "$f")});";
+                    cmd.ExecuteNonQuery();
+                }
+
+                foreach (var file in files)
+                {
+                    if (!byLibrary.TryGetValue(file.LibraryId, out var list))
                     {
                         list = new List<int>();
-                        byLibrary[row.LibraryId] = list;
+                        byLibrary[file.LibraryId] = list;
                     }
 
-                    list.Add(row.Id);
+                    list.Add(file.FileId);
                 }
-            }
+
+                return 0;
+            }, ct).ConfigureAwait(false);
         }
         finally
         {
             _writeLock.Release();
-            Publish(byLibrary);
         }
+
+        Publish(byLibrary);
     }
 
     private void Publish(Dictionary<int, List<int>> byLibrary)

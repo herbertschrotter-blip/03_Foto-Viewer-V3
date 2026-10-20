@@ -104,6 +104,7 @@ public sealed partial class StatusBarViewModel : ObservableObject, IDisposable
         _archiveTimer = new DispatcherTimer(ArchiveWarningDisplayDuration, DispatcherPriority.Background, (_, _) => ClearArchiveText(), dispatcher);
         _archiveTimer.Stop();
         _messenger.Register<StatusBarViewModel, ArchiveAutoExtractStatusMessage>(this, static (r, m) => UiThread.Post(() => r.OnAutoExtractStatus(m.Status)));
+        InitCatalogWriteWait(); // Schreibvorgänge warten auf die Katalog-DB (ADR-0030, StatusBarViewModel.CatalogWriteWait.cs)
     }
 
     /// <summary>Datei-Operationen, die auf einen laufenden Scan derselben Bibliothek warten (Hinweis + „Abbrechen“).</summary>

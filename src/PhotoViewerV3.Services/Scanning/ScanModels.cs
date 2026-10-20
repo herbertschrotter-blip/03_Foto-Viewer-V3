@@ -94,6 +94,12 @@ public sealed record ScanOptions
     /// überschritten ist (Benutzer hat „Als fehlend markieren“ bestätigt, PLAN Kap. 12).
     /// </summary>
     public bool ConfirmMassMissing { get; init; }
+
+    /// <summary>
+    /// Kennung des Aufrufers für die Scan-Sperre (0.2.29): landet in <see cref="ScanGateWait.CallerId"/>, falls der Scan
+    /// auf die Bibliothek warten muss. Die Bibliotheksseite vergibt je Scan-Lauf eine eigene und zeigt nur dieses Warten.
+    /// </summary>
+    public Guid? GateCallerId { get; init; }
 }
 
 /// <summary>

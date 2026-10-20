@@ -4,6 +4,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using PhotoViewerV3.Domain.Entities;
+using PhotoViewerV3.Services.Catalog;
 using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Messaging;
 
@@ -331,49 +332,45 @@ public sealed class CategoryService : ICategoryService, IDisposable
         }
 
         var byLibrary = new Dictionary<int, List<int>>();
-        var changed = 0;
+        int changed;
         await _writeLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            using var connection = _factory.OpenSqliteConnection();
-            using var tx = connection.BeginTransaction();
-            EnsureValueBelongsToCategory(connection, tx, categoryId, valueId);
-
-            foreach (var chunk in ids.Chunk(ChunkSize))
+            // Wartet asynchron auf eine belegte Schreibsperre, Ziele nach einem Neuaufbau umgesetzt (ADR-0030).
+            changed = await CatalogFileTargets.WriteAsync(_factory, ids, _logger, (connection, tx, files) =>
             {
-                ct.ThrowIfCancellationRequested();
-                using (var lookup = connection.CreateCommand())
+                EnsureValueBelongsToCategory(connection, tx, categoryId, valueId);
+                foreach (var file in files)
                 {
-                    lookup.Transaction = tx;
-                    lookup.CommandText = $"SELECT Id, LibraryId FROM Files WHERE Id IN ({BindIds(lookup, chunk, "$f")});";
-                    using var reader = lookup.ExecuteReader();
-                    while (reader.Read())
+                    Collect(byLibrary, file.LibraryId, file.FileId);
+                }
+
+                var count = 0;
+                foreach (var chunk in files.Select(f => f.FileId).Chunk(ChunkSize))
+                {
+                    ct.ThrowIfCancellationRequested();
+                    using var cmd = connection.CreateCommand();
+                    cmd.Transaction = tx;
+                    cmd.Parameters.AddWithValue("$c", categoryId);
+                    var inList = BindIds(cmd, chunk, "$f");
+                    if (valueId is { } value)
                     {
-                        Collect(byLibrary, reader.GetInt32(1), reader.GetInt32(0));
+                        // Nur echte Änderungen zählen: gleicher Wert bleibt unberührt (WHERE im UPSERT).
+                        cmd.Parameters.AddWithValue("$v", value);
+                        cmd.CommandText =
+                            $"INSERT INTO FileCategoryValues(FileId, CategoryId, ValueId) SELECT f.Id, $c, $v FROM Files f WHERE f.Id IN ({inList}) " +
+                            "ON CONFLICT(FileId, CategoryId) DO UPDATE SET ValueId = excluded.ValueId WHERE ValueId <> excluded.ValueId;";
                     }
+                    else
+                    {
+                        cmd.CommandText = $"DELETE FROM FileCategoryValues WHERE CategoryId = $c AND FileId IN ({inList});";
+                    }
+
+                    count += cmd.ExecuteNonQuery();
                 }
 
-                using var cmd = connection.CreateCommand();
-                cmd.Transaction = tx;
-                cmd.Parameters.AddWithValue("$c", categoryId);
-                var inList = BindIds(cmd, chunk, "$f");
-                if (valueId is { } value)
-                {
-                    // Nur echte Änderungen zählen: gleicher Wert bleibt unberührt (WHERE im UPSERT).
-                    cmd.Parameters.AddWithValue("$v", value);
-                    cmd.CommandText =
-                        $"INSERT INTO FileCategoryValues(FileId, CategoryId, ValueId) SELECT f.Id, $c, $v FROM Files f WHERE f.Id IN ({inList}) " +
-                        "ON CONFLICT(FileId, CategoryId) DO UPDATE SET ValueId = excluded.ValueId WHERE ValueId <> excluded.ValueId;";
-                }
-                else
-                {
-                    cmd.CommandText = $"DELETE FROM FileCategoryValues WHERE CategoryId = $c AND FileId IN ({inList});";
-                }
-
-                changed += cmd.ExecuteNonQuery();
-            }
-
-            tx.Commit();
+                return count;
+            }, ct).ConfigureAwait(false);
         }
         finally
         {

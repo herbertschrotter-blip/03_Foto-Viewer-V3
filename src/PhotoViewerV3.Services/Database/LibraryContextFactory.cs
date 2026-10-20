@@ -1,4 +1,5 @@
 using System.Data.Common;
+using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -25,6 +26,12 @@ public interface ILibraryContextFactory
     /// Caller ist für Dispose verantwortlich.
     /// </summary>
     SqliteConnection OpenSqliteConnection();
+
+    /// <summary>
+    /// Wiederholung bei gesperrter DB (ADR-0030) für rohe Schreibpfade (<c>BeginTransactionAsync</c> statt
+    /// <c>BeginTransaction()</c>); EF-Kontexte dieser Factory nutzen sie automatisch.
+    /// </summary>
+    SqliteBusyRetry BusyRetry => SqliteBusyRetry.Default;
 }
 
 /// <summary>
@@ -53,28 +60,42 @@ public sealed class LibraryContextFactory : ILibraryContextFactory, IDatabaseAcc
     private readonly ILoggerFactory? _loggerFactory;
     private readonly string _connectionString;
     private readonly AccessGateInterceptor _gateInterceptor;
+    private readonly BusyRetryInterceptor _busyRetryInterceptor;
     private string? _suspendReason;
 
+    /// <param name="busyRetry">Wiederholung bei gesperrter DB (ADR-0030); null = Standard (bis 5 min).</param>
+    /// <param name="messenger">Für <see cref="Messaging.CatalogWriteWaitMessage"/>; null = WeakReferenceMessenger.Default.</param>
+    /// <param name="defaultCommandTimeoutSeconds">
+    /// CommandTimeout der Befehle ohne Wiederholung (Microsoft.Data.Sqlite-Standard 30 s); nur Tests verkürzen ihn.
+    /// </param>
     public LibraryContextFactory(
         IAppDataPaths paths,
         SqlitePragmaInterceptor pragmaInterceptor,
-        ILoggerFactory? loggerFactory = null)
+        ILoggerFactory? loggerFactory = null,
+        SqliteBusyRetryOptions? busyRetry = null,
+        IMessenger? messenger = null,
+        int defaultCommandTimeoutSeconds = 30)
     {
         _paths = paths;
         _pragmaInterceptor = pragmaInterceptor;
         _loggerFactory = loggerFactory;
         _gateInterceptor = new AccessGateInterceptor(this);
+        BusyRetry = new SqliteBusyRetry(busyRetry, messenger, loggerFactory?.CreateLogger<SqliteBusyRetry>());
+        _busyRetryInterceptor = new BusyRetryInterceptor(BusyRetry);
         _connectionString = new SqliteConnectionStringBuilder
         {
             DataSource = _paths.LibraryDatabasePath,
             Mode = SqliteOpenMode.ReadWriteCreate,
             Cache = SqliteCacheMode.Default,
             Pooling = false,
+            DefaultTimeout = defaultCommandTimeoutSeconds,
         }.ToString();
     }
 
     public string DatabasePath => _paths.LibraryDatabasePath;
     public string ConnectionString => _connectionString;
+
+    public SqliteBusyRetry BusyRetry { get; }
 
     public bool IsSuspended => Volatile.Read(ref _suspendReason) is not null;
 
@@ -93,7 +114,7 @@ public sealed class LibraryContextFactory : ILibraryContextFactory, IDatabaseAcc
         ThrowIfSuspended();
         var optionsBuilder = new DbContextOptionsBuilder<LibraryContext>()
             .UseSqlite(_connectionString)
-            .AddInterceptors(_gateInterceptor, _pragmaInterceptor);
+            .AddInterceptors(_gateInterceptor, _pragmaInterceptor, _busyRetryInterceptor);
 
         if (_loggerFactory is not null)
         {
@@ -108,7 +129,7 @@ public sealed class LibraryContextFactory : ILibraryContextFactory, IDatabaseAcc
         ThrowIfSuspended();
         var connection = new SqliteConnection(_connectionString);
         connection.Open();
-        SqlitePragmaInterceptor.ApplyPragmas(connection);
+        _pragmaInterceptor.Apply(connection);
         return connection;
     }
 

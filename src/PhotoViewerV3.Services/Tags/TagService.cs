@@ -4,6 +4,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using PhotoViewerV3.Domain.Entities;
+using PhotoViewerV3.Services.Catalog;
 using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Messaging;
 
@@ -225,22 +226,25 @@ public sealed class TagService : ITagService, IDisposable
             return 0;
         }
 
-        var removed = 0;
+        int removed;
         await _writeLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            using var connection = _factory.OpenSqliteConnection();
-            using var tx = connection.BeginTransaction();
-            foreach (var chunk in ids.Chunk(ChunkSize))
+            // Wartet asynchron auf eine belegte Schreibsperre, Ziele nach einem Neuaufbau umgesetzt (ADR-0030).
+            removed = await CatalogFileTargets.WriteAsync(_factory, ids, _logger, (connection, tx, files) =>
             {
-                ct.ThrowIfCancellationRequested();
-                using var cmd = connection.CreateCommand();
-                cmd.Transaction = tx;
-                cmd.CommandText = $"DELETE FROM FileTags WHERE FileId IN ({BindIds(cmd, chunk, "$f")});";
-                removed += cmd.ExecuteNonQuery();
-            }
+                var count = 0;
+                foreach (var chunk in files.Select(f => f.FileId).Chunk(ChunkSize))
+                {
+                    ct.ThrowIfCancellationRequested();
+                    using var cmd = connection.CreateCommand();
+                    cmd.Transaction = tx;
+                    cmd.CommandText = $"DELETE FROM FileTags WHERE FileId IN ({BindIds(cmd, chunk, "$f")});";
+                    count += cmd.ExecuteNonQuery();
+                }
 
-            tx.Commit();
+                return count;
+            }, ct).ConfigureAwait(false);
         }
         finally
         {
@@ -292,42 +296,38 @@ public sealed class TagService : ITagService, IDisposable
         }
 
         var byLibrary = new Dictionary<int, List<int>>();
-        var changed = 0;
+        int changed;
         await _writeLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            using var connection = _factory.OpenSqliteConnection();
-            using var tx = connection.BeginTransaction();
-            foreach (var chunk in ids.Chunk(ChunkSize))
+            // Nur Dateien, die es gibt (für die Nachricht und als FK-Schutz beim Zuweisen); wartet asynchron auf eine
+            // belegte Schreibsperre und setzt Ziele nach einem Neuaufbau auf die neuen FileIds um (ADR-0030).
+            changed = await CatalogFileTargets.WriteAsync(_factory, ids, _logger, (connection, tx, files) =>
             {
-                ct.ThrowIfCancellationRequested();
-
-                // Nur Dateien, die es gibt (für die Nachricht und als FK-Schutz beim Zuweisen).
-                using (var lookup = connection.CreateCommand())
+                var count = 0;
+                foreach (var file in files)
                 {
-                    lookup.Transaction = tx;
-                    lookup.CommandText = $"SELECT Id, LibraryId FROM Files WHERE Id IN ({BindIds(lookup, chunk, "$f")});";
-                    using var reader = lookup.ExecuteReader();
-                    while (reader.Read())
+                    Collect(byLibrary, file.LibraryId, file.FileId);
+                }
+
+                foreach (var chunk in files.Select(f => f.FileId).Chunk(ChunkSize))
+                {
+                    ct.ThrowIfCancellationRequested();
+                    foreach (var tagId in tags)
                     {
-                        Collect(byLibrary, reader.GetInt32(1), reader.GetInt32(0));
+                        using var cmd = connection.CreateCommand();
+                        cmd.Transaction = tx;
+                        cmd.Parameters.AddWithValue("$t", tagId);
+                        var inList = BindIds(cmd, chunk, "$f");
+                        cmd.CommandText = assign
+                            ? $"INSERT OR IGNORE INTO FileTags(FileId, TagId) SELECT f.Id, $t FROM Files f WHERE f.Id IN ({inList}) AND EXISTS (SELECT 1 FROM Tags t WHERE t.Id = $t);"
+                            : $"DELETE FROM FileTags WHERE TagId = $t AND FileId IN ({inList});";
+                        count += cmd.ExecuteNonQuery();
                     }
                 }
 
-                foreach (var tagId in tags)
-                {
-                    using var cmd = connection.CreateCommand();
-                    cmd.Transaction = tx;
-                    cmd.Parameters.AddWithValue("$t", tagId);
-                    var inList = BindIds(cmd, chunk, "$f");
-                    cmd.CommandText = assign
-                        ? $"INSERT OR IGNORE INTO FileTags(FileId, TagId) SELECT f.Id, $t FROM Files f WHERE f.Id IN ({inList}) AND EXISTS (SELECT 1 FROM Tags t WHERE t.Id = $t);"
-                        : $"DELETE FROM FileTags WHERE TagId = $t AND FileId IN ({inList});";
-                    changed += cmd.ExecuteNonQuery();
-                }
-            }
-
-            tx.Commit();
+                return count;
+            }, ct).ConfigureAwait(false);
         }
         finally
         {

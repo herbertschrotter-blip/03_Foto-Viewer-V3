@@ -211,6 +211,7 @@ internal sealed partial class SmokeScenario
         await StepAsync("Kategorien (Anlegen, Zuweisen, Strg+K, Filter, Suche, Sortierung, Lightbox, Listenspalte, Verwaltung)", CategoriesAsync).ConfigureAwait(true);
         await StepAsync("Sortierer: Eingang → Archiv (Wurzel-Auswahl, gesperrtes Ziel, Katalog, Rückgängig, Flatten im Eingang)", SorterInboxToArchiveAsync).ConfigureAwait(true);
         await StepAsync("Wartezustände: Datei-Operation wartet auf Scan (Statusleiste, Abbrechen), Scan wartet auf Datei-Batch (Bibliotheksseite)", GateWaitAsync).ConfigureAwait(true);
+        await StepAsync("Katalog gesperrt: Bewertung wartet auf die Schreibsperre (Statusleiste), kommt danach an", CatalogWriteWaitAsync).ConfigureAwait(true);
         await StepAsync("Ordnerüberwachung: Datei kopieren → automatischer Diff-Scan → Galerie", WatchAsync).ConfigureAwait(true);
         if (_cleanup)
         {
@@ -1382,7 +1383,9 @@ internal sealed partial class SmokeScenario
         var entry = _gallery.TagMenuEntries.First(e => e.Tag.Id == urlaub.Id);
         Check(entry.State == false, "Menüeintrag „Urlaub“ vor der Zuweisung ohne Häkchen");
         await _gallery.ToggleSelectionTagCommand.ExecuteAsync(entry).ConfigureAwait(true);
-        Check(entry.State == true, "Menüeintrag „Urlaub“ nach der Zuweisung mit Häkchen");
+        // Aktuellen Eintrag lesen: seit 0.2.29 kommen die TagsChangedMessages der beiden CreateAsync vom Thread-Pool, die
+        // zweite kann das Menü nach dem Abgreifen von „entry“ noch einmal neu aufbauen (neue Instanzen).
+        Check(_gallery.TagMenuEntries.First(e => e.Tag.Id == urlaub.Id).State == true, "Menüeintrag „Urlaub“ nach der Zuweisung mit Häkchen");
         var urlaubRows = await DbScalarAsync<int>("SELECT COUNT(*) FROM FileTags WHERE TagId = $t", ("$t", urlaub.Id)).ConfigureAwait(true);
         Check(urlaubRows == 3, $"DB: {urlaubRows} Zuweisungen „Urlaub“ (erwartet 3)");
         Check(targets.All(t => t.HasTag(urlaub.Id) && t.HasTags), "Kacheln zeigen den Tag-Punkt „Urlaub“");

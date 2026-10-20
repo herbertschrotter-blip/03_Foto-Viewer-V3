@@ -3,6 +3,62 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.29] — 2026-10-20
+
+### Behoben (ADR-0030, offener Punkt aus 0.2.24)
+- **Keine verlorene Benutzeraktion während „Neu aufbauen“.** Die eine Schreibtransaktion am Ende (500 000 Dateien ≈ 30 s)
+  ließ andere Schreiber scheitern — gemessen nach **34 s** (busy_timeout 5 s + interne Wiederholung von
+  Microsoft.Data.Sqlite bis CommandTimeout 30 s), und weil Microsoft.Data.Sqlite auch in `*Async` synchron arbeitet, war
+  das Fenster bei einer Bewertung so lange **eingefroren**. Jetzt wartet jeder Schreiber asynchron:
+  - `Services/Database/SqliteBusyRetry` (zentral): Versuch auf dem Thread-Pool, nach SQLITE_BUSY/LOCKED asynchron
+    warten und wiederholen bis `MaxWait` (5 min); danach kommt der Fehler wie bisher beim Aufrufer an.
+  - `BusyRetryInterceptor` an jedem EF-Kontext der `LibraryContextFactory`: Autocommit-Schreibbefehle und
+    Transaktionsbeginn laufen darüber — Einstellungen, Tag-/Kategorie-Stammdaten, Thumbnail-Status und
+    Datei-Operationen ohne eigene Zeile.
+  - Favorit/Bewertung, Tag- und Kategorie-Zuweisungen über `Services/Catalog/CatalogFileTargets`: Ordnerpfad + Name der
+    Ziele vorher lesen, `BEGIN IMMEDIATE` mit Wiederholung, danach **fehlende FileIds auf die neuen Ids des Neuaufbaus
+    umsetzen** — sonst landete die wartende Bewertung nach dem Commit auf einer Id, die es nicht mehr gibt (still
+    verloren; im Test mit Wiederholung allein rot). `CatalogUpdateService` schreibt dafür Raw-SQL in einer Transaktion
+    statt `ExecuteUpdateAsync` je Chunk; die Nachricht kommt nach dem Commit mit den tatsächlich geschriebenen Ids.
+  - Statusleiste: „Änderung wartet auf den Katalog…“ (bzw. „n Änderungen warten…“, Uhr-Symbol, Tooltip) solange ein
+    Schreiber wartet (`CatalogWriteWaitMessage`).
+- **Bibliotheksseite erkennt ihr eigenes Warten an einer Kennung** (offener Punkt aus 0.2.22, ADR-0025 Nachtrag):
+  `IScanGate.AcquireAsync(libraryId, callerId, ct)`, `ScanGateWait.CallerId`, `ScanOptions.GateCallerId`. Die Seite
+  vergibt je Scan-Lauf eine Guid und zeigt nur dieses Warten; die Ordnerüberwachung scannt mit eigener Kennung. Vorher
+  hielt die Seite das Warten eines gleichzeitig wartenden automatischen Scans für ihr eigenes.
+
+### Geändert
+- Nachrichten der Dienste nach Bewertung, Tags, Kategorien und EF-Schreibvorgängen kommen jetzt vom Thread-Pool (alle
+  Empfänger dispatchen selbst); sie laufen also nach der Rückkehr des Aufrufs. Rauchtest-Schritt „Tags“ liest den
+  Menüeintrag deshalb nach der Zuweisung neu (das Menü kann nach dem Anlegen zweier Tags noch einmal neu aufgebaut werden).
+- `SqlitePragmaInterceptor(busyTimeoutMs)` und `LibraryContextFactory(busyRetry, messenger, defaultCommandTimeoutSeconds)`
+  nehmen verkürzte Zeiten für Tests; produktiv unverändert (busy_timeout 5000, CommandTimeout 30 s).
+
+### Tests
+- `tests/PhotoViewerV3.Tests`: 470 (+11): `Database/CatalogWriteRetryTests` (9: Bewertung, Tag-Zuweisung,
+  Kategorie-Wert und EF-Schreiber — Einzel-INSERT, Mehrfach-UPDATE in Transaktion, Einstellung — kommen nach einer 2,5 s
+  gehaltenen Schreibsperre an, der Aufruf kehrt sofort zurück, Wartenachricht 1 → 0; Bewertung und Tag auf eine beim
+  „Neuaufbau“ ersetzte FileId landen auf der neuen Id; Gegenprobe ohne Wiederholung scheitert mit SQLITE_BUSY; nach der
+  Höchstdauer kommt der Fehler an; Abbruch schreibt nichts; `IsBusy`), busy_timeout 100 ms und CommandTimeout 1 s statt
+  5 s/30 s. Gegen den alten Stand 7 von 9 rot (Gegenprobe und `IsBusy` grün); mit Interceptor, aber altem
+  `CatalogUpdateService` bleibt der FileId-Test rot. `Watch/ScanGateCallerIdTests` (2: Kennungen gleichzeitiger
+  Wartender in Nachrichten und `GetWaits`, ScanService reicht `ScanOptions.GateCallerId` durch).
+- `tests/PhotoViewerV3.Wpf.Tests`: 204 (+2 `Shell/ScanGateCallerIdViewModelTests`: Watch-Scan wartet zuerst, die Seite
+  zeigt nur ihr eigenes Warten und wartet weiter, als der Watch-Scan die Sperre bekommt — gegen das alte
+  `LibraryViewModel` rot; Statusleisten-Hinweis 1/2/0 Wartende). Volle Suite 3× hintereinander grün. Die Hilfsklasse
+  `GateScanService` in `ScanGateWaitViewModelTests` reicht die Kennung wie der echte ScanService durch.
+- Rauchtest 23/23 OK, 0 WPF-Binding-Fehler; neuer Schritt „Katalog gesperrt“ (hält BEGIN IMMEDIATE, Bewertung über die
+  Kachel kehrt sofort zurück, Statusleiste zeigt den Hinweis, Bewertung nach der Freigabe in der DB; Screenshot
+  `19-statusleiste-katalog-wartet`; im Log „nach 5,7 s (2 Versuche) ausgeführt“).
+
+### Offen
+- Rohe Schreibpfade der Scans (`IncrementalCatalogWriter`, `LibraryCatalogCleanup`) und synchrone EF-Aufrufe nutzen die
+  Wiederholung nicht (Hintergrund-Threads, warten wie bisher bis ≈ 35 s): ein automatischer Scan einer *anderen*
+  Bibliothek kann während eines langen „Neu aufbauen“ weiterhin scheitern.
+- Wird die App beendet, während eine Änderung wartet, ist sie verloren (Tooltip weist darauf hin).
+- Eine Aktion auf eine alte FileId *nach* dem Commit, bevor die Galerie neu geladen hat, trifft weiter ins Leere (vorher
+  ebenso; betrifft nur Klicks in diesem Augenblick).
+
 ## [0.2.28] — 2026-10-20
 
 ### Behoben

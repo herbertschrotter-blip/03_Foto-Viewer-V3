@@ -122,7 +122,7 @@ public sealed class ScanService : IScanService
         {
             // Nie zwei Scans derselben Bibliothek gleichzeitig (manuell, Entpacken, Ordnerüberwachung): der spätere wartet.
             // Im try, damit auch ein beim Warten abgebrochener Aufruf seine ScanAbortedMessage sendet.
-            using var lease = await _scanGate.AcquireAsync(libraryId, ct).ConfigureAwait(false);
+            using var lease = await _scanGate.AcquireAsync(libraryId, options.GateCallerId, ct).ConfigureAwait(false);
             var result = mode == ScanMode.Incremental
                 ? await RunIncrementalScanAsync(libraryId, options, reporter, ct).ConfigureAwait(false)
                 : await RunFullScanAsync(libraryId, mode, reporter, ct).ConfigureAwait(false);

@@ -13,9 +13,11 @@ public enum ScanGateUse
 /// <summary>
 /// Ein Aufrufer wartet auf die Sperre einer Bibliothek (0.2.22). <paramref name="Holder"/> ist die Belegung, die beim
 /// Beginn des Wartens bestand; <paramref name="WaitId"/> ist je <see cref="IScanGate"/> eindeutig und dient
-/// <see cref="IScanGate.CancelWait"/>.
+/// <see cref="IScanGate.CancelWait"/>. <paramref name="CallerId"/> (0.2.29) ist die Kennung, die der Aufrufer bei
+/// <see cref="IScanGate.AcquireAsync(int, Guid?, CancellationToken)"/> mitgegeben hat (z. B. die Bibliotheksseite je
+/// Scan-Lauf über <see cref="ScanOptions.GateCallerId"/>) — so erkennt er sein eigenes Warten; null = ohne Kennung.
 /// </summary>
-public sealed record ScanGateWait(long WaitId, int LibraryId, ScanGateUse Waiter, ScanGateUse Holder);
+public sealed record ScanGateWait(long WaitId, int LibraryId, ScanGateUse Waiter, ScanGateUse Holder, Guid? CallerId = null);
 
 /// <summary>
 /// Das Warten auf die Sperre wurde über <see cref="IScanGate.CancelWait"/> abgebrochen (z. B. „Abbrechen“ in der

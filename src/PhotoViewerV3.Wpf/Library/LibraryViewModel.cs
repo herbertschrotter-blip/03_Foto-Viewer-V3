@@ -42,8 +42,11 @@ public sealed partial class LibraryViewModel : ObservableObject
     private readonly Stopwatch _scanStopwatch = new();
     private CancellationTokenSource? _scanCts;
 
-    /// <summary>Bibliothek des eigenen Scans, solange er noch keinen Fortschritt gemeldet hat (nur dann zählt ein Warten).</summary>
-    private int? _gateWatchLibraryId;
+    /// <summary>
+    /// Kennung des laufenden eigenen Scans für die Scan-Sperre (0.2.29, <see cref="ScanOptions.GateCallerId"/>), solange
+    /// er die Bibliothek noch nicht hat — nur ein Warten mit dieser Kennung ist das eigene.
+    /// </summary>
+    private Guid? _gateCallerId;
 
     /// <summary>Das Warten auf die Scan-Sperre, das das Panel gerade anzeigt.</summary>
     private long? _gateWaitId;
@@ -624,7 +627,9 @@ public sealed partial class LibraryViewModel : ObservableObject
         ScanElapsedText = Formatting.Duration(TimeSpan.Zero);
 
         _scanCts = new CancellationTokenSource();
-        ResetGateWait(item.Id);
+        var callerId = Guid.NewGuid();
+        options = options with { GateCallerId = callerId };
+        ResetGateWait(callerId);
         IsScanning = true;
         _scanStopwatch.Restart();
         _elapsedTimer.Start();
@@ -730,22 +735,21 @@ public sealed partial class LibraryViewModel : ObservableObject
 
     // ---- Warten auf die Scan-Sperre (0.2.22) ------------------------------------------------------
 
-    private void ResetGateWait(int? libraryId)
+    private void ResetGateWait(Guid? callerId)
     {
-        _gateWatchLibraryId = libraryId;
+        _gateCallerId = callerId;
         _gateWaitId = null;
         _gateWaitAborted = false;
         IsWaitingForGate = false;
     }
 
     /// <summary>
-    /// Ein Scan der Bibliothek des eigenen Scans wartet, bevor der eigene Fortschritt meldet → das ist (fast sicher) der
-    /// eigene. Nur der erste zählt; wartet zugleich ein automatischer Scan der Ordnerüberwachung, kann die Anzeige den
-    /// falschen erwischen (siehe CHANGELOG 0.2.22, „Offen“).
+    /// Nur das Warten mit der Kennung des eigenen Scans zählt (0.2.29): ein automatischer Scan der Ordnerüberwachung
+    /// oder ein anderer Scan derselben Bibliothek, der zugleich wartet, trägt eine andere bzw. keine Kennung.
     /// </summary>
     private void OnGateWaitStarted(ScanGateWait wait)
     {
-        if (wait.Waiter != ScanGateUse.Scan || _gateWatchLibraryId != wait.LibraryId || _gateWaitId is not null || !IsScanning)
+        if (wait.Waiter != ScanGateUse.Scan || _gateCallerId is null || wait.CallerId != _gateCallerId || _gateWaitId is not null || !IsScanning)
         {
             return;
         }
@@ -767,7 +771,7 @@ public sealed partial class LibraryViewModel : ObservableObject
         IsWaitingForGate = false;
         if (message.Acquired)
         {
-            _gateWatchLibraryId = null; // der eigene Scan läuft — weitere Wartende gehören anderen
+            _gateCallerId = null; // der eigene Scan läuft
             ScanPhaseText = Formatting.ScanPhase(ScanPhase.Enumerating);
         }
         else

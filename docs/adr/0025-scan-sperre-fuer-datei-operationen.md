@@ -72,6 +72,14 @@ Die Statusleiste zeigt wartende Datei-Operationen („Wartet auf laufenden Scan�
 einen wartenden manuellen Scan („Wartet auf laufende Datei-Operation…“ bzw. „… laufenden Scan…“). Damit entfällt der
 erste Punkt unter „Negativ“ („die Galerie zeigt dabei nur den laufenden Scan“).
 
+## Nachtrag 2026-10-20 (0.2.29): Aufrufer-Kennung
+
+Ergänzt den Nachtrag 0.2.22. `IScanGate.AcquireAsync(libraryId, callerId, ct)` nimmt eine Kennung (`Guid?`) entgegen, die
+in `ScanGateWait.CallerId` der Wartenachrichten und von `GetWaits()` steht; Scans geben sie über
+`ScanOptions.GateCallerId` mit. Die Bibliotheksseite vergibt je Scan-Lauf eine eigene Kennung und zeigt nur dieses
+Warten — vorher ordnete sie ein Warten über Bibliothek und Zeitpunkt zu und konnte das Warten eines gleichzeitigen
+automatischen Scans der Ordnerüberwachung (eigene Kennung je Dienst) für ihr eigenes halten.
+
 ## Referenzen
 
 - `src/PhotoViewerV3.Services/Scanning/ScanGate.cs`, `src/PhotoViewerV3.Services/Watch/OwnChangeRegistry.cs`,
