@@ -3,6 +3,24 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.33] — 2026-10-20
+
+### Behoben
+- Wackelnde Tests in `tests/PhotoViewerV3.Tests`: `ArchiveServiceTests.ExtractAsync_bricht_ab_und_laesst_keine_Teildateien_zurueck`
+  brach unter Last gelegentlich nicht ab (498/499). Ursache: `Progress<T>` stellt Meldungen ohne SynchronizationContext
+  asynchron über den Thread-Pool zu — der Abbruch aus der Meldung kam erst, als alle 20 Dateien schon entpackt waren.
+  Dasselbe Muster prüfte in `ArchiveServiceTests` (Fortschritt) und `FileSorterServiceTests` (Ausführen) eine Liste,
+  die nach dem `await` noch nicht vollständig sein musste. Neu: `Fixtures/InlineProgress<T>` meldet sofort auf dem
+  meldenden Thread; die drei Tests nutzen es.
+
+### Tests
+- `tests/PhotoViewerV3.Tests`: 499, dreimal hintereinander grün; die beiden betroffenen Klassen 15× hintereinander grün.
+
+### Offen
+- Einmal (von über 15 Läufen) endete ein Lauf der Services-Tests mit „Testlauf abgebrochen“ statt mit einem Ergebnis
+  (auch Agent O sah einmal nur 147 gezählte Tests). Mit `--blame-crash` und in allen weiteren Läufen nicht wieder
+  aufgetreten; Ursache unbekannt.
+
 ## [0.2.32] — 2026-10-20
 
 ### Neu (ADR-0034)

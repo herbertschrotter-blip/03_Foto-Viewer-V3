@@ -60,7 +60,7 @@ public sealed class ArchiveServiceTests
             ("notes.txt", Text("hallo")));
         var progress = new List<ArchiveExtractProgress>();
 
-        var result = await CreateService().ExtractAsync(zip, new ArchiveExtractOptions { MediaOnly = false }, new Progress<ArchiveExtractProgress>(progress.Add));
+        var result = await CreateService().ExtractAsync(zip, new ArchiveExtractOptions { MediaOnly = false }, new InlineProgress<ArchiveExtractProgress>(progress.Add));
 
         var target = Path.Combine(fx.OutsideDir, "urlaub");
         result.TargetFolder.Should().Be(target);
@@ -212,7 +212,7 @@ public sealed class ArchiveServiceTests
         var entries = Enumerable.Range(0, 20).Select(i => ($"f{i:00}.jpg", Jpeg(200_000))).ToArray();
         var zip = WriteZip(Path.Combine(fx.OutsideDir, "gross.zip"), entries);
         using var cts = new CancellationTokenSource();
-        var progress = new Progress<ArchiveExtractProgress>(p =>
+        var progress = new InlineProgress<ArchiveExtractProgress>(p =>
         {
             if (p.FilesDone >= 2)
             {

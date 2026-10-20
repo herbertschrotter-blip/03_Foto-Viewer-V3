@@ -328,7 +328,7 @@ public sealed class FileSorterServiceTests
         var plan = s.Sorter.BuildPlan(analysis, Mappings(("p006", "Set_006"), ("p020", "p020")));
         var progress = new List<SorterProgress>();
 
-        var result = await s.Sorter.ExecuteAsync(plan, new Progress<SorterProgress>(progress.Add));
+        var result = await s.Sorter.ExecuteAsync(plan, new InlineProgress<SorterProgress>(progress.Add));
 
         result.Moved.Should().Be(3);
         result.Failed.Should().Be(0);
