@@ -25,6 +25,9 @@ public sealed class LibraryContext : DbContext
     public DbSet<Setting> Settings => Set<Setting>();
     public DbSet<Tag> Tags => Set<Tag>();
     public DbSet<FileTag> FileTags => Set<FileTag>();
+    public DbSet<Category> Categories => Set<Category>();
+    public DbSet<CategoryValue> CategoryValues => Set<CategoryValue>();
+    public DbSet<FileCategoryValue> FileCategoryValues => Set<FileCategoryValue>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

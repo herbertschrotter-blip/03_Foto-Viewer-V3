@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using PhotoViewerV3.Gallery.Data;
@@ -91,25 +92,53 @@ public static class GalleryListColumns
 }
 
 /// <summary>
-/// Sichtbare Spalten der Listenansicht in Reihenfolge (Setting <c>ui.gallery.listColumns</c>, Schlüssel durch Komma).
-/// Unbekannte Schlüssel werden beim Parsen übergangen, „Name“ bleibt immer sichtbar.
+/// Sichtbare Spalten der Listenansicht in Reihenfolge (Setting <c>ui.gallery.listColumns</c>, Token durch Komma).
+/// Token: Name einer festen Spalte (<see cref="GalleryListColumnKey"/>) oder „Kategorie:{Id}“ (ADR-0027);
+/// „!Kategorie:{Id}“ = ausgeblendete Kategorie-Spalte. Feste Spalten ohne Token sind ausgeblendet, Kategorie-Spalten
+/// ohne Token sichtbar (neue Kategorien erscheinen am Ende). Unbekannte Token werden beim Parsen übergangen,
+/// „Name“ bleibt immer sichtbar.
 /// </summary>
 public sealed class GalleryListColumnSettings
 {
-    private readonly List<GalleryListColumnKey> _visible;
+    public const string CategoryPrefix = "Kategorie:";
 
-    private GalleryListColumnSettings(List<GalleryListColumnKey> visible)
+    private readonly List<string> _tokens;
+    private readonly HashSet<int> _hiddenCategories;
+
+    private GalleryListColumnSettings(List<string> tokens, HashSet<int> hiddenCategories)
     {
-        _visible = visible;
+        _tokens = tokens;
+        _hiddenCategories = hiddenCategories;
     }
 
     public static GalleryListColumnSettings Default
-        => new(GalleryListColumns.All.Select(c => c.Key).ToList());
+        => new(GalleryListColumns.All.Select(c => c.Key.ToString()).ToList(), new HashSet<int>());
 
-    /// <summary>Sichtbare Spalten in Anzeigereihenfolge.</summary>
-    public IReadOnlyList<GalleryListColumnKey> Visible => _visible;
+    /// <summary>Sichtbare feste Spalten in Anzeigereihenfolge.</summary>
+    public IReadOnlyList<GalleryListColumnKey> Visible
+        => _tokens
+            .Select(t => System.Enum.TryParse<GalleryListColumnKey>(t, out var key) ? key : (GalleryListColumnKey?)null)
+            .Where(k => k is not null)
+            .Select(k => k!.Value)
+            .ToList();
 
-    public bool IsVisible(GalleryListColumnKey key) => _visible.Contains(key);
+    /// <summary>Alle ausdrücklich sichtbaren Spalten (feste und Kategorie-Spalten) in Anzeigereihenfolge.</summary>
+    public IReadOnlyList<string> VisibleTokens => _tokens;
+
+    public bool IsVisible(GalleryListColumnKey key) => _tokens.Contains(key.ToString());
+
+    /// <summary>Kategorie-Spalten sind sichtbar, solange sie nicht ausdrücklich ausgeblendet wurden.</summary>
+    public bool IsCategoryVisible(int categoryId) => !_hiddenCategories.Contains(categoryId);
+
+    public static string CategoryToken(int categoryId) => CategoryPrefix + categoryId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    public static bool TryParseCategoryToken(string token, out int categoryId)
+    {
+        categoryId = 0;
+        return token.StartsWith(CategoryPrefix, System.StringComparison.OrdinalIgnoreCase)
+               && int.TryParse(token.AsSpan(CategoryPrefix.Length), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out categoryId)
+               && categoryId > 0;
+    }
 
     public static GalleryListColumnSettings Parse(string? value)
     {
@@ -118,65 +147,113 @@ public sealed class GalleryListColumnSettings
             return Default;
         }
 
-        var keys = new List<GalleryListColumnKey>();
+        var tokens = new List<string>();
+        var hidden = new HashSet<int>();
         foreach (var token in value.Split(',', System.StringSplitOptions.RemoveEmptyEntries | System.StringSplitOptions.TrimEntries))
         {
-            if (System.Enum.TryParse<GalleryListColumnKey>(token, ignoreCase: true, out var key) && !keys.Contains(key))
+            if (token.StartsWith('!') && TryParseCategoryToken(token[1..], out var hiddenId))
             {
-                keys.Add(key);
+                hidden.Add(hiddenId);
+            }
+            else if (TryParseCategoryToken(token, out var categoryId))
+            {
+                var canonical = CategoryToken(categoryId);
+                if (!tokens.Contains(canonical))
+                {
+                    tokens.Add(canonical);
+                }
+            }
+            else if (System.Enum.TryParse<GalleryListColumnKey>(token, ignoreCase: true, out var key) && !tokens.Contains(key.ToString()))
+            {
+                tokens.Add(key.ToString());
             }
         }
 
-        if (!keys.Contains(GalleryListColumnKey.Name))
+        if (!tokens.Contains(nameof(GalleryListColumnKey.Name)))
         {
-            keys.Insert(0, GalleryListColumnKey.Name);
+            tokens.Insert(0, nameof(GalleryListColumnKey.Name));
         }
 
-        return new GalleryListColumnSettings(keys);
+        tokens.RemoveAll(t => TryParseCategoryToken(t, out var id) && hidden.Contains(id));
+        return new GalleryListColumnSettings(tokens, hidden);
     }
 
-    public string Serialize() => string.Join(",", _visible);
+    public string Serialize()
+        => string.Join(",", _tokens.Concat(_hiddenCategories.Order().Select(id => "!" + CategoryToken(id))));
 
-    /// <summary>Blendet eine Spalte ein (ans Ende) oder aus; „Name“ lässt sich nicht ausblenden.</summary>
+    /// <summary>Blendet eine feste Spalte ein (ans Ende) oder aus; „Name“ lässt sich nicht ausblenden.</summary>
     public GalleryListColumnSettings WithVisibility(GalleryListColumnKey key, bool visible)
     {
-        var keys = new List<GalleryListColumnKey>(_visible);
+        var tokens = new List<string>(_tokens);
+        var token = key.ToString();
         if (visible)
         {
-            if (!keys.Contains(key))
+            if (!tokens.Contains(token))
             {
-                keys.Add(key);
+                tokens.Add(token);
             }
         }
         else if (key != GalleryListColumnKey.Name)
         {
-            keys.Remove(key);
+            tokens.Remove(token);
         }
 
-        return new GalleryListColumnSettings(keys);
+        return new GalleryListColumnSettings(tokens, new HashSet<int>(_hiddenCategories));
     }
 
-    /// <summary>Neue Reihenfolge aus den sichtbaren Spalten, wie das DataGrid sie nach dem Ziehen anzeigt.</summary>
-    public GalleryListColumnSettings WithOrder(IEnumerable<GalleryListColumnKey> orderedVisible)
+    /// <summary>Blendet die Spalte einer Kategorie ein (ans Ende) oder aus.</summary>
+    public GalleryListColumnSettings WithCategoryVisibility(int categoryId, bool visible)
     {
-        var keys = new List<GalleryListColumnKey>();
-        foreach (var key in orderedVisible)
+        var tokens = new List<string>(_tokens);
+        var hidden = new HashSet<int>(_hiddenCategories);
+        var token = CategoryToken(categoryId);
+        if (visible)
         {
-            if (_visible.Contains(key) && !keys.Contains(key))
+            hidden.Remove(categoryId);
+            if (!tokens.Contains(token))
             {
-                keys.Add(key);
+                tokens.Add(token);
+            }
+        }
+        else
+        {
+            hidden.Add(categoryId);
+            tokens.Remove(token);
+        }
+
+        return new GalleryListColumnSettings(tokens, hidden);
+    }
+
+    /// <summary>Neue Reihenfolge der festen Spalten, wie das DataGrid sie nach dem Ziehen anzeigt.</summary>
+    public GalleryListColumnSettings WithOrder(IEnumerable<GalleryListColumnKey> orderedVisible)
+        => WithTokenOrder(orderedVisible.Select(k => k.ToString()));
+
+    /// <summary>
+    /// Neue Reihenfolge aus allen sichtbaren Spalten (feste und Kategorie-Spalten); nicht genannte sichtbare Spalten
+    /// folgen dahinter. Sichtbare Kategorie-Spalten ohne Token werden dabei festgeschrieben.
+    /// </summary>
+    public GalleryListColumnSettings WithTokenOrder(IEnumerable<string> orderedVisible)
+    {
+        var tokens = new List<string>();
+        foreach (var token in orderedVisible)
+        {
+            var known = _tokens.Contains(token)
+                        || (TryParseCategoryToken(token, out var id) && !_hiddenCategories.Contains(id));
+            if (known && !tokens.Contains(token))
+            {
+                tokens.Add(token);
             }
         }
 
-        foreach (var key in _visible)
+        foreach (var token in _tokens)
         {
-            if (!keys.Contains(key))
+            if (!tokens.Contains(token))
             {
-                keys.Add(key);
+                tokens.Add(token);
             }
         }
 
-        return new GalleryListColumnSettings(keys);
+        return new GalleryListColumnSettings(tokens, new HashSet<int>(_hiddenCategories));
     }
 
     public override string ToString() => Serialize();

@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using PhotoViewerV3.Data.RawSql;
 using PhotoViewerV3.Services.Archive;
 using PhotoViewerV3.Services.Catalog;
+using PhotoViewerV3.Services.Categories;
 using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Database.Relocation;
 using PhotoViewerV3.Services.Infrastructure;
@@ -62,6 +63,7 @@ public static class ServiceCollectionExtensions
         services.AddSorter();
         services.AddArchives();
         services.AddTags();
+        services.AddCategories(); // frei konfigurierbare Kategorien mit Werten (ADR-0027)
 
         // Ordnerüberwachung (Services/Watch): FileSystemWatcher je Wurzel → Incremental-Scan nach Ruhezeit
         services.AddWatch();

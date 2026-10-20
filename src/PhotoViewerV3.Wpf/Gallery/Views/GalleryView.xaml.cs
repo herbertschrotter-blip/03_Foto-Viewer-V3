@@ -313,6 +313,56 @@ public partial class GalleryView : UserControl
         var manage = new MenuItem { Header = "Tags verwalten…" };
         manage.Click += (_, _) => _navigation.NavigateTo(NavigationTags.Tags);
         menu.Items.Add(manage);
+
+        // Kategorien (ADR-0027) nur im Rechtsklick-Menü, nicht im Tag-Dropdown der Aktionsleiste
+        if (ReferenceEquals(menu, Resources["TagContextMenu"]))
+        {
+            AddCategoryItems(menu);
+        }
+    }
+
+    /// <summary>Je Kategorie ein Untermenü mit ihren Werten (Häkchen = alle ausgewählten haben ihn) und „Kein Wert“.</summary>
+    private void AddCategoryItems(ContextMenu menu)
+    {
+        if (_viewModel.CategoryMenuGroups.Count == 0 || !_viewModel.HasSelection)
+        {
+            return;
+        }
+
+        menu.Items.Add(new Separator());
+        foreach (var group in _viewModel.CategoryMenuGroups)
+        {
+            var current = group.Entries.FirstOrDefault(e => e.State == true && !e.IsNone);
+            var mixed = group.Entries.Count(e => e.State != false) > 1;
+            var parent = new MenuItem
+            {
+                Header = current is not null ? $"{group.Name}: {current.Name}" : mixed ? $"{group.Name}: (gemischt)" : group.Name,
+                Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Group24 },
+            };
+            foreach (var entry in group.Entries)
+            {
+                if (entry.IsNone)
+                {
+                    parent.Items.Add(new Separator());
+                }
+
+                parent.Items.Add(new MenuItem
+                {
+                    Header = entry.State is null ? $"{entry.Name}  (teilweise)" : entry.Name,
+                    IsCheckable = !entry.IsNone,
+                    IsChecked = !entry.IsNone && entry.State == true,
+                    FontStyle = entry.IsNone ? FontStyles.Italic : FontStyles.Normal,
+                    Command = _viewModel.SetSelectionCategoryValueCommand,
+                    CommandParameter = entry,
+                });
+            }
+
+            menu.Items.Add(parent);
+        }
+
+        var manage = new MenuItem { Header = "Kategorien verwalten…" };
+        manage.Click += (_, _) => _navigation.NavigateTo(NavigationTags.Categories);
+        menu.Items.Add(manage);
     }
 
     private void AddFileActions(ContextMenu menu, GalleryItem target)

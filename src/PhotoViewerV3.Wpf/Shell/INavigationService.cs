@@ -9,6 +9,7 @@ public static class NavigationTags
     public const string Gallery = "gallery";
     public const string Folders = "folders";
     public const string Tags = "tags";
+    public const string Categories = "categories";
     public const string Settings = "settings";
 }
 

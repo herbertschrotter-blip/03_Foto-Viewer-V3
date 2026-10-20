@@ -16,6 +16,80 @@ namespace PhotoViewerV3.Data.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.0");
 
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.Category", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasDatabaseName("UX_Categories_Name");
+
+                    b.ToTable("Categories", (string)null);
+                });
+
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.CategoryValue", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("CategoryId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CategoryId", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("UX_CategoryValues_Category_Name");
+
+                    b.ToTable("CategoryValues", (string)null);
+                });
+
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.FileCategoryValue", b =>
+                {
+                    b.Property<int>("FileId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("CategoryId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ValueId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("FileId", "CategoryId");
+
+                    b.HasIndex("CategoryId")
+                        .HasDatabaseName("IX_FileCategoryValues_Category");
+
+                    b.HasIndex("ValueId")
+                        .HasDatabaseName("IX_FileCategoryValues_Value");
+
+                    b.ToTable("FileCategoryValues", (string)null);
+                });
+
             modelBuilder.Entity("PhotoViewerV3.Domain.Entities.FileOperation", b =>
                 {
                     b.Property<int>("Id")
@@ -371,6 +445,36 @@ namespace PhotoViewerV3.Data.Migrations
                         .HasDatabaseName("IX_Thumbnails_File_Size_Kind");
 
                     b.ToTable("Thumbnails", (string)null);
+                });
+
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.CategoryValue", b =>
+                {
+                    b.HasOne("PhotoViewerV3.Domain.Entities.Category", null)
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.FileCategoryValue", b =>
+                {
+                    b.HasOne("PhotoViewerV3.Domain.Entities.Category", null)
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("PhotoViewerV3.Domain.Entities.MediaFile", null)
+                        .WithMany()
+                        .HasForeignKey("FileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("PhotoViewerV3.Domain.Entities.CategoryValue", null)
+                        .WithMany()
+                        .HasForeignKey("ValueId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("PhotoViewerV3.Domain.Entities.FileTag", b =>

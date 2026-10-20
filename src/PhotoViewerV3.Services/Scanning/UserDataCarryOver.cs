@@ -6,8 +6,8 @@ namespace PhotoViewerV3.Services.Scanning;
 
 /// <summary>
 /// Trägt die Benutzerdaten einer Bibliothek über „Neu aufbauen“ (<see cref="ScanMode.ClearAndRescan"/>) hinweg
-/// (ADR-0023): Favorit (<c>Files.IsFavorite</c>), Bewertung (<c>Files.Rating</c>) und Tag-Zuweisungen
-/// (<c>FileTags</c>). <see cref="Capture"/> sichert sie VOR dem Leeren des Katalogs in TEMP-Tabellen einer eigenen
+/// (ADR-0023): Favorit (<c>Files.IsFavorite</c>), Bewertung (<c>Files.Rating</c>), Tag-Zuweisungen
+/// (<c>FileTags</c>) und Kategorie-Werte (<c>FileCategoryValues</c>, ADR-0027). <see cref="Capture"/> sichert sie VOR dem Leeren des Katalogs in TEMP-Tabellen einer eigenen
 /// Verbindung, <see cref="Restore"/> schreibt sie NACH dem Bulk-Insert auf die neuen FileIds zurück — mengenbasiert
 /// (INSERT…SELECT / UPDATE…FROM, keine Zeilenschleife in C#) und in einer Transaktion.
 /// <para>
@@ -15,8 +15,8 @@ namespace PhotoViewerV3.Services.Scanning;
 /// damit auch Wurzel-übergreifend eindeutig, ADR-0020) + Dateiname, ohne Groß-/Kleinschreibung (Unicode, wie
 /// <see cref="StringComparer.OrdinalIgnoreCase"/>). Keine Prüfung von Größe/Änderungszeit: eine an Ort und Stelle
 /// geänderte Datei behält ihre Daten — wie beim Incremental-Scan, wo sie ihre FileId behält. Dateien, die nach dem
-/// Neuscan nicht mehr existieren (auch zuvor „fehlt“-markierte), verlieren ihre Daten. Die Tabelle <c>Tags</c> selbst
-/// wird nie angefasst.
+/// Neuscan nicht mehr existieren (auch zuvor „fehlt“-markierte), verlieren ihre Daten. Die Tabellen <c>Tags</c>,
+/// <c>Categories</c> und <c>CategoryValues</c> selbst werden nie angefasst.
 /// </para>
 /// <para>
 /// Die TEMP-Tabellen leben nur in dieser Verbindung (<c>temp_store=MEMORY</c>, Pooling aus) und verschwinden mit
@@ -32,7 +32,8 @@ public sealed class UserDataCarryOver : IDisposable
         int LostFiles,
         int FavoritesOrRatingsRestored,
         int TagAssignmentsRestored,
-        TimeSpan Duration);
+        TimeSpan Duration,
+        int CategoryValuesRestored = 0);
 
     private const string CaseFoldFunction = "pv_casefold";
 
@@ -49,6 +50,11 @@ public sealed class UserDataCarryOver : IDisposable
             OldFileId INTEGER NOT NULL,
             TagId     INTEGER NOT NULL,
             PRIMARY KEY(OldFileId, TagId)) WITHOUT ROWID;
+        CREATE TEMP TABLE pv_carry_categories(
+            OldFileId  INTEGER NOT NULL,
+            CategoryId INTEGER NOT NULL,
+            ValueId    INTEGER NOT NULL,
+            PRIMARY KEY(OldFileId, CategoryId)) WITHOUT ROWID;
         CREATE TEMP TABLE pv_carry_folders(
             FolderKey TEXT PRIMARY KEY,
             FolderId  INTEGER NOT NULL) WITHOUT ROWID;
@@ -64,13 +70,20 @@ public sealed class UserDataCarryOver : IDisposable
         SELECT f.Id, pv_casefold(d.Path), pv_casefold(f.Name), f.Name, f.IsFavorite, f.Rating
         FROM Files f JOIN Folders d ON d.Id = f.FolderId
         WHERE f.LibraryId = $lib
-          AND (f.IsFavorite <> 0 OR f.Rating IS NOT NULL OR EXISTS (SELECT 1 FROM FileTags t WHERE t.FileId = f.Id))
+          AND (f.IsFavorite <> 0 OR f.Rating IS NOT NULL
+               OR EXISTS (SELECT 1 FROM FileTags t WHERE t.FileId = f.Id)
+               OR EXISTS (SELECT 1 FROM FileCategoryValues v WHERE v.FileId = f.Id))
         ORDER BY f.Missing, f.Id;
         """;
 
     private const string CaptureTagsSql = """
         INSERT OR IGNORE INTO temp.pv_carry_tags(OldFileId, TagId)
         SELECT t.FileId, t.TagId FROM temp.pv_carry_files c CROSS JOIN FileTags t ON t.FileId = c.OldFileId;
+        """;
+
+    private const string CaptureCategoriesSql = """
+        INSERT OR IGNORE INTO temp.pv_carry_categories(OldFileId, CategoryId, ValueId)
+        SELECT v.FileId, v.CategoryId, v.ValueId FROM temp.pv_carry_files c CROSS JOIN FileCategoryValues v ON v.FileId = c.OldFileId;
         """;
 
     // Ordner-Schlüssel des Neuscans: eine Funktionsauswertung je Ordner, nicht je Datei.
@@ -116,6 +129,14 @@ public sealed class UserDataCarryOver : IDisposable
         WHERE EXISTS (SELECT 1 FROM Tags g WHERE g.Id = t.TagId);
         """;
 
+    // Wie bei Tags: ein während des Scans gelöschter Wert (oder seine Kategorie) fällt still heraus.
+    private const string RestoreCategoriesSql = """
+        INSERT OR IGNORE INTO FileCategoryValues(FileId, CategoryId, ValueId)
+        SELECT m.NewFileId, v.CategoryId, v.ValueId
+        FROM temp.pv_carry_categories v CROSS JOIN temp.pv_carry_map m ON m.OldFileId = v.OldFileId
+        WHERE EXISTS (SELECT 1 FROM CategoryValues cv WHERE cv.Id = v.ValueId AND cv.CategoryId = v.CategoryId);
+        """;
+
     private readonly SqliteConnection _connection;
     private readonly int _libraryId;
     private bool _restored;
@@ -126,11 +147,14 @@ public sealed class UserDataCarryOver : IDisposable
         _libraryId = libraryId;
     }
 
-    /// <summary>Anzahl gesicherter Dateien (mit Favorit, Bewertung oder mindestens einem Tag).</summary>
+    /// <summary>Anzahl gesicherter Dateien (mit Favorit, Bewertung, mindestens einem Tag oder Kategorie-Wert).</summary>
     public int CapturedFiles { get; private set; }
 
     /// <summary>Anzahl gesicherter Tag-Zuweisungen.</summary>
     public int CapturedTagAssignments { get; private set; }
+
+    /// <summary>Anzahl gesicherter Kategorie-Werte.</summary>
+    public int CapturedCategoryValues { get; private set; }
 
     /// <summary>Dauer der Sicherung.</summary>
     public TimeSpan CaptureDuration { get; private set; }
@@ -154,6 +178,7 @@ public sealed class UserDataCarryOver : IDisposable
             {
                 carry.CapturedFiles = Execute(connection, tx, CaptureFilesSql, libraryId);
                 carry.CapturedTagAssignments = Execute(connection, tx, CaptureTagsSql, libraryId);
+                carry.CapturedCategoryValues = Execute(connection, tx, CaptureCategoriesSql, libraryId);
                 tx.Commit();
             }
 
@@ -192,9 +217,10 @@ public sealed class UserDataCarryOver : IDisposable
         mapped += Execute(_connection, tx, MapCaseInsensitiveSql, _libraryId);
         var files = Execute(_connection, tx, RestoreFilesSql, _libraryId);
         var tags = Execute(_connection, tx, RestoreTagsSql, _libraryId);
+        var categories = Execute(_connection, tx, RestoreCategoriesSql, _libraryId);
         tx.Commit();
 
-        return new RestoreReport(CapturedFiles, mapped, CapturedFiles - mapped, files, tags, sw.Elapsed);
+        return new RestoreReport(CapturedFiles, mapped, CapturedFiles - mapped, files, tags, sw.Elapsed, categories);
     }
 
     /// <summary>Schließt die Verbindung; die TEMP-Tabellen verschwinden mit ihr.</summary>

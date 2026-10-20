@@ -10,6 +10,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using PhotoViewerV3.Gallery.Data;
 using PhotoViewerV3.Gallery.ViewModels;
+using PhotoViewerV3.Services.Categories;
 
 namespace PhotoViewerV3.Gallery.ListView;
 
@@ -21,6 +22,7 @@ namespace PhotoViewerV3.Gallery.ListView;
 public partial class GalleryListView : UserControl
 {
     private readonly Dictionary<GalleryListColumnKey, DataGridColumn> _columns = new();
+    private readonly Dictionary<int, DataGridColumn> _categoryColumns = new(); // ADR-0027: je Kategorie eine Spalte
     private GalleryViewModel? _viewModel;
     private ListCollectionView? _view;
     private bool _applyingSettings;
@@ -35,6 +37,23 @@ public partial class GalleryListView : UserControl
 
     /// <summary>Das DataGrid (für Tests und das Kontextmenü der Galerie-Seite).</summary>
     public GalleryDataGrid DataGrid => Grid;
+
+    /// <summary>Alle sichtbaren Spalten als Einstellungs-Token (feste Spalten und „Kategorie:{Id}“) nach DisplayIndex.</summary>
+    public IReadOnlyList<string> VisibleColumnTokensInOrder()
+        => _columns.Select(p => (Token: p.Key.ToString(), Column: p.Value))
+            .Concat(_categoryColumns.Select(p => (Token: GalleryListColumnSettings.CategoryToken(p.Key), Column: p.Value)))
+            .Where(p => p.Column.Visibility == Visibility.Visible)
+            .OrderBy(p => p.Column.DisplayIndex)
+            .Select(p => p.Token)
+            .ToList();
+
+    /// <summary>Überschriften der sichtbaren Kategorie-Spalten in Anzeigereihenfolge (Rauchtest, Tests).</summary>
+    public IReadOnlyList<string> VisibleCategoryHeaders()
+        => _categoryColumns.Values
+            .Where(c => c.Visibility == Visibility.Visible)
+            .OrderBy(c => c.DisplayIndex)
+            .Select(c => c.Header?.ToString() ?? string.Empty)
+            .ToList();
 
     /// <summary>Spaltenschlüssel in aktueller Anzeigereihenfolge (sichtbare zuerst nach DisplayIndex).</summary>
     public IReadOnlyList<GalleryListColumnKey> VisibleColumnKeysInOrder()
@@ -63,6 +82,7 @@ public partial class GalleryListView : UserControl
         _view = new ListCollectionView(_viewModel.CurrentPage);
         Grid.ItemsSource = _view;
         _viewModel.PropertyChanged += OnViewModelPropertyChanged;
+        RebuildCategoryColumns();
         ApplySettings(GalleryListColumnSettings.Parse(_viewModel.ListColumnSettings));
         UpdateSortIndicators();
     }
@@ -75,6 +95,10 @@ public partial class GalleryListView : UserControl
                 UpdateSortIndicators();
                 break;
             case nameof(GalleryViewModel.ListColumnSettings) when !_applyingSettings:
+                ApplySettings(GalleryListColumnSettings.Parse(_viewModel?.ListColumnSettings));
+                break;
+            case nameof(GalleryViewModel.CategoryColumns):
+                RebuildCategoryColumns();
                 ApplySettings(GalleryListColumnSettings.Parse(_viewModel?.ListColumnSettings));
                 break;
         }
@@ -92,6 +116,44 @@ public partial class GalleryListView : UserControl
             column.MinWidth = 50;
             _columns[def.Key] = column;
             Grid.Columns.Add(column);
+        }
+    }
+
+    /// <summary>
+    /// Kategorie-Spalten (ADR-0027) nach den Kategorien des ViewModels neu aufbauen: Wertname per Indexer
+    /// <c>Categories[Id]</c>, Sortierung nur innerhalb der Page.
+    /// </summary>
+    private void RebuildCategoryColumns()
+    {
+        _applyingSettings = true;
+        try
+        {
+            foreach (var column in _categoryColumns.Values)
+            {
+                Grid.Columns.Remove(column);
+            }
+
+            _categoryColumns.Clear();
+            var categories = _viewModel?.CategoryColumns ?? Array.Empty<CategoryInfo>();
+            foreach (var category in categories)
+            {
+                var path = $"{nameof(GalleryItem.Categories)}[{category.Id}]";
+                var column = new DataGridTextColumn
+                {
+                    Header = category.Name,
+                    Binding = new Binding(path) { Mode = BindingMode.OneWay },
+                    SortMemberPath = path,
+                    ElementStyle = TrimmedTextStyle(),
+                    Width = new DataGridLength(140),
+                    MinWidth = 50,
+                };
+                _categoryColumns[category.Id] = column;
+                Grid.Columns.Add(column);
+            }
+        }
+        finally
+        {
+            _applyingSettings = false;
         }
     }
 
@@ -177,6 +239,26 @@ public partial class GalleryListView : UserControl
             menu.Items.Add(item);
         }
 
+        var categories = _viewModel?.CategoryColumns ?? Array.Empty<CategoryInfo>();
+        foreach (var category in categories)
+        {
+            if (!_categoryColumns.TryGetValue(category.Id, out var column))
+            {
+                continue;
+            }
+
+            var categoryItem = new MenuItem
+            {
+                Header = $"{category.Name} (Kategorie)",
+                IsCheckable = true,
+                IsChecked = column.Visibility == Visibility.Visible,
+                StaysOpenOnClick = true,
+                Tag = category.Id,
+            };
+            categoryItem.Click += OnColumnToggleClick;
+            menu.Items.Add(categoryItem);
+        }
+
         menu.Items.Add(new Separator());
         var reset = new MenuItem { Header = "Standard wiederherstellen" };
         reset.Click += (_, _) => SaveSettings(GalleryListColumnSettings.Default);
@@ -185,13 +267,21 @@ public partial class GalleryListView : UserControl
 
     private void OnColumnToggleClick(object sender, RoutedEventArgs e)
     {
-        if (sender is not MenuItem { Tag: GalleryListColumnKey key } item)
+        if (sender is not MenuItem item)
         {
             return;
         }
 
-        var current = GalleryListColumnSettings.Parse(_viewModel?.ListColumnSettings).WithOrder(VisibleColumnKeysInOrder());
-        SaveSettings(current.WithVisibility(key, item.IsChecked));
+        var current = GalleryListColumnSettings.Parse(_viewModel?.ListColumnSettings).WithTokenOrder(VisibleColumnTokensInOrder());
+        switch (item.Tag)
+        {
+            case GalleryListColumnKey key:
+                SaveSettings(current.WithVisibility(key, item.IsChecked));
+                break;
+            case int categoryId:
+                SaveSettings(current.WithCategoryVisibility(categoryId, item.IsChecked));
+                break;
+        }
     }
 
     private void OnColumnReordered(object? sender, DataGridColumnEventArgs e)
@@ -202,7 +292,7 @@ public partial class GalleryListView : UserControl
         }
 
         var current = GalleryListColumnSettings.Parse(_viewModel?.ListColumnSettings);
-        SaveSettings(current.WithOrder(VisibleColumnKeysInOrder()));
+        SaveSettings(current.WithTokenOrder(VisibleColumnTokensInOrder()));
     }
 
     private void SaveSettings(GalleryListColumnSettings settings)
@@ -229,20 +319,44 @@ public partial class GalleryListView : UserControl
         try
         {
             var index = 0;
-            foreach (var key in settings.Visible)
+            var placed = new HashSet<DataGridColumn>();
+            foreach (var token in settings.VisibleTokens)
             {
-                if (_columns.TryGetValue(key, out var column))
+                var column = GalleryListColumnSettings.TryParseCategoryToken(token, out var categoryId)
+                    ? _categoryColumns.GetValueOrDefault(categoryId)
+                    : Enum.TryParse<GalleryListColumnKey>(token, out var key) ? _columns.GetValueOrDefault(key) : null;
+                if (column is not null && placed.Add(column))
                 {
                     column.Visibility = Visibility.Visible;
                     column.DisplayIndex = index++;
                 }
             }
 
+            // Kategorie-Spalten ohne Token (neue Kategorien) sichtbar ans Ende, ausgeblendete dahinter.
+            foreach (var (categoryId, column) in _categoryColumns)
+            {
+                if (!placed.Contains(column) && settings.IsCategoryVisible(categoryId))
+                {
+                    column.Visibility = Visibility.Visible;
+                    column.DisplayIndex = index++;
+                    placed.Add(column);
+                }
+            }
+
             foreach (var def in GalleryListColumns.All)
             {
-                if (!settings.IsVisible(def.Key))
+                var column = _columns[def.Key];
+                if (!placed.Contains(column))
                 {
-                    var column = _columns[def.Key];
+                    column.Visibility = Visibility.Collapsed;
+                    column.DisplayIndex = index++;
+                }
+            }
+
+            foreach (var column in _categoryColumns.Values)
+            {
+                if (!placed.Contains(column))
+                {
                     column.Visibility = Visibility.Collapsed;
                     column.DisplayIndex = index++;
                 }
@@ -258,6 +372,11 @@ public partial class GalleryListView : UserControl
 
     private void OnSorting(object sender, DataGridSortingEventArgs e)
     {
+        if (!_columns.ContainsValue(e.Column))
+        {
+            return; // Kategorie-Spalte: nur innerhalb der Page sortieren (Standardverhalten)
+        }
+
         var key = _columns.FirstOrDefault(p => ReferenceEquals(p.Value, e.Column)).Key;
         if (_viewModel is null || GalleryListColumns.NextSort(key, _viewModel.SelectedSort.Sort) is not { } next)
         {

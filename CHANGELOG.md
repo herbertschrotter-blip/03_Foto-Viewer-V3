@@ -3,6 +3,37 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.20] — 2026-10-20
+
+### Neu (ADR-0027)
+- **Kategorien mit festen Werten**: neue Seite **Kategorien** (Navigation unter „Tags“) — Kategorien anlegen (optional
+  gleich mit Werten „N, NN“), umbenennen, sortieren, löschen; Werte hinzufügen (mehrere durch Komma), umbenennen,
+  sortieren, löschen; Zähler je Wert. Jede Datei hat je Kategorie höchstens einen Wert.
+- **Zuweisen** per Rechtsklick auf Kachel oder Zeile: je Kategorie ein Untermenü mit den Werten (Häkchen / „teilweise“
+  bezogen auf die Auswahl) und „Kein Wert“.
+- **Filter** „Kategorien“ in der Galerie-Kopfzeile (sichtbar, sobald es Kategorien gibt): je Kategorie Werte und
+  „ohne Wert“ — innerhalb einer Kategorie ODER, zwischen Kategorien UND; wirkt mit Suche, Tag- und Status-Filter zusammen.
+- **Listenspalten**: je Kategorie eine Spalte (Sortierung innerhalb der Seite); ein-/ausblenden und Reihenfolge werden
+  gespeichert (`ui.gallery.listColumns`: Token `Kategorie:{Id}` bzw. `!Kategorie:{Id}`), neue Kategorien erscheinen
+  automatisch am Ende.
+- **Schema** (Migration `AddCategories`): `Categories`, `CategoryValues`, `FileCategoryValues` (PK FileId+CategoryId,
+  alle Fremdschlüssel ON DELETE CASCADE); `ICategoryService` (Services/Categories). „Neu aufbauen“ übernimmt die Werte
+  wie Tags (`UserDataCarryOver`, ADR-0023).
+
+### Tests
+- `tests/PhotoViewerV3.Tests`: 424 (+7 `Categories/CategoryServiceTests`: Anlegen mit Werten, Duplikate/leere Namen,
+  ein Wert je Kategorie setzen/ersetzen/entfernen, fremder Wert abgelehnt, Kaskaden beim Löschen von Wert/Kategorie/Datei,
+  Umbenennen/Reihenfolge, „Neu aufbauen“ übernimmt die Werte).
+- `tests/PhotoViewerV3.Wpf.Tests`: 168 (+13): `Categories/GalleryPageSourceCategoryTests` (6: Wert, ODER, „ohne Wert“,
+  UND zwischen Kategorien, mit Suche — gegen echte, migrierte DB), `Categories/CategoryColumnSettingsTests` (7: Spalten-Token,
+  Aus-/Einblenden, Reihenfolge, Indexer der Werte, Sortierung über den Indexer-Pfad, Werteingabe zerlegen).
+- Rauchtest 21/21 OK (neuer Schritt „Kategorien“: Anlegen, Zuweisen über das Menü-Kommando inkl. Bedienbarkeit, Filter,
+  Listenspalte, Verwaltung, Umbenennen, Löschen), 0 WPF-Binding-Fehler.
+
+### Offen
+- Kategorie-Werte lassen sich nur über das Rechtsklick-Menü zuweisen (kein Tastenkürzel, keine Anzeige in der Lightbox);
+  die Suche findet Kategorie-Werte nicht; Kategorie-Spalten sortieren nur die geladene Seite.
+
 ## [0.2.19] — 2026-10-20
 
 ### Neu

@@ -21,7 +21,7 @@ namespace PhotoViewerV3.Gallery.Data;
 /// <see cref="FtsQueryBuilder.FromUserInput"/> (eine Implementierung im Repo) — Text ohne suchbaren Inhalt
 /// (leer, nur Sonderzeichen wie <c>---</c>) gilt als „keine Suche“. Die Suche findet außerdem Dateien, deren
 /// Tag-Name den Suchtext enthält (Tags, ADR-0021). <paramref name="TagIds"/> + <paramref name="TagMode"/> filtern
-/// nach Tags (ODER / UND / ohne Tag).
+/// nach Tags (ODER / UND / ohne Tag), <paramref name="CategoryFilters"/> nach Kategorie-Werten (ADR-0027).
 /// </summary>
 public sealed record GalleryQuery(
     int LibraryId,
@@ -31,7 +31,8 @@ public sealed record GalleryQuery(
     bool IncludeSubfolders = true,
     GallerySort Sort = GallerySort.ModifiedDesc,
     IReadOnlyList<int>? TagIds = null,
-    GalleryTagMode TagMode = GalleryTagMode.Any)
+    GalleryTagMode TagMode = GalleryTagMode.Any,
+    IReadOnlyList<GalleryCategoryFilter>? CategoryFilters = null)
 {
     /// <summary>Sicherer FTS5-MATCH-Ausdruck (quotierte Präfix-Phrasen) oder null ohne suchbaren Inhalt.</summary>
     public string? MatchExpression => FtsQueryBuilder.FromUserInput(SearchTerm);
@@ -41,6 +42,19 @@ public sealed record GalleryQuery(
 
     /// <summary>True, wenn ein Tag-Filter wirkt (Tags gewählt oder Modus „ohne Tag“).</summary>
     public bool HasTagFilter => TagMode == GalleryTagMode.None || TagIds is { Count: > 0 };
+
+    /// <summary>Wirksame Kategorie-Filter (mindestens ein Wert oder „ohne Wert“ gewählt).</summary>
+    public IReadOnlyList<GalleryCategoryFilter> ActiveCategoryFilters
+        => CategoryFilters?.Where(c => c.IsActive).ToList() ?? (IReadOnlyList<GalleryCategoryFilter>)[];
+}
+
+/// <summary>
+/// Filter einer Kategorie (ADR-0027): Dateien mit einem der Werte (ODER) und/oder ohne Wert in dieser Kategorie.
+/// Mehrere Kategorien verknüpft die Galerie mit UND.
+/// </summary>
+public sealed record GalleryCategoryFilter(int CategoryId, IReadOnlyList<int> ValueIds, bool IncludeNone)
+{
+    public bool IsActive => IncludeNone || ValueIds.Count > 0;
 }
 
 /// <summary>
@@ -367,6 +381,7 @@ public sealed class GalleryPageSource : IDisposable
             WHERE f.LibraryId = $libId
               {BuildFilterClause(query.Filter)}
               {BuildTagClause(query)}
+              {BuildCategoryClause(query)}
               {folderClause}
             ORDER BY {orderBy}
             LIMIT $limit OFFSET $offset;
@@ -381,6 +396,7 @@ public sealed class GalleryPageSource : IDisposable
             WHERE f.LibraryId = $libId
               {BuildFilterClause(query.Filter)}
               {BuildTagClause(query)}
+              {BuildCategoryClause(query)}
               {folderClause};
             """;
     }
@@ -418,6 +434,40 @@ public sealed class GalleryPageSource : IDisposable
         return query.TagMode == GalleryTagMode.All
             ? $"AND f.Id IN (SELECT ft.FileId FROM FileTags ft WHERE ft.TagId IN ({inList}) GROUP BY ft.FileId HAVING COUNT(DISTINCT ft.TagId) = $tagCount)"
             : $"AND f.Id IN (SELECT ft.FileId FROM FileTags ft WHERE ft.TagId IN ({inList}))";
+    }
+
+    /// <summary>
+    /// Kategorie-Filter (ADR-0027): je Kategorie „Wert ∈ gewählte Werte“ ODER „kein Wert“ (falls gewählt); die
+    /// Kategorien untereinander UND. Parameter $catC{i} (Kategorie) und $catV{i}_{j} (Werte).
+    /// </summary>
+    private static string BuildCategoryClause(GalleryQuery query)
+    {
+        var filters = query.ActiveCategoryFilters;
+        if (filters.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var sb = new StringBuilder();
+        for (var i = 0; i < filters.Count; i++)
+        {
+            var filter = filters[i];
+            var parts = new List<string>(2);
+            if (filter.ValueIds.Count > 0)
+            {
+                var inList = string.Join(",", Enumerable.Range(0, filter.ValueIds.Count).Select(j => $"$catV{i}_{j}"));
+                parts.Add($"f.Id IN (SELECT cv.FileId FROM FileCategoryValues cv WHERE cv.CategoryId = $catC{i} AND cv.ValueId IN ({inList}))");
+            }
+
+            if (filter.IncludeNone)
+            {
+                parts.Add($"NOT EXISTS (SELECT 1 FROM FileCategoryValues cv WHERE cv.FileId = f.Id AND cv.CategoryId = $catC{i})");
+            }
+
+            sb.Append(" AND (").Append(string.Join(" OR ", parts)).Append(')');
+        }
+
+        return sb.ToString();
     }
 
     /// <summary>LIKE-Muster „%text%“ für die Tag-Namenssuche (Sonderzeichen von LIKE escaped).</summary>
@@ -485,6 +535,16 @@ public sealed class GalleryPageSource : IDisposable
             if (query.TagMode == GalleryTagMode.All)
             {
                 cmd.Parameters.AddWithValue("$tagCount", tagIds.Distinct().Count());
+            }
+        }
+
+        var categoryFilters = query.ActiveCategoryFilters;
+        for (var i = 0; i < categoryFilters.Count; i++)
+        {
+            cmd.Parameters.AddWithValue($"$catC{i}", categoryFilters[i].CategoryId);
+            for (var j = 0; j < categoryFilters[i].ValueIds.Count; j++)
+            {
+                cmd.Parameters.AddWithValue($"$catV{i}_{j}", categoryFilters[i].ValueIds[j]);
             }
         }
 

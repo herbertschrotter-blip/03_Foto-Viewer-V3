@@ -127,10 +127,20 @@ neben den Filter-Pills filtert nach einem oder mehreren Tags — „mindestens e
 Dateien ohne Tag“. Die Suche findet neben Dateinamen auch Dateien, deren Tag-Name den Suchtext enthält. Tags hängen am
 Katalog-Eintrag: „Aktualisieren“ und „Neu aufbauen“ (über den Pfad) behalten sie, der Papierkorb entfernt die Zuweisungen.
 
+#### Kategorien
+Eigene Kategorien mit festen Werten (z. B. „Projekt“: Nord, Süd) legt man auf der Seite **Kategorien** an (ADR-0027).
+Jede Datei hat je Kategorie höchstens einen Wert. Zuweisen: Rechtsklick auf Kachel oder Zeile → Untermenü der Kategorie
+→ Wert (Häkchen = alle ausgewählten Dateien haben ihn, „(teilweise)“ = nur ein Teil; **Kein Wert** entfernt ihn). Das
+Dropdown **Kategorien** neben dem Tag-Filter (erscheint, sobald es Kategorien gibt) filtert je Kategorie nach einem
+oder mehreren Werten und/oder „ohne Wert“ — innerhalb einer Kategorie ODER, zwischen Kategorien UND. In der
+Listenansicht ist jede Kategorie eine eigene Spalte. Werte hängen wie Tags am Katalog-Eintrag („Neu aufbauen“ behält
+sie, der Papierkorb entfernt sie).
+
 #### Listenansicht
 Der Umschalter rechts in der Kopfzeile wechselt zwischen Kachel-Grid und Liste (die Wahl bleibt gespeichert). Die
 Liste zeigt dieselbe Seite mit den Spalten Name (mit Vorschaubild), Ordner, Geändert, Größe, Typ, Bewertung (Sterne
-klickbar), Favorit (Herz klickbar), Tags und Status. Rechtsklick auf eine Spaltenüberschrift blendet Spalten ein/aus,
+klickbar), Favorit (Herz klickbar), Tags, Status und je Kategorie eine Spalte (neue Kategorien erscheinen am Ende).
+Rechtsklick auf eine Spaltenüberschrift blendet Spalten ein/aus,
 Ziehen ändert die Reihenfolge — beides bleibt gespeichert. Klick auf Name, Geändert oder Größe sortiert die ganze
 Trefferliste (wie die Sortier-Auswahl), die übrigen Spalten sortieren nur die geladene Seite. Auswahl, Aktionsleiste,
 Doppelklick/Enter (Lightbox) und Tastenkürzel wie im Grid.
@@ -209,6 +219,12 @@ werden protokolliert umbenannt und lassen sich mit Rückgängig zurücknehmen).
 Verwaltung der Tags: neues Tag anlegen (Enter), je Tag Farbe aus der Palette, nach oben/unten (Reihenfolge in Menüs,
 Chips und Filter), Umbenennen, Löschen (fragt nach und nennt die Zahl der Dateien; die Dateien selbst bleiben
 unverändert). Neben dem Namen steht, wie vielen Dateien das Tag zugewiesen ist.
+
+### Kategorien
+Verwaltung der Kategorien (ADR-0027): neue Kategorie mit Namen und optional gleich ihren Werten („N, NN“) anlegen
+(Enter); je Kategorie eine Karte mit Umbenennen, Löschen (fragt nach und nennt die Zahl der Dateien) und Reihenfolge
+(Filter, Spalten, Kontextmenü). Werte: hinzufügen (mehrere durch Komma), umbenennen, nach oben/unten, löschen (betroffene
+Dateien haben danach keinen Wert in dieser Kategorie). Neben jedem Wert steht, wie vielen Dateien er zugeordnet ist.
 
 ### Einstellungen
 Farbschema (Hell/Dunkel/System folgt Windows live), Speicherorte mit „Ordner öffnen“ und **Ändern…** (siehe

@@ -178,6 +178,12 @@ FilesFts           -- FTS5 virtual table (Files.Name, Extension)
   `Tags (Id, Name UNIQUE COLLATE NOCASE, Color "#RRGGBB", SortOrder, CreatedAtUtc)`,
   `FileTags (FileId → Files ON DELETE CASCADE, TagId → Tags ON DELETE CASCADE, PK (FileId, TagId), IX_FileTags_Tag)`.
   Tags sind global (nicht je Library); Suche nach Tag-Namen per Join, nicht über `FilesFts`.
+- Categories / CategoryValues / FileCategoryValues — umgesetzt in 0.2.20 (Migration `AddCategories`, ADR-0027):
+  `Categories (Id, Name UNIQUE COLLATE NOCASE, SortOrder, CreatedAtUtc)`,
+  `CategoryValues (Id, CategoryId → Categories ON DELETE CASCADE, Name COLLATE NOCASE, SortOrder, UNIQUE (CategoryId, Name))`,
+  `FileCategoryValues (FileId → Files, CategoryId → Categories, ValueId → CategoryValues — alle ON DELETE CASCADE,
+  PK (FileId, CategoryId) = ein Wert je Kategorie und Datei, IX_FileCategoryValues_Value, IX_FileCategoryValues_Category)`.
+  Global wie Tags; „Neu aufbauen“ trägt die Werte über `UserDataCarryOver` (ADR-0023) mit.
 - Albums / AlbumFiles (V0.3+)
 - Plans / PlanFolders / PlanAssignments (V0.3)
 - FileHashes (V0.3+ separat von Files)

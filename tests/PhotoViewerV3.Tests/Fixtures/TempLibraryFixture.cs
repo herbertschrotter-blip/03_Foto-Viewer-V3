@@ -6,6 +6,7 @@ using PhotoViewerV3.Data.RawSql;
 using PhotoViewerV3.Domain.Entities;
 using PhotoViewerV3.Domain.Enums;
 using PhotoViewerV3.Services.Catalog;
+using PhotoViewerV3.Services.Categories;
 using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Library;
 using PhotoViewerV3.Services.Media;
@@ -166,6 +167,9 @@ public sealed class TempLibraryFixture : IDisposable
 
     public TagService CreateTagService()
         => new(ContextFactory, NullLogger<TagService>.Instance, Messenger);
+
+    public CategoryService CreateCategoryService()
+        => new(ContextFactory, NullLogger<CategoryService>.Instance, Messenger);
 
     public async Task<MediaFile?> FindFileAsync(string name)
     {

@@ -7,6 +7,7 @@
              xmlns:gc="clr-namespace:PhotoViewerV3.Gallery.Controls"
              xmlns:conv="clr-namespace:PhotoViewerV3.Gallery.Converters"
              xmlns:tags="clr-namespace:PhotoViewerV3.Gallery.Tags"
+             xmlns:cats="clr-namespace:PhotoViewerV3.Gallery.Categories"
              xmlns:vm="clr-namespace:PhotoViewerV3.Gallery.ViewModels"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=vm:GalleryViewModel, IsDesignTimeCreatable=False}"
@@ -131,6 +132,9 @@
 
             <!-- Tag-Filter (ODER/UND/ohne Tag), ADR-0021 -->
             <tags:TagFilterDropDown />
+
+            <!-- Kategorien-Filter (je Kategorie Werte + „ohne Wert“), ADR-0027 — nur wenn Kategorien angelegt sind -->
+            <cats:CategoryFilterDropDown Visibility="{Binding HasCategories, Converter={StaticResource BoolToVis}}" />
 
             <!-- Ordner-Chip -->
             <Border Padding="10,3,4,3"

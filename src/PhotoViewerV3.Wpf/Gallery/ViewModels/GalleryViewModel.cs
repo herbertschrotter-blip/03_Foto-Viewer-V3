@@ -24,6 +24,7 @@ using PhotoViewerV3.Gallery.Services;
 using PhotoViewerV3.Gallery.Tags;
 using PhotoViewerV3.Lightbox;
 using PhotoViewerV3.Services.Archive;
+using PhotoViewerV3.Services.Categories;
 using PhotoViewerV3.Services.Tags;
 using PhotoViewerV3.Services.Catalog;
 using PhotoViewerV3.Services.Database;
@@ -77,6 +78,7 @@ public sealed partial class GalleryViewModel : ObservableObject
     private readonly IArchiveExtractDialogService _archiveDialog;
     private readonly ITagService _tags;
     private readonly ITagPickerService _tagPicker;
+    private readonly ICategoryService _categories;
     private readonly IGalleryViewSettingsStore _viewSettings;
     private readonly ILogger<GalleryViewModel> _logger;
     private readonly IMessenger _messenger = WeakReferenceMessenger.Default;
@@ -120,6 +122,7 @@ public sealed partial class GalleryViewModel : ObservableObject
         IArchiveExtractDialogService archiveDialog,
         ITagService tags,
         ITagPickerService tagPicker,
+        ICategoryService categories,
         IGalleryViewSettingsStore viewSettings,
         ILogger<GalleryViewModel> logger)
     {
@@ -135,6 +138,7 @@ public sealed partial class GalleryViewModel : ObservableObject
         _archiveDialog = archiveDialog;
         _tags = tags;
         _tagPicker = tagPicker;
+        _categories = categories;
         _viewSettings = viewSettings;
         _logger = logger;
 
@@ -232,7 +236,7 @@ public sealed partial class GalleryViewModel : ObservableObject
         nameof(FavoriteSelectionCommand), nameof(UnfavoriteSelectionCommand),
         nameof(SetSelectionRatingCommand), nameof(ClearSelectionRatingCommand),
         nameof(MoveSelectionCommand), nameof(RecycleSelectionCommand), nameof(ArchiveSelectionCommand), nameof(ExtractSelectionCommand),
-        nameof(EditSelectionTagsCommand), nameof(ToggleSelectionTagCommand))]
+        nameof(EditSelectionTagsCommand), nameof(ToggleSelectionTagCommand), nameof(SetSelectionCategoryValueCommand))]
     private int _selectedCount;
 
     /// <summary>Archive in der Auswahl (Aktionsleiste „Entpacken…“, ADR-0022).</summary>
@@ -250,7 +254,7 @@ public sealed partial class GalleryViewModel : ObservableObject
         nameof(FavoriteSelectionCommand), nameof(UnfavoriteSelectionCommand),
         nameof(SetSelectionRatingCommand), nameof(ClearSelectionRatingCommand),
         nameof(MoveSelectionCommand), nameof(RecycleSelectionCommand), nameof(ArchiveSelectionCommand), nameof(UndoCommand), nameof(ExtractSelectionCommand),
-        nameof(EditSelectionTagsCommand), nameof(ToggleSelectionTagCommand))]
+        nameof(EditSelectionTagsCommand), nameof(ToggleSelectionTagCommand), nameof(SetSelectionCategoryValueCommand))]
     private bool _isOperationRunning;
 
     [ObservableProperty]
@@ -295,6 +299,11 @@ public sealed partial class GalleryViewModel : ObservableObject
                     : "Keine Dateien mit diesem Tag-Filter.";
             }
 
+            if (HasCategoryFilter)
+            {
+                return "Keine Dateien mit diesem Kategorien-Filter.";
+            }
+
             if (FolderId is not null)
             {
                 return "In diesem Ordner liegen keine Dateien, die zum Filter passen.";
@@ -328,6 +337,7 @@ public sealed partial class GalleryViewModel : ObservableObject
 
         await LoadViewSettingsAsync();
         await LoadTagsAsync();
+        await LoadCategoriesAsync();
         await ReloadLibraryAsync(null);
 
         FirstPageLoadMs = (DateTime.UtcNow - _startupBegin).TotalMilliseconds;
@@ -384,6 +394,7 @@ public sealed partial class GalleryViewModel : ObservableObject
             ClearItems();
             ClearSelectionState();
             ResetTagFilter();
+            ResetCategoryFilter();
         }
         finally
         {
@@ -466,6 +477,8 @@ public sealed partial class GalleryViewModel : ObservableObject
             this, static (r, m) => r.RunOnUi(() => r.HandleFoldersChangedAsync(m)));
         _messenger.Register<GalleryViewModel, TagsChangedMessage>(
             this, static (r, m) => r.RunOnUi(() => r.HandleTagsChangedAsync(m)));
+        _messenger.Register<GalleryViewModel, CategoriesChangedMessage>(
+            this, static (r, m) => r.RunOnUi(() => r.HandleCategoriesChangedAsync(m)));
     }
 
     /// <summary>Wurzeln geändert (ADR-0020): Archiv-Wurzel bzw. Anzeigepfad kann wechseln, Status-Filter liefert andere Treffer → Library neu laden.</summary>
@@ -589,6 +602,7 @@ public sealed partial class GalleryViewModel : ObservableObject
             }
 
             await ApplyTagsToItemsAsync(inPage, CancellationToken.None);
+            await ApplyCategoriesToItemsAsync(inPage, CancellationToken.None);
             UpdateSelectionSummary();
         }
         catch (Exception ex)
@@ -759,6 +773,7 @@ public sealed partial class GalleryViewModel : ObservableObject
 
         // Tags der Page in einem Batch nachladen (ADR-0021) — unabhängig von den Thumbnails.
         FireAndForget(() => ApplyTagsToItemsAsync(rows.Select(r => r.Id).ToList(), ct));
+        FireAndForget(() => ApplyCategoriesToItemsAsync(rows.Select(r => r.Id).ToList(), ct)); // ADR-0027
 
         SetLoadStatus($"{TotalCount:N0} Treffer · Seite {DisplayPageIndex} von {PageCount:N0} · {LastPageLoadMs:N1} ms");
         _logger.LogInformation(
@@ -828,7 +843,7 @@ public sealed partial class GalleryViewModel : ObservableObject
     private GalleryQuery BuildQuery()
     {
         var term = string.IsNullOrWhiteSpace(SearchTerm) ? null : SearchTerm.Trim();
-        return new GalleryQuery(_libraryId, Filter, term, FolderId, IncludeSubfolders, SelectedSort.Sort, SelectedTagIds(), TagFilterMode);
+        return new GalleryQuery(_libraryId, Filter, term, FolderId, IncludeSubfolders, SelectedSort.Sort, SelectedTagIds(), TagFilterMode, SelectedCategoryFilters());
     }
 
     /// <summary>
@@ -1133,6 +1148,7 @@ public sealed partial class GalleryViewModel : ObservableObject
 
         SelectionRating = uniform ? common : null;
         UpdateTagMenuStates();
+        UpdateCategoryMenuStates();
     }
 
     private void ClearSelectionState()

@@ -10,6 +10,7 @@
                  xmlns:gallery="clr-namespace:PhotoViewerV3.Gallery.Views"
                  xmlns:sorter="clr-namespace:PhotoViewerV3.Sorter"
                  xmlns:tagmgmt="clr-namespace:PhotoViewerV3.Settings.TagManagement"
+                 xmlns:catmgmt="clr-namespace:PhotoViewerV3.Settings.CategoryManagement"
                  Title="PhotoViewer V3"
                  Height="800"
                  Width="1280"
@@ -68,6 +69,13 @@
                                        TargetPageType="{x:Type tagmgmt:TagManagementPage}">
                     <ui:NavigationViewItem.Icon>
                         <ui:SymbolIcon Symbol="Tag24" />
+                    </ui:NavigationViewItem.Icon>
+                </ui:NavigationViewItem>
+                <ui:NavigationViewItem Content="Kategorien"
+                                       TargetPageTag="categories"
+                                       TargetPageType="{x:Type catmgmt:CategoryManagementPage}">
+                    <ui:NavigationViewItem.Icon>
+                        <ui:SymbolIcon Symbol="Group24" />
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
             </ui:NavigationView.MenuItems>

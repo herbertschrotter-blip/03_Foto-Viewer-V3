@@ -31,8 +31,11 @@ using PhotoViewerV3.Gallery.Data;
 using PhotoViewerV3.Gallery.ViewModels;
 using PhotoViewerV3.Gallery.ListView;
 using PhotoViewerV3.Gallery.Tags;
+using PhotoViewerV3.Gallery.Categories;
 using PhotoViewerV3.Services.Tags;
 using PhotoViewerV3.Settings.TagManagement;
+using PhotoViewerV3.Settings.CategoryManagement;
+using PhotoViewerV3.Services.Categories;
 using PhotoViewerV3.Sorter.ViewModels;
 using Wpf.Ui.Appearance;
 
@@ -105,6 +108,8 @@ internal sealed class SmokeScenario
     private readonly ITagService _tags;
     private readonly SmokeTagPickerService? _tagPicker;
     private readonly TagManagementViewModel _tagManagement;
+    private readonly ICategoryService _categories;
+    private readonly CategoryManagementViewModel _categoryManagement;
     private readonly SorterPageViewModel _sorterPage;
 
     private int _libraryId;
@@ -142,6 +147,8 @@ internal sealed class SmokeScenario
         _tags = services.GetRequiredService<ITagService>();
         _tagPicker = services.GetService<SmokeTagPickerService>();
         _tagManagement = services.GetRequiredService<TagManagementViewModel>();
+        _categories = services.GetRequiredService<ICategoryService>();
+        _categoryManagement = services.GetRequiredService<CategoryManagementViewModel>();
         _sorterPage = services.GetRequiredService<SorterPageViewModel>();
         _messenger.Register<SmokeScenario, ScanCompletedMessage>(this, static (r, m) => r._lastScan = m.Result);
     }
@@ -196,6 +203,7 @@ internal sealed class SmokeScenario
         await StepAsync("Archiv: ZIP → Kachel → Inhaltsansicht → Entpacken → Katalog", ArchiveAsync).ConfigureAwait(true);
         await StepAsync("Eingang → Archiv (zweite Wurzel, Status-Filter, Ins Archiv, Rückgängig, Ordner anlegen/umbenennen)", InboxArchiveAsync).ConfigureAwait(true);
         await StepAsync("Tags (Zuweisen, Filter, Suche, Verwaltung) + Listenansicht", TagsAndListViewAsync).ConfigureAwait(true);
+        await StepAsync("Kategorien (Anlegen, Zuweisen, Filter, Listenspalte, Verwaltung)", CategoriesAsync).ConfigureAwait(true);
         await StepAsync("Sortierer: Eingang → Archiv (Wurzel-Auswahl, gesperrtes Ziel, Katalog, Rückgängig, Flatten im Eingang)", SorterInboxToArchiveAsync).ConfigureAwait(true);
         await StepAsync("Ordnerüberwachung: Datei kopieren → automatischer Diff-Scan → Galerie", WatchAsync).ConfigureAwait(true);
         if (_cleanup)
@@ -1502,6 +1510,110 @@ internal sealed class SmokeScenario
             () => targetIds.All(id => InPage(id) is { HasTags: false }) && _gallery.TagMenuEntries.Count == 0,
             ShortWait,
             "Galerie ohne Tags").ConfigureAwait(true);
+
+        _navigation.NavigateTo(NavigationTags.Gallery);
+        await WaitUntilAsync(() => _navigation.CurrentTag == NavigationTags.Gallery, ShortWait, "zurück zur Galerie").ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Kategorien (ADR-0027): Kategorie „Smoke XX“ mit den Werten N und NN anlegen, über das Kontextmenü-Kommando
+    /// zuweisen (3 Dateien N, eine davon danach NN), Zustand der Menüeinträge, Filter (Wert, ODER, „ohne Wert“), Spalte
+    /// der Listenansicht (ein-/ausblenden), Verwaltungsseite, Umbenennen eines Werts und Löschen samt Zuordnungen.
+    /// Hinterlässt keine Kategorien.
+    /// </summary>
+    private async Task CategoriesAsync()
+    {
+        _navigation.NavigateTo(NavigationTags.Gallery);
+        await WaitUntilAsync(() => _navigation.CurrentTag == NavigationTags.Gallery, ShortWait, "Galerie aktiv").ConfigureAwait(true);
+        var baseline = _gallery.TotalCount;
+        Check(baseline >= 4 && _gallery.CurrentPage.Count >= 3 && !_gallery.HasCategories, $"Ausgangslage: {baseline} Dateien, keine Kategorien");
+
+        var xx = await _categories.CreateAsync("Smoke XX", ["N", "NN"]).ConfigureAwait(true);
+        int n = xx.Values[0].Id, nn = xx.Values[1].Id;
+        await WaitUntilAsync(
+            () => _gallery.HasCategories && _gallery.CategoryMenuGroups.Any(g => g.CategoryId == xx.Id),
+            ShortWait,
+            "Neue Kategorie in Galerie-Menü und -Filter").ConfigureAwait(true);
+
+        // Kontextmenü „Smoke XX → N“ für 3 Dateien, danach „NN“ für die erste
+        _gallery.ClearSelectionCommand.Execute(null);
+        var targets = _gallery.CurrentPage.Take(3).ToList();
+        foreach (var item in targets)
+        {
+            item.IsSelected = true;
+        }
+
+        CategoryMenuEntry Entry(int? valueId) => _gallery.CategoryMenuGroups.First(g => g.CategoryId == xx.Id).Entries.First(e => e.ValueId == valueId);
+        Check(Entry(n).State == false, "Menüeintrag „N“ vor der Zuweisung ohne Häkchen");
+        Check(_gallery.SetSelectionCategoryValueCommand.CanExecute(Entry(n)), "Menüeintrag „N“ bei Auswahl bedienbar");
+        await _gallery.SetSelectionCategoryValueCommand.ExecuteAsync(Entry(n)).ConfigureAwait(true);
+        Check(Entry(n).State == true, "Menüeintrag „N“ nach der Zuweisung mit Häkchen");
+
+        _gallery.ClearSelectionCommand.Execute(null);
+        targets[0].IsSelected = true;
+        await _gallery.SetSelectionCategoryValueCommand.ExecuteAsync(Entry(nn)).ConfigureAwait(true);
+        Check(Entry(nn).State == true && Entry(n).State == false, "ein Wert je Kategorie: NN ersetzt N");
+        var rows = await DbScalarAsync<int>("SELECT COUNT(*) FROM FileCategoryValues WHERE CategoryId = $c", ("$c", xx.Id)).ConfigureAwait(true);
+        var nRows = await DbScalarAsync<int>("SELECT COUNT(*) FROM FileCategoryValues WHERE ValueId = $v", ("$v", n)).ConfigureAwait(true);
+        Check(rows == 3 && nRows == 2, $"DB: {rows} Zuordnungen, davon {nRows} × N (erwartet 3 / 2)");
+        Check(targets[0].Categories[xx.Id] == "NN" && targets[1].Categories[xx.Id] == "N", "Werte an den Kacheln");
+        _gallery.ClearSelectionCommand.Execute(null);
+
+        // Filter: N, N ODER NN, ohne Wert
+        CategoryFilterEntry Filter(int? valueId) => _gallery.CategoryFilterGroups.First(g => g.CategoryId == xx.Id).Entries.First(e => e.ValueId == valueId);
+        Filter(n).IsSelected = true;
+        await _gallery.ApplyCategoryFilterCommand.ExecuteAsync(null).ConfigureAwait(true);
+        await WaitForGalleryAsync("Kategorien-Filter N").ConfigureAwait(true);
+        Check(_gallery.TotalCount == 2 && _gallery.HasCategoryFilter, $"Filter „N“: {_gallery.TotalCount} Treffer (erwartet 2), Knopf „{_gallery.CategoryFilterText}“");
+
+        Filter(nn).IsSelected = true;
+        await _gallery.ApplyCategoryFilterCommand.ExecuteAsync(null).ConfigureAwait(true);
+        await WaitForGalleryAsync("Kategorien-Filter N oder NN").ConfigureAwait(true);
+        Check(_gallery.TotalCount == 3, $"Filter „N oder NN“: {_gallery.TotalCount} Treffer (erwartet 3)");
+
+        Filter(n).IsSelected = false;
+        Filter(nn).IsSelected = false;
+        Filter(null).IsSelected = true;
+        await _gallery.ApplyCategoryFilterCommand.ExecuteAsync(null).ConfigureAwait(true);
+        await WaitForGalleryAsync("Kategorien-Filter ohne Wert").ConfigureAwait(true);
+        Check(_gallery.TotalCount == baseline - 3, $"Filter „ohne Wert“: {_gallery.TotalCount} Treffer (erwartet {baseline - 3})");
+
+        await _gallery.ClearCategoryFilterCommand.ExecuteAsync(null).ConfigureAwait(true);
+        await WaitForGalleryAsync("Kategorien-Filter zurückgesetzt").ConfigureAwait(true);
+        Check(!_gallery.HasCategoryFilter && _gallery.TotalCount == baseline && _gallery.CategoryFilterText == "Kategorien", "Filter zurückgesetzt → alle Dateien");
+
+        // Spalte der Listenansicht
+        _gallery.ViewMode = GalleryViewMode.List;
+        await Task.Delay(400).ConfigureAwait(true);
+        var listView = FindVisualChild<GalleryListView>(Application.Current.MainWindow);
+        Check(listView is not null, "Listenansicht im Fenster");
+        await WaitUntilAsync(() => listView!.VisibleCategoryHeaders().Contains("Smoke XX"), ShortWait, "Spalte „Smoke XX“ sichtbar").ConfigureAwait(true);
+        await SnapshotAsync("15-galerie-kategorien-liste").ConfigureAwait(true);
+        _gallery.ListColumnSettings = GalleryListColumnSettings.Parse(_gallery.ListColumnSettings).WithCategoryVisibility(xx.Id, false).Serialize();
+        await Task.Delay(300).ConfigureAwait(true);
+        Check(!listView!.VisibleCategoryHeaders().Contains("Smoke XX"), "Spalte „Smoke XX“ ausgeblendet");
+        _gallery.ListColumnSettings = null;
+        _gallery.ViewMode = GalleryViewMode.Grid;
+        await Task.Delay(300).ConfigureAwait(true);
+
+        // Verwaltungsseite „Kategorien“
+        _navigation.NavigateTo(NavigationTags.Categories);
+        await WaitUntilAsync(
+            () => _navigation.CurrentTag == NavigationTags.Categories && _categoryManagement.Categories.Any(c => c.Id == xx.Id && c.FileCount == 3),
+            ShortWait,
+            "Kategorien-Verwaltung geladen").ConfigureAwait(true);
+        await SnapshotAsync("16-kategorien-verwaltung").ConfigureAwait(true);
+
+        var targetIds = targets.Select(t => t.Id).ToList();
+        GalleryItem? InPage(int id) => _gallery.CurrentPage.FirstOrDefault(i => i.Id == id);
+        await _categories.RenameValueAsync(nn, "Doppel-N").ConfigureAwait(true);
+        await WaitUntilAsync(() => InPage(targetIds[0])?.Categories[xx.Id] == "Doppel-N", ShortWait, "Umbenennen erreicht die Kachel").ConfigureAwait(true);
+
+        var removed = await _categories.DeleteAsync(xx.Id).ConfigureAwait(true);
+        Check(removed == 3, $"Kategorie gelöscht: {removed} Zuordnungen entfernt");
+        var leftover = await DbScalarAsync<int>("SELECT COUNT(*) FROM FileCategoryValues").ConfigureAwait(true);
+        Check(leftover == 0, "DB: keine Zuordnungen übrig");
+        await WaitUntilAsync(() => !_gallery.HasCategories && targetIds.All(id => InPage(id) is { Categories.Count: 0 }), ShortWait, "Galerie ohne Kategorien").ConfigureAwait(true);
 
         _navigation.NavigateTo(NavigationTags.Gallery);
         await WaitUntilAsync(() => _navigation.CurrentTag == NavigationTags.Gallery, ShortWait, "zurück zur Galerie").ConfigureAwait(true);

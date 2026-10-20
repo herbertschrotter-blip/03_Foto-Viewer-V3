@@ -89,6 +89,9 @@ public sealed partial class GalleryItem : ObservableObject
     [NotifyPropertyChangedFor(nameof(HasTags), nameof(TagsText))]
     private IReadOnlyList<TagInfo> _tags = Array.Empty<TagInfo>();
 
+    /// <summary>Kategorie-Werte (ADR-0027) für Listenspalten und Kontextmenü; wird als Ganzes ersetzt.</summary>
+    [ObservableProperty] private GalleryItemCategories _categories = GalleryItemCategories.Empty;
+
     public bool HasRating => Rating is > 0;
 
     public bool HasTags => Tags.Count > 0;

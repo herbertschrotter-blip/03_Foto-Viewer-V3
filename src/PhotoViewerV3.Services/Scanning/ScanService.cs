@@ -456,8 +456,8 @@ public sealed class ScanService : IScanService
     {
         var carry = UserDataCarryOver.Capture(_contextFactory, libraryId);
         _logger.LogInformation(
-            "Benutzerdaten gesichert: Library={LibraryId} — {Files} Dateien mit Favorit/Bewertung/Tags, {Tags} Tag-Zuweisungen in {Ms:N0} ms",
-            libraryId, carry.CapturedFiles, carry.CapturedTagAssignments, carry.CaptureDuration.TotalMilliseconds);
+            "Benutzerdaten gesichert: Library={LibraryId} — {Files} Dateien mit Favorit/Bewertung/Tags/Kategorien, {Tags} Tag-Zuweisungen, {Categories} Kategorie-Werte in {Ms:N0} ms",
+            libraryId, carry.CapturedFiles, carry.CapturedTagAssignments, carry.CapturedCategoryValues, carry.CaptureDuration.TotalMilliseconds);
         return carry;
     }
 
@@ -466,8 +466,8 @@ public sealed class ScanService : IScanService
     {
         var report = carry.Restore();
         _logger.LogInformation(
-            "Benutzerdaten übernommen: Library={LibraryId} — {Restored}/{Captured} Dateien ({Values} mit Favorit/Bewertung, {Tags} Tag-Zuweisungen), {Lost} nicht mehr vorhanden, in {Ms:N0} ms",
-            libraryId, report.RestoredFiles, report.CapturedFiles, report.FavoritesOrRatingsRestored, report.TagAssignmentsRestored, report.LostFiles, report.Duration.TotalMilliseconds);
+            "Benutzerdaten übernommen: Library={LibraryId} — {Restored}/{Captured} Dateien ({Values} mit Favorit/Bewertung, {Tags} Tag-Zuweisungen, {Categories} Kategorie-Werte), {Lost} nicht mehr vorhanden, in {Ms:N0} ms",
+            libraryId, report.RestoredFiles, report.CapturedFiles, report.FavoritesOrRatingsRestored, report.TagAssignmentsRestored, report.CategoryValuesRestored, report.LostFiles, report.Duration.TotalMilliseconds);
     }
 
     // ---- Gemeinsame Helfer ----------------------------------------------------------------------
