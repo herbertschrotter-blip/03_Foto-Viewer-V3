@@ -43,7 +43,7 @@ Native Windows-Desktop-Anwendung zum Ansehen, Sortieren und Verschieben von Foto
 | **Storage** | gemischt — wandert zwischen lokaler SSD, externer HDD, NAS |
 | **Formate** | Formatregister `IMediaFormatRegistry` ([ADR-0016](docs/adr/0016-formatregister.md)): gängige Foto-Formate (JPG, PNG, GIF, BMP, TIFF, WebP, HEIC/HEIF, AVIF, Kamera-RAW) und Video-Container (MP4, MOV, MKV, AVI, WMV, MTS, …); WIC + Windows-Codec-Pakete, FFmpeg als Fallback — ursprünglich nur JPG / PNG / MP4 |
 | **Plan-Apply-Modus** | nur Move im MVP, Copy später |
-| **Distribution** | Portable Ordner via `dotnet publish` |
+| **Distribution** | Portable Ordner via `dotnet publish` — seit 0.2.26 `build/publish.ps1`: self-contained `win-x64`, Ordner + ZIP unter `artifacts/`, kein Single-File, kein Trimming; FFmpeg nicht im Paket (PATH/winget), Daten unter `%LocalAppData%\PhotoViewerV3` |
 | **V0.1-Aufwand** | 8–10 Wochen, robust release-fähig |
 
 ### Hauptfeatures
@@ -94,6 +94,7 @@ Native Windows-Desktop-Anwendung zum Ansehen, Sortieren und Verschieben von Foto
 
 ```
 PhotoViewerV3.slnx                       # Solution (.slnx), Directory.Packages.props = Central Package Management
+build/                                   # publish.ps1 (portable Version → artifacts/), run-smoke.ps1 (Rauchtest gegen eine EXE)
 src/
   PhotoViewerV3.Domain/                  # net10.0 — keine externen Deps
     Entities/                         # Library, MediaFile, Folder, Thumbnail, OperationBatch, FileOperation, Setting

@@ -59,7 +59,33 @@ dotnet run --project src/PhotoViewerV3.Wpf -c Debug
 Oder in Visual Studio: `PhotoViewerV3.slnx` öffnen, `PhotoViewerV3.Wpf` als Startprojekt, **F5**.
 Beim ersten Start legt die App die Datenbank an (EF-Core-Migration) und zeigt die Seite „Bibliothek“.
 
-Eine portable Auslieferung (`dotnet publish`) gibt es noch nicht; die App läuft als lokaler Debug-Build.
+Die App-Version (Einstellungen → „Über“, Dateiversion der EXE) kommt aus dem obersten Eintrag in
+[CHANGELOG.md](CHANGELOG.md); `PhotoViewerV3.Wpf.csproj` liest sie beim Build aus.
+
+## Portable Version bauen
+
+```powershell
+pwsh -File build\publish.ps1
+```
+
+Erzeugt per `dotnet publish` (Release, `win-x64`, **self-contained**, kein Single-File, kein Trimming) den Ordner
+`artifacts\PhotoViewerV3-<Version>-win-x64\` und daneben dieselbe Version als ZIP. Ordner bzw. ZIP an einen beliebigen
+Ort kopieren und `PhotoViewerV3.exe` starten — ein installiertes .NET ist nicht nötig. Das Skript bricht ab, wenn die
+Produktversion der EXE nicht zum CHANGELOG passt oder SQLite (`e_sqlite3.dll`) bzw. LibVLC (`libvlc\win-x64\`) fehlen.
+`artifacts\` ist per `.gitignore` ausgenommen; mit `-OutputRoot <Ordner>` landet das Paket außerhalb des Repos (z. B.
+außerhalb von OneDrive), `-NoZip` lässt das ZIP weg, `-FrameworkDependent` baut ein kleineres Paket, das die
+„.NET 10 Desktop Runtime“ (x64) voraussetzt.
+
+- **Daten** liegen auch bei der portablen Version unter `%LocalAppData%\PhotoViewerV3` (bzw. im Ordner aus
+  `database-location.json`), nicht im Paketordner — ein neues Paket übernimmt Katalog und Vorschaubilder. Die
+  Formatregister sind fest im Code, es gibt keine Konfigurationsdateien neben der EXE.
+- **FFmpeg** ist nicht im Paket; es wird wie beim Debug-Build im `PATH` bzw. unter den winget-Links gesucht
+  (`winget install Gyan.FFmpeg`).
+- **Pfadlänge:** Die LibVLC-Plugins liegen bis zu ~120 Zeichen tief im Paket (`PhotoViewerV3-…\libvlc\win-x64\…`);
+  Paket bzw. `-OutputRoot` deshalb nicht tiefer als ~130 Zeichen ablegen, sonst scheitern Kopieren/Entpacken am
+  260-Zeichen-Limit von Windows.
+- **Rauchtest gegen das Paket** (Testbibliothek siehe [Tests](#tests)):
+  `pwsh -File build\run-smoke.ps1 -Exe artifacts\PhotoViewerV3-<Version>-win-x64\PhotoViewerV3.exe -TestLib <Testbibliothek>`
 
 ## Bedienung
 
@@ -364,6 +390,13 @@ dotnet run --project src/PhotoViewerV3.Wpf -c Debug
 Get-Content "$env:PHOTOVIEWERV3_APPDATA\smoke-result.txt"   # Erwartung: 16 OK, 0 FAIL
 ```
 
+Dasselbe als Skript gegen eine beliebige EXE (Debug-Build oder portables Paket; kopiert die Testbibliothek nach
+`%TEMP%\PhotoViewerV3-smoke-<Tag>\lib`, eigenes AppData daneben, ExitCode 0 = alle Schritte OK):
+
+```powershell
+pwsh -File build\run-smoke.ps1 -Exe src\PhotoViewerV3.Wpf\bin\Debug\net10.0-windows\PhotoViewerV3.exe -TestLib <Testbibliothek>
+```
+
 Die Testbibliothek sollte Bilder (JPG/PNG), Videos (MP4/MOV), einen Ordner ohne direkte Dateien mit zwei
 Unterordnern („Leer\Sub A“, „Leer\Sub B“), einen Ordner „Unsortiert“ mit mehreren JPGs sowie die Ordner
 „2024\Familie“ und „2025\Screenshots“ enthalten (das Szenario prüft diese Namen) — insgesamt mindestens sechs
@@ -385,6 +418,7 @@ Spike- und Benchmark-Harness: `dotnet run --project tests/PhotoViewerV3.PerfTest
 ```
 PhotoViewerV3.slnx                 # Solution (.slnx)
 Directory.Packages.props           # Central Package Management inkl. transitiver Security-Pins
+build/                             # publish.ps1 (portable Version), run-smoke.ps1 (Rauchtest gegen eine beliebige EXE)
 src/
   PhotoViewerV3.Domain/            # Entities, Enums — keine Abhängigkeiten
   PhotoViewerV3.Data/              # LibraryContext (EF Core), EntitiesMapping, Migrations,

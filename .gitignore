@@ -66,6 +66,10 @@ _flatten-undo.json
 # .NET Build Output
 [Bb]in/
 [Oo]bj/
+
+# Portable Auslieferung (build/publish.ps1): Paketordner und ZIP
+/artifacts/
+/publish/
 *.userprefs
 
 # Visual Studio

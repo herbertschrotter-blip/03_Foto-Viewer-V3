@@ -3,6 +3,34 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.26] — 2026-10-20
+
+### Neu (ADR-0029)
+- **Portable Version**: `pwsh -File build\publish.ps1` baut per `dotnet publish` ein self-contained Paket für
+  `win-x64` (kein installiertes .NET nötig) als Ordner `artifacts\PhotoViewerV3-<Version>-win-x64\` plus ZIP — kein
+  Single-File (LibVLC braucht seinen Plugin-Ordner), kein Trimming (WPF), nur `libvlc\win-x64`, nur deutsche
+  Satelliten-Ressourcen. Das Skript prüft Produktversion = CHANGELOG sowie SQLite- und LibVLC-Bestandteile.
+  Schalter `-OutputRoot`, `-NoZip`, `-FrameworkDependent`. `artifacts/` und `publish/` stehen in `.gitignore`.
+- **Rauchtest gegen eine beliebige EXE**: `build\run-smoke.ps1 -Exe <PhotoViewerV3.exe> -TestLib <Testbibliothek>`
+  kopiert die Testbibliothek in einen frischen Arbeitsordner (Standard `%TEMP%\PhotoViewerV3-smoke-<Tag>`), startet
+  mit eigenem AppData und gibt Ergebnis, Log-Auszug und Screenshots aus (ExitCode 0 = alle Schritte OK).
+
+### Geändert
+- **App-Version aus dem CHANGELOG**: `PhotoViewerV3.Wpf.csproj` liest die Version beim Build aus dem obersten
+  Eintrag `## [x.y.z]` (bisher fest `0.2.0`, Einstellungen → „Über“ zeigte deshalb seit 0.2.1 die falsche Version).
+  Der Rauchtest-Schritt „Einstellungen“ erwartet jetzt die Assembly-Version statt fest „0.2.0“.
+
+### Geprüft
+- Pfade hängen nicht vom Repo-Layout ab: Daten unter `%LocalAppData%\PhotoViewerV3` bzw. `PHOTOVIEWERV3_APPDATA` und
+  `database-location.json`; Formatregister sind Code; SQLite (`e_sqlite3.dll`) und LibVLC liegen im Paket; FFmpeg
+  wird wie bisher im PATH bzw. unter den winget-Links gesucht.
+- Paket 0.2.26: 780 Dateien, 256,6 MB entpackt, ZIP 114 MB. Rauchtest mit der **veröffentlichten** EXE: 21/21 OK,
+  0 WPF-Binding-Fehler, Version „0.2.26“, LibVLC 3.0.21 und FFmpeg gefunden.
+
+### Offen
+- FFmpeg ist nicht im Paket (Lizenz, Größe) und wird nicht neben der EXE gesucht; kein Code-Signing, kein Installer.
+- `BuildHost-net472/-netcore` (~4 MB aus `Microsoft.EntityFrameworkCore.Design`) liegen unnötig im Paket.
+
 ## [0.2.25] — 2026-10-20
 
 ### Neu (ADR-0032)

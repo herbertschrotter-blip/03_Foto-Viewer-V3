@@ -8,8 +8,11 @@
     <UseWPF>true</UseWPF>
     <RootNamespace>PhotoViewerV3</RootNamespace>
     <AssemblyName>PhotoViewerV3</AssemblyName>
-    <!-- App-Version (Einstellungen → „Über“); ohne Git-Revisions-Suffix, damit die Anzeige „0.2.0“ bleibt -->
-    <Version>0.2.0</Version>
+    <!-- App-Version (Einstellungen → „Über“, Datei-/Produktversion der EXE) = oberster Eintrag „## [x.y.z]“ in
+         CHANGELOG.md, der Versionsquelle des Commit-Profils; so muss sie nicht je Commit nachgezogen werden.
+         Ohne Git-Revisions-Suffix. build/publish.ps1 prüft, dass die veröffentlichte EXE dieselbe Version trägt. -->
+    <ChangelogFile>$(MSBuildThisFileDirectory)..\..\CHANGELOG.md</ChangelogFile>
+    <Version Condition="Exists('$(ChangelogFile)')">$([System.Text.RegularExpressions.Regex]::Match($([System.IO.File]::ReadAllText('$(ChangelogFile)')), '(?m)(?&lt;=^## \[)\d+\.\d+\.\d+(?=\])').Value)</Version>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 

@@ -1006,7 +1006,11 @@ internal sealed partial class SmokeScenario
             ShortWait,
             "Einstellungen geladen").ConfigureAwait(true);
         Check(_settings.ThumbnailCacheText.Contains("Dateien", StringComparison.Ordinal), $"Cache: {_settings.ThumbnailCacheText}");
-        Check(_settings.AppVersionText.Contains("0.2.0", StringComparison.Ordinal), $"Version: {_settings.AppVersionText}");
+        // Erwartet die Assembly-Version (aus CHANGELOG.md, siehe Wpf.csproj) — nicht fest „0.2.0“, sonst schlägt der
+        // Schritt bei jeder neuen Version fehl („0.2.20“ enthält „0.2.0“ nicht).
+        var assemblyVersion = typeof(SmokeScenario).Assembly.GetName().Version;
+        var expectedVersion = assemblyVersion is null ? "?" : $"{assemblyVersion.Major}.{assemblyVersion.Minor}.{assemblyVersion.Build}";
+        Check(_settings.AppVersionText.StartsWith($"PhotoViewer V3 {expectedVersion}", StringComparison.Ordinal), $"Version: {_settings.AppVersionText}");
         Check(_settings.IsFfmpegAvailable, $"FFmpeg: {_settings.FfmpegText}");
         Check(_settings.DatabasePath == _db.DatabasePath && _settings.DatabaseSizeText.Length > 0, $"DB: {_settings.DatabasePath} ({_settings.DatabaseSizeText})");
         Check(_settings.ImageFormatsText.Contains(".jpg", StringComparison.Ordinal) && _settings.VideoFormatsText.Contains(".mp4", StringComparison.Ordinal), "Formate angezeigt");
