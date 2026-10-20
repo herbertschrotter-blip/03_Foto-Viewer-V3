@@ -122,7 +122,7 @@ Eine Bibliothek hat genau einen **Archiv-Ordner** (der beim Anlegen gewählte Or
 
 ### Galerie
 Toolbar: Filter-Pills als Segmentgruppe (Alle / Bilder / Videos / Favoriten / Archive), Dropdown **Status** (Nicht archiviert /
-Archiviert), Tag-Filter, Suchfeld (Dateiname, Endung, Tag-Name oder Kategorie-Wert; Wörter werden
+Archiviert), Tag-Filter, Suchfeld (Dateiname, Endung, Tag-Name, Kategorie-Wert oder Kategorie-Name; Wörter werden
 als Präfix gesucht, Sonderzeichen sind erlaubt; ✕ leert die Suche), Sortierung, Seitengröße, **Vorschaugröße** (Regler neben
 der Ansichtsumschaltung, nur in der Kachelansicht: Kachelbreite 120–320 px in 20er-Stufen, wird gemerkt), Pager, Aktualisieren. In schmalen
 Fenstern (bzw. rechts auf der Ordner-Seite) rutscht die Suche in eine eigene Zeile, statt gequetscht zu werden. Ein Ordnerfilter erscheint als
@@ -173,7 +173,8 @@ sie, der Papierkorb entfernt sie).
 Kategorie eine Auswahlliste mit den Werten und „Kein Wert“; haben die Dateien unterschiedliche Werte, steht dort
 „(gemischt — nicht ändern)“, und die Kategorie bleibt unverändert, solange man nichts anderes wählt. Ohne Maus: Tab
 wechselt die Kategorie, ↑/↓ den Wert, Enter übernimmt, Esc bricht ab. Die **Suche** findet auch Dateien, deren
-Kategorie-Wert den Suchtext enthält (wie bei Tag-Namen, ohne Groß-/Kleinschreibung).
+Kategorie-Wert den Suchtext enthält (wie bei Tag-Namen, ohne Groß-/Kleinschreibung); trifft der Suchtext den Namen
+einer Kategorie (z. B. „Projekt“), findet sie alle Dateien, die in dieser Kategorie irgendeinen Wert haben.
 
 #### Listenansicht
 Der Umschalter rechts in der Kopfzeile wechselt zwischen Kachel-Grid und Liste (die Wahl bleibt gespeichert). Die

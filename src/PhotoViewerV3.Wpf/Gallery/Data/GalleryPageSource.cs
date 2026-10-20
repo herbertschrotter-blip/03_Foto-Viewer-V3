@@ -20,7 +20,7 @@ namespace PhotoViewerV3.Gallery.Data;
 /// <paramref name="SearchTerm"/> ist freier Benutzertext; den FTS5-MATCH-Ausdruck baut
 /// <see cref="FtsQueryBuilder.FromUserInput"/> (eine Implementierung im Repo) — Text ohne suchbaren Inhalt
 /// (leer, nur Sonderzeichen wie <c>---</c>) gilt als „keine Suche“. Die Suche findet außerdem Dateien, deren
-/// Tag-Name (Tags, ADR-0021) oder Kategorie-Wert (ADR-0027) den Suchtext enthält. <paramref name="TagIds"/> +
+/// Tag-Name (Tags, ADR-0021), Kategorie-Wert oder Kategorie-Name (ADR-0027) den Suchtext enthält. <paramref name="TagIds"/> +
 /// <paramref name="TagMode"/> filtern nach Tags (ODER / UND / ohne Tag), <paramref name="CategoryFilters"/> nach
 /// Kategorie-Werten. <paramref name="CategorySort"/> (nicht null) sortiert die ganze Trefferliste nach dem Wert einer
 /// Kategorie und ersetzt dann <paramref name="Sort"/>.
@@ -63,7 +63,7 @@ public sealed record GalleryCategoryFilter(int CategoryId, IReadOnlyList<int> Va
 /// <summary>
 /// Serverseitige Sortierung nach dem Wert einer Kategorie (ADR-0027, 0.2.23): Werte in ihrer Reihenfolge aus der
 /// Verwaltung (SortOrder), absteigend umgekehrt; Dateien ohne Wert stehen in beiden Richtungen am Ende. Gleiche Werte
-/// nach Datum neu → alt, dann Id.
+/// nach Datum neu → alt, dann Id. Gelesen wird segmentweise je Wert (ADR-0031, <c>GalleryPageSource.CategorySort.cs</c>).
 /// </summary>
 public sealed record GalleryCategorySort(int CategoryId, bool Descending);
 
@@ -72,7 +72,7 @@ public sealed record GalleryCategorySort(int CategoryId, bool Descending);
 /// serialisiert auf dem Thread-Pool, damit der UI-Thread nie blockiert. Liefert ausschließlich
 /// kleine DTOs — nie mehr als eine Page (≤ 1000 Zeilen) pro Aufruf.
 /// </summary>
-public sealed class GalleryPageSource : IDisposable
+public sealed partial class GalleryPageSource : IDisposable
 {
     private const string FileColumns =
         "f.Id, f.FolderId, f.Name, f.Extension, f.Size, f.ModifiedAtUtc, f.MediaType, f.IsFavorite, f.Rating, f.Missing, fo.Path, lr.Role";
@@ -105,6 +105,7 @@ public sealed class GalleryPageSource : IDisposable
         }
 
         _connection = _factory.OpenSqliteConnection();
+        ResetCountCaches();
     }
 
     /// <summary>Anzahl der Treffer für die Query (Filter, Suche, Ordner).</summary>
@@ -115,14 +116,24 @@ public sealed class GalleryPageSource : IDisposable
             using var cmd = conn.CreateCommand();
             cmd.CommandText = BuildCountSql(query, folder.Clause);
             BindFilterParams(cmd, query, folder);
-            return Convert.ToInt32(cmd.ExecuteScalar());
+            if (query.CategorySort is null)
+            {
+                return Convert.ToInt32(cmd.ExecuteScalar());
+            }
+
+            // Kategorie-Sortierung (ADR-0031): die erste Seite braucht dieselbe Zahl — merken statt doppelt zählen.
+            var dataVersion = ReadDataVersion(conn, null, startSnapshot: false);
+            var total = Convert.ToInt64(cmd.ExecuteScalar());
+            RememberTotal(dataVersion, cmd, total);
+            return (int)total;
         }, ct);
 
     /// <summary>
     /// Lädt eine Page. Liegt die Page näher am Ende als am Anfang der Trefferliste, wird intern
     /// umgekehrt sortiert, vom Ende her mit kleinem OFFSET gelesen und clientseitig gedreht
     /// (Reverse-Trick aus Spike #02, Folge-Erkenntnis 1 — ⏭ bleibt auch bei 500k unter 150 ms).
-    /// <paramref name="totalCount"/> ist der zuletzt gezählte Gesamtwert (0 = unbekannt → kein Reverse).
+    /// <paramref name="totalCount"/> ist der zuletzt gezählte Gesamtwert (0 = unbekannt → kein Reverse). Mit
+    /// Kategorie-Sortierung zählt die Methode selbst je Wert-Segment und ignoriert <paramref name="totalCount"/> (ADR-0031).
     /// </summary>
     public Task<IReadOnlyList<GalleryFileDto>> LoadPageAsync(
         GalleryQuery query,
@@ -132,6 +143,12 @@ public sealed class GalleryPageSource : IDisposable
         CancellationToken ct)
         => RunAsync<IReadOnlyList<GalleryFileDto>>(conn =>
         {
+            if (query.CategorySort is { } categorySort)
+            {
+                // Segmentweise je Wert statt einer Sortierung über alle Dateien (ADR-0031); zählt selbst.
+                return LoadCategorySortedPage(conn, query, categorySort, pageIndex, pageSize, ct);
+            }
+
             var offsetFromStart = (long)pageIndex * pageSize;
             var remaining = Math.Max(0L, totalCount - offsetFromStart);
             var limitFromEnd = (int)Math.Min(pageSize, remaining);
@@ -144,10 +161,6 @@ public sealed class GalleryPageSource : IDisposable
             BindFilterParams(cmd, query, folder);
             cmd.Parameters.AddWithValue("$limit", useReverse ? limitFromEnd : pageSize);
             cmd.Parameters.AddWithValue("$offset", useReverse ? offsetFromEnd : offsetFromStart);
-            if (query.CategorySort is { } categorySort)
-            {
-                cmd.Parameters.AddWithValue("$sortCat", categorySort.CategoryId);
-            }
 
             var sw = Stopwatch.StartNew();
             var rows = new List<GalleryFileDto>(pageSize);
@@ -166,8 +179,7 @@ public sealed class GalleryPageSource : IDisposable
             sw.Stop();
             _logger.LogDebug(
                 "Page-SQL: Idx={Idx} Size={Size} Rows={Rows} Reverse={Reverse} Offset={Offset} Sort={Sort} Folder={Folder} Rek={Rek} Suche={Search} {Ms:N1} ms",
-                pageIndex, pageSize, rows.Count, useReverse, useReverse ? offsetFromEnd : offsetFromStart,
-                query.CategorySort is { } cs ? $"Kategorie {cs.CategoryId}{(cs.Descending ? " ↓" : " ↑")}" : query.Sort.ToString(),
+                pageIndex, pageSize, rows.Count, useReverse, useReverse ? offsetFromEnd : offsetFromStart, query.Sort,
                 query.FolderId?.ToString() ?? "-", query.IncludeSubfolders, query.SearchTerm ?? "-",
                 sw.Elapsed.TotalMilliseconds);
             return rows;
@@ -342,11 +354,18 @@ public sealed class GalleryPageSource : IDisposable
 
     /// <summary>
     /// Abfrageplan (EXPLAIN QUERY PLAN, Spalte „detail“) der Page- bzw. Count-SQL — für Tests, die sichern, dass die
-    /// Suche über Indizes läuft und nicht alle Dateien oder Zuordnungen durchläuft (ADR-0010/0011).
+    /// Suche über Indizes läuft und nicht alle Dateien oder Zuordnungen durchläuft (ADR-0010/0011). Mit
+    /// Kategorie-Sortierung (und <paramref name="count"/> = false) die Pläne von Segment-Zählung, Wert- und
+    /// „ohne Wert“-Segment hintereinander (ADR-0031).
     /// </summary>
     internal Task<IReadOnlyList<string>> ExplainAsync(GalleryQuery query, bool count, CancellationToken ct)
         => RunAsync<IReadOnlyList<string>>(conn =>
         {
+            if (!count && query.CategorySort is { } categorySort)
+            {
+                return ExplainCategorySort(conn, query, categorySort);
+            }
+
             var folder = ResolveFolderClause(conn, query);
             using var cmd = conn.CreateCommand();
             cmd.CommandText = "EXPLAIN QUERY PLAN " + (count ? BuildCountSql(query, folder.Clause) : BuildPageSql(query, folder.Clause, reverse: false));
@@ -355,10 +374,6 @@ public sealed class GalleryPageSource : IDisposable
             {
                 cmd.Parameters.AddWithValue("$limit", 100);
                 cmd.Parameters.AddWithValue("$offset", 0);
-                if (query.CategorySort is { } categorySort)
-                {
-                    cmd.Parameters.AddWithValue("$sortCat", categorySort.CategoryId);
-                }
             }
 
             var lines = new List<string>();
@@ -418,15 +433,12 @@ public sealed class GalleryPageSource : IDisposable
 
     private static string BuildPageSql(GalleryQuery query, string folderClause, bool reverse)
     {
-        var orderBy = query.CategorySort is { } categorySort
-            ? BuildCategoryOrderBy(categorySort, reverse)
-            : BuildOrderBy(query.Sort, reverse);
+        var orderBy = BuildOrderBy(query.Sort, reverse);
         return $"""
             SELECT {FileColumns}
             FROM {BuildFilesSource(query)}
             JOIN Folders fo ON fo.Id = f.FolderId
             {RootJoin}
-            {(query.CategorySort is null ? string.Empty : CategorySortJoin)}
             WHERE f.LibraryId = $libId
               {BuildFilterClause(query.Filter)}
               {BuildTagClause(query)}
@@ -453,43 +465,29 @@ public sealed class GalleryPageSource : IDisposable
     /// <summary>
     /// Quelle der Files-Zeilen. Mit Suche treiben die Treffer die Abfrage wie vor 0.2.6 (damals
     /// <c>FROM FilesFts JOIN Files</c>): FTS5-Treffer (Name/Endung, Präfix-Phrasen) vereinigt mit den Dateien, deren
-    /// Tag-Name (ADR-0021) oder Kategorie-Wert (ADR-0027) den Suchtext enthält (NOCASE-Spalten, LIKE), einmal
-    /// materialisiert und per <c>CROSS JOIN</c> (feste Join-Reihenfolge) über die Rowid an Files gebunden — kein
-    /// Durchlauf aller Dateien der Library. Die Kategorie-Werte laufen als <c>ValueId IN (…)</c> über die kleine
-    /// Tabelle <c>CategoryValues</c>, damit SQLite <c>IX_FileCategoryValues_Value</c> nutzt statt alle Zuordnungen zu
-    /// lesen. Ohne Suche einfach <c>Files f</c>.
+    /// Tag-Name (ADR-0021), Kategorie-Wert oder Kategorie-Name (ADR-0027) den Suchtext enthält (NOCASE-Spalten, LIKE),
+    /// einmal materialisiert und per <c>CROSS JOIN</c> (feste Join-Reihenfolge) über die Rowid an Files gebunden — kein
+    /// Durchlauf aller Dateien der Library. Tags, Werte und Kategorien laufen alle als <c>… IN (Ids aus der kleinen
+    /// Namenstabelle)</c>, damit SQLite die Zuordnungen über ihren Index liest (<c>IX_FileTags_Tag</c>,
+    /// <c>IX_FileCategoryValues_Value</c>, <c>IX_FileCategoryValues_Category_Value_File</c>) statt alle Zuordnungen zu
+    /// durchlaufen (vor 0.2.30 las der Tag-Zweig per Join alle <c>FileTags</c>-Zeilen, Plan <c>SCAN ft</c>). Ohne Suche
+    /// einfach <c>Files f</c>.
     /// </summary>
     private static string BuildFilesSource(GalleryQuery query) => query.HasSearch
         ? """
           (SELECT rowid AS Id FROM FilesFts WHERE FilesFts MATCH $term
            UNION
-           SELECT ft.FileId FROM FileTags ft JOIN Tags t ON t.Id = ft.TagId WHERE t.Name LIKE $tagLike ESCAPE '\'
+           SELECT ft.FileId FROM FileTags ft
+           WHERE ft.TagId IN (SELECT t.Id FROM Tags t WHERE t.Name LIKE $tagLike ESCAPE '\')
            UNION
            SELECT fcv.FileId FROM FileCategoryValues fcv
-           WHERE fcv.ValueId IN (SELECT v.Id FROM CategoryValues v WHERE v.Name LIKE $tagLike ESCAPE '\')) hit
+           WHERE fcv.ValueId IN (SELECT v.Id FROM CategoryValues v WHERE v.Name LIKE $tagLike ESCAPE '\')
+           UNION
+           SELECT fcn.FileId FROM FileCategoryValues fcn
+           WHERE fcn.CategoryId IN (SELECT k.Id FROM Categories k WHERE k.Name LIKE $tagLike ESCAPE '\')) hit
           CROSS JOIN Files f ON f.Id = hit.Id
           """
         : "Files f";
-
-    /// <summary>Wert der Sortier-Kategorie je Datei (Primärschlüssel-Lookups; LEFT JOIN, weil Dateien ohne Wert mitlaufen).</summary>
-    private const string CategorySortJoin = """
-        LEFT JOIN FileCategoryValues scv ON scv.FileId = f.Id AND scv.CategoryId = $sortCat
-        LEFT JOIN CategoryValues sv ON sv.Id = scv.ValueId
-        """;
-
-    /// <summary>
-    /// Sortierung nach Kategorie-Wert: „ohne Wert“ immer zuletzt, dann SortOrder/Id des Werts in Richtung
-    /// <see cref="GalleryCategorySort.Descending"/>, gleiche Werte nach Datum neu → alt (wie die Standard-Sortierung) und
-    /// Id. Bewusst Ganzzahl-Spalten statt Name: bei 500k Dateien halbiert das die Sortierzeit tiefer Seiten (ADR-0027,
-    /// Nachtrag 0.2.23). <paramref name="reverse"/> (Reverse-Trick beim Lesen vom Ende) dreht jede Spalte, damit die
-    /// Gesamtordnung exakt umgekehrt wird.
-    /// </summary>
-    private static string BuildCategoryOrderBy(GalleryCategorySort sort, bool reverse)
-    {
-        string Dir(bool descending) => descending ^ reverse ? "DESC" : "ASC";
-        return $"(sv.Id IS NULL) {Dir(false)}, sv.SortOrder {Dir(sort.Descending)}, sv.Id {Dir(sort.Descending)}, "
-               + $"f.ModifiedAtUtc {Dir(true)}, f.Id {Dir(true)}";
-    }
 
     /// <summary>Tag-Filter: ODER (mindestens eines), UND (alle gewählten) oder „ohne Tag“ (ADR-0021).</summary>
     private static string BuildTagClause(GalleryQuery query)

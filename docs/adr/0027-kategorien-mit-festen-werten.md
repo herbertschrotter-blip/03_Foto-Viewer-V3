@@ -1,7 +1,10 @@
 # ADR-0027: Frei konfigurierbare Kategorien mit festen Werten: ein Wert je Datei, Filter und Listenspalte
 
 - **Status:** Accepted (Nachtrag 0.2.23: Strg+K, Lightbox, Suche per Join, serverseitige Kategorie-Sortierung — die
-  Konsequenzen „sortieren nur die geladene Seite“, „nur Rechtsklick-Menü“ und „Suche findet Werte nicht“ sind aufgehoben)
+  Konsequenzen „sortieren nur die geladene Seite“, „nur Rechtsklick-Menü“ und „Suche findet Werte nicht“ sind aufgehoben;
+  Ausführung der Kategorie-Sortierung als eine Abfrage über alle Dateien und Index `IX_FileCategoryValues_Category`
+  abgelöst durch [ADR-0031](0031-kategorie-sortierung-segmentweise.md), 0.2.30 — Reihenfolge unverändert; die Suche
+  findet seit 0.2.30 auch Kategorie-Namen)
 - **Datum:** 2026-10-20
 - **Entscheider:** Herbert Schrotter
 - **Bezogen auf:** [ADR-0021](0021-tags-eigene-tabellen.md) (Tags), [ADR-0023](0023-neu-aufbauen-uebernimmt-benutzerdaten.md) (Neu aufbauen), [ADR-0010](0010-ui-datenmodell-paging.md) (Paging)

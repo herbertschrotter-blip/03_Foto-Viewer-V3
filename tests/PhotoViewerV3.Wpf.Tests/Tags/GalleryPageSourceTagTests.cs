@@ -117,6 +117,30 @@ public sealed class GalleryPageSourceTagTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Suche_nach_Tag_Namen_folgt_Umbenennen_und_neuen_Zuweisungen()
+    {
+        using var tags = new TagService(_factory, NullLogger<TagService>.Instance, new WeakReferenceMessenger());
+        await tags.RenameAsync(_arbeit.Id, "Baustelle");
+        (await NamesAsync(Query(search: "arbeit"))).Should().BeEmpty("der alte Name steht nirgends mehr");
+        await tags.AssignAsync([_ids["d"]], [_arbeit.Id]);
+        (await NamesAsync(Query(search: "baustelle"))).Should().Equal("IMG_d.jpg", "IMG_e.jpg");
+    }
+
+    [Fact]
+    public async Task Suche_nach_Tag_Namen_liest_Zuordnungen_ueber_den_Tag_Index()
+    {
+        // 0.2.30: vorher „SCAN ft“ (alle FileTags-Zeilen per Join gegen Tags), jetzt TagId IN (passende Tags) über IX_FileTags_Tag.
+        foreach (var count in new[] { true, false })
+        {
+            var plan = await _source.ExplainAsync(Query(search: "urlaub"), count, CancellationToken.None);
+            var joined = string.Join(" | ", plan);
+            plan.Should().Contain(l => l.StartsWith("SEARCH ft USING INDEX IX_FileTags_Tag (TagId=?)", StringComparison.Ordinal),
+                $"Tag-Zuordnungen über den Index (Plan: {joined})");
+            plan.Should().NotContain(l => System.Text.RegularExpressions.Regex.IsMatch(l, "^SCAN (ft|f)( |$)"), $"kein Durchlauf (Plan: {joined})");
+        }
+    }
+
+    [Fact]
     public async Task Suche_und_Tag_Filter_wirken_zusammen()
         => (await NamesAsync(Query(search: "urlaub", tagIds: [_familie.Id]))).Should().BeEquivalentTo("IMG_a.jpg", "IMG_b.jpg");
 

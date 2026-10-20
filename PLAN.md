@@ -184,6 +184,9 @@ FilesFts           -- FTS5 virtual table (Files.Name, Extension)
   `CategoryValues (Id, CategoryId → Categories ON DELETE CASCADE, Name COLLATE NOCASE, SortOrder, UNIQUE (CategoryId, Name))`,
   `FileCategoryValues (FileId → Files, CategoryId → Categories, ValueId → CategoryValues — alle ON DELETE CASCADE,
   PK (FileId, CategoryId) = ein Wert je Kategorie und Datei, IX_FileCategoryValues_Value, IX_FileCategoryValues_Category)`.
+  Seit 0.2.30 (Migration `AddCategorySortIndex`, ADR-0031) ersetzt der abdeckende Index
+  `IX_FileCategoryValues_Category_Value_File (CategoryId, ValueId, FileId)` den Index `IX_FileCategoryValues_Category`
+  (segmentweise Kategorie-Sortierung, Kategorie-Filter, Suche nach Kategorie-Namen lesen nur den Index).
   Global wie Tags; „Neu aufbauen“ trägt die Werte über `UserDataCarryOver` (ADR-0023) mit — seit 0.2.24 in derselben
   Transaktion, die die alten Zeilen ersetzt (ADR-0028, keine Schema-Änderung).
 - Albums / AlbumFiles (V0.3+)

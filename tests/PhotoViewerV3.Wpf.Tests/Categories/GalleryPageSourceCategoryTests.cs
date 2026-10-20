@@ -237,12 +237,63 @@ public sealed class GalleryPageSourceCategoryTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Sortierung_liest_den_Wert_je_Datei_per_Primaerschluessel()
+    public async Task Sortierung_liest_segmentweise_ueber_Indizes_statt_alle_Dateien_zu_sortieren()
     {
+        // 0.2.30 (ADR-0031): Segment-Zählung über den abdeckenden Kategorie-Index, Seiten je Segment in der Reihenfolge
+        // von IX_Files_Library_Modified — kein Schlüssel-Lookup je Datei und keine Sortierung der ganzen Bibliothek mehr.
         var plan = await _source.ExplainAsync(new GalleryQuery(_libraryId, GalleryFilter.All, null, CategorySort: new GalleryCategorySort(_xx.Id, false)), false, CancellationToken.None);
-        plan.Should().Contain(l => l.StartsWith("SEARCH scv", StringComparison.Ordinal) && l.Contains("FileId=? AND CategoryId=?", StringComparison.Ordinal),
-            $"Wert je Datei per Schlüssel (Plan: {string.Join(" | ", plan)})");
-        plan.Should().Contain(l => l.StartsWith("SEARCH sv", StringComparison.Ordinal));
+        var joined = string.Join(" | ", plan);
+        plan.Should().Contain(l => l.StartsWith("SEARCH scv USING COVERING INDEX IX_FileCategoryValues_Category_Value_File (CategoryId=?)", StringComparison.Ordinal),
+            $"Zählung je Wert nur aus dem Index (Plan: {joined})");
+        plan.Should().Contain(l => l.Contains("IX_FileCategoryValues_Category_Value_File (CategoryId=? AND ValueId=?)", StringComparison.Ordinal),
+            $"Dateien eines Werts aus dem Index (Plan: {joined})");
+        plan.Should().Contain(l => l.StartsWith("SEARCH f USING COVERING INDEX IX_Files_Library_Modified", StringComparison.Ordinal),
+            $"Reihenfolge im Segment aus dem Datums-Index (Plan: {joined})");
+        plan.Where(l => l == "USE TEMP B-TREE FOR ORDER BY").Should().ContainSingle(
+            $"voll sortiert wird nur das kleine Segment, das von seinen Zuordnungen her gelesen wird (Plan: {joined})");
+        var small = plan.ToList().IndexOf("USE TEMP B-TREE FOR ORDER BY");
+        plan[small - 2].Should().Be("SEARCH c USING COVERING INDEX IX_FileCategoryValues_Category_Value_File (CategoryId=? AND ValueId=?)");
+        plan[small - 1].Should().Be("SEARCH f USING INTEGER PRIMARY KEY (rowid=?)");
+        plan.Should().NotContain(l => System.Text.RegularExpressions.Regex.IsMatch(l, "^SCAN (f|scv|c)( |$)"), $"kein Durchlauf (Plan: {joined})");
+    }
+
+    // ---- Suche nach Kategorie-Namen (0.2.30) ------------------------------------------------------
+
+    [Theory]
+    [InlineData("projekt", new[] { "IMG_a.jpg", "IMG_c.jpg" })]
+    [InlineData("PROJ", new[] { "IMG_a.jpg", "IMG_c.jpg" })]
+    [InlineData("xx", new[] { "IMG_a.jpg", "IMG_b.jpg", "IMG_c.jpg" })]
+    [InlineData("ekt", new[] { "IMG_a.jpg", "IMG_c.jpg" })]
+    public async Task Suche_nach_Kategorie_Namen_findet_alle_Dateien_mit_irgendeinem_Wert(string term, string[] expected)
+        => (await SearchAsync(term)).Should().Equal(expected);
+
+    [Fact]
+    public async Task Suche_nach_Kategorie_Namen_folgt_Umbenennen_und_wirkt_mit_Filter_und_Sortierung()
+    {
+        await _service.RenameAsync(_projekt.Id, "Baustelle");
+        (await SearchAsync("projekt")).Should().BeEmpty("der alte Name steht nirgends mehr");
+        (await SearchAsync("baustelle")).Should().Equal("IMG_a.jpg", "IMG_c.jpg");
+
+        var query = new GalleryQuery(_libraryId, GalleryFilter.All, "baustelle",
+            CategoryFilters: [new GalleryCategoryFilter(_xx.Id, [N], false)]);
+        (await LoadAllAsync(query)).Should().Equal(["IMG_a.jpg"], "nur a hat einen Baustellen-Wert und XX = N");
+
+        var sorted = new GalleryQuery(_libraryId, GalleryFilter.All, "baustelle", CategorySort: new GalleryCategorySort(_projekt.Id, true));
+        (await LoadAllAsync(sorted)).Should().Equal(["IMG_c.jpg", "IMG_a.jpg"], "Süd vor Nord bei absteigender Sortierung");
+    }
+
+    [Fact]
+    public async Task Suche_nach_Kategorie_Namen_laeuft_ueber_den_Kategorie_Index()
+    {
+        var query = new GalleryQuery(_libraryId, GalleryFilter.All, "projekt");
+        foreach (var count in new[] { true, false })
+        {
+            var plan = await _source.ExplainAsync(query, count, CancellationToken.None);
+            var joined = string.Join(" | ", plan);
+            plan.Should().Contain(l => l.StartsWith("SEARCH fcn USING COVERING INDEX IX_FileCategoryValues_Category_Value_File (CategoryId=?)", StringComparison.Ordinal),
+                $"Zuordnungen der passenden Kategorien aus dem Index (Plan: {joined})");
+            plan.Should().NotContain(l => System.Text.RegularExpressions.Regex.IsMatch(l, "^SCAN (fcn|fcv|ft|f)( |$)"), $"kein Durchlauf (Plan: {joined})");
+        }
     }
 
     private async Task<List<string>> SearchAsync(string term)

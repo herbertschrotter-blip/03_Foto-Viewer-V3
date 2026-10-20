@@ -3,6 +3,52 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.30] — 2026-10-20
+
+### Geändert (ADR-0031, offene Punkte aus 0.2.23)
+- **Kategorie-Sortierung segmentweise**: statt einer Sortierung aller Dateien mit je einem Schlüssel-Lookup zählt die
+  Galerie die Dateien je Wert und liest die Seite nur aus dem Wert-Segment, in das sie fällt (Reihenfolge des
+  Datums-Index, `f.Id IN (Dateien des Werts)`, Reverse-Trick vom Segmentende, Spalten erst für die Zeilen der Seite).
+  Kleine Wert-Segmente (≤ 4 000 Dateien, ohne Suche/Filter) lesen ihre Zuordnungen direkt. Zählung und Seite laufen in
+  einer Lese-Transaktion (ein Snapshot); die Zählung bleibt beim Blättern gültig, bis eine andere Verbindung schreibt
+  (`PRAGMA data_version`), die Gesamtzahl aus `GetTotalCountAsync` wird übernommen statt doppelt gezählt. Reihenfolge
+  unverändert (ohne Wert zuletzt, Werte-Reihenfolge der Verwaltung, gleiche Werte nach Datum neu → alt, dann Id).
+  500 000 Dateien: Seite 1 / Mitte / Seite 801 von 7,8–8,4 s auf 0,26–0,61 s beim ersten Laden nach einer Änderung und
+  0,03–0,26 s beim Blättern (Spike #08, `docs/spikes/08-suche-sortierung.md`).
+- **Neue Migration `AddCategorySortIndex`**: abdeckender Index `IX_FileCategoryValues_Category_Value_File (CategoryId,
+  ValueId, FileId)` ersetzt `IX_FileCategoryValues_Category`; bestehende Daten bleiben unverändert.
+- **Tag-Zweig der Suche** in derselben `IN`-Form wie die Kategorie-Werte: `FileTags.TagId IN (passende Tags)` über
+  `IX_FileTags_Tag` statt Join über alle Zuordnungen (Plan vorher `SCAN ft`, nachher `SEARCH ft USING INDEX
+  IX_FileTags_Tag (TagId=?)`). 500 000 Dateien mit 1,1 Mio. Tag-Zuweisungen: seltener Tag 196 → 42 ms (Zählen wie
+  Seite); bei einem Tag mit 100 000 Treffern dominieren die Treffer selbst (≈ 0,15–0,35 s, vorher wie nachher).
+
+### Neu
+- **Suche findet Kategorie-Namen**: trifft der Suchtext den Namen einer Kategorie (Teilstring, ohne Groß-/Kleinschreibung),
+  erscheinen alle Dateien mit irgendeinem Wert dieser Kategorie — gleiche Mechanik wie Tags/Werte (`CategoryId IN
+  (passende Kategorien)` über den neuen Index, keine Index-Pflege, Umbenennen wirkt sofort).
+
+### Tests
+- `tests/PhotoViewerV3.Tests`: 460 (+1 `Categories/CategorySortIndexMigrationTests`) (DB auf Stand `AddCategories` mit
+  Zuweisungen → migriert, neuer Index da, alter weg, alle Zuweisungen erhalten, `foreign_key_check` leer).
+- `tests/PhotoViewerV3.Wpf.Tests`: 234 (+32): `Categories/GalleryCategorySortPagingTests` (neu: Blättern mit 8 Seitengrößen auf/ab,
+  mit Filter und Suche gleich der Reihenfolge der alten Ein-Abfrage-Sortierung, zwei Bibliotheken, Zuweisung zwischen
+  zwei Seiten macht die zwischengespeicherte Zählung ungültig — Gegenprobe ohne `data_version` rot, neue Datei nach
+  dem Zählen erscheint ohne erneutes Zählen — Gegenprobe mit blind übernommener Gesamtzahl rot, leere Werte, Seite
+  hinter dem Ende), `GalleryPageSourceCategoryTests` (Kategorie-Namen-Suche, Umbenennen, mit Filter/Sortierung, Plan
+  über den neuen Index; Plan-Test der Sortierung auf die Segment-Form umgestellt), `GalleryPageSourceTagTests` (Plan
+  `IX_FileTags_Tag` ohne `SCAN ft`, Umbenennen/Zuweisen), `Gallery/GallerySearchSortMeasurementTests` (Messung,
+  Größe über `PV3_SEARCHSORT_FILES`, Standard 3 000). Wpf-Suite 3× hintereinander grün, Build ohne Warnungen.
+- Rauchtest 22/22 OK, 0 WPF-Binding-Fehler, kein ERR/FTL im Log (Schritt „Kategorien“ deckt Suche und Sortierung ab;
+  kein neuer Schritt).
+
+### Offen
+- Grundsortierungen Datum/Name/Größe lesen je übersprungener Zeile die ganze Files-Zeile; im synthetischen
+  500k-Katalog mit quer zur Id verteiltem Datum kostet die mittlere Seite 2,4 s (Datum) bzw. 6,8 s (Name). Abhilfe wie
+  hier: verzögerter Join (innen nur Id + Sortierspalten), für Name/Größe mit eigenem Index (Spike #08).
+- Eine Suche, die sehr viele Dateien trifft (z. B. Kategorie-Name mit 250 000 Dateien), materialisiert alle Treffer
+  (≈ 0,3–0,4 s bei 500k); ein kurzer Suchtext trifft als Teilstring jede Kategorie, deren Name ihn enthält.
+- Der Platzhalter des Suchfelds („Name, Endung oder Tag…“) nennt Kategorien nicht (Gallery-View, nicht angefasst).
+
 ## [0.2.29] — 2026-10-20
 
 ### Behoben (ADR-0030, offener Punkt aus 0.2.24)

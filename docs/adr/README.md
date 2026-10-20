@@ -45,10 +45,11 @@ Wenn eine ADR-Entscheidung revidiert wird: **neues ADR anlegen** + altes auf "Su
 | [0024](0024-sortierer-ziel-nur-unter-bibliothekswurzeln.md) | Sortierer und Flatten: Quelle und Ziel nur unter den Wurzeln der Bibliothek | Accepted |
 | [0025](0025-scan-sperre-fuer-datei-operationen.md) | Scan und Datei-Batch einer Bibliothek schließen sich aus; eigene Schreibvorgänge zählen nicht für die Ordnerüberwachung | Accepted |
 | [0026](0026-speicherort-katalog-waehlbar.md) | Speicherort von Katalog-DB und Thumbnail-Cache ist wählbar; Umzug per geprüfter Kopie und Neustart | Accepted |
-| [0027](0027-kategorien-mit-festen-werten.md) | Frei konfigurierbare Kategorien mit festen Werten: ein Wert je Datei, Filter und Listenspalte | Accepted (Nachtrag 0.2.23: Strg+K, Lightbox, Suche per Join, serverseitige Sortierung) |
+| [0027](0027-kategorien-mit-festen-werten.md) | Frei konfigurierbare Kategorien mit festen Werten: ein Wert je Datei, Filter und Listenspalte | Accepted (Nachtrag 0.2.23: Strg+K, Lightbox, Suche per Join, serverseitige Sortierung; Ausführung der Sortierung abgelöst durch 0031) |
 | [0028](0028-neu-aufbauen-in-einer-transaktion.md) | „Neu aufbauen“ ersetzt den Katalog in einer Transaktion nach der Enumeration — kein Verlust von Katalog und Benutzerdaten bei Abbruch oder Absturz | Accepted |
 | [0029](0029-portable-auslieferung-self-contained.md) | Portable Auslieferung als self-contained Ordner (win-x64) mit Version aus dem CHANGELOG | Accepted |
 | [0030](0030-schreiber-warten-auf-gesperrten-katalog.md) | Schreiber warten asynchron auf einen gesperrten Katalog (zentrale Wiederholung, FileIds nach „Neu aufbauen“ umgesetzt) — keine verlorene Benutzeraktion | Accepted |
+| [0031](0031-kategorie-sortierung-segmentweise.md) | Kategorie-Sortierung segmentweise je Wert über einen abdeckenden Index; Zählung bis zur nächsten Änderung zwischengespeichert | Accepted |
 | [0032](0032-archive-automatisch-entpacken.md) | Neue Archive in Eingangsordnern optional automatisch entpacken (nach dem Scan, Standard aus) | Accepted |
 
 ## Quellen der Entscheidungen

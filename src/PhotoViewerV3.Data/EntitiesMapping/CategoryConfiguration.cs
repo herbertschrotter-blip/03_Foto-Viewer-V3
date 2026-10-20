@@ -66,7 +66,10 @@ internal sealed class FileCategoryValueConfiguration : IEntityTypeConfiguration<
 
         b.HasIndex(x => x.ValueId)
             .HasDatabaseName("IX_FileCategoryValues_Value");
-        b.HasIndex(x => x.CategoryId)
-            .HasDatabaseName("IX_FileCategoryValues_Category");
+        // Ersetzt seit 0.2.30 IX_FileCategoryValues_Category (ADR-0031): Bereich einer Kategorie nach Wert und FileId
+        // geordnet und abdeckend — Segment-Zählung der Kategorie-Sortierung, Kategorie-Filter, Suche nach Kategorie-Namen
+        // und „ohne Wert“ lesen nur den Index. Deckt als Präfix auch den Fremdschlüssel CategoryId ab.
+        b.HasIndex(x => new { x.CategoryId, x.ValueId, x.FileId })
+            .HasDatabaseName("IX_FileCategoryValues_Category_Value_File");
     }
 }

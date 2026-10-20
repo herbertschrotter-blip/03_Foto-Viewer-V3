@@ -81,11 +81,11 @@ namespace PhotoViewerV3.Data.Migrations
 
                     b.HasKey("FileId", "CategoryId");
 
-                    b.HasIndex("CategoryId")
-                        .HasDatabaseName("IX_FileCategoryValues_Category");
-
                     b.HasIndex("ValueId")
                         .HasDatabaseName("IX_FileCategoryValues_Value");
+
+                    b.HasIndex("CategoryId", "ValueId", "FileId")
+                        .HasDatabaseName("IX_FileCategoryValues_Category_Value_File");
 
                     b.ToTable("FileCategoryValues", (string)null);
                 });
