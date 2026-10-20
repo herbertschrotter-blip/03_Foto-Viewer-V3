@@ -330,6 +330,16 @@ public sealed class GalleryToolbarLayoutTests(ITestOutputHelper output)
 
         public GalleryViewMode ViewMode { get; set; } = GalleryViewMode.Grid;
 
+        public bool IsGridView => ViewMode == GalleryViewMode.Grid;
+
+        public int TileSize { get; set; } = GalleryViewModel.DefaultTileSize;
+
+        public int MinTileSizeValue => GalleryViewModel.MinTileSize;
+
+        public int MaxTileSizeValue => GalleryViewModel.MaxTileSize;
+
+        public int TileSizeStepValue => GalleryViewModel.TileSizeStep;
+
         public bool HasFolderFilter { get; set; }
 
         public string FolderChipText { get; set; } = string.Empty;

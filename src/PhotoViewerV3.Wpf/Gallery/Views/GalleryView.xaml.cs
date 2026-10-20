@@ -175,6 +175,39 @@ public partial class GalleryView : UserControl
         _viewModel.OpenInLightboxCommand.Execute(item);
     }
 
+    /// <summary>Strg+Mausrad im Kachel-Grid: Vorschaugröße eine Stufe größer bzw. kleiner (statt zu scrollen).</summary>
+    private void OnGridPreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (Keyboard.Modifiers != ModifierKeys.Control || e.Delta == 0)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        _viewModel.StepTileSize(e.Delta > 0 ? 1 : -1);
+    }
+
+    /// <summary>Strg+Plus / Strg+Minus im Kachel-Grid: Vorschaugröße ändern.</summary>
+    private void OnGridPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (Keyboard.Modifiers != ModifierKeys.Control)
+        {
+            return;
+        }
+
+        var direction = e.Key switch
+        {
+            Key.OemPlus or Key.Add => 1,
+            Key.OemMinus or Key.Subtract => -1,
+            _ => 0,
+        };
+        if (direction != 0)
+        {
+            e.Handled = true;
+            _viewModel.StepTileSize(direction);
+        }
+    }
+
     /// <summary>Das Kachel-Panel meldet den sichtbaren Index-Bereich — das ViewModel fordert Vorschaubilder dafür zuerst an.</summary>
     private void OnVisibleRangeChanged(object sender, VisibleRangeChangedEventArgs e)
         => _viewModel.ReportVisibleRange(e.FirstIndex, e.LastIndex);

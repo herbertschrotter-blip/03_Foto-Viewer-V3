@@ -220,6 +220,24 @@
             <!-- Abstandhalter: schiebt die rechte Gruppe an den Rand -->
             <Border gc:ToolbarFlowPanel.Fill="True" MinWidth="0" Height="1" />
 
+            <!-- Vorschaugröße (nur Kachelansicht, 0.2.19): 120–320 px in 20er-Stufen; auch Strg+Mausrad, Strg+Plus/Minus -->
+            <StackPanel Orientation="Horizontal" Margin="0,0,8,0"
+                        Visibility="{Binding IsGridView, Converter={StaticResource BoolToVis}}">
+                <ui:SymbolIcon Symbol="ImageMultiple24" FontSize="14" Margin="0,0,4,0" VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                <Slider Width="90" VerticalAlignment="Center"
+                        AutomationProperties.AutomationId="GalleryTileSizeSlider"
+                        AutomationProperties.Name="Vorschaugröße"
+                        ToolTip="Vorschaugröße (Strg+Mausrad)"
+                        Minimum="{Binding MinTileSizeValue, Mode=OneTime}"
+                        Maximum="{Binding MaxTileSizeValue, Mode=OneTime}"
+                        TickFrequency="{Binding TileSizeStepValue, Mode=OneTime}"
+                        SmallChange="{Binding TileSizeStepValue, Mode=OneTime}"
+                        LargeChange="{Binding TileSizeStepValue, Mode=OneTime}"
+                        IsSnapToTickEnabled="True"
+                        Value="{Binding TileSize, Mode=TwoWay}" />
+            </StackPanel>
+
             <StackPanel Orientation="Horizontal">
                 <!-- Umschalter Kachel-Grid / Liste (Wahl wird gemerkt) -->
                 <RadioButton GroupName="ViewMode"

@@ -8,7 +8,7 @@ using PhotoViewerV3.Services.Database;
 
 namespace PhotoViewerV3.Gallery.ListView;
 
-/// <summary>Ansichts-Einstellungen der Galerie (Grid/Liste, Spalten) in der Settings-Tabelle.</summary>
+/// <summary>Ansichts-Einstellungen der Galerie (Grid/Liste, Spalten, Vorschaugröße) in der Settings-Tabelle.</summary>
 public interface IGalleryViewSettingsStore
 {
     Task<string?> GetAsync(string key, CancellationToken ct = default);
@@ -21,6 +21,7 @@ public sealed class GalleryViewSettingsStore : IGalleryViewSettingsStore
 {
     public const string ViewModeKey = "ui.gallery.viewMode";
     public const string ListColumnsKey = "ui.gallery.listColumns";
+    public const string TileSizeKey = "ui.gallery.tileSize";
 
     private readonly ILibraryContextFactory _factory;
     private readonly ILogger<GalleryViewSettingsStore> _logger;

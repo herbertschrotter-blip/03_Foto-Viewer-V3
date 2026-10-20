@@ -2112,6 +2112,58 @@ public sealed partial class GalleryViewModel : ObservableObject
         }
     }
 
+    // ---- Vorschaugröße (Kachelbreite, 0.2.19) -----------------------------------------------------
+
+    /// <summary>Kleinste, größte und Standard-Kachelbreite in px; Schrittweite für Regler und Strg+Mausrad.</summary>
+    public const int MinTileSize = 120;
+    public const int MaxTileSize = 320;
+    public const int DefaultTileSize = 180;
+    public const int TileSizeStep = 20;
+
+    /// <summary>Höhe der Namenszeile unter dem Bild + Rand: bleibt fest, nur der Bildbereich wächst (Seitenverhältnis wie bei 180 × 160).</summary>
+    private const double TileHeightAt180 = 160;
+    private const double TileMediaRatio = 0.64;
+
+    /// <summary>Kachelbreite in px (120–320); wird gemerkt. Vorschaubilder sind 320 px groß — darüber würden sie unscharf.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TileWidth), nameof(TileHeight))]
+    private int _tileSize = DefaultTileSize;
+
+    public double TileWidth => TileSize;
+
+    public double TileHeight => Math.Round(TileHeightAt180 + (TileSize - DefaultTileSize) * TileMediaRatio);
+
+    public int MinTileSizeValue => MinTileSize;
+
+    public int MaxTileSizeValue => MaxTileSize;
+
+    public int TileSizeStepValue => TileSizeStep;
+
+    /// <summary>Begrenzt auf 120–320 und rastet auf die Schrittweite ein (Regler liefert Zwischenwerte).</summary>
+    public static int NormalizeTileSize(double value)
+    {
+        var snapped = (int)(Math.Round(value / TileSizeStep) * TileSizeStep);
+        return Math.Clamp(snapped, MinTileSize, MaxTileSize);
+    }
+
+    /// <summary>Strg+Mausrad / Strg+Plus/Minus: eine Stufe größer (+1) oder kleiner (−1).</summary>
+    public void StepTileSize(int direction) => TileSize = NormalizeTileSize(TileSize + Math.Sign(direction) * TileSizeStep);
+
+    partial void OnTileSizeChanged(int value)
+    {
+        var normalized = NormalizeTileSize(value);
+        if (normalized != value)
+        {
+            TileSize = normalized; // löst den Handler erneut mit dem gültigen Wert aus
+            return;
+        }
+
+        if (_isInitialized && !_suppressViewSettings)
+        {
+            FireAndForget(() => _viewSettings.SetAsync(GalleryViewSettingsStore.TileSizeKey, value.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        }
+    }
+
     partial void OnViewModeChanged(GalleryViewMode value)
     {
         _logger.LogInformation("Galerie-Ansicht: {Mode}", value);
@@ -2133,6 +2185,12 @@ public sealed partial class GalleryViewModel : ObservableObject
             }
 
             ListColumnSettings = await _viewSettings.GetAsync(GalleryViewSettingsStore.ListColumnsKey);
+
+            var tileSize = await _viewSettings.GetAsync(GalleryViewSettingsStore.TileSizeKey);
+            if (int.TryParse(tileSize, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var size))
+            {
+                TileSize = NormalizeTileSize(size);
+            }
         }
         catch (Exception ex)
         {

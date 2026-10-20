@@ -3,6 +3,20 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.19] — 2026-10-20
+
+### Neu
+- **Vorschaugröße in der Galerie einstellbar**: Regler in der Kopfzeile neben dem Umschalter Kachel/Liste (nur in der
+  Kachelansicht), außerdem Strg+Mausrad und Strg+Plus/Minus im Kachel-Grid. Kachelbreite 120–320 px in 20er-Stufen
+  (Standard 180; 320 = Auflösung der Vorschaubilder), die Höhe wächst mit dem Bildbereich, die Namenszeile bleibt gleich.
+  Die Wahl steht in der Settings-Tabelle (`ui.gallery.tileSize`). Beim Umschalten bleibt die oberste sichtbare Kachel
+  oben (`VirtualizingTilePanel` verankert den Scroll-Offset am ersten sichtbaren Item).
+
+### Tests
+- `tests/PhotoViewerV3.Wpf.Tests`: 155 (+7): `Gallery/VirtualizingTilePanelTests` (Kachelgröße ändern hält die oberste
+  Kachel, 2 Fälle; Begrenzen/Einrasten der Vorschaugröße, 5 Fälle); Kopfzeilen-Layouttest weiter grün (Regler passt bei
+  1024 px in die Ansichtszeile).
+
 ## [0.2.18] — 2026-10-20
 
 ### Neu (ADR-0026)

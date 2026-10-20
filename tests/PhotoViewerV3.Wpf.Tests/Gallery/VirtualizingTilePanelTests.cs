@@ -323,6 +323,38 @@ public sealed class VirtualizingTilePanelTests
 
     // ---- Hilfen --------------------------------------------------------------------------------
 
+    [Theory]
+    [InlineData(120, 122)]
+    [InlineData(320, 250)]
+    public void Kachelgroesse_aendern_haelt_die_oberste_Kachel_im_Blick(double width, double height)
+    {
+        Run(host =>
+        {
+            var panel = host.Panel;
+            panel.SetVerticalOffset(40 * GalleryGridHost.TileHeight + 30); // mitten in Zeile 40
+            host.Window.UpdateLayout();
+            var anchor = (int)(panel.VerticalOffset / panel.ItemHeight) * panel.Columns;
+
+            panel.ItemWidth = width;
+            panel.ItemHeight = height;
+            host.Window.UpdateLayout();
+
+            ((int)(panel.VerticalOffset / panel.ItemHeight)).Should().Be(anchor / panel.Columns, $"Item {anchor} bleibt in der obersten Zeile");
+            host.ContainerOf(anchor).Should().NotBeNull();
+            host.TopOf(host.ContainerOf(anchor)!).Should().BeInRange(0, height);
+            panel.ExtentHeight.Should().Be(Math.Ceiling(ItemCount / (double)panel.Columns) * height);
+        });
+    }
+
+    [Theory]
+    [InlineData(50, 120)]
+    [InlineData(129, 120)]
+    [InlineData(131, 140)]
+    [InlineData(187.4, 180)]
+    [InlineData(999, 320)]
+    public void Vorschaugroesse_wird_begrenzt_und_rastet_auf_20er_Stufen(double value, int expected)
+        => GalleryViewModel.NormalizeTileSize(value).Should().Be(expected);
+
     private static void Run(Action<GalleryGridHost> test)
     {
         TestUiThread.Run(() =>

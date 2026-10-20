@@ -47,14 +47,14 @@ public sealed class VirtualizingTilePanel : VirtualizingPanel, IScrollInfo
         nameof(ItemWidth),
         typeof(double),
         typeof(VirtualizingTilePanel),
-        new FrameworkPropertyMetadata(180.0, FrameworkPropertyMetadataOptions.AffectsMeasure),
+        new FrameworkPropertyMetadata(180.0, FrameworkPropertyMetadataOptions.AffectsMeasure, OnItemExtentChanged),
         IsValidItemExtent);
 
     public static readonly DependencyProperty ItemHeightProperty = DependencyProperty.Register(
         nameof(ItemHeight),
         typeof(double),
         typeof(VirtualizingTilePanel),
-        new FrameworkPropertyMetadata(160.0, FrameworkPropertyMetadataOptions.AffectsMeasure),
+        new FrameworkPropertyMetadata(160.0, FrameworkPropertyMetadataOptions.AffectsMeasure, OnItemExtentChanged),
         IsValidItemExtent);
 
     /// <summary>
@@ -74,7 +74,21 @@ public sealed class VirtualizingTilePanel : VirtualizingPanel, IScrollInfo
     private int _firstRealizedIndex = -1;
     private int _lastRealizedIndex = -1;
     private int _reportedFirstVisible = int.MinValue;
+    private int _anchorIndex = -1;
     private int _reportedLastVisible = int.MinValue;
+
+    /// <summary>
+    /// Kachelgröße geändert (Vorschaugröße, 0.2.19): die erste sichtbare Kachel bleibt oben — sonst spränge der Pixel-Offset
+    /// bei kleineren Kacheln weit nach unten bzw. bei größeren nach oben.
+    /// </summary>
+    private static void OnItemExtentChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        var panel = (VirtualizingTilePanel)d;
+        if (panel._reportedFirstVisible > 0)
+        {
+            panel._anchorIndex = panel._reportedFirstVisible;
+        }
+    }
 
     public static void AddVisibleRangeChangedHandler(DependencyObject d, VisibleRangeChangedEventHandler handler)
         => (d as UIElement)?.AddHandler(VisibleRangeChangedEvent, handler);
@@ -230,6 +244,11 @@ public sealed class VirtualizingTilePanel : VirtualizingPanel, IScrollInfo
             ? Math.Max(1, (int)Math.Floor(availableSize.Width / itemWidth + 1e-6))
             : Math.Max(1, itemCount);
         var rows = itemCount == 0 ? 0 : (itemCount + _columns - 1) / _columns;
+        if (_anchorIndex >= 0)
+        {
+            _verticalOffset = _anchorIndex < itemCount ? (_anchorIndex / _columns) * itemHeight : _verticalOffset;
+            _anchorIndex = -1;
+        }
 
         var extent = new Size(hasFiniteWidth ? availableSize.Width : _columns * itemWidth, rows * itemHeight);
         var viewport = new Size(extent.Width, double.IsPositiveInfinity(availableSize.Height) ? extent.Height : availableSize.Height);

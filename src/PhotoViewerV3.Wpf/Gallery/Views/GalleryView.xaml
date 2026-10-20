@@ -377,11 +377,14 @@
                          VirtualizingPanel.VirtualizationMode="Recycling"
                          KeyboardNavigation.DirectionalNavigation="Contained"
                          KeyDown="OnListKeyDown"
+                         PreviewMouseWheel="OnGridPreviewMouseWheel"
+                         PreviewKeyDown="OnGridPreviewKeyDown"
                          controls:VirtualizingTilePanel.VisibleRangeChanged="OnVisibleRangeChanged"
                          Visibility="{Binding ShowGrid, Converter={StaticResource BoolToVis}}">
                     <controls:GalleryListBox.ItemsPanel>
                         <ItemsPanelTemplate>
-                            <controls:VirtualizingTilePanel ItemWidth="180" ItemHeight="160" />
+                            <!-- Kachelgröße aus der Vorschaugröße (Regler, Strg+Mausrad) -->
+                            <controls:VirtualizingTilePanel ItemWidth="{Binding TileWidth}" ItemHeight="{Binding TileHeight}" />
                         </ItemsPanelTemplate>
                     </controls:GalleryListBox.ItemsPanel>
                     <controls:GalleryListBox.InputBindings>

@@ -92,7 +92,8 @@ Eine Bibliothek hat genau einen **Archiv-Ordner** (der beim Anlegen gewählte Or
 ### Galerie
 Toolbar: Filter-Pills als Segmentgruppe (Alle / Bilder / Videos / Favoriten / Archive), Dropdown **Status** (Nicht archiviert /
 Archiviert), Tag-Filter, Suchfeld (Dateiname, Endung oder Tag-Name; Wörter werden
-als Präfix gesucht, Sonderzeichen sind erlaubt; ✕ leert die Suche), Sortierung, Seitengröße, Pager, Aktualisieren. In schmalen
+als Präfix gesucht, Sonderzeichen sind erlaubt; ✕ leert die Suche), Sortierung, Seitengröße, **Vorschaugröße** (Regler neben
+der Ansichtsumschaltung, nur in der Kachelansicht: Kachelbreite 120–320 px in 20er-Stufen, wird gemerkt), Pager, Aktualisieren. In schmalen
 Fenstern (bzw. rechts auf der Ordner-Seite) rutscht die Suche in eine eigene Zeile, statt gequetscht zu werden. Ein Ordnerfilter erscheint als
 Chip und lässt sich dort wieder aufheben. Kacheln: Herz = Favorit, Sterne = Bewertung, Badge „fehlt“ bei Dateien, die
 beim letzten Scan nicht mehr auf der Platte lagen. Ordner ohne direkte Dateien zeigen ihre Unterordner als Kacheln.
@@ -105,6 +106,7 @@ Ordner-Umbenennung) zurück.
 | Klick, Strg+Klick, Umschalt+Klick | Auswahl, Mehrfachauswahl |
 | Enter, Doppelklick | Lightbox öffnen |
 | Strg+A | Alles auf der Seite auswählen |
+| Strg+Mausrad, Strg+Plus / Strg+Minus | Vorschaugröße größer / kleiner (Kachelansicht) |
 | Esc | Auswahl aufheben (im Suchfeld: Suche leeren) |
 | Entf | Auswahl in den Papierkorb (mit Bestätigung) |
 | Strg+← / Strg+→ | Vorherige / nächste Seite |
