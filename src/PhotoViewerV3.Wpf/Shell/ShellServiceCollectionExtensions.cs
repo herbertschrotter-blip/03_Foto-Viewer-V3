@@ -21,6 +21,7 @@ public static class ShellServiceCollectionExtensions
         services.AddSingleton<INavigationViewPageProvider, NavigationPageProvider>();
         services.AddSingleton<IDialogService, DialogService>();
         services.AddSingleton<IThemeService, ThemeService>();
+        services.AddSingleton<IAppRestartService, AppRestartService>();
         services.AddSingleton<StatusBarViewModel>();
         services.AddSingleton<ShellViewModel>();
 

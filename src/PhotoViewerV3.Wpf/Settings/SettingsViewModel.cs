@@ -9,6 +9,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
 using PhotoViewerV3.Services.Database;
+using PhotoViewerV3.Services.Database.Relocation;
 using PhotoViewerV3.Services.Infrastructure;
 using PhotoViewerV3.Services.Media;
 using PhotoViewerV3.Services.Thumbnails;
@@ -18,7 +19,7 @@ using PhotoViewerV3.Shell;
 namespace PhotoViewerV3.Settings;
 
 /// <summary>
-/// Einstellungen: Farbschema, Speicherorte (DB, Logs), Thumbnail-Cache (Größe, Leeren), FFmpeg-Status,
+/// Einstellungen: Farbschema, Speicherorte (DB, Logs; DB samt Thumbnails umziehen, ADR-0026), Thumbnail-Cache (Größe, Leeren), FFmpeg-Status,
 /// unterstützte Formate, Ordnerüberwachung (Schalter, Ruhezeit) und App-Version.
 /// </summary>
 public sealed partial class SettingsViewModel : ObservableObject
@@ -33,6 +34,8 @@ public sealed partial class SettingsViewModel : ObservableObject
     private readonly IThemeService _theme;
     private readonly IDialogService _dialogs;
     private readonly ILibraryWatchService _watch;
+    private readonly IDatabaseRelocationService _relocation;
+    private readonly IAppRestartService _restart;
     private readonly ILogger<SettingsViewModel> _logger;
 
     public SettingsViewModel(
@@ -44,6 +47,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         IThemeService theme,
         IDialogService dialogs,
         ILibraryWatchService watch,
+        IDatabaseRelocationService relocation,
+        IAppRestartService restart,
         ILogger<SettingsViewModel> logger)
     {
         _factory = factory;
@@ -54,6 +59,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         _theme = theme;
         _dialogs = dialogs;
         _watch = watch;
+        _relocation = relocation;
+        _restart = restart;
         _logger = logger;
     }
 
@@ -119,6 +126,16 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     [ObservableProperty] private string _databasePath = string.Empty;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(MoveDatabaseCommand), nameof(ResetDatabaseLocationCommand))]
+    private bool _isRelocating;
+
+    [ObservableProperty] private string? _relocationStatus;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ResetDatabaseLocationCommand))]
+    private bool _usesCustomLocation;
     [ObservableProperty] private string _databaseSizeText = string.Empty;
     [ObservableProperty] private string _logsPath = string.Empty;
     [ObservableProperty] private string _thumbnailsPath = string.Empty;
@@ -163,6 +180,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     private async Task LoadAsync()
     {
         DatabasePath = _factory.DatabasePath;
+        UsesCustomLocation = !AppDataPaths.PathsEqual(_relocation.CurrentFolder, _relocation.DefaultFolder);
         DatabaseSizeText = FileSizeText(_factory.DatabasePath);
         LogsPath = _paths.LogsRoot;
         ThumbnailsPath = _paths.ThumbnailsRoot;
@@ -203,6 +221,144 @@ public sealed partial class SettingsViewModel : ObservableObject
             ErrorMessage = $"Zwischenablage nicht verfügbar: {ex.Message}";
         }
     }
+
+    // ---- Speicherort der Katalog-DB (ADR-0026) ------------------------------------------------------
+
+    private bool CanRelocate() => !IsRelocating;
+
+    private bool CanResetLocation() => !IsRelocating && UsesCustomLocation;
+
+    [RelayCommand(CanExecute = nameof(CanRelocate))]
+    private async Task MoveDatabaseAsync()
+    {
+        var folder = _dialogs.PickFolder("Neuer Speicherort für Katalog und Vorschaubilder");
+        if (!string.IsNullOrWhiteSpace(folder))
+        {
+            await RelocateToAsync(folder).ConfigureAwait(true);
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanResetLocation))]
+    private Task ResetDatabaseLocationAsync() => RelocateToAsync(_relocation.DefaultFolder);
+
+    /// <summary>
+    /// Zielordner prüfen, Modus erfragen (bei vorhandenem Katalog: übernehmen oder ersetzen), umziehen und neu starten;
+    /// bei Fehler bleibt der alte Ort aktiv und ein Dialog nennt den Grund.
+    /// </summary>
+    internal async Task RelocateToAsync(string folder)
+    {
+        IsRelocating = true;
+        RelocationStatus = "Zielordner wird geprüft…";
+        var restarting = false;
+        try
+        {
+            var check = await _relocation.CheckTargetAsync(folder).ConfigureAwait(true);
+            var mode = await AskRelocationModeAsync(check).ConfigureAwait(true);
+            if (mode is null)
+            {
+                return;
+            }
+
+            _restart.SetInputBlocked(true);
+            var progress = new Progress<RelocationProgress>(p => RelocationStatus = p.Total > 0
+                ? $"{p.Stage}… {p.Done:N0} von {p.Total:N0}"
+                : $"{p.Stage}…");
+            var result = await _relocation.RelocateAsync(check.TargetFolder, mode.Value, progress).ConfigureAwait(true);
+            if (result.Success)
+            {
+                RelocationStatus = "Umzug abgeschlossen — PhotoViewer startet neu…";
+                restarting = _restart.Restart();
+                if (!restarting)
+                {
+                    _restart.SetInputBlocked(false);
+                    await _dialogs.ShowErrorAsync(
+                        "Bitte PhotoViewer neu starten",
+                        $"Der Katalog liegt jetzt unter\n{result.DatabasePath}\n\nDer automatische Neustart ist fehlgeschlagen. Bitte " +
+                        "PhotoViewer beenden und neu starten — bis dahin ist der Katalog gesperrt.").ConfigureAwait(true);
+                }
+
+                return;
+            }
+
+            _restart.SetInputBlocked(false);
+            await _dialogs.ShowErrorAsync(
+                "Umzug fehlgeschlagen",
+                $"{result.Error}\n\nPhotoViewer arbeitet weiter mit dem bisherigen Speicherort:\n{_relocation.CurrentFolder}").ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _restart.SetInputBlocked(false);
+            _logger.LogError(ex, "DB-Umzug nach {Folder} fehlgeschlagen", folder);
+            await _dialogs.ShowErrorAsync("Umzug fehlgeschlagen", $"Unerwarteter Fehler: {ex.Message}").ConfigureAwait(true);
+        }
+        finally
+        {
+            if (!restarting)
+            {
+                IsRelocating = false;
+                RelocationStatus = null;
+            }
+        }
+    }
+
+    /// <summary>Dialoge je Prüfergebnis; null = abgebrochen bzw. Ziel ungeeignet.</summary>
+    private async Task<RelocationMode?> AskRelocationModeAsync(RelocationTargetCheck check)
+    {
+        var cloudHint = check.IsCloudSynced
+            ? "\n\nAchtung: der Ordner wird von OneDrive synchronisiert. Synchronisierung während der Arbeit kann den Katalog " +
+              "beschädigen — besser einen Ordner außerhalb von OneDrive wählen."
+            : string.Empty;
+
+        switch (check.State)
+        {
+            case RelocationTargetState.Invalid:
+                await _dialogs.ShowErrorAsync("Speicherort nicht geeignet", check.Problem ?? "Der Ordner ist ungeeignet.").ConfigureAwait(true);
+                return null;
+
+            case RelocationTargetState.Ready:
+                var ok = await _dialogs.ConfirmAsync(
+                    "Katalog umziehen?",
+                    $"Katalog (library.db) und {check.ThumbnailFiles:N0} Vorschaubilder werden nach\n{check.TargetFolder}\n" +
+                    $"kopiert und geprüft (Platzbedarf etwa {Formatting.Bytes(check.RequiredBytes)}). Laufende Scans und " +
+                    "Datei-Operationen werden vorher abgewartet.\n\nDanach startet PhotoViewer neu und arbeitet mit dem neuen " +
+                    "Ort; die alten Dateien werden beim Start gelöscht." + cloudHint,
+                    "Umziehen und neu starten").ConfigureAwait(true);
+                return ok ? RelocationMode.Move : null;
+        }
+
+        var existing = check.Existing!;
+        var spaceHint = check.HasEnoughSpace ? string.Empty : $"\n\nErsetzen ist nicht möglich: {check.Problem}";
+        if (existing is { HasDatabase: true, IsValidCatalog: true })
+        {
+            var modified = existing.ModifiedAtUtc is { } at ? $", zuletzt geändert {at.ToLocalTime():g}" : string.Empty;
+            var choice = await _dialogs.ChooseAsync(
+                "Im Zielordner liegt bereits ein Katalog",
+                $"{check.TargetFolder}\nenthält einen PhotoViewer-Katalog mit {existing.Libraries:N0} Bibliothek(en) und " +
+                $"{existing.Files:N0} Dateien{modified}.\n\n" +
+                "Übernehmen: PhotoViewer arbeitet nach dem Neustart mit diesem Katalog; der bisherige bleibt unverändert unter\n" +
+                $"{_relocation.CurrentFolder}\nerhalten.\n\n" +
+                "Ersetzen: der vorhandene Katalog samt Vorschaubildern wird beim nächsten Start gelöscht und durch den aktuellen " +
+                "ersetzt." + spaceHint + cloudHint,
+                "Übernehmen",
+                "Ersetzen",
+                secondaryIsDestructive: true).ConfigureAwait(true);
+            return choice switch
+            {
+                DialogChoice.Primary => RelocationMode.AdoptExisting,
+                DialogChoice.Secondary => RelocationMode.ReplaceExisting,
+                _ => null,
+            };
+        }
+
+        var replace = await _dialogs.ConfirmAsync(
+            "Zielordner enthält fremde Daten",
+            $"{check.TargetFolder}\n{existing.Problem}\n\nErsetzen: diese Daten werden beim nächsten Start gelöscht und " +
+            "durch den aktuellen Katalog samt Vorschaubildern ersetzt." + spaceHint + cloudHint,
+            "Ersetzen",
+            isDestructive: true).ConfigureAwait(true);
+        return replace ? RelocationMode.ReplaceExisting : null;
+    }
+
 
     private bool CanClearCache() => !IsCacheBusy;
 

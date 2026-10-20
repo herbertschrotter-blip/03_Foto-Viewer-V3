@@ -3,6 +3,45 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.18] — 2026-10-20
+
+### Neu (ADR-0026)
+- **Speicherort des Katalogs wählbar**: Einstellungen → Speicherorte → Datenbank → **Ändern…** zieht `library.db`
+  samt Vorschaubildern (`thumbs\`, Herberts Entscheidung: zieht mit) in einen anderen Ordner; **Standardort** holt sie
+  zurück. Der Ort steht in `database-location.json` in der App-Wurzel (`DatabaseLocationStore`), `AppDataPaths.Resolve`
+  liest sie beim Start; Logs bleiben in der App-Wurzel. Beschädigte Datei oder gewählter Ordner ohne `library.db`
+  (Laufwerk abgezogen) → Start bricht mit Meldung ab statt still einen leeren Katalog anzulegen.
+- **Sicherer Umzug** (`Services/Database/Relocation/DatabaseRelocationService`): Ziel prüfen (lokal, kein UNC/
+  Netzlaufwerk, nicht in einer Bibliothekswurzel oder im Thumbnail-/Log-Ordner, Schreibprobe, Platz inkl. Reserve,
+  OneDrive nur mit Warnung) → Ordnerüberwachung stoppen, alle Bibliotheken über `IScanGate` belegen, Thumbnail-Worker
+  pausieren (`IThumbnailService.PauseAsync/Resume`), höchstens 30 s warten → Context-Factory sperren
+  (`IDatabaseAccessGate`, neue Verbindungen werfen `DatabaseSuspendedException`), `ClearAllPools`, `BEGIN IMMEDIATE` →
+  `wal_checkpoint(TRUNCATE)` + SQLite-Backup-API → `integrity_check` und Zeilenzahl je Tabelle → `Thumbnails.CachePath`
+  auf den neuen Ordner umschreiben → Vorschaubilder kopieren → neuen Ort atomar speichern. Erst dann gilt er.
+- **Vorhandener Katalog im Ziel**: „Übernehmen“ (gültiger Katalog; nichts kopiert, der bisherige bleibt erhalten) oder
+  „Ersetzen“ (vorhandene Dateien werden in `….ersetzt-{Zeit}` umbenannt und beim nächsten Start gelöscht).
+- **Fehler/Abbruch**: Rücknahme-Stapel räumt das Ziel auf, benennt Beiseitegelegtes zurück, hebt Sperren auf; die App
+  arbeitet mit dem alten Ort weiter, `IDialogService` nennt den Grund. Während des Umzugs ist das Fenster gesperrt.
+- **Neustart statt Umschalten zur Laufzeit** (`Shell/AppRestartService`): nach Erfolg startet die App neu; der neue
+  Prozess löscht alte DB-Dateien und den alten `thumbs\` im Hintergrund (bis zu 10 Versuche, nie etwas vom aktiven Ort).
+
+### Tests
+- `tests/PhotoViewerV3.Tests`: 417 (+23): `Database/DatabaseRelocationServiceTests` (14: Umzug mit Prüfung und
+  umgeschriebenen Thumbnail-Pfaden, „Neustart“ mit neuem Ort und Aufräumen, zurück zum Standardort, Abbruch beim
+  Kopieren und Fehler beim Speichern → vollständige Rücknahme, Scan über die Wartezeit, Warten auf einen Datei-Batch,
+  vorhandener Katalog: erkennen/übernehmen/ersetzen/Rücknahme nach dem Beiseitelegen, kaputte Datei, ungeeignete Ziele,
+  OneDrive), `Database/DatabaseLocationStoreTests` (8: Persistenz, beschädigte Datei, fehlendes Laufwerk, Aufräumen nie
+  am aktiven Ort, gesperrte Datei bleibt vorgemerkt), `Thumbnails/ThumbnailServicePauseTests` (1). Ohne Rücknahme
+  scheitern 3 der Relocation-Tests (gegengeprüft).
+- `tests/PhotoViewerV3.Wpf.Tests`: 148 (+8 `Settings/SettingsRelocationTests`: Neustart nach Erfolg, Fehlerdialog mit
+  weiter gültigem Ort, ungeeignetes Ziel, Übernehmen/Ersetzen/Abbrechen, fremde Datei, OneDrive-Warnung).
+
+### Offen
+- Ein EF-Kontext, der vor der Sperre erzeugt wurde und erst danach speichert (Favorit im selben Augenblick), schreibt
+  noch in die alte DB; die `BEGIN IMMEDIATE`-Barriere fängt nur laufende Transaktionen ab.
+- Während der Pause verworfene Vorschaubild-Anforderungen kommen nach einer Rücknahme erst mit dem nächsten Seitenwechsel.
+- Der Thumbnail-Ordner wird für Prüfung und Umzug mehrfach durchlaufen (bei 500k Dateien spürbar).
+
 ## [0.2.17] — 2026-10-19
 
 ### Behoben (offene Punkte aus 0.2.14, ADR-0025)

@@ -6,45 +6,16 @@ namespace PhotoViewerV3.Shell;
 
 /// <summary>
 /// Optionaler AppData-Root per Umgebungsvariable PHOTOVIEWERV3_APPDATA (z. B. für Rauchtests mit frischer DB
-/// ohne die Katalog-DB des Benutzers anzufassen). Ohne Variable gilt die produktive <see cref="AppDataPaths"/>.
+/// ohne die Katalog-DB des Benutzers anzufassen). Ohne Variable gilt %LocalAppData%\PhotoViewerV3. In beiden Fällen
+/// bestimmt <c>database-location.json</c> in der Wurzel, wo DB und Thumbnails liegen (ADR-0026).
 /// </summary>
 public static class AppDataRootOverride
 {
     public const string EnvironmentVariable = "PHOTOVIEWERV3_APPDATA";
 
-    public static IAppDataPaths Resolve()
+    public static AppDataPaths Resolve()
     {
         var root = Environment.GetEnvironmentVariable(EnvironmentVariable);
-        return string.IsNullOrWhiteSpace(root)
-            ? new AppDataPaths()
-            : new RelocatedAppDataPaths(Path.GetFullPath(root));
-    }
-
-    private sealed class RelocatedAppDataPaths : IAppDataPaths
-    {
-        public RelocatedAppDataPaths(string root)
-        {
-            AppDataRoot = root;
-            LibraryDatabasePath = Path.Combine(root, "library.db");
-            ThumbnailsRoot = Path.Combine(root, "thumbs");
-            LogsRoot = Path.Combine(root, "logs");
-        }
-
-        public string AppDataRoot { get; }
-
-        public string LibraryDatabasePath { get; }
-
-        public string ThumbnailsRoot { get; }
-
-        public string LogsRoot { get; }
-
-        public string GetLibraryThumbnailsPath(long libraryId) => Path.Combine(ThumbnailsRoot, libraryId.ToString());
-
-        public void EnsureDirectoriesExist()
-        {
-            Directory.CreateDirectory(AppDataRoot);
-            Directory.CreateDirectory(ThumbnailsRoot);
-            Directory.CreateDirectory(LogsRoot);
-        }
+        return AppDataPaths.Resolve(string.IsNullOrWhiteSpace(root) ? AppDataPaths.DefaultAppDataRoot : Path.GetFullPath(root));
     }
 }

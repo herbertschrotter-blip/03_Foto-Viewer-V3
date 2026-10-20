@@ -44,6 +44,7 @@ Wenn eine ADR-Entscheidung revidiert wird: **neues ADR anlegen** + altes auf "Su
 | [0023](0023-neu-aufbauen-uebernimmt-benutzerdaten.md) | „Neu aufbauen“ übernimmt Favoriten, Bewertungen und Tags über den Pfad | Accepted |
 | [0024](0024-sortierer-ziel-nur-unter-bibliothekswurzeln.md) | Sortierer und Flatten: Quelle und Ziel nur unter den Wurzeln der Bibliothek | Accepted |
 | [0025](0025-scan-sperre-fuer-datei-operationen.md) | Scan und Datei-Batch einer Bibliothek schließen sich aus; eigene Schreibvorgänge zählen nicht für die Ordnerüberwachung | Accepted |
+| [0026](0026-speicherort-katalog-waehlbar.md) | Speicherort von Katalog-DB und Thumbnail-Cache ist wählbar; Umzug per geprüfter Kopie und Neustart | Accepted |
 
 ## Quellen der Entscheidungen
 

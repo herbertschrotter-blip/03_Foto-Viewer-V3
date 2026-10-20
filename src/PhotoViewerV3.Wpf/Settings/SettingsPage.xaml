@@ -73,17 +73,45 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <ui:TextBlock Grid.Row="0" Grid.ColumnSpan="3" Style="{StaticResource SectionTitle}" Text="Speicherorte" />
 
                     <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource Label}" Text="Datenbank" />
                     <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource ValueText}" ToolTip="{Binding DatabasePath}"><Run Text="{Binding DatabasePath, Mode=OneWay}" /><Run Text=" · " Foreground="{DynamicResource TextFillColorTertiaryBrush}" /><Run Text="{Binding DatabaseSizeText, Mode=OneWay}" Foreground="{DynamicResource TextFillColorTertiaryBrush}" /></TextBlock>
-                    <ui:Button Grid.Row="1" Grid.Column="2" Content="Ordner öffnen" Icon="{ui:SymbolIcon FolderOpen24}"
-                               Command="{Binding OpenDatabaseFolderCommand}" Margin="12,2" />
+                    <StackPanel Grid.Row="1" Grid.Column="2" Orientation="Horizontal" Margin="12,2">
+                        <ui:Button Content="Ordner öffnen" Icon="{ui:SymbolIcon FolderOpen24}"
+                                   Command="{Binding OpenDatabaseFolderCommand}" />
+                        <ui:Button Content="Ändern…" Icon="{ui:SymbolIcon FolderArrowRight24}" Margin="8,0,0,0"
+                                   Command="{Binding MoveDatabaseCommand}"
+                                   AutomationProperties.Name="Speicherort der Datenbank ändern" />
+                    </StackPanel>
 
-                    <TextBlock Grid.Row="2" Grid.Column="0" Style="{StaticResource Label}" Text="Protokolle" />
-                    <TextBlock Grid.Row="2" Grid.Column="1" Style="{StaticResource ValueText}" Text="{Binding LogsPath}" ToolTip="{Binding LogsPath}" />
-                    <ui:Button Grid.Row="2" Grid.Column="2" Content="Öffnen" Icon="{ui:SymbolIcon FolderOpen24}"
+                    <!-- Umzug (ADR-0026): Hinweis, Fortschritt, zurück zum Standardort -->
+                    <Grid Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,2,12,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                                    Visibility="{Binding IsRelocating, Converter={StaticResource BoolToVis}}">
+                            <ui:ProgressRing IsIndeterminate="True" Width="14" Height="14" Margin="0,0,8,0" />
+                            <TextBlock Style="{StaticResource ValueText}" Text="{Binding RelocationStatus}" />
+                        </StackPanel>
+                        <TextBlock FontSize="12" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   Visibility="{Binding IsRelocating, Converter={StaticResource InvBoolToVis}}"
+                                   Text="Die Vorschaubilder ziehen mit um. Nach dem Umzug startet PhotoViewer neu; die alten Dateien werden beim Start gelöscht." />
+                        <ui:Button Grid.Column="1" Content="Standardort" Icon="{ui:SymbolIcon ArrowReset24}" Margin="12,0,0,0"
+                                   Command="{Binding ResetDatabaseLocationCommand}"
+                                   Visibility="{Binding UsesCustomLocation, Converter={StaticResource BoolToVis}}"
+                                   ToolTip="Katalog und Vorschaubilder zurück nach %LocalAppData%\PhotoViewerV3"
+                                   AutomationProperties.Name="Datenbank zurück an den Standardort" />
+                    </Grid>
+
+                    <TextBlock Grid.Row="3" Grid.Column="0" Style="{StaticResource Label}" Text="Protokolle" />
+                    <TextBlock Grid.Row="3" Grid.Column="1" Style="{StaticResource ValueText}" Text="{Binding LogsPath}" ToolTip="{Binding LogsPath}" />
+                    <ui:Button Grid.Row="3" Grid.Column="2" Content="Öffnen" Icon="{ui:SymbolIcon FolderOpen24}"
                                Command="{Binding OpenLogsFolderCommand}" Margin="12,2" />
                 </Grid>
             </Border>

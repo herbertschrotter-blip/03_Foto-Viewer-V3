@@ -65,6 +65,9 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
     private int _pending;
     private int _disposed;
     private int _ffmpegMissingLogged;
+    private readonly object _pauseLock = new();
+    private TaskCompletionSource? _resumed; // gesetzt, solange pausiert (ADR-0026)
+    private int _activeJobs;
 
     private enum JobOutcome { Queued, Done, Failed }
 
@@ -106,6 +109,70 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
         }
     }
 
+    public async Task PauseAsync(CancellationToken ct = default)
+    {
+        lock (_pauseLock)
+        {
+            _resumed ??= new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+
+        while (Volatile.Read(ref _activeJobs) > 0)
+        {
+            await Task.Delay(25, ct).ConfigureAwait(false);
+        }
+
+        _logger.LogInformation("ThumbnailService pausiert ({Pending} Aufträge warten)", PendingCount);
+    }
+
+    public void Resume()
+    {
+        TaskCompletionSource? resumed;
+        lock (_pauseLock)
+        {
+            resumed = _resumed;
+            _resumed = null;
+        }
+
+        if (resumed is not null)
+        {
+            resumed.TrySetResult();
+            _logger.LogInformation("ThumbnailService fortgesetzt");
+        }
+    }
+
+    private bool IsPaused
+    {
+        get
+        {
+            lock (_pauseLock)
+            {
+                return _resumed is not null;
+            }
+        }
+    }
+
+    /// <summary>Belegt einen Job-Platz; ist der Dienst pausiert, gibt er ihn wieder frei und wartet auf <see cref="Resume"/>.</summary>
+    private async Task EnterJobAsync(CancellationToken token)
+    {
+        while (true)
+        {
+            Interlocked.Increment(ref _activeJobs);
+            Task? resumed;
+            lock (_pauseLock)
+            {
+                resumed = _resumed?.Task;
+            }
+
+            if (resumed is null)
+            {
+                return;
+            }
+
+            Interlocked.Decrement(ref _activeJobs);
+            await resumed.WaitAsync(token).ConfigureAwait(false);
+        }
+    }
+
     public void InvalidateAll()
     {
         // ConcurrentDictionary erlaubt Entfernen während der Enumeration; laufende Jobs bleiben (Dedupe).
@@ -124,6 +191,13 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
     {
         if (requests.Count == 0 || Volatile.Read(ref _disposed) != 0)
         {
+            return;
+        }
+
+        if (IsPaused)
+        {
+            // Katalog-DB zieht um (ADR-0026): sie ist gesperrt; die Galerie fordert nach Neustart bzw. Rücknahme neu an.
+            _logger.LogDebug("ThumbnailService pausiert — {Count} Anforderungen verworfen", requests.Count);
             return;
         }
 
@@ -314,7 +388,15 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
                 while (reader.TryRead(out var req))
                 {
                     current = req;
-                    await ProcessJobAsync(req).ConfigureAwait(false);
+                    await EnterJobAsync(token).ConfigureAwait(false);
+                    try
+                    {
+                        await ProcessJobAsync(req).ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        Interlocked.Decrement(ref _activeJobs);
+                    }
                 }
             }
             catch (OperationCanceledException)

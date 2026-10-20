@@ -17,6 +17,7 @@ using PhotoViewerV3.Sorter;
 using PhotoViewerV3.Thumbnails;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Serilog;
 using Serilog.Events;
 
@@ -30,11 +31,27 @@ namespace PhotoViewerV3;
 public partial class App : Application
 {
     private readonly IHost _host;
+    private readonly AppDataPaths _paths;
+    private readonly string? _locationError;
 
     public App()
     {
-        // Produktiv %LocalAppData%\PhotoViewerV3; per PHOTOVIEWERV3_APPDATA umlenkbar (Rauchtests mit frischer DB)
-        var paths = AppDataRootOverride.Resolve();
+        // Produktiv %LocalAppData%\PhotoViewerV3; per PHOTOVIEWERV3_APPDATA umlenkbar (Rauchtests mit frischer DB).
+        // DB und Thumbnails liegen dort oder im Ordner aus database-location.json (Einstellungen → Speicherorte, ADR-0026).
+        AppDataPaths paths;
+        try
+        {
+            paths = AppDataRootOverride.Resolve();
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException)
+        {
+            // Nur für das Protokoll; OnStartup bricht ab, bevor eine DB geöffnet wird (sonst entstünde am Standardort ein leerer Katalog).
+            _locationError = ex.Message;
+            var root = Environment.GetEnvironmentVariable(AppDataRootOverride.EnvironmentVariable);
+            paths = new AppDataPaths(string.IsNullOrWhiteSpace(root) ? AppDataPaths.DefaultAppDataRoot : Path.GetFullPath(root));
+        }
+
+        _paths = paths;
         paths.EnsureDirectoriesExist();
 
         Log.Logger = new LoggerConfiguration()
@@ -107,7 +124,16 @@ public partial class App : Application
         {
             await _host.StartAsync();
 
-            Log.Information("PhotoViewer V3 startet — AppData: {AppDataRoot}", _host.Services.GetRequiredService<IAppDataPaths>().AppDataRoot);
+            Log.Information("PhotoViewer V3 startet — AppData: {AppDataRoot}, Katalog: {Database}", _paths.AppDataRoot, _paths.LibraryDatabasePath);
+
+            var locationProblem = CheckDatabaseLocation();
+            if (locationProblem is not null)
+            {
+                Log.Error("Speicherort der Katalog-DB unbrauchbar: {Problem}", locationProblem);
+                ShowFatal(locationProblem);
+                Shutdown(1);
+                return;
+            }
 
             // Library-DB initialisieren (Migration anwenden, Crash-Recovery)
             try
@@ -148,6 +174,8 @@ public partial class App : Application
 
             var mainWindow = _host.Services.GetRequiredService<MainWindow>();
             mainWindow.Show();
+
+            CleanUpOldDatabaseLocation();
         }
         catch (Exception ex)
         {
@@ -156,6 +184,47 @@ public partial class App : Application
             ShowFatal($"PhotoViewer V3 konnte nicht gestartet werden:\n{ex.Message}\n\nDetails stehen im Protokoll.");
             Shutdown(1);
         }
+    }
+
+    /// <summary>
+    /// Speicherort-Datei beschädigt oder gewählter Ordner ohne Katalog (Laufwerk nicht verbunden): nicht starten — sonst
+    /// legte die Migration still einen leeren Katalog an.
+    /// </summary>
+    private string? CheckDatabaseLocation()
+    {
+        var locationFile = DatabaseLocationStore.GetFilePath(_paths.AppDataRoot);
+        if (_locationError is not null)
+        {
+            return $"Der gespeicherte Speicherort der Katalog-Datenbank ist nicht lesbar:\n{_locationError}\n\n" +
+                   $"Datei reparieren oder löschen (dann gilt wieder der Standardort):\n{locationFile}";
+        }
+
+        if (_paths.UsesCustomDataFolder && !File.Exists(_paths.LibraryDatabasePath))
+        {
+            return $"Die Katalog-Datenbank wurde nicht gefunden:\n{_paths.LibraryDatabasePath}\n\n" +
+                   "Ist das Laufwerk verbunden? Danach PhotoViewer neu starten.\n" +
+                   $"Zurück zum Standardort: diese Datei löschen:\n{locationFile}";
+        }
+
+        return null;
+    }
+
+    /// <summary>Nach einem Umzug: alte DB-Dateien und den alten Thumbnail-Ordner im Hintergrund löschen (ADR-0026).</summary>
+    private void CleanUpOldDatabaseLocation()
+    {
+        var logger = _host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("PhotoViewerV3.DatabaseLocation");
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                // Die alte Instanz gibt ihre Handles erst beim Beenden frei → bis zu 10 Versuche im Abstand von 2 s
+                await DatabaseLocationStore.RunPendingDeletesAsync(_paths, logger, attempts: 10).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Alter Speicherort konnte nicht aufgeräumt werden");
+            }
+        });
     }
 
     /// <summary>Synchron: nach einem await liefe die Fortsetzung auf einem Dispatcher, der gerade herunterfährt.</summary>

@@ -4,6 +4,7 @@
 - **Datum:** 2026-05-10
 - **Entscheider:** Herbert Schrotter, Claude, GPT-5
 - **Ergänzt durch:** [ADR-0020](0020-bibliothek-mehrere-wurzeln-rollen.md) — eine Bibliothek hat mehrere Wurzeln (eine Archiv-Wurzel, beliebig viele Eingänge); `RootPath` bleibt als Anzeigefeld der Archiv-Wurzel
+- **Ergänzt durch:** [ADR-0026](0026-speicherort-katalog-waehlbar.md) — Ordner von DB und Thumbnails in den Einstellungen wählbar (Standard bleibt `%LocalAppData%\PhotoViewerV3`)
 
 ## Kontext
 

@@ -4,6 +4,7 @@ using PhotoViewerV3.Data.RawSql;
 using PhotoViewerV3.Services.Archive;
 using PhotoViewerV3.Services.Catalog;
 using PhotoViewerV3.Services.Database;
+using PhotoViewerV3.Services.Database.Relocation;
 using PhotoViewerV3.Services.Infrastructure;
 using PhotoViewerV3.Services.Library;
 using PhotoViewerV3.Services.Media;
@@ -64,6 +65,9 @@ public static class ServiceCollectionExtensions
 
         // Ordnerüberwachung (Services/Watch): FileSystemWatcher je Wurzel → Incremental-Scan nach Ruhezeit
         services.AddWatch();
+
+        // Speicherort von Katalog-DB und Thumbnails ändern (Services/Database/Relocation, ADR-0026)
+        services.AddDatabaseRelocation();
 
         return services;
     }

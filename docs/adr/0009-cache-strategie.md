@@ -4,6 +4,7 @@
 - **Datum:** 2026-05-10
 - **Entscheider:** Herbert Schrotter, Claude, GPT-5
 - **Bezogen auf:** [ADR-0003](0003-catalog-modell.md), [ADR-0008](0008-storage-profile.md)
+- **Ergänzt durch:** [ADR-0026](0026-speicherort-katalog-waehlbar.md) — der Cache liegt immer neben `library.db` und zieht beim Umzug mit; weiterhin nur lokale Laufwerke
 
 ## Kontext
 

@@ -105,8 +105,9 @@ src/
     Migrations/                       # EF Core (InitialV01)
   PhotoViewerV3.Services/                # → Domain + Data, WPF-frei; AddPhotoViewerServices()
     Catalog/                          # CatalogUpdateService (Favorit/Bewertung)
-    Database/                         # LibraryContextFactory, DatabaseInitializer, SqlitePragmaInterceptor
-    Infrastructure/                   # AppDataPaths
+    Database/                         # LibraryContextFactory (+ IDatabaseAccessGate), DatabaseInitializer, SqlitePragmaInterceptor
+      Relocation/                     # DatabaseRelocationService, StorageProbe — Katalog + Thumbnails umziehen (ADR-0026)
+    Infrastructure/                   # AppDataPaths, DatabaseLocationStore (database-location.json, ADR-0026)
     Library/                          # LibraryService, LibraryCatalogCleanup
     Media/                            # MediaFormatRegistry (ADR-0016)
     Messaging/                        # Nachrichten-Records für WeakReferenceMessenger (ADR-0017)
@@ -521,7 +522,8 @@ Das kann passieren, wenn ein Laufwerk nicht vollständig verfügbar ist.
 ## 13. Thumbnail-Pipeline
 
 ### Speicherort
-`%LocalAppData%\PhotoViewerV3\thumbs\{libraryId}\{fileId}_{size}_{kind}.jpg`
+`%LocalAppData%\PhotoViewerV3\thumbs\{libraryId}\{fileId}_{size}_{kind}.jpg` — bzw. `{Datenordner}\thumbs\…`, wenn der
+Katalog in den Einstellungen umgezogen ist: der Cache liegt immer neben `library.db` und zieht mit (ADR-0026).
 
 - **Naming**: `42_320_still.jpg` für File-ID 42 in 320px statisches Thumb
 - **Animierte (Phase 8)**: `42_320_hover.gif`
@@ -615,6 +617,7 @@ Fehler: <Message>
 | **Memory-Leaks bei langer Laufzeit** | Niemals `ImageSource` in Services, `BitmapCacheOption.OnLoad`, `Freeze()`, EF ChangeTracker.Clear() |
 | **Concurrent SQLite-Writes** | WAL + Single-Writer-Pattern via Channel oder `SemaphoreSlim` |
 | **FFmpeg hängt bei kaputten Videos** | `CancellationTokenSource.CancelAfter(3s/8s)` + Process.Kill |
+| **Katalog-Umzug verliert Daten** | Kopie per Backup-API, `integrity_check` + Zeilenzahlen, Umschalten erst danach; Scans/Batches/Überwachung/Thumbnails ruhig, Factory gesperrt; Neustart statt Laufzeit-Umschaltung (ADR-0026) |
 | **Background-Worker blockiert UI** | WorkBudgetService mit StorageProfile-Limits + UI-Activity-Delay |
 
 ---

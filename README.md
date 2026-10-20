@@ -27,7 +27,7 @@ großer Foto- und Video-Bibliotheken (50 000–500 000 Dateien). Nachfolger der 
   Unterordner).
 - **Sortieren**: Pattern-basierter File Sorter (Regex-Profile, Multi-Level, Vorschau, Import/Export der V2-Profile)
   und Flatten & Move — jede Verschiebung läuft protokolliert über die Datei-Operationen und ist rückgängig machbar.
-- **Einstellungen**: Speicherorte, Thumbnail-Cache, FFmpeg-Status, unterstützte Formate, Farbschema (Hell/Dunkel/System),
+- **Einstellungen**: Speicherorte (Katalog samt Vorschaubildern umziehbar), Thumbnail-Cache, FFmpeg-Status, unterstützte Formate, Farbschema (Hell/Dunkel/System),
   Version.
 - **Statusleiste**: Scan-Fortschritt und -Ergebnis, Thumbnail-Warteschlange, Hintergrund-Aktivität, Hinweise
   (Bibliothek offline, unvollständige Dateivorgänge).
@@ -209,9 +209,28 @@ Chips und Filter), Umbenennen, Löschen (fragt nach und nennt die Zahl der Datei
 unverändert). Neben dem Namen steht, wie vielen Dateien das Tag zugewiesen ist.
 
 ### Einstellungen
-Farbschema (Hell/Dunkel/System folgt Windows live), Speicherorte mit „Ordner öffnen“, Thumbnail-Cache (Belegung,
+Farbschema (Hell/Dunkel/System folgt Windows live), Speicherorte mit „Ordner öffnen“ und **Ändern…** (siehe
+„Speicherort des Katalogs“), Thumbnail-Cache (Belegung,
 **Cache leeren** — Vorschaubilder werden bei Bedarf neu erzeugt), FFmpeg-Status mit kopierbarem winget-Befehl,
 unterstützte Bild- und Videoformate, Ordnerüberwachung (Schalter, Ruhezeit), Version und Build-Datum.
+
+#### Speicherort des Katalogs
+**Einstellungen → Speicherorte → Datenbank → Ändern…** zieht Katalog (`library.db`) und Vorschaubilder (`thumbs\`) in
+einen anderen Ordner (ADR-0026); **Standardort** holt sie nach `%LocalAppData%\PhotoViewerV3` zurück.
+- Der Ordner muss auf einem lokalen Laufwerk liegen (interne Platte, SSD, USB) — Netzlaufwerke und `\\Server\…` werden
+  abgelehnt, ebenso Ordner in einer Bibliothekswurzel (die Vorschaubilder würden sonst als Fotos eingelesen). Er muss
+  beschreibbar sein und genug Platz bieten (Katalog + Vorschaubilder + 10 % + 50 MB). OneDrive-Ordner gehen, aber mit
+  Warnung: die Synchronisierung kann den laufenden Katalog beschädigen.
+- Liegt im Ziel schon ein Katalog: **Übernehmen** (PhotoViewer arbeitet danach mit diesem; der bisherige bleibt
+  unverändert liegen) oder **Ersetzen** (der vorhandene wird beiseitegelegt und beim nächsten Start gelöscht).
+- Ablauf: laufende Scans und Datei-Operationen werden abgewartet (höchstens 30 s), Ordnerüberwachung und Vorschaubilder
+  angehalten, der Katalog per SQLite-Backup kopiert und geprüft (Integrität, Zeilenzahl jeder Tabelle), dann die
+  Vorschaubilder kopiert. Erst danach gilt der neue Ort; PhotoViewer startet neu und löscht beim Start die alten Dateien.
+  Während des Umzugs ist das Fenster gesperrt.
+- Geht etwas schief (Platte voll, Prüfung fehlgeschlagen, Scan läuft noch), wird das Ziel aufgeräumt und PhotoViewer
+  arbeitet mit dem bisherigen Ort weiter; ein Dialog nennt den Grund.
+- Ist der gewählte Ordner beim Start nicht erreichbar (USB-Laufwerk abgezogen), startet PhotoViewer nicht und nennt die
+  Datei `database-location.json`, deren Löschen zum Standardort zurückführt.
 
 ### Ordnerüberwachung
 Die Bibliotheksordner der aktiven Bibliothek werden im Hintergrund überwacht (`FileSystemWatcher` je Wurzel, rekursiv).
@@ -254,10 +273,13 @@ Hintergrund-Aktivität („Bereit“, wenn nichts läuft).
 
 ## Datenablage
 
-Alles liegt unter `%LocalAppData%\PhotoViewerV3` (Fotos und Videos bleiben an Ort und Stelle):
+Alles liegt unter `%LocalAppData%\PhotoViewerV3` (Fotos und Videos bleiben an Ort und Stelle). Katalog und
+Vorschaubilder können in den Einstellungen in einen anderen Ordner umziehen; dann liegen `library.db` und `thumbs\`
+dort, Protokolle und `database-location.json` bleiben hier:
 
 | Pfad | Inhalt |
 |---|---|
+| `database-location.json` | Nur nach einem Umzug: gewählter Ordner für Katalog und Vorschaubilder, alte Dateien zum Löschen beim nächsten Start |
 | `library.db` (+ `-wal`, `-shm`) | SQLite-Katalog: Bibliotheken, Ordner, Dateien, Thumbnails-Status, OperationBatches/FileOperations, Settings, FTS5-Index |
 | `thumbs\{libraryId}\{fileId}_320_still.jpg` | Vorschaubilder (320 px, FileId-basiert, atomar geschrieben) |
 | `logs\photoviewer-YYYYMMDD.log` | Serilog-Protokoll, täglich rollierend, 14 Tage |
@@ -269,7 +291,7 @@ werden dabei zurückgesetzt und unfertige Dateivorgänge gemeldet.
 
 | Variable | Wirkung |
 |---|---|
-| `PHOTOVIEWERV3_APPDATA` | Anderer AppData-Root (DB, Thumbnails, Logs) — z. B. für Tests mit frischer Datenbank, ohne den eigenen Katalog anzufassen |
+| `PHOTOVIEWERV3_APPDATA` | Anderer AppData-Root (DB, Thumbnails, Logs, `database-location.json`) — z. B. für Tests mit frischer Datenbank, ohne den eigenen Katalog anzufassen |
 | `PHOTOVIEWERV3_SMOKE_ROOT` | Startet nach dem Laden des Hauptfensters den Rauchtest gegen diesen Bibliotheksordner. **Dateien darin werden verschoben und in den Papierkorb gelegt** — nur mit einer Kopie verwenden. |
 | `PHOTOVIEWERV3_SMOKE_SHOTS` | Ordner für PNG-Screenshots der Hauptansichten (optional) |
 | `PHOTOVIEWERV3_SMOKE_EXIT` | `1` → App nach dem Rauchtest beenden; ExitCode 0 = alle Schritte OK, 2 = mindestens ein Schritt FAIL |
