@@ -18,6 +18,7 @@ using Microsoft.Extensions.Logging;
 using PhotoViewerV3.Data.RawSql;
 using PhotoViewerV3.Domain.Entities;
 using PhotoViewerV3.Gallery.Archives;
+using PhotoViewerV3.Gallery.Categories;
 using PhotoViewerV3.Gallery.Controls;
 using PhotoViewerV3.Gallery.ListView;
 using PhotoViewerV3.Gallery.Services;
@@ -37,8 +38,11 @@ using System.Windows.Threading;
 
 namespace PhotoViewerV3.Gallery.ViewModels;
 
-/// <summary>Eintrag der Sortier-Auswahl in der Toolbar.</summary>
-public sealed record GallerySortOption(GallerySort Sort, string Label);
+/// <summary>
+/// Eintrag der Sortier-Auswahl in der Toolbar. <paramref name="Category"/> (nicht null) = Sortierung nach einer
+/// Kategorie (Kopfzeilenklick in der Listenansicht, ADR-0027); dann gilt <paramref name="Sort"/> nicht.
+/// </summary>
+public sealed record GallerySortOption(GallerySort Sort, string Label, GalleryCategorySort? Category = null);
 
 /// <summary>
 /// ViewModel der Galerie (ADR-0010): hält nur die aktuelle Page (≤ 1000 Items) als
@@ -79,6 +83,7 @@ public sealed partial class GalleryViewModel : ObservableObject
     private readonly ITagService _tags;
     private readonly ITagPickerService _tagPicker;
     private readonly ICategoryService _categories;
+    private readonly ICategoryPickerService _categoryPicker;
     private readonly IGalleryViewSettingsStore _viewSettings;
     private readonly ILogger<GalleryViewModel> _logger;
     private readonly IMessenger _messenger = WeakReferenceMessenger.Default;
@@ -123,6 +128,7 @@ public sealed partial class GalleryViewModel : ObservableObject
         ITagService tags,
         ITagPickerService tagPicker,
         ICategoryService categories,
+        ICategoryPickerService categoryPicker,
         IGalleryViewSettingsStore viewSettings,
         ILogger<GalleryViewModel> logger)
     {
@@ -139,6 +145,7 @@ public sealed partial class GalleryViewModel : ObservableObject
         _tags = tags;
         _tagPicker = tagPicker;
         _categories = categories;
+        _categoryPicker = categoryPicker;
         _viewSettings = viewSettings;
         _logger = logger;
 
@@ -157,7 +164,9 @@ public sealed partial class GalleryViewModel : ObservableObject
     /// <summary>Unterordner-Kacheln im Container-State (Ordner ohne direkte Dateien, PLAN Kap. 16).</summary>
     public ObservableCollection<GallerySubfolderDto> Subfolders { get; }
 
-    public IReadOnlyList<GallerySortOption> SortOptions => s_sortOptions;
+    /// <summary>Feste Sortierungen plus höchstens eine Kategorie-Sortierung, solange sie gewählt ist (ADR-0027).</summary>
+    public IReadOnlyList<GallerySortOption> SortOptions => _sortOptions;
+
     public IReadOnlyList<int> PageSizeOptions => s_pageSizeOptions;
 
     /// <summary>
@@ -236,7 +245,7 @@ public sealed partial class GalleryViewModel : ObservableObject
         nameof(FavoriteSelectionCommand), nameof(UnfavoriteSelectionCommand),
         nameof(SetSelectionRatingCommand), nameof(ClearSelectionRatingCommand),
         nameof(MoveSelectionCommand), nameof(RecycleSelectionCommand), nameof(ArchiveSelectionCommand), nameof(ExtractSelectionCommand),
-        nameof(EditSelectionTagsCommand), nameof(ToggleSelectionTagCommand), nameof(SetSelectionCategoryValueCommand))]
+        nameof(EditSelectionTagsCommand), nameof(ToggleSelectionTagCommand), nameof(SetSelectionCategoryValueCommand), nameof(EditSelectionCategoriesCommand))]
     private int _selectedCount;
 
     /// <summary>Archive in der Auswahl (Aktionsleiste „Entpacken…“, ADR-0022).</summary>
@@ -254,7 +263,7 @@ public sealed partial class GalleryViewModel : ObservableObject
         nameof(FavoriteSelectionCommand), nameof(UnfavoriteSelectionCommand),
         nameof(SetSelectionRatingCommand), nameof(ClearSelectionRatingCommand),
         nameof(MoveSelectionCommand), nameof(RecycleSelectionCommand), nameof(ArchiveSelectionCommand), nameof(UndoCommand), nameof(ExtractSelectionCommand),
-        nameof(EditSelectionTagsCommand), nameof(ToggleSelectionTagCommand), nameof(SetSelectionCategoryValueCommand))]
+        nameof(EditSelectionTagsCommand), nameof(ToggleSelectionTagCommand), nameof(SetSelectionCategoryValueCommand), nameof(EditSelectionCategoriesCommand))]
     private bool _isOperationRunning;
 
     [ObservableProperty]
@@ -843,7 +852,7 @@ public sealed partial class GalleryViewModel : ObservableObject
     private GalleryQuery BuildQuery()
     {
         var term = string.IsNullOrWhiteSpace(SearchTerm) ? null : SearchTerm.Trim();
-        return new GalleryQuery(_libraryId, Filter, term, FolderId, IncludeSubfolders, SelectedSort.Sort, SelectedTagIds(), TagFilterMode, SelectedCategoryFilters());
+        return new GalleryQuery(_libraryId, Filter, term, FolderId, IncludeSubfolders, SelectedSort.Sort, SelectedTagIds(), TagFilterMode, SelectedCategoryFilters(), SelectedSort.Category);
     }
 
     /// <summary>

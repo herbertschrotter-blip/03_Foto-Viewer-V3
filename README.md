@@ -17,6 +17,9 @@ großer Foto- und Video-Bibliotheken (50 000–500 000 Dateien). Nachfolger der 
   Tags, Verschieben nach…, Papierkorb) und Rückgängig. Umschaltbar auf eine **Listenansicht** mit Spalten.
 - **Tags**: frei definierbare, farbige Schlagworte (Seite „Tags“), Zuweisen für die Auswahl (Aktionsleiste,
   Kontextmenü, Strg+T), Tag-Punkte auf der Kachel, Filter nach Tags (ODER/UND/ohne Tag), Suche findet Tag-Namen.
+- **Kategorien**: eigene Kategorien mit festen Werten (Seite „Kategorien“), ein Wert je Datei, Zuweisen per
+  Kontextmenü oder Strg+K (auch in der Lightbox), Filter, Suche nach Werten, je Kategorie eine Listenspalte, die die
+  ganze Trefferliste sortiert.
 - **Lightbox**: eigenes Fenster (auch auf einem zweiten Monitor) für Bilder mit Zoom/Pan und Info-Panel sowie Videos
   über LibVLC mit Transportleiste; Favorit, Bewertung, Papierkorb, „Im Explorer anzeigen“, „Mit Standardprogramm
   öffnen“.
@@ -93,7 +96,7 @@ Eine Bibliothek hat genau einen **Archiv-Ordner** (der beim Anlegen gewählte Or
 
 ### Galerie
 Toolbar: Filter-Pills als Segmentgruppe (Alle / Bilder / Videos / Favoriten / Archive), Dropdown **Status** (Nicht archiviert /
-Archiviert), Tag-Filter, Suchfeld (Dateiname, Endung oder Tag-Name; Wörter werden
+Archiviert), Tag-Filter, Suchfeld (Dateiname, Endung, Tag-Name oder Kategorie-Wert; Wörter werden
 als Präfix gesucht, Sonderzeichen sind erlaubt; ✕ leert die Suche), Sortierung, Seitengröße, **Vorschaugröße** (Regler neben
 der Ansichtsumschaltung, nur in der Kachelansicht: Kachelbreite 120–320 px in 20er-Stufen, wird gemerkt), Pager, Aktualisieren. In schmalen
 Fenstern (bzw. rechts auf der Ordner-Seite) rutscht die Suche in eine eigene Zeile, statt gequetscht zu werden. Ein Ordnerfilter erscheint als
@@ -116,6 +119,7 @@ Ordner-Umbenennung) zurück.
 | F5 | Aktualisieren |
 | Strg+M | Auswahl ins Archiv… |
 | Strg+T | Tags der Auswahl bearbeiten (Tag-Auswahl) |
+| Strg+K | Kategorie-Werte der Auswahl zuweisen (Kategorie-Auswahl) |
 | Rechtsklick | Tag-Menü der Auswahl (nicht ausgewählte Kachel/Zeile wird zuerst gewählt) |
 | Enter im Suchfeld | Suchen |
 
@@ -138,20 +142,30 @@ oder mehreren Werten und/oder „ohne Wert“ — innerhalb einer Kategorie ODER
 Listenansicht ist jede Kategorie eine eigene Spalte. Werte hängen wie Tags am Katalog-Eintrag („Neu aufbauen“ behält
 sie, der Papierkorb entfernt sie).
 
+**Strg+K** (oder Rechtsklick → „Kategorien zuweisen…“) öffnet die Kategorie-Auswahl für die ausgewählten Dateien: je
+Kategorie eine Auswahlliste mit den Werten und „Kein Wert“; haben die Dateien unterschiedliche Werte, steht dort
+„(gemischt — nicht ändern)“, und die Kategorie bleibt unverändert, solange man nichts anderes wählt. Ohne Maus: Tab
+wechselt die Kategorie, ↑/↓ den Wert, Enter übernimmt, Esc bricht ab. Die **Suche** findet auch Dateien, deren
+Kategorie-Wert den Suchtext enthält (wie bei Tag-Namen, ohne Groß-/Kleinschreibung).
+
 #### Listenansicht
 Der Umschalter rechts in der Kopfzeile wechselt zwischen Kachel-Grid und Liste (die Wahl bleibt gespeichert). Die
 Liste zeigt dieselbe Seite mit den Spalten Name (mit Vorschaubild), Ordner, Geändert, Größe, Typ, Bewertung (Sterne
 klickbar), Favorit (Herz klickbar), Tags, Status und je Kategorie eine Spalte (neue Kategorien erscheinen am Ende).
 Rechtsklick auf eine Spaltenüberschrift blendet Spalten ein/aus,
 Ziehen ändert die Reihenfolge — beides bleibt gespeichert. Klick auf Name, Geändert oder Größe sortiert die ganze
-Trefferliste (wie die Sortier-Auswahl), die übrigen Spalten sortieren nur die geladene Seite. Auswahl, Aktionsleiste,
+Trefferliste (wie die Sortier-Auswahl). Klick auf eine Kategorie-Spalte sortiert ebenfalls die ganze Trefferliste:
+Werte in ihrer Reihenfolge von der Seite **Kategorien**, erneuter Klick kehrt um; Dateien ohne Wert stehen immer am
+Ende, gleiche Werte nach Datum neu → alt. Die Sortier-Auswahl zeigt das als „… (Kategorie) ↑/↓“; eine andere
+Sortierung dort hebt es wieder auf. Die übrigen Spalten sortieren nur die geladene Seite. Auswahl, Aktionsleiste,
 Doppelklick/Enter (Lightbox) und Tastenkürzel wie im Grid.
 
 ### Lightbox
 Rahmenloses Fenster, Toolbar und Titelleiste blenden sich nach kurzer Zeit aus (Mausbewegung oder Taste blendet sie
 ein). Bilder: Mausrad = Zoom am Cursor, Ziehen = Verschieben, Doppelklick = Einpassen ↔ 100 %. Videos: Transportleiste
 mit Position, Wiedergabe/Pause, Lautstärke, Stumm. Das Info-Panel zeigt Datei- und Medieninfos (Auflösung, Dauer,
-Codec).
+Codec) und, sobald es Kategorien gibt, je Kategorie den Wert der Datei („—“ ohne Wert) mit dem Knopf **Zuweisen…**.
+Gesetzte Kategorie-Werte stehen außerdem in der Titelleiste (z. B. „Projekt: Nord · XX: N“).
 
 | Taste | Wirkung |
 |---|---|
@@ -171,6 +185,7 @@ Codec).
 | Strg+0 | Bewertung löschen |
 | Strg+M | Ins Archiv… |
 | Strg+T | Tags der Datei bearbeiten (die Titelleiste zeigt die Tags) |
+| Strg+K | Kategorie-Werte der Datei zuweisen (dieselbe Auswahl wie in der Galerie) |
 | Entf | In den Papierkorb (mit Bestätigung) |
 
 ### Archive

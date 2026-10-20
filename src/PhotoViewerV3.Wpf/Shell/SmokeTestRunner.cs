@@ -54,6 +54,8 @@ public static class SmokeTestRunner
         services.AddSingleton<PhotoViewerV3.Gallery.ArchiveTarget.IArchiveTargetPicker>(sp => sp.GetRequiredService<SmokeArchiveTargetPicker>());
         services.AddSingleton<SmokeTagPickerService>();
         services.AddSingleton<Gallery.Tags.ITagPickerService>(sp => sp.GetRequiredService<SmokeTagPickerService>());
+        services.AddSingleton<SmokeCategoryPickerService>();
+        services.AddSingleton<Gallery.Categories.ICategoryPickerService>(sp => sp.GetRequiredService<SmokeCategoryPickerService>());
         return services;
     }
 

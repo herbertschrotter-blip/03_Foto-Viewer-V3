@@ -16,7 +16,7 @@
         Listenansicht (0.2.6): DataGrid über dieselbe Page wie das Kachel-Grid (CurrentPage) mit eigener
         ListCollectionView (Sortieren innerhalb der Page darf das Grid nicht umsortieren). Spalten entstehen im
         Code-Behind aus GalleryListColumns + den gespeicherten Einstellungen (sichtbar, Reihenfolge); Kopfzeilenklick
-        sortiert über GallerySort (Name/Geändert/Größe) oder clientseitig innerhalb der Page (übrige Spalten).
+        sortiert über GallerySort (Name/Geändert/Größe) bzw. je Kategorie-Spalte in der DB (ADR-0027) oder clientseitig innerhalb der Page (übrige Spalten).
     -->
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />

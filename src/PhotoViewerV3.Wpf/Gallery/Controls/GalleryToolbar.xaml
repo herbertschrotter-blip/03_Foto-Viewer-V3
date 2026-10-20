@@ -178,7 +178,7 @@
                             AutomationProperties.Name="Suche"
                             Icon="{ui:SymbolIcon Search24}"
                             PlaceholderText="Name, Endung oder Tag…"
-                            ToolTip="Suche nach Dateiname, Endung oder Tag-Name (Enter sucht, Esc leert)"
+                            ToolTip="Suche nach Dateiname, Endung, Tag-Name oder Kategorie-Wert (Enter sucht, Esc leert)"
                             ClearButtonEnabled="False"
                             Text="{Binding SearchTerm, UpdateSourceTrigger=PropertyChanged}">
                     <ui:TextBox.InputBindings>

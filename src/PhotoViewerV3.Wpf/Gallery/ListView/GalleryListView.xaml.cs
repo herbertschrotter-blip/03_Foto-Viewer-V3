@@ -55,6 +55,10 @@ public partial class GalleryListView : UserControl
             .Select(c => c.Header?.ToString() ?? string.Empty)
             .ToList();
 
+    /// <summary>Sortierpfeil der Kategorie-Spalte (Rauchtest, Tests); null ohne Spalte oder ohne Sortierung.</summary>
+    public ListSortDirection? CategorySortDirection(int categoryId)
+        => _categoryColumns.TryGetValue(categoryId, out var column) ? column.SortDirection : null;
+
     /// <summary>Spaltenschlüssel in aktueller Anzeigereihenfolge (sichtbare zuerst nach DisplayIndex).</summary>
     public IReadOnlyList<GalleryListColumnKey> VisibleColumnKeysInOrder()
         => _columns
@@ -100,6 +104,7 @@ public partial class GalleryListView : UserControl
             case nameof(GalleryViewModel.CategoryColumns):
                 RebuildCategoryColumns();
                 ApplySettings(GalleryListColumnSettings.Parse(_viewModel?.ListColumnSettings));
+                UpdateSortIndicators();
                 break;
         }
     }
@@ -121,7 +126,7 @@ public partial class GalleryListView : UserControl
 
     /// <summary>
     /// Kategorie-Spalten (ADR-0027) nach den Kategorien des ViewModels neu aufbauen: Wertname per Indexer
-    /// <c>Categories[Id]</c>, Sortierung nur innerhalb der Page.
+    /// <c>Categories[Id]</c>; ein Klick auf die Kopfzeile sortiert die ganze Trefferliste in der DB (<see cref="GalleryViewModel.SortByCategory"/>).
     /// </summary>
     private void RebuildCategoryColumns()
     {
@@ -374,7 +379,17 @@ public partial class GalleryListView : UserControl
     {
         if (!_columns.ContainsValue(e.Column))
         {
-            return; // Kategorie-Spalte: nur innerhalb der Page sortieren (Standardverhalten)
+            // Kategorie-Spalte (ADR-0027, 0.2.23): ganze Trefferliste serverseitig nach dem Wert sortieren.
+            var categoryId = _categoryColumns.FirstOrDefault(p => ReferenceEquals(p.Value, e.Column)).Key;
+            if (_viewModel is not null && categoryId > 0)
+            {
+                e.Handled = true;
+                _view?.SortDescriptions.Clear();
+                _viewModel.SortByCategory(categoryId);
+                UpdateSortIndicators();
+            }
+
+            return;
         }
 
         var key = _columns.FirstOrDefault(p => ReferenceEquals(p.Value, e.Column)).Key;
@@ -399,7 +414,8 @@ public partial class GalleryListView : UserControl
             return;
         }
 
-        var active = GalleryListColumns.ForSort(_viewModel.SelectedSort.Sort);
+        var categorySort = _viewModel.SelectedSort.Category;
+        var active = categorySort is null ? GalleryListColumns.ForSort(_viewModel.SelectedSort.Sort) : null;
         foreach (var (key, column) in _columns)
         {
             column.SortDirection = active is { } a && a.Key == key
@@ -407,8 +423,15 @@ public partial class GalleryListView : UserControl
                 : null;
         }
 
+        foreach (var (categoryId, column) in _categoryColumns)
+        {
+            column.SortDirection = categorySort is { } c && c.CategoryId == categoryId
+                ? (c.Descending ? ListSortDirection.Descending : ListSortDirection.Ascending)
+                : null;
+        }
+
         // Eine DB-Sortierung ersetzt eine zuvor gewählte Page-Sortierung.
-        if (active is not null && _view is { SortDescriptions.Count: > 0 })
+        if ((active is not null || categorySort is not null) && _view is { SortDescriptions.Count: > 0 })
         {
             _view.SortDescriptions.Clear();
         }

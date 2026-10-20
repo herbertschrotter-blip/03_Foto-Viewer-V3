@@ -20,8 +20,10 @@ namespace PhotoViewerV3.Gallery.Data;
 /// <paramref name="SearchTerm"/> ist freier Benutzertext; den FTS5-MATCH-Ausdruck baut
 /// <see cref="FtsQueryBuilder.FromUserInput"/> (eine Implementierung im Repo) — Text ohne suchbaren Inhalt
 /// (leer, nur Sonderzeichen wie <c>---</c>) gilt als „keine Suche“. Die Suche findet außerdem Dateien, deren
-/// Tag-Name den Suchtext enthält (Tags, ADR-0021). <paramref name="TagIds"/> + <paramref name="TagMode"/> filtern
-/// nach Tags (ODER / UND / ohne Tag), <paramref name="CategoryFilters"/> nach Kategorie-Werten (ADR-0027).
+/// Tag-Name (Tags, ADR-0021) oder Kategorie-Wert (ADR-0027) den Suchtext enthält. <paramref name="TagIds"/> +
+/// <paramref name="TagMode"/> filtern nach Tags (ODER / UND / ohne Tag), <paramref name="CategoryFilters"/> nach
+/// Kategorie-Werten. <paramref name="CategorySort"/> (nicht null) sortiert die ganze Trefferliste nach dem Wert einer
+/// Kategorie und ersetzt dann <paramref name="Sort"/>.
 /// </summary>
 public sealed record GalleryQuery(
     int LibraryId,
@@ -32,7 +34,8 @@ public sealed record GalleryQuery(
     GallerySort Sort = GallerySort.ModifiedDesc,
     IReadOnlyList<int>? TagIds = null,
     GalleryTagMode TagMode = GalleryTagMode.Any,
-    IReadOnlyList<GalleryCategoryFilter>? CategoryFilters = null)
+    IReadOnlyList<GalleryCategoryFilter>? CategoryFilters = null,
+    GalleryCategorySort? CategorySort = null)
 {
     /// <summary>Sicherer FTS5-MATCH-Ausdruck (quotierte Präfix-Phrasen) oder null ohne suchbaren Inhalt.</summary>
     public string? MatchExpression => FtsQueryBuilder.FromUserInput(SearchTerm);
@@ -56,6 +59,13 @@ public sealed record GalleryCategoryFilter(int CategoryId, IReadOnlyList<int> Va
 {
     public bool IsActive => IncludeNone || ValueIds.Count > 0;
 }
+
+/// <summary>
+/// Serverseitige Sortierung nach dem Wert einer Kategorie (ADR-0027, 0.2.23): Werte in ihrer Reihenfolge aus der
+/// Verwaltung (SortOrder), absteigend umgekehrt; Dateien ohne Wert stehen in beiden Richtungen am Ende. Gleiche Werte
+/// nach Datum neu → alt, dann Id.
+/// </summary>
+public sealed record GalleryCategorySort(int CategoryId, bool Descending);
 
 /// <summary>
 /// Raw-SQLite-Lesepfad der Galerie (ADR-0004 / ADR-0010): eine Verbindung, alle Queries laufen
@@ -134,6 +144,10 @@ public sealed class GalleryPageSource : IDisposable
             BindFilterParams(cmd, query, folder);
             cmd.Parameters.AddWithValue("$limit", useReverse ? limitFromEnd : pageSize);
             cmd.Parameters.AddWithValue("$offset", useReverse ? offsetFromEnd : offsetFromStart);
+            if (query.CategorySort is { } categorySort)
+            {
+                cmd.Parameters.AddWithValue("$sortCat", categorySort.CategoryId);
+            }
 
             var sw = Stopwatch.StartNew();
             var rows = new List<GalleryFileDto>(pageSize);
@@ -153,7 +167,8 @@ public sealed class GalleryPageSource : IDisposable
             _logger.LogDebug(
                 "Page-SQL: Idx={Idx} Size={Size} Rows={Rows} Reverse={Reverse} Offset={Offset} Sort={Sort} Folder={Folder} Rek={Rek} Suche={Search} {Ms:N1} ms",
                 pageIndex, pageSize, rows.Count, useReverse, useReverse ? offsetFromEnd : offsetFromStart,
-                query.Sort, query.FolderId?.ToString() ?? "-", query.IncludeSubfolders, query.SearchTerm ?? "-",
+                query.CategorySort is { } cs ? $"Kategorie {cs.CategoryId}{(cs.Descending ? " ↓" : " ↑")}" : query.Sort.ToString(),
+                query.FolderId?.ToString() ?? "-", query.IncludeSubfolders, query.SearchTerm ?? "-",
                 sw.Elapsed.TotalMilliseconds);
             return rows;
         }, ct);
@@ -325,6 +340,37 @@ public sealed class GalleryPageSource : IDisposable
             return result;
         }, ct);
 
+    /// <summary>
+    /// Abfrageplan (EXPLAIN QUERY PLAN, Spalte „detail“) der Page- bzw. Count-SQL — für Tests, die sichern, dass die
+    /// Suche über Indizes läuft und nicht alle Dateien oder Zuordnungen durchläuft (ADR-0010/0011).
+    /// </summary>
+    internal Task<IReadOnlyList<string>> ExplainAsync(GalleryQuery query, bool count, CancellationToken ct)
+        => RunAsync<IReadOnlyList<string>>(conn =>
+        {
+            var folder = ResolveFolderClause(conn, query);
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "EXPLAIN QUERY PLAN " + (count ? BuildCountSql(query, folder.Clause) : BuildPageSql(query, folder.Clause, reverse: false));
+            BindFilterParams(cmd, query, folder);
+            if (!count)
+            {
+                cmd.Parameters.AddWithValue("$limit", 100);
+                cmd.Parameters.AddWithValue("$offset", 0);
+                if (query.CategorySort is { } categorySort)
+                {
+                    cmd.Parameters.AddWithValue("$sortCat", categorySort.CategoryId);
+                }
+            }
+
+            var lines = new List<string>();
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                lines.Add(reader.GetString(3));
+            }
+
+            return lines;
+        }, ct);
+
     // ---- SQL-Aufbau -------------------------------------------------------------------------
 
     private readonly record struct FolderClause(string Clause, int? FolderId, string? Path, string? Prefix);
@@ -372,12 +418,15 @@ public sealed class GalleryPageSource : IDisposable
 
     private static string BuildPageSql(GalleryQuery query, string folderClause, bool reverse)
     {
-        var orderBy = BuildOrderBy(query.Sort, reverse);
+        var orderBy = query.CategorySort is { } categorySort
+            ? BuildCategoryOrderBy(categorySort, reverse)
+            : BuildOrderBy(query.Sort, reverse);
         return $"""
             SELECT {FileColumns}
             FROM {BuildFilesSource(query)}
             JOIN Folders fo ON fo.Id = f.FolderId
             {RootJoin}
+            {(query.CategorySort is null ? string.Empty : CategorySortJoin)}
             WHERE f.LibraryId = $libId
               {BuildFilterClause(query.Filter)}
               {BuildTagClause(query)}
@@ -404,18 +453,43 @@ public sealed class GalleryPageSource : IDisposable
     /// <summary>
     /// Quelle der Files-Zeilen. Mit Suche treiben die Treffer die Abfrage wie vor 0.2.6 (damals
     /// <c>FROM FilesFts JOIN Files</c>): FTS5-Treffer (Name/Endung, Präfix-Phrasen) vereinigt mit den Dateien, deren
-    /// Tag-Name den Suchtext enthält (NOCASE-Spalte, LIKE, ADR-0021), einmal materialisiert und per
-    /// <c>CROSS JOIN</c> (feste Join-Reihenfolge) über die Rowid an Files gebunden — kein Durchlauf aller Dateien der
-    /// Library. Ohne Suche einfach <c>Files f</c>.
+    /// Tag-Name (ADR-0021) oder Kategorie-Wert (ADR-0027) den Suchtext enthält (NOCASE-Spalten, LIKE), einmal
+    /// materialisiert und per <c>CROSS JOIN</c> (feste Join-Reihenfolge) über die Rowid an Files gebunden — kein
+    /// Durchlauf aller Dateien der Library. Die Kategorie-Werte laufen als <c>ValueId IN (…)</c> über die kleine
+    /// Tabelle <c>CategoryValues</c>, damit SQLite <c>IX_FileCategoryValues_Value</c> nutzt statt alle Zuordnungen zu
+    /// lesen. Ohne Suche einfach <c>Files f</c>.
     /// </summary>
     private static string BuildFilesSource(GalleryQuery query) => query.HasSearch
         ? """
           (SELECT rowid AS Id FROM FilesFts WHERE FilesFts MATCH $term
            UNION
-           SELECT ft.FileId FROM FileTags ft JOIN Tags t ON t.Id = ft.TagId WHERE t.Name LIKE $tagLike ESCAPE '\') hit
+           SELECT ft.FileId FROM FileTags ft JOIN Tags t ON t.Id = ft.TagId WHERE t.Name LIKE $tagLike ESCAPE '\'
+           UNION
+           SELECT fcv.FileId FROM FileCategoryValues fcv
+           WHERE fcv.ValueId IN (SELECT v.Id FROM CategoryValues v WHERE v.Name LIKE $tagLike ESCAPE '\')) hit
           CROSS JOIN Files f ON f.Id = hit.Id
           """
         : "Files f";
+
+    /// <summary>Wert der Sortier-Kategorie je Datei (Primärschlüssel-Lookups; LEFT JOIN, weil Dateien ohne Wert mitlaufen).</summary>
+    private const string CategorySortJoin = """
+        LEFT JOIN FileCategoryValues scv ON scv.FileId = f.Id AND scv.CategoryId = $sortCat
+        LEFT JOIN CategoryValues sv ON sv.Id = scv.ValueId
+        """;
+
+    /// <summary>
+    /// Sortierung nach Kategorie-Wert: „ohne Wert“ immer zuletzt, dann SortOrder/Id des Werts in Richtung
+    /// <see cref="GalleryCategorySort.Descending"/>, gleiche Werte nach Datum neu → alt (wie die Standard-Sortierung) und
+    /// Id. Bewusst Ganzzahl-Spalten statt Name: bei 500k Dateien halbiert das die Sortierzeit tiefer Seiten (ADR-0027,
+    /// Nachtrag 0.2.23). <paramref name="reverse"/> (Reverse-Trick beim Lesen vom Ende) dreht jede Spalte, damit die
+    /// Gesamtordnung exakt umgekehrt wird.
+    /// </summary>
+    private static string BuildCategoryOrderBy(GalleryCategorySort sort, bool reverse)
+    {
+        string Dir(bool descending) => descending ^ reverse ? "DESC" : "ASC";
+        return $"(sv.Id IS NULL) {Dir(false)}, sv.SortOrder {Dir(sort.Descending)}, sv.Id {Dir(sort.Descending)}, "
+               + $"f.ModifiedAtUtc {Dir(true)}, f.Id {Dir(true)}";
+    }
 
     /// <summary>Tag-Filter: ODER (mindestens eines), UND (alle gewählten) oder „ohne Tag“ (ADR-0021).</summary>
     private static string BuildTagClause(GalleryQuery query)

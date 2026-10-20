@@ -23,7 +23,9 @@ using PhotoViewerV3.Services.Catalog;
 using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Messaging;
 using PhotoViewerV3.Services.Operations;
+using PhotoViewerV3.Gallery.Categories;
 using PhotoViewerV3.Gallery.Tags;
+using PhotoViewerV3.Services.Categories;
 using PhotoViewerV3.Services.Tags;
 
 namespace PhotoViewerV3.Lightbox;
@@ -74,7 +76,9 @@ public sealed partial class LightboxViewModel : ObservableObject, IDisposable
         IArchiveService? archives = null,
         IArchiveMoveService? archiveMove = null,
         ITagService? tags = null,
-        ITagPickerService? tagPicker = null)
+        ITagPickerService? tagPicker = null,
+        ICategoryService? categories = null,
+        ICategoryPickerService? categoryPicker = null)
     {
         _vlc = vlc;
         _contextFactory = contextFactory;
@@ -91,6 +95,7 @@ public sealed partial class LightboxViewModel : ObservableObject, IDisposable
             this,
             static (recipient, message) => ((LightboxViewModel)recipient).OnFilesChanged(message));
         InitTags(tags, tagPicker); // Tags anzeigen/bearbeiten (LightboxViewModel.Tags.cs, ADR-0021)
+        InitCategories(categories, categoryPicker); // Kategorie-Werte anzeigen/zuweisen (LightboxViewModel.Categories.cs, ADR-0027)
     }
 
     // ----- Anbindung an das Fenster (View-Mechanik) -----
@@ -265,6 +270,7 @@ public sealed partial class LightboxViewModel : ObservableObject, IDisposable
         PreviousCommand.NotifyCanExecuteChanged();
         UpdateHeader();
         _ = LoadCurrentTagsAsync();
+        _ = LoadCurrentCategoriesAsync();
         _ = ShowCurrentAsync();
     }
 
@@ -1059,6 +1065,7 @@ public sealed partial class LightboxViewModel : ObservableObject, IDisposable
                 if (CurrentItem is { } current && relevant.Contains(current.FileId))
                 {
                     _ = LoadCurrentTagsAsync(); // Tag-Zuweisungen melden sich als Metadata
+                    _ = LoadCurrentCategoriesAsync(); // Kategorie-Zuweisungen ebenso
                 }
 
                 break;

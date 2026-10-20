@@ -210,6 +210,9 @@ public partial class LightboxWindow : AppFluentWindow
             case Key.T when ctrl:
                 _ = _viewModel.EditTagsCommand.ExecuteAsync(null);
                 break;
+            case Key.K when ctrl:
+                _ = _viewModel.EditCategoriesCommand.ExecuteAsync(null);
+                break;
             case Key.D0 when ctrl:
             case Key.NumPad0 when ctrl:
                 _ = _viewModel.SetRatingCommand.ExecuteAsync("0");

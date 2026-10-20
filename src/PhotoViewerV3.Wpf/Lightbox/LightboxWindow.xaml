@@ -50,6 +50,20 @@
                                           VerticalAlignment="Center"
                                           Margin="0,2,12,0"
                                           ToolTip="{Binding CurrentTagsText}" />
+                    <!-- Gesetzte Kategorie-Werte (Strg+K weist zu, ADR-0027) -->
+                    <Border CornerRadius="10"
+                            Padding="10,2"
+                            Margin="0,0,12,0"
+                            MaxWidth="320"
+                            Background="{DynamicResource LightboxChipBrush}"
+                            VerticalAlignment="Center"
+                            ToolTip="{Binding CurrentCategoriesToolTip}"
+                            Visibility="{Binding HasCurrentCategoryValues, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Text="{Binding CurrentCategoriesText}"
+                                   FontSize="12"
+                                   TextTrimming="CharacterEllipsis"
+                                   Foreground="{DynamicResource LightboxTextBrush}" />
+                    </Border>
                     <TextBlock Text="{Binding Subtitle}"
                                FontSize="12"
                                VerticalAlignment="Center"
@@ -145,12 +159,29 @@
                                    Margin="0,14,0,8" />
                         <ItemsControl ItemsSource="{Binding MediaInfoRows}" ItemTemplate="{StaticResource InfoRowTemplate}" />
 
+                        <!-- Kategorien der Datei (ADR-0027): alle Kategorien, „—“ ohne Wert; Zuweisen öffnet den Strg+K-Dialog -->
+                        <StackPanel Visibility="{Binding HasCategories, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Style="{StaticResource InfoHeader}" Text="KATEGORIEN" Margin="0,14,0,8" />
+                            <ItemsControl ItemsSource="{Binding CategoryRows}" ItemTemplate="{StaticResource InfoRowTemplate}" />
+                            <Button Style="{StaticResource LightboxOverlayButton}"
+                                    HorizontalAlignment="Left"
+                                    Margin="0,2,0,0"
+                                    Padding="10,4"
+                                    MinHeight="28"
+                                    Background="{DynamicResource LightboxChipBrush}"
+                                    Command="{Binding EditCategoriesCommand}"
+                                    ToolTip="Kategorie-Werte zuweisen (Strg+K)"
+                                    AutomationProperties.Name="Kategorien zuweisen">
+                                <TextBlock Text="Zuweisen… (Strg+K)" FontSize="12" Foreground="{DynamicResource LightboxTextBrush}" />
+                            </Button>
+                        </StackPanel>
+
                         <TextBlock Style="{StaticResource InfoHeader}" Text="TASTEN" Margin="0,18,0,8" />
                         <TextBlock FontSize="11"
                                    LineHeight="18"
                                    TextWrapping="Wrap"
                                    Foreground="{DynamicResource LightboxTextSecondaryBrush}"
-                                   Text="← → Blättern · Pos1/Ende Anfang/Ende · Bild↑/↓ ±10&#x0a;+ − Zoom · 1 = 100 % · 0 = Einpassen · Doppelklick Fit ↔ 100 %&#x0a;Leertaste Play/Pause · M Stumm&#x0a;Strg+D Favorit · Strg+1…5 Bewertung · Strg+0 löscht&#x0a;I Info · F/F11 Vollbild · Entf Papierkorb · Esc Schließen" />
+                                   Text="← → Blättern · Pos1/Ende Anfang/Ende · Bild↑/↓ ±10&#x0a;+ − Zoom · 1 = 100 % · 0 = Einpassen · Doppelklick Fit ↔ 100 %&#x0a;Leertaste Play/Pause · M Stumm&#x0a;Strg+D Favorit · Strg+1…5 Bewertung · Strg+0 löscht&#x0a;Strg+T Tags · Strg+K Kategorien&#x0a;I Info · F/F11 Vollbild · Entf Papierkorb · Esc Schließen" />
                     </StackPanel>
                 </ScrollViewer>
             </Border>

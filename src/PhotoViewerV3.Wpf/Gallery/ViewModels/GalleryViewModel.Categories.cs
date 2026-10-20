@@ -147,6 +147,7 @@ public sealed partial class GalleryViewModel
     {
         var hadFilter = HasCategoryFilter;
         await LoadCategoriesAsync();
+        UpdateCategorySortAfterChange(m);
         foreach (var item in CurrentPage)
         {
             if (item.Categories.Count > 0)
@@ -261,10 +262,172 @@ public sealed partial class GalleryViewModel
             SetResultStatus(entry.IsNone
                 ? $"{entry.CategoryName}: Wert bei {ids.Count:N0} Datei(en) entfernt ({changed:N0} geändert)."
                 : $"{entry.CategoryName} = „{entry.Name}“ bei {ids.Count:N0} Datei(en) gesetzt ({changed:N0} geändert).");
-            if (HasCategoryFilter)
+            if (HasCategoryFilter || IsCategorySorted)
             {
                 ScheduleReload();
             }
         });
     }
+
+    /// <summary>
+    /// Strg+K: Kategorie-Auswahl-Dialog für die Auswahl (je Kategorie Wert, „Kein Wert“ oder „gemischt — nicht
+    /// ändern“). Die Ausgangswerte kommen aus der DB, damit auch ausgewählte Dateien außerhalb der Page zählen.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanActOnSelection))]
+    private async Task EditSelectionCategoriesAsync()
+    {
+        var ids = SelectedIdsSnapshot();
+        if (ids.Count == 0)
+        {
+            return;
+        }
+
+        if (CategoryColumns.Count == 0)
+        {
+            SetResultStatus("Noch keine Kategorien angelegt — unter „Kategorien“ anlegen.");
+            return;
+        }
+
+        IReadOnlyDictionary<int, IReadOnlyDictionary<int, int>> values;
+        try
+        {
+            values = await _categories.GetValuesForFilesAsync(ids);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Kategorie-Werte der Auswahl konnten nicht geladen werden");
+            SetResultStatus($"Kategorie-Werte konnten nicht geladen werden: {ex.Message}");
+            return;
+        }
+
+        var request = new CategoryPickRequest(CategoryColumns, values, ids);
+        var owner = OwnerWindowResolver?.Invoke() ?? System.Windows.Application.Current?.MainWindow;
+        var result = await _categoryPicker.PickAsync(request, owner);
+        if (result is null || result.IsEmpty)
+        {
+            return;
+        }
+
+        await RunOperationAsync("Kategorien", async () =>
+        {
+            var changed = 0;
+            foreach (var change in result.Changes)
+            {
+                changed += await _categories.SetValueAsync(ids, change.CategoryId, change.ValueId);
+            }
+
+            await ApplyCategoriesToItemsAsync(ids.Where(_currentItems.ContainsKey).ToList(), CancellationToken.None);
+            SetResultStatus($"Kategorien bei {ids.Count:N0} Datei(en) gesetzt: {result.Changes.Count} Kategorie(n), {changed:N0} Zuordnung(en) geändert.");
+            if (HasCategoryFilter || IsCategorySorted)
+            {
+                ScheduleReload();
+            }
+        });
+    }
+
+    // ---- Sortierung nach Kategorie (Listenansicht, serverseitig) ------------------------------------
+
+    private readonly ObservableCollection<GallerySortOption> _sortOptions = new(s_sortOptions);
+
+    /// <summary>True, wenn die Trefferliste nach einer Kategorie sortiert ist.</summary>
+    public bool IsCategorySorted => SelectedSort.Category is not null;
+
+    /// <summary>
+    /// Kopfzeilenklick auf eine Kategorie-Spalte: erst aufsteigend (Werte-Reihenfolge der Verwaltung), erneuter Klick
+    /// kehrt um. Sortiert die ganze Trefferliste in der DB; die Toolbar zeigt die Sortierung als eigenen Eintrag.
+    /// </summary>
+    public void SortByCategory(int categoryId)
+    {
+        if (!_categoryById.TryGetValue(categoryId, out var category))
+        {
+            return;
+        }
+
+        var next = GalleryCategorySortLogic.Next(SelectedSort.Category, categoryId);
+        var option = new GallerySortOption(SelectedSort.Sort, GalleryCategorySortLogic.Label(category.Name, next.Descending), next);
+        _sortOptions.Add(option);
+        SelectedSort = option;
+    }
+
+    /// <summary>
+    /// Aufräumen der Sortier-Auswahl erst NACH der Änderungsmeldung von <see cref="SelectedSort"/>: würde der zuvor
+    /// gewählte Eintrag schon in <c>OnSelectedSortChanged</c> entfernt, verlöre die gebundene ComboBox ihr SelectedItem
+    /// und schriebe null zurück (Rauchtest 0.2.23).
+    /// </summary>
+    protected override void OnPropertyChanged(System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        base.OnPropertyChanged(e);
+        if (e.PropertyName == nameof(SelectedSort) && SelectedSort is { } selected)
+        {
+            RemoveUnusedCategorySortOptions(selected);
+        }
+    }
+
+    /// <summary>Nur die gewählte Kategorie-Sortierung bleibt in der Auswahlliste; feste Einträge bleiben immer.</summary>
+    private void RemoveUnusedCategorySortOptions(GallerySortOption selected)
+    {
+        for (var i = _sortOptions.Count - 1; i >= 0; i--)
+        {
+            if (_sortOptions[i].Category is not null && !ReferenceEquals(_sortOptions[i], selected))
+            {
+                _sortOptions.RemoveAt(i);
+            }
+        }
+
+        OnPropertyChanged(nameof(IsCategorySorted));
+    }
+
+    /// <summary>
+    /// Nach Stammdaten-Änderungen: gelöschte Sortier-Kategorie → Standard-Sortierung; umbenannt → Beschriftung ohne
+    /// Neuladen; Werte geändert (Reihenfolge, gelöscht) → Page neu laden.
+    /// </summary>
+    private void UpdateCategorySortAfterChange(CategoriesChangedMessage m)
+    {
+        if (SelectedSort.Category is not { } sort)
+        {
+            return;
+        }
+
+        if (!_categoryById.TryGetValue(sort.CategoryId, out var category))
+        {
+            SelectedSort = s_sortOptions[0];
+            return;
+        }
+
+        var label = GalleryCategorySortLogic.Label(category.Name, sort.Descending);
+        if (label != SelectedSort.Label)
+        {
+            var renamed = SelectedSort with { Label = label };
+            _sortOptions.Add(renamed);
+            var suppress = _suppressReload;
+            _suppressReload = true;
+            try
+            {
+                SelectedSort = renamed;
+            }
+            finally
+            {
+                _suppressReload = suppress;
+            }
+        }
+
+        if (HasLibrary && m.Kind == CategoriesChangeKind.ValuesChanged)
+        {
+            ScheduleReload();
+        }
+    }
+}
+
+/// <summary>Reine Logik der Kategorie-Sortierung (Kopfzeilenklick, Beschriftung) — ohne ViewModel testbar.</summary>
+public static class GalleryCategorySortLogic
+{
+    /// <summary>Gleiche Kategorie → Richtung wechseln, sonst aufsteigend.</summary>
+    public static GalleryCategorySort Next(GalleryCategorySort? current, int categoryId)
+        => current is { } c && c.CategoryId == categoryId
+            ? c with { Descending = !c.Descending }
+            : new GalleryCategorySort(categoryId, Descending: false);
+
+    /// <summary>Eintrag der Sortier-Auswahl, z. B. „XX (Kategorie) ↑“.</summary>
+    public static string Label(string categoryName, bool descending)
+        => $"{categoryName} (Kategorie) {(descending ? "↓" : "↑")}";
 }

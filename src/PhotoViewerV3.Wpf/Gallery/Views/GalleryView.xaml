@@ -318,6 +318,7 @@
         <KeyBinding Key="F5" Command="{Binding ReloadCommand}" />
         <KeyBinding Modifiers="Ctrl" Key="M" Command="{Binding ArchiveSelectionCommand}" />
         <KeyBinding Modifiers="Ctrl" Key="T" Command="{Binding EditSelectionTagsCommand}" />
+        <KeyBinding Modifiers="Ctrl" Key="K" Command="{Binding EditSelectionCategoriesCommand}" />
     </UserControl.InputBindings>
 
     <Grid Margin="16,8,16,12">

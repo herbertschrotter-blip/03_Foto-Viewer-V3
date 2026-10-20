@@ -3,6 +3,48 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.23] — 2026-10-20
+
+### Neu (ADR-0027, Nachtrag 0.2.23)
+- **Strg+K — Kategorien zuweisen per Tastatur** in Galerie und Lightbox (auch Rechtsklick → „Kategorien zuweisen…“):
+  Dialog mit je Kategorie einer Auswahlliste (Werte, „Kein Wert“, bei unterschiedlichen Werten der Auswahl
+  „(gemischt — nicht ändern)“); Tab/↑/↓/Enter/Esc, nur geänderte Kategorien werden geschrieben. Ausgangswerte kommen aus
+  der DB, zählen also auch ausgewählte Dateien außerhalb der Seite. Strg+K war in Galerie und Lightbox frei.
+- **Lightbox zeigt Kategorie-Werte**: gesetzte Werte in der Titelleiste („XX: N · Projekt: Nord“), im Info-Panel (I)
+  alle Kategorien mit Wert bzw. „—“ und Knopf „Zuweisen… (Strg+K)“; folgt Blättern, Zuweisungen und Änderungen auf der
+  Seite „Kategorien“. Tastenhilfe nennt Strg+T und Strg+K.
+- **Suche findet Kategorie-Werte** (Teilstring ohne Groß-/Kleinschreibung wie Tag-Namen) — per Join
+  (`FileCategoryValues.ValueId IN (… CategoryValues.Name LIKE …)`) statt FTS: keine Index-Pflege, Umbenennen/Löschen
+  wirkt sofort; der Weg läuft über `IX_FileCategoryValues_Value`. 500 000 Dateien: 33 ms (seltener Wert) bis 320 ms
+  (50 000 Treffer).
+- **Kategorie-Spalten sortieren die ganze Trefferliste serverseitig** (SQL mit Paging inkl. Reverse-Trick): Werte in der
+  Reihenfolge der Verwaltung, erneuter Klick kehrt um, „ohne Wert“ immer am Ende, gleiche Werte nach Datum neu → alt.
+  Die Sortier-Auswahl zeigt „XX (Kategorie) ↑/↓“, Sortierpfeil an der Spalte. 500 000 Dateien: Seite 1 ≈ 0,5 s, Mitte
+  ≈ 1,25 s (wie „Name A → Z“).
+
+### Tests
+- `tests/PhotoViewerV3.Tests`: 425 (+1 `Categories/CategoryServiceTests`: Werte einer Auswahl über die Chunk-Grenze lesen
+  und je Kategorie setzen/entfernen).
+- `tests/PhotoViewerV3.Wpf.Tests`: 189 (+21): `Categories/GalleryPageSourceCategoryTests` (+13: Suche nach Werten, mit
+  Dateiname und Filter, Umbenennen/Löschen ohne Index-Pflege, Abfrageplan ohne `SCAN f`/`SCAN fcv`; Sortierung auf/ab mit
+  „ohne Wert“ am Ende, Werte-Reihenfolge der Verwaltung, Seiten inkl. Reverse-Trick, mit Filter/Suche, Primärschlüssel-
+  Lookup im Plan), `Categories/CategoryPickerTests` (+8: Ausgangszustand gemeinsam/kein Wert/gemischt, nur Änderungen im
+  Ergebnis, echtes Dialogfenster mit Fokus/Enter/Esc, Kopfzeilen-Logik, Strg+K belegt ohne Doppelbelegung in Galerie und
+  Lightbox).
+- Rauchtest 21/21 OK, 0 WPF-Binding-Fehler; Schritt „Kategorien“ erweitert um Strg+K (Galerie, gemischte Auswahl,
+  Tastenbindung), Suche nach Wert, Sortierung auf/ab samt Sortierpfeil und Rückkehr zur Standard-Sortierung, Lightbox
+  (Titelleiste, Info-Panel, Zuweisen/Entfernen).
+- Bekannt, nicht durch diese Änderung: unter paralleler Testausführung und Last scheitern in `PhotoViewerV3.Wpf.Tests`
+  sporadisch 2–3 UI-Tests mit Zeitüberschreitung (`AppDialogWindowTests`, `EarlyCloseWindowTests`, `ArchiveUiTests`;
+  gemeinsamer UI-Thread). Gegengeprüft: Stand 0.2.20 zeigt dasselbe; seriell
+  (`-- xUnit.ParallelizeTestCollections=false`) alle 189 grün.
+
+### Offen
+- Tiefe Seiten der Kategorie-Sortierung kosten bei 500 000 Dateien gut eine Sekunde (Top-N-Sortierung wie Name/Größe).
+- Der Tag-Zweig der Suche liest alle `FileTags`-Zeilen (Plan `SCAN ft`); dieselbe `IN`-Form wie bei Kategorie-Werten
+  wäre bei vielen Tag-Zuweisungen schneller.
+- Die Suche findet Kategorie-Werte, nicht Kategorie-Namen.
+
 ## [0.2.22] — 2026-10-20
 
 ### Neu (offene Punkte aus 0.2.14 und 0.2.17, ADR-0025 Nachtrag)

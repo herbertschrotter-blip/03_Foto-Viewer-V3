@@ -360,6 +360,12 @@ public partial class GalleryView : UserControl
             menu.Items.Add(parent);
         }
 
+        menu.Items.Add(new MenuItem
+        {
+            Header = "Kategorien zuweisen…",
+            InputGestureText = "Strg+K",
+            Command = _viewModel.EditSelectionCategoriesCommand,
+        });
         var manage = new MenuItem { Header = "Kategorien verwalten…" };
         manage.Click += (_, _) => _navigation.NavigateTo(NavigationTags.Categories);
         menu.Items.Add(manage);

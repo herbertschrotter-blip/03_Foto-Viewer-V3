@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.DependencyInjection;
@@ -30,6 +31,7 @@ using PhotoViewerV3.Settings;
 using PhotoViewerV3.Gallery.Data;
 using PhotoViewerV3.Gallery.ViewModels;
 using PhotoViewerV3.Gallery.ListView;
+using PhotoViewerV3.Gallery.Views;
 using PhotoViewerV3.Gallery.Tags;
 using PhotoViewerV3.Gallery.Categories;
 using PhotoViewerV3.Services.Tags;
@@ -107,6 +109,7 @@ internal sealed partial class SmokeScenario
     private readonly IArchiveService _archives;
     private readonly ITagService _tags;
     private readonly SmokeTagPickerService? _tagPicker;
+    private readonly SmokeCategoryPickerService? _categoryPicker;
     private readonly TagManagementViewModel _tagManagement;
     private readonly ICategoryService _categories;
     private readonly CategoryManagementViewModel _categoryManagement;
@@ -146,6 +149,7 @@ internal sealed partial class SmokeScenario
         _archives = services.GetRequiredService<IArchiveService>();
         _tags = services.GetRequiredService<ITagService>();
         _tagPicker = services.GetService<SmokeTagPickerService>();
+        _categoryPicker = services.GetService<SmokeCategoryPickerService>();
         _tagManagement = services.GetRequiredService<TagManagementViewModel>();
         _categories = services.GetRequiredService<ICategoryService>();
         _categoryManagement = services.GetRequiredService<CategoryManagementViewModel>();
@@ -204,7 +208,7 @@ internal sealed partial class SmokeScenario
         await StepAsync("Archiv: ZIP → Kachel → Inhaltsansicht → Entpacken → Katalog", ArchiveAsync).ConfigureAwait(true);
         await StepAsync("Eingang → Archiv (zweite Wurzel, Status-Filter, Ins Archiv, Rückgängig, Ordner anlegen/umbenennen)", InboxArchiveAsync).ConfigureAwait(true);
         await StepAsync("Tags (Zuweisen, Filter, Suche, Verwaltung) + Listenansicht", TagsAndListViewAsync).ConfigureAwait(true);
-        await StepAsync("Kategorien (Anlegen, Zuweisen, Filter, Listenspalte, Verwaltung)", CategoriesAsync).ConfigureAwait(true);
+        await StepAsync("Kategorien (Anlegen, Zuweisen, Strg+K, Filter, Suche, Sortierung, Lightbox, Listenspalte, Verwaltung)", CategoriesAsync).ConfigureAwait(true);
         await StepAsync("Sortierer: Eingang → Archiv (Wurzel-Auswahl, gesperrtes Ziel, Katalog, Rückgängig, Flatten im Eingang)", SorterInboxToArchiveAsync).ConfigureAwait(true);
         await StepAsync("Wartezustände: Datei-Operation wartet auf Scan (Statusleiste, Abbrechen), Scan wartet auf Datei-Batch (Bibliotheksseite)", GateWaitAsync).ConfigureAwait(true);
         await StepAsync("Ordnerüberwachung: Datei kopieren → automatischer Diff-Scan → Galerie", WatchAsync).ConfigureAwait(true);
@@ -1584,6 +1588,8 @@ internal sealed partial class SmokeScenario
         await WaitForGalleryAsync("Kategorien-Filter zurückgesetzt").ConfigureAwait(true);
         Check(!_gallery.HasCategoryFilter && _gallery.TotalCount == baseline && _gallery.CategoryFilterText == "Kategorien", "Filter zurückgesetzt → alle Dateien");
 
+        await CategoryShortcutSearchSortLightboxAsync(xx, n, nn, targets, baseline).ConfigureAwait(true);
+
         // Spalte der Listenansicht
         _gallery.ViewMode = GalleryViewMode.List;
         await Task.Delay(400).ConfigureAwait(true);
@@ -1619,6 +1625,134 @@ internal sealed partial class SmokeScenario
 
         _navigation.NavigateTo(NavigationTags.Gallery);
         await WaitUntilAsync(() => _navigation.CurrentTag == NavigationTags.Gallery, ShortWait, "zurück zur Galerie").ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Kategorien 0.2.23: Strg+K-Dialog (Fake) in Galerie und Lightbox, Tastenkürzel gebunden, Suche nach einem
+    /// Kategorie-Wert, serverseitige Sortierung nach der Kategorie (auf/ab, Pfeil in der Kopfzeile). Stellt den Zustand
+    /// am Ende wieder her (targets[0] = NN, targets[1..2] = N).
+    /// </summary>
+    private async Task CategoryShortcutSearchSortLightboxAsync(CategoryInfo xx, int n, int nn, IReadOnlyList<GalleryItem> targets, int baseline)
+    {
+        // Die Items der Page werden nach jedem Neuladen neu erzeugt (Filter, Suche) → immer über die Id auflösen.
+        var targetIds = targets.Select(t => t.Id).ToList();
+        GalleryItem? Item(int k) => _gallery.CurrentPage.FirstOrDefault(i => i.Id == targetIds[k]);
+
+        async Task<int> CountValueAsync(int valueId)
+            => await DbScalarAsync<int>("SELECT COUNT(*) FROM FileCategoryValues WHERE ValueId = $v", ("$v", valueId)).ConfigureAwait(true);
+
+        // Strg+K in der Galerie: gebunden, ohne bestehendes Kürzel zu überschreiben
+        var galleryView = FindVisualChild<GalleryView>(Application.Current.MainWindow);
+        var bindings = galleryView?.InputBindings.OfType<KeyBinding>().ToList() ?? [];
+        Check(
+            bindings.Count(b => b.Key == Key.K && b.Modifiers == ModifierKeys.Control) == 1
+            && bindings.Any(b => b.Key == Key.K && ReferenceEquals(b.Command, _gallery.EditSelectionCategoriesCommand))
+            && bindings.Any(b => b.Key == Key.T && ReferenceEquals(b.Command, _gallery.EditSelectionTagsCommand)),
+            "Strg+K → Kategorien zuweisen (Strg+T bleibt Tags)");
+
+        if (_categoryPicker is not null)
+        {
+            // Auswahl NN + N → „gemischt“; Dialog setzt N für beide
+            _gallery.ClearSelectionCommand.Execute(null);
+            Item(0)!.IsSelected = true;
+            Item(1)!.IsSelected = true;
+            _categoryPicker.NextResult = new CategoryPickResult([new CategoryValueChange(xx.Id, n)]);
+            Check(_gallery.EditSelectionCategoriesCommand.CanExecute(null), "Strg+K bei Auswahl bedienbar");
+            await _gallery.EditSelectionCategoriesCommand.ExecuteAsync(null).ConfigureAwait(true);
+            var item = _categoryPicker.LastRequest is { } request
+                ? CategoryPickLogic.BuildItems(request).FirstOrDefault(i => i.Category.Id == xx.Id)
+                : null;
+            Check(item is { Initial.KeepsMixed: true } && _categoryPicker.LastRequest!.SelectionCount == 2, $"Strg+K-Dialog: 2 Dateien, „Smoke XX“ gemischt ({item?.Hint})");
+            await WaitUntilAsync(() => Item(0)?.Categories[xx.Id] == "N", ShortWait, "Strg+K setzt N an der Kachel").ConfigureAwait(true);
+            Check(await CountValueAsync(n) == 3 && await CountValueAsync(nn) == 0, "DB nach Strg+K: 3 × N, 0 × NN");
+
+            // Zurück: targets[0] = NN (Ausgangswert im Dialog = N, nicht gemischt)
+            _gallery.ClearSelectionCommand.Execute(null);
+            Item(0)!.IsSelected = true;
+            _categoryPicker.NextResult = new CategoryPickResult([new CategoryValueChange(xx.Id, nn)]);
+            await _gallery.EditSelectionCategoriesCommand.ExecuteAsync(null).ConfigureAwait(true);
+            var single = CategoryPickLogic.BuildItems(_categoryPicker.LastRequest!).First(i => i.Category.Id == xx.Id);
+            Check(single.Initial.ValueId == n && !single.Initial.KeepsMixed, "Strg+K-Dialog: Ausgangswert N bei einer Datei");
+            await WaitUntilAsync(() => Item(0)?.Categories[xx.Id] == "NN", ShortWait, "Strg+K setzt NN zurück").ConfigureAwait(true);
+            _gallery.ClearSelectionCommand.Execute(null);
+        }
+        else
+        {
+            Check(false, "Rauchtest-Ersatz für den Kategorie-Dialog fehlt");
+        }
+
+        // Suche findet einen Kategorie-Wert (kein Dateiname enthält „Smokewert“)
+        var extra = await _categories.AddValueAsync(xx.Id, "Smokewert").ConfigureAwait(true);
+        await _categories.SetValueAsync([targetIds[2]], xx.Id, extra.Id).ConfigureAwait(true);
+        _gallery.SearchTerm = "smokewer";
+        await _gallery.SearchCommand.ExecuteAsync(null).ConfigureAwait(true);
+        await WaitForGalleryAsync("Suche nach Kategorie-Wert").ConfigureAwait(true);
+        Check(
+            _gallery.ErrorMessage is null && _gallery.TotalCount == 1 && _gallery.CurrentPage.FirstOrDefault()?.Id == targetIds[2],
+            $"Suche „smokewer“ findet {_gallery.TotalCount} Datei mit dem Wert (erwartet 1)");
+        await _gallery.ClearSearchCommand.ExecuteAsync(null).ConfigureAwait(true);
+        await WaitForGalleryAsync("Suche geleert").ConfigureAwait(true);
+        await _categories.SetValueAsync([targetIds[2]], xx.Id, n).ConfigureAwait(true);
+        Check(_gallery.TotalCount == baseline, "nach der Suche wieder alle Dateien");
+
+        // Serverseitige Sortierung nach der Kategorie (Kopfzeilenklick → SortByCategory)
+        _gallery.ViewMode = GalleryViewMode.List;
+        await Task.Delay(400).ConfigureAwait(true);
+        var listView = FindVisualChild<GalleryListView>(Application.Current.MainWindow);
+        var withN = new HashSet<int> { targetIds[1], targetIds[2] };
+        _gallery.SortByCategory(xx.Id);
+        await WaitForGalleryAsync("Sortierung nach Kategorie ↑").ConfigureAwait(true);
+        var ids = _gallery.CurrentPage.Select(i => i.Id).ToList();
+        Check(
+            _gallery.SelectedSort.Category == new GalleryCategorySort(xx.Id, false) && ids.Count == baseline
+            && withN.Contains(ids[0]) && withN.Contains(ids[1]) && ids[2] == targetIds[0],
+            $"Sortierung „{_gallery.SelectedSort.Label}“: N, N, NN, dann ohne Wert");
+        Check(_gallery.SortOptions.Count(o => o.Category is not null) == 1, "Sortier-Auswahl zeigt die Kategorie-Sortierung");
+        Check(listView?.CategorySortDirection(xx.Id) == System.ComponentModel.ListSortDirection.Ascending, "Sortierpfeil ↑ an der Spalte „Smoke XX“");
+
+        _gallery.SortByCategory(xx.Id);
+        await WaitForGalleryAsync("Sortierung nach Kategorie ↓").ConfigureAwait(true);
+        ids = _gallery.CurrentPage.Select(i => i.Id).ToList();
+        Check(
+            _gallery.SelectedSort.Category is { Descending: true } && ids[0] == targetIds[0] && withN.Contains(ids[1]) && withN.Contains(ids[2]),
+            $"Sortierung „{_gallery.SelectedSort.Label}“: NN, N, N, dann ohne Wert");
+        await SnapshotAsync("17-galerie-liste-kategorie-sortiert").ConfigureAwait(true);
+        await SetSortAsync(GallerySort.ModifiedDesc).ConfigureAwait(true);
+        Check(_gallery.SortOptions.All(o => o.Category is null) && listView?.CategorySortDirection(xx.Id) is null, "Standard-Sortierung ersetzt die Kategorie-Sortierung");
+        _gallery.ViewMode = GalleryViewMode.Grid;
+        await Task.Delay(300).ConfigureAwait(true);
+
+        // Lightbox: Werte anzeigen und per Strg+K-Dialog zuweisen
+        var target = Item(0)!;
+        _gallery.OpenInLightboxCommand.Execute(target);
+        await WaitUntilAsync(() => _lightbox.IsOpen, ShortWait, "Lightbox geöffnet").ConfigureAwait(true);
+        var window = Application.Current.Windows.OfType<LightboxWindow>().First();
+        var lightbox = window.ViewModel;
+        await WaitUntilAsync(
+            () => lightbox.CurrentItem?.FileId == target.Id && lightbox.CurrentCategoriesText == "Smoke XX: NN",
+            ShortWait,
+            "Lightbox zeigt „Smoke XX: NN“").ConfigureAwait(true);
+        Check(lightbox.HasCategories && lightbox.CategoryRows.Any(r => r.Label == "Smoke XX" && r.Value == "NN"), "Info-Panel: Zeile „Smoke XX = NN“");
+        lightbox.IsInfoVisible = true;
+        await Task.Delay(300).ConfigureAwait(true);
+        await SnapshotAsync("18-lightbox-kategorien", window).ConfigureAwait(true);
+        if (_categoryPicker is not null)
+        {
+            _categoryPicker.NextResult = new CategoryPickResult([new CategoryValueChange(xx.Id, null)]);
+            await lightbox.EditCategoriesCommand.ExecuteAsync(null).ConfigureAwait(true);
+            Check(_categoryPicker.LastRequest is { SelectionCount: 1 }, "Lightbox: Strg+K-Dialog für die aktuelle Datei");
+            await WaitUntilAsync(() => !lightbox.HasCurrentCategoryValues, ShortWait, "Lightbox: „Kein Wert“ entfernt NN").ConfigureAwait(true);
+            Check(await CountValueAsync(nn) == 0, "DB: NN entfernt");
+            _categoryPicker.NextResult = new CategoryPickResult([new CategoryValueChange(xx.Id, nn)]);
+            await lightbox.EditCategoriesCommand.ExecuteAsync(null).ConfigureAwait(true);
+            await WaitUntilAsync(() => lightbox.CurrentCategoriesText == "Smoke XX: NN", ShortWait, "Lightbox: NN wieder gesetzt").ConfigureAwait(true);
+            await WaitUntilAsync(() => Item(0)?.Categories[xx.Id] == "NN", ShortWait, "Galerie-Kachel folgt der Lightbox").ConfigureAwait(true);
+        }
+
+        lightbox.IsInfoVisible = false;
+        lightbox.CloseCommand.Execute(null);
+        await WaitUntilAsync(() => !_lightbox.IsOpen, ShortWait, "Lightbox geschlossen").ConfigureAwait(true);
+        Check(await CountValueAsync(n) == 2 && await CountValueAsync(nn) == 1, "Ausgangszustand wiederhergestellt (2 × N, 1 × NN)");
     }
 
     private static T? FindVisualChild<T>(DependencyObject? root)
@@ -1722,9 +1856,9 @@ internal sealed partial class SmokeScenario
 
     private async Task SetSortAsync(GallerySort sort)
     {
-        _gallery.SelectedSort = _gallery.SortOptions.First(o => o.Sort == sort);
+        _gallery.SelectedSort = _gallery.SortOptions.First(o => o.Sort == sort && o.Category is null);
         await WaitForGalleryAsync($"Sortierung {sort}").ConfigureAwait(true);
-        Check(_gallery.SelectedSort.Sort == sort && _gallery.ErrorMessage is null, $"Sortierung {sort} angewendet");
+        Check(_gallery.SelectedSort.Sort == sort && !_gallery.IsCategorySorted && _gallery.ErrorMessage is null, $"Sortierung {sort} angewendet");
     }
 
     private async Task SnapshotAsync(string name, Window? window = null)
@@ -1860,6 +1994,26 @@ internal sealed class SmokeTagPickerService : ITagPickerService
     public TagPickResult? NextResult { get; set; }
 
     public Task<TagPickResult?> PickAsync(TagPickRequest request, Window? owner)
+    {
+        LastRequest = request;
+        var result = NextResult;
+        NextResult = null;
+        return Task.FromResult(result);
+    }
+}
+
+/// <summary>
+/// Rauchtest-Ersatz für den Kategorie-Auswahl-Dialog (Strg+K): merkt sich die Anfrage und liefert das vom Szenario
+/// gesetzte Ergebnis — der modale Dialog würde den unbeaufsichtigten Lauf blockieren.
+/// </summary>
+internal sealed class SmokeCategoryPickerService : ICategoryPickerService
+{
+    public CategoryPickRequest? LastRequest { get; private set; }
+
+    /// <summary>Nächstes Ergebnis; null = Abbruch.</summary>
+    public CategoryPickResult? NextResult { get; set; }
+
+    public Task<CategoryPickResult?> PickAsync(CategoryPickRequest request, Window? owner)
     {
         LastRequest = request;
         var result = NextResult;

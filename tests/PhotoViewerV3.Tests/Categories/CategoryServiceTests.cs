@@ -162,6 +162,55 @@ public sealed class CategoryServiceTests
         all[1].Values.Select(v => v.Name).Should().Equal("NNN", "Klein", "NN");
     }
 
+    /// <summary>
+    /// Strg+K (0.2.23) liest die Ausgangswerte der ganzen Auswahl aus der DB und setzt danach je geänderter Kategorie
+    /// einen Wert — auch bei Auswahlen über die Chunk-Grenze (500) hinweg und mit Dateien, die noch keinen Wert haben.
+    /// </summary>
+    [Fact]
+    public async Task Werte_einer_grossen_Auswahl_lesen_und_je_Kategorie_setzen()
+    {
+        using var fx = await TempLibraryFixture.CreateAsync();
+        var (libraryId, a, _, _) = await ArrangeAsync(fx);
+        var ids = new List<int> { a };
+        await using (var ctx = fx.CreateContext())
+        {
+            var folderId = (await ctx.Files.AsNoTracking().FirstAsync(f => f.Id == a)).FolderId;
+            var files = Enumerable.Range(0, 1200).Select(i => new PhotoViewerV3.Domain.Entities.MediaFile
+            {
+                LibraryId = libraryId,
+                FolderId = folderId,
+                Name = $"bulk_{i:D4}.jpg",
+                Extension = ".jpg",
+                Size = 1,
+                CreatedAtUtc = DateTime.UtcNow,
+                ModifiedAtUtc = DateTime.UtcNow,
+                MediaType = MediaType.Image,
+            }).ToList();
+            ctx.Files.AddRange(files);
+            await ctx.SaveChangesAsync();
+            ids.AddRange(files.Select(f => f.Id));
+        }
+
+        using var svc = fx.CreateCategoryService();
+        var xx = await svc.CreateAsync("XX", ["N", "NN"]);
+        var projekt = await svc.CreateAsync("Projekt", ["Nord"]);
+        await svc.SetValueAsync([a], xx.Id, xx.Values[1].Id);
+        await svc.SetValueAsync(ids.Skip(600).ToList(), projekt.Id, projekt.Values[0].Id);
+
+        var before = await svc.GetValuesForFilesAsync(ids);
+        before.Should().HaveCount(602, "a (NN) plus 601 Dateien mit Projekt-Wert; Dateien ohne Wert fehlen");
+        before[a].Should().Equal(new Dictionary<int, int> { [xx.Id] = xx.Values[1].Id });
+        before[ids[^1]].Should().Equal(new Dictionary<int, int> { [projekt.Id] = projekt.Values[0].Id });
+
+        // Ergebnis des Dialogs: XX = N für alle, Projekt = Kein Wert für alle
+        (await svc.SetValueAsync(ids, xx.Id, xx.Values[0].Id)).Should().Be(ids.Count, "a wird ersetzt, alle anderen neu gesetzt");
+        (await svc.SetValueAsync(ids, projekt.Id, null)).Should().Be(601);
+
+        var after = await svc.GetValuesForFilesAsync(ids);
+        after.Should().HaveCount(ids.Count);
+        after.Values.Should().OnlyContain(v => v.Count == 1 && v[xx.Id] == xx.Values[0].Id);
+    }
+
     [Fact]
     public async Task Neu_aufbauen_uebernimmt_Kategorie_Werte_auf_die_neuen_FileIds()
     {
