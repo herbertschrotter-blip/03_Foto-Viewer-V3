@@ -14,6 +14,7 @@ using PhotoViewerV3.Wpf.Tests.Fixtures;
 namespace PhotoViewerV3.Wpf.Tests.Archive;
 
 /// <summary>Archiv-Oberfläche (ADR-0022): Kachel-Daten, Inhaltszeilen, Entpacken-Dialog (ViewModel und echtes Fenster).</summary>
+[Collection(UiTestCollection.Name)]
 public sealed class ArchiveUiTests
 {
     private static GalleryFileDto ArchiveDto(int id = 7, string name = "urlaub.ZIP")

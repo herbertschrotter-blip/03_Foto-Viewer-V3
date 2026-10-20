@@ -9,6 +9,7 @@ namespace PhotoViewerV3.Wpf.Tests.Categories;
 /// Reihenfolge) und „!Kategorie:{Id}“ (ausgeblendet); neue Kategorien ohne Token sind sichtbar. Dazu Indexer der
 /// Item-Werte und das Zerlegen der Werteingabe der Verwaltungsseite.
 /// </summary>
+[Collection(PhotoViewerV3.Wpf.Tests.Fixtures.UiTestCollection.Name)]
 public sealed class CategoryColumnSettingsTests
 {
     [Fact]

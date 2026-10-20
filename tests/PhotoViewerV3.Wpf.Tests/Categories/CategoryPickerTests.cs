@@ -17,6 +17,7 @@ namespace PhotoViewerV3.Wpf.Tests.Categories;
 /// Ergebnis, echtes Dialogfenster (Fokus, Enter/Esc), Tastenkürzel ohne Doppelbelegung in Galerie und Lightbox sowie
 /// die Logik der Kategorie-Sortierung (Kopfzeilenklick).
 /// </summary>
+[Collection(UiTestCollection.Name)]
 public sealed class CategoryPickerTests
 {
     private static readonly CategoryInfo Xx = new(1, "XX", 0, [new(11, 1, "N", 0), new(12, 1, "NN", 1)]);

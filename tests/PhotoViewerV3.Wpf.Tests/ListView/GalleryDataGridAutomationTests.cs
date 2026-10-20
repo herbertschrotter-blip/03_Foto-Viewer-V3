@@ -10,6 +10,7 @@ namespace PhotoViewerV3.Wpf.Tests.ListView;
 /// CLAUDE.md-Regel (v0.2.0-Hänger): Einträge großer Listen bleiben im UI-Automation-Baum Blätter. Die Listenansicht
 /// ersetzt deshalb den DataGrid-Peer (dessen Item-Peers je Zelle weitere Peers erzeugen) und den Zeilen-Peer.
 /// </summary>
+[Collection(UiTestCollection.Name)]
 public sealed class GalleryDataGridAutomationTests
 {
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(20);

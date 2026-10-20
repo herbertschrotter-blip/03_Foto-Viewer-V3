@@ -23,6 +23,7 @@ namespace PhotoViewerV3.Wpf.Tests.Gallery;
 /// ragt über den Rand, die Suche hat ihre Mindestbreite und Platz für den Platzhalter, die Zeilenzahl passt.
 /// Die PNGs landen unter <c>bin/…/toolbar-shots</c> (Belege in <c>docs/spikes/07-galerie-kopfzeile*</c>).
 /// </summary>
+[Collection(UiTestCollection.Name)]
 public sealed class GalleryToolbarLayoutTests(ITestOutputHelper output)
 {
     private const double NavPaneWidth = 220;

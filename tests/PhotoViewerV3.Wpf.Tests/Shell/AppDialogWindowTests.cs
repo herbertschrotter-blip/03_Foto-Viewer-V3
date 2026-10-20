@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Threading;
 using PhotoViewerV3.Shell;
 using PhotoViewerV3.Shell.Dialogs;
@@ -12,6 +13,7 @@ namespace PhotoViewerV3.Wpf.Tests.Shell;
 /// Wpf.Ui MessageBox in einer Layout-Schleife hängen (Dialog ohne Knöpfe, CPU voll, Speicher wächst).
 /// Das eigene <see cref="AppDialogWindow"/> muss sich öffnen, bedienen und schließen lassen.
 /// </summary>
+[Collection(UiTestCollection.Name)]
 public sealed class AppDialogWindowTests
 {
     private const string LongFolder = @"D:\OneDrive\Dokumente\02 Arbeit\01 Projekte\25-05 Office Lights Grenzgasse\02 Fotos";
@@ -68,11 +70,33 @@ public sealed class AppDialogWindowTests
         elapsed.Should().BeLessThan(TimeSpan.FromSeconds(10));
     }
 
-    private static (DialogOutcome Outcome, TimeSpan Elapsed) ShowAndFinish(DialogRequest request, DialogChoice finishWith)
+    /// <summary>
+    /// Der Testdialog wird trotz <c>ShowActivated = false</c> Vordergrundfenster (ShowDialog aktiviert immer). Tastatur-
+    /// eingaben, die über den InputManager kommen — wie die echte Tastatur des Benutzers —, dürfen die Vorbelegung nicht
+    /// verändern (Wackler: Rücktaste aus Herberts App leerte „02 Fotos“).
+    /// </summary>
+    [Fact]
+    public void Eingaben_ueber_den_InputManager_erreichen_den_Testdialog_nicht()
     {
-        var sw = Stopwatch.StartNew();
-        var outcome = TestUiThread.Run(() =>
+        var request = new DialogRequest("Neue Bibliothek", "Name der Bibliothek:") { PrimaryText = "Anlegen", InputInitialValue = "02 Fotos" };
+
+        var (outcome, _) = ShowAndFinish(request, DialogChoice.Primary, window =>
         {
+            var source = PresentationSource.FromVisual(window)!;
+            var back = new KeyEventArgs(Keyboard.PrimaryDevice, source, 0, Key.Back) { RoutedEvent = Keyboard.PreviewKeyDownEvent };
+            _ = InputManager.Current.ProcessInput(back);
+            TextCompositionManager.StartComposition(new TextComposition(InputManager.Current, Keyboard.FocusedElement, "x"));
+        });
+
+        outcome.InputText.Should().Be("02 Fotos");
+    }
+
+    private static (DialogOutcome Outcome, TimeSpan Elapsed) ShowAndFinish(DialogRequest request, DialogChoice finishWith, Action<Window>? beforeFinish = null)
+    {
+        // Gemessen wird nur die Zeit im Dialog — Start des Test-UI-Threads und Wartezeit davor zählen nicht.
+        return TestUiThread.Run(() =>
+        {
+            var sw = Stopwatch.StartNew();
             var window = new AppDialogWindow(request);
             // Testfenster außerhalb des sichtbaren Bereichs — sonst erscheint der Dialog auf dem Desktop des Benutzers.
             window.WindowStartupLocation = WindowStartupLocation.Manual;
@@ -81,11 +105,13 @@ public sealed class AppDialogWindowTests
             window.ShowActivated = false;
             // Erst wenn das Fenster fertig gelayoutet ist (ContextIdle), wird der Knopf „gedrückt“ —
             // hängt das Layout, kommt dieser Aufruf nie und der Test läuft in den Timeout.
-            window.Loaded += (_, _) => window.Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, () => window.Finish(finishWith));
+            window.Loaded += (_, _) => window.Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, () =>
+            {
+                beforeFinish?.Invoke(window);
+                window.Finish(finishWith);
+            });
             _ = window.ShowDialog();
-            return window.Outcome;
+            return (window.Outcome, sw.Elapsed);
         }, TimeSpan.FromSeconds(15));
-        sw.Stop();
-        return (outcome, sw.Elapsed);
     }
 }

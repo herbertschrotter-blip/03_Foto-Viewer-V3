@@ -16,6 +16,7 @@ namespace PhotoViewerV3.Wpf.Tests.Gallery;
 /// bleibt zwischen Items (ViewModel) und ListBox konsistent, auch für Items ohne Container; der UI-Automation-Baum
 /// bleibt klein (Blatt-Peers + Virtualisierung). Alle Tests öffnen ein echtes Fenster auf dem Test-UI-Thread.
 /// </summary>
+[Collection(UiTestCollection.Name)]
 public sealed class VirtualizingTilePanelTests
 {
     private const int ItemCount = 1000;

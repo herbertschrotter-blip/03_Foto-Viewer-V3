@@ -12,6 +12,7 @@ using PhotoViewerV3.Wpf.Tests.Fixtures;
 namespace PhotoViewerV3.Wpf.Tests.Sorter;
 
 /// <summary>Wurzel-Auswahl von Sortierer und Flatten (ADR-0020/ADR-0024): Vorbelegung, Synchronisation, Sperre, Neuladen.</summary>
+[Collection(UiTestCollection.Name)]
 public sealed class SorterRootSelectionTests
 {
     private const string Archive = @"D:\Fotos";

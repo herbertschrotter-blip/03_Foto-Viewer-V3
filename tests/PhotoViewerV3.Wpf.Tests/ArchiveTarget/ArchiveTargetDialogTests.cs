@@ -13,6 +13,7 @@ namespace PhotoViewerV3.Wpf.Tests.ArchiveTarget;
 /// schließt mit dem Zielordner — hängt das Layout, läuft der Test in den Timeout. Mit der Umgebungsvariable
 /// <c>PHOTOVIEWERV3_TEST_SHOTS</c> (Ordner) wird zusätzlich ein Bild des Dialogs abgelegt.
 /// </summary>
+[Collection(UiTestCollection.Name)]
 public sealed class ArchiveTargetDialogTests
 {
     [Fact]

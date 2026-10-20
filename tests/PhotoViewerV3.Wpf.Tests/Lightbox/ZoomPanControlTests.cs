@@ -13,6 +13,7 @@ namespace PhotoViewerV3.Wpf.Tests.Lightbox;
 /// zugeschnitten und dann per RenderTransform verkleinert — sichtbar blieb nur die linke obere Ecke in Fit-Größe.
 /// Eingepasst muss das Bild die Bühne in der Breite füllen; ein Treffertest am rechten Rand muss das Bild treffen.
 /// </summary>
+[Collection(UiTestCollection.Name)]
 public sealed class ZoomPanControlTests
 {
     [Fact]

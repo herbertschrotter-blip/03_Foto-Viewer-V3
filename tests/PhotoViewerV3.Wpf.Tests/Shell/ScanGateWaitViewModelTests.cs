@@ -17,7 +17,7 @@ namespace PhotoViewerV3.Wpf.Tests.Shell;
 /// Alles läuft auf dem Test-UI-Thread mit echtem <see cref="ScanGate"/> und eigenem Messenger — nicht parallel zu den
 /// Fenster-Tests, die auf demselben Dispatcher die Reihenfolge von Loaded/ContentRendered prüfen.
 /// </summary>
-[Collection(ScanGateWaitUiCollection.Name)]
+[Collection(UiTestCollection.Name)]
 public sealed class ScanGateWaitViewModelTests
 {
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(30);
@@ -237,10 +237,4 @@ public sealed class ScanGateWaitViewModelTests
         sawWait.Should().BeFalse();
         vm.ScanSummaryTitle.Should().Be("Aktualisierung abgeschlossen");
     });
-}
-
-[CollectionDefinition(Name, DisableParallelization = true)]
-public sealed class ScanGateWaitUiCollection
-{
-    public const string Name = "ScanGateWaitUi";
 }

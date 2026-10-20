@@ -3,6 +3,34 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.28] — 2026-10-20
+
+### Behoben
+- **Wackelnde UI-Tests in der vollen Suite** (`tests/PhotoViewerV3.Wpf.Tests`): `AppDialogWindowTests` (Namensabfrage,
+  gelegentlich auch Fehlerdialog) und `ArchiveUiTests.Dialog_Fenster_oeffnet_entpackt_und_schliesst` rissen ab und zu die
+  10-s-Grenze (gemessen bis 12 s *im* Dialog), einzeln liefen sie stabil grün. Ursache: Alle UI-Testklassen teilen sich
+  den einen `TestUiThread`, liefen als xUnit-Klassen aber parallel. `ShowDialog` und `Dispatcher.Invoke` (Pump) öffnen
+  dort verschachtelte Message-Loops, in denen die Dispatcher-Aufträge fremder Testklassen (z. B. die Layout-Messungen der
+  `VirtualizingTilePanelTests`) mitliefen — der Dialog kehrte erst danach zurück.
+- Abhilfe: neue xUnit-Sammlung `Fixtures/UiTestCollection` (`DisableParallelization = true`); alle zehn Klassen, die den
+  UI-Thread nutzen, stehen darin und laufen nacheinander. `TestUiThread` prüft beim Zugriff über den Aufrufstapel, dass
+  die aufrufende Testklasse in der Sammlung steht, und wirft sonst sofort — eine vergessene Zuordnung fällt damit immer
+  auf statt gelegentlich. `AppDialogWindowTests` misst wie der Archiv-Test nur noch die Zeit im Dialog (nicht den Start
+  des UI-Threads); Zeitgrenzen und Timeouts bleiben unverändert.
+- Zweites Fehlerbild der Namensabfrage (Eingabe leer statt „02 Fotos“): `ShowDialog` übergeht `ShowActivated = false`,
+  der Testdialog wird auch außerhalb des Bildschirms Vordergrundfenster mit fokussiertem, markiertem Eingabefeld — eine
+  Taste des Benutzers in seiner eigenen App (z. B. Rücktaste) landete im Test. `TestUiThread` verwirft deshalb echte
+  Tastatur- und Maus-Eingaben (`InputManager.PreProcessInput`); kein Test nutzt sie, Fokuswechsel bleiben unberührt.
+
+### Tests
+- `tests/PhotoViewerV3.Wpf.Tests`: 169 (+1 `AppDialogWindowTests.Eingaben_ueber_den_InputManager_erreichen_den_Testdialog_nicht`:
+  Rücktaste und Texteingabe über den InputManager ändern die Vorbelegung nicht; Gegenprobe ohne Filter rot). Volle Suite
+  10× hintereinander grün (vorher 3 von 7 Läufen rot); Build ohne Warnungen.
+- Beim Zusammenführen mit 0.2.21–0.2.27: `Categories/CategoryPickerTests` (aus 0.2.23) in die Sammlung `UiTestCollection`
+  aufgenommen — der neue Wächter in `TestUiThread` verlangt das für jede Klasse, die den UI-Thread nutzt.
+  `Shell/ScanGateWaitViewModelTests` (aus 0.2.22) nutzt statt ihrer eigenen Sammlung `ScanGateWaitUiCollection` jetzt
+  ebenfalls `UiTestCollection` — zwei Sammlungen hätten wieder parallel auf dem einen UI-Thread laufen können.
+
 ## [0.2.27] — 2026-10-20
 
 ### Neu

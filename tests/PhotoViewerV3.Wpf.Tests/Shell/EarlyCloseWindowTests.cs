@@ -18,6 +18,7 @@ namespace PhotoViewerV3.Wpf.Tests.Shell;
 /// verwirft das ContentRendered eines geschlossenen Fensters; die Tests öffnen und schließen deshalb sofort und
 /// erwarten keine Ausnahme auf dem UI-Thread.
 /// </summary>
+[Collection(UiTestCollection.Name)]
 public sealed class EarlyCloseWindowTests
 {
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(20);
