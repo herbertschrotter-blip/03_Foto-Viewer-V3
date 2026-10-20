@@ -32,6 +32,13 @@ public interface IOwnChangeScope : IDisposable
     void Add(string path);
 
     /// <summary>
+    /// Wie <see cref="Add"/>, aber für einen ganzen Ordnerbaum: der Ordner und alles darunter gilt als eigen. Für Schritte,
+    /// deren einzelne Pfade vorher nicht feststehen (automatisches Entpacken, ADR-0032). Nicht mit <see cref="Revoke"/>
+    /// rücknehmbar — wer einen Baum anmeldet, scannt danach selbst.
+    /// </summary>
+    void AddTree(string folder);
+
+    /// <summary>
     /// Der Katalog ist für den Pfad nicht gebucht (Dateisystem- oder Katalog-Schritt gescheitert): er gilt nicht mehr als
     /// eigen, und <see cref="IOwnChangeRegistry.Revoked"/> meldet ihn der Ordnerüberwachung.
     /// </summary>
@@ -46,6 +53,7 @@ public sealed class OwnChangeRegistry : IOwnChangeRegistry
 
     private readonly object _gate = new();
     private readonly Dictionary<string, Entry> _entries = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Entry> _trees = new(StringComparer.OrdinalIgnoreCase);
     private readonly TimeSpan _gracePeriod;
     private readonly TimeProvider _time;
 
@@ -79,19 +87,45 @@ public sealed class OwnChangeRegistry : IOwnChangeRegistry
 
         lock (_gate)
         {
-            if (!_entries.TryGetValue(key, out var entry))
-            {
-                return false;
-            }
-
-            if (entry.Active > 0 || _time.GetUtcNow() < entry.ExpiresAt)
+            var now = _time.GetUtcNow();
+            if (IsLiveLocked(_entries, key, now))
             {
                 return true;
             }
 
-            _entries.Remove(key);
+            if (_trees.Count == 0)
+            {
+                return false;
+            }
+
+            // Ordnerbäume (AddTree): der Pfad selbst oder einer seiner übergeordneten Ordner
+            for (var folder = key; !string.IsNullOrEmpty(folder); folder = Path.GetDirectoryName(folder))
+            {
+                if (IsLiveLocked(_trees, folder, now))
+                {
+                    return true;
+                }
+            }
+
             return false;
         }
+    }
+
+    /// <summary>true, wenn der Eintrag aktiv oder in der Nachlaufzeit ist; abgelaufene Einträge werden entfernt.</summary>
+    private static bool IsLiveLocked(Dictionary<string, Entry> entries, string key, DateTimeOffset now)
+    {
+        if (!entries.TryGetValue(key, out var entry))
+        {
+            return false;
+        }
+
+        if (entry.Active > 0 || now < entry.ExpiresAt)
+        {
+            return true;
+        }
+
+        entries.Remove(key);
+        return false;
     }
 
     internal static string? Normalize(string? path)
@@ -111,21 +145,21 @@ public sealed class OwnChangeRegistry : IOwnChangeRegistry
         }
     }
 
-    private void AddLocked(string key)
+    private static void AddLocked(Dictionary<string, Entry> entries, string key)
     {
-        if (!_entries.TryGetValue(key, out var entry))
+        if (!entries.TryGetValue(key, out var entry))
         {
             entry = new Entry();
-            _entries[key] = entry;
+            entries[key] = entry;
         }
 
         entry.Active++;
     }
 
     /// <summary>Scope beendet (oder Pfad zurückgenommen): ab jetzt läuft die Nachlaufzeit bzw. der Eintrag verfällt sofort.</summary>
-    private void ReleaseLocked(string key, int count, bool revoke)
+    private void ReleaseLocked(Dictionary<string, Entry> entries, string key, int count, bool revoke)
     {
-        if (!_entries.TryGetValue(key, out var entry))
+        if (!entries.TryGetValue(key, out var entry))
         {
             return;
         }
@@ -138,7 +172,7 @@ public sealed class OwnChangeRegistry : IOwnChangeRegistry
 
         if (revoke)
         {
-            _entries.Remove(key);
+            entries.Remove(key);
         }
         else
         {
@@ -148,15 +182,18 @@ public sealed class OwnChangeRegistry : IOwnChangeRegistry
 
     private void PruneLocked()
     {
-        if (_entries.Count == 0)
-        {
-            return;
-        }
-
         var now = _time.GetUtcNow();
-        foreach (var key in _entries.Where(kv => kv.Value.Active == 0 && kv.Value.ExpiresAt <= now).Select(kv => kv.Key).ToList())
+        foreach (var entries in new[] { _entries, _trees })
         {
-            _entries.Remove(key);
+            if (entries.Count == 0)
+            {
+                continue;
+            }
+
+            foreach (var key in entries.Where(kv => kv.Value.Active == 0 && kv.Value.ExpiresAt <= now).Select(kv => kv.Key).ToList())
+            {
+                entries.Remove(key);
+            }
         }
     }
 
@@ -181,6 +218,7 @@ public sealed class OwnChangeRegistry : IOwnChangeRegistry
     private sealed class Scope(OwnChangeRegistry owner) : IOwnChangeScope
     {
         private readonly Dictionary<string, int> _paths = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, int> _trees = new(StringComparer.OrdinalIgnoreCase);
         private bool _disposed;
 
         public void Add(string path)
@@ -198,8 +236,28 @@ public sealed class OwnChangeRegistry : IOwnChangeRegistry
                     return;
                 }
 
-                owner.AddLocked(key);
+                AddLocked(owner._entries, key);
                 _paths[key] = _paths.GetValueOrDefault(key) + 1;
+            }
+        }
+
+        public void AddTree(string folder)
+        {
+            var key = Normalize(folder);
+            if (key is null)
+            {
+                return;
+            }
+
+            lock (owner._gate)
+            {
+                if (_disposed)
+                {
+                    return;
+                }
+
+                AddLocked(owner._trees, key);
+                _trees[key] = _trees.GetValueOrDefault(key) + 1;
             }
         }
 
@@ -215,7 +273,7 @@ public sealed class OwnChangeRegistry : IOwnChangeRegistry
             {
                 if (_paths.Remove(key, out var count))
                 {
-                    owner.ReleaseLocked(key, count, revoke: true);
+                    owner.ReleaseLocked(owner._entries, key, count, revoke: true);
                 }
             }
 
@@ -234,10 +292,16 @@ public sealed class OwnChangeRegistry : IOwnChangeRegistry
                 _disposed = true;
                 foreach (var (key, count) in _paths)
                 {
-                    owner.ReleaseLocked(key, count, revoke: false);
+                    owner.ReleaseLocked(owner._entries, key, count, revoke: false);
+                }
+
+                foreach (var (key, count) in _trees)
+                {
+                    owner.ReleaseLocked(owner._trees, key, count, revoke: false);
                 }
 
                 _paths.Clear();
+                _trees.Clear();
             }
         }
     }

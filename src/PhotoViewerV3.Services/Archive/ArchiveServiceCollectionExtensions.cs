@@ -12,6 +12,10 @@ public static class ArchiveServiceCollectionExtensions
     public static IServiceCollection AddArchives(this IServiceCollection services)
     {
         services.TryAddSingleton<IArchiveService, ArchiveService>();
+
+        // Automatisches Entpacken neu gefundener Archive in Eingangsordnern (ADR-0032, Standard aus); Start in App.xaml.cs
+        services.TryAddSingleton<IArchiveAutoExtractSettingsStore, ArchiveAutoExtractSettingsStore>();
+        services.TryAddSingleton<IArchiveAutoExtractService, ArchiveAutoExtractService>();
         return services;
     }
 }

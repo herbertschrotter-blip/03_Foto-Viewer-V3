@@ -9,6 +9,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Logging;
 using PhotoViewerV3.Domain.Enums;
+using PhotoViewerV3.Services.Archive;
 using PhotoViewerV3.Services.Library;
 using PhotoViewerV3.Services.Messaging;
 using PhotoViewerV3.Services.Operations;
@@ -23,7 +24,8 @@ namespace PhotoViewerV3.Shell;
 /// ScanAbortedMessage), (2) Thumbnail-Warteschlange (IThumbnailService.PendingCount, alle 500 ms),
 /// (3) Hintergrund-Aktivität und (4) Recovery-Hinweise: unvollständige oder fehlgeschlagene OperationBatches
 /// (IFileOperationService.GetRecentBatchesAsync — nur Anzeige) sowie „Bibliothek offline“. Dazu (0.2.22) der Hinweis
-/// „Wartet auf laufenden Scan…“ mit „Abbrechen“, solange eine Datei-Operation auf die Scan-Sperre wartet (ADR-0025).
+/// „Wartet auf laufenden Scan…“ mit „Abbrechen“, solange eine Datei-Operation auf die Scan-Sperre wartet (ADR-0025),
+/// sowie Hinweise der Ordnerüberwachung und des automatischen Entpackens (ArchiveAutoExtractStatusMessage, ADR-0032).
 /// Alle Messenger-Nachrichten werden auf den UI-Thread dispatcht.
 /// </summary>
 public sealed partial class StatusBarViewModel : ObservableObject, IDisposable
@@ -98,6 +100,10 @@ public sealed partial class StatusBarViewModel : ObservableObject, IDisposable
         _messenger.Register<StatusBarViewModel, ActiveLibraryChangedMessage>(this, static (r, m) => UiThread.Post(() => { _ = r.RefreshLibraryAsync(); }));
         // Jede Datei-Operation endet mit einer FilesChangedMessage → Batch-Status neu prüfen (billig: 50 Zeilen).
         _messenger.Register<StatusBarViewModel, FilesChangedMessage>(this, static (r, m) => UiThread.Post(() => { _ = r.RefreshRecoveryAsync(); }));
+
+        _archiveTimer = new DispatcherTimer(ArchiveWarningDisplayDuration, DispatcherPriority.Background, (_, _) => ClearArchiveText(), dispatcher);
+        _archiveTimer.Stop();
+        _messenger.Register<StatusBarViewModel, ArchiveAutoExtractStatusMessage>(this, static (r, m) => UiThread.Post(() => r.OnAutoExtractStatus(m.Status)));
     }
 
     /// <summary>Datei-Operationen, die auf einen laufenden Scan derselben Bibliothek warten (Hinweis + „Abbrechen“).</summary>
@@ -296,6 +302,11 @@ public sealed partial class StatusBarViewModel : ObservableObject, IDisposable
             parts.Add("Vorschaubilder");
         }
 
+        if (ArchiveIsRunning)
+        {
+            parts.Add("Entpacken");
+        }
+
         IsBackgroundActive = parts.Count > 0;
         BackgroundActivityText = IsBackgroundActive ? "Hintergrund: " + string.Join(" · ", parts) : null;
     }
@@ -400,8 +411,130 @@ public sealed partial class StatusBarViewModel : ObservableObject, IDisposable
         WatchText = $"Änderungen erkannt — Aktualisierung in {remaining} s";
     }
 
+    // ---- Automatisches Entpacken (Services/Archive, ADR-0032) ------------------------------------------------------
+
+    private static readonly TimeSpan ArchiveWarningDisplayDuration = TimeSpan.FromSeconds(60);
+    private readonly DispatcherTimer _archiveTimer;
+
+    /// <summary>Fortschritt bzw. Ergebnis des automatischen Entpackens; null = nichts.</summary>
+    [ObservableProperty] private string? _archiveText;
+
+    /// <summary>Tooltip: die gemeldeten Archive mit Grund.</summary>
+    [ObservableProperty] private string? _archiveDetails;
+
+    [ObservableProperty] private bool _archiveIsWarning;
+    [ObservableProperty] private bool _archiveIsRunning;
+
+    private void OnAutoExtractStatus(ArchiveAutoExtractStatus status)
+    {
+        var (text, warning, details) = DescribeAutoExtract(status);
+        ArchiveIsRunning = status.State != ArchiveAutoExtractState.Finished;
+        ArchiveText = text;
+        ArchiveIsWarning = warning;
+        ArchiveDetails = details;
+        _archiveTimer.Stop();
+        if (!ArchiveIsRunning)
+        {
+            // Erfolg so lange wie ein Scan-Ergebnis, Meldungen länger (gemeldete Archive sollen auffallen)
+            _archiveTimer.Interval = warning ? ArchiveWarningDisplayDuration : ResultDisplayDuration;
+            _archiveTimer.Start();
+            if (warning)
+            {
+                _logger.LogWarning("Statusleiste: {Text}{NewLine}{Details}", text, Environment.NewLine, details);
+            }
+        }
+
+        UpdateActivity();
+    }
+
+    private void ClearArchiveText()
+    {
+        _archiveTimer.Stop();
+        ArchiveText = null;
+        ArchiveDetails = null;
+        ArchiveIsWarning = false;
+    }
+
+    /// <summary>Text, Warnstufe und Tooltip für einen Zustand des automatischen Entpackens.</summary>
+    internal static (string Text, bool IsWarning, string? Details) DescribeAutoExtract(ArchiveAutoExtractStatus status)
+    {
+        switch (status.State)
+        {
+            case ArchiveAutoExtractState.Running:
+                var prefix = status.Total > 1 ? $"Archiv {status.Index}/{status.Total}" : "Archiv";
+                return ($"{prefix} wird automatisch entpackt: {status.CurrentArchive}", false, null);
+            case ArchiveAutoExtractState.Scanning:
+                return ("Entpackte Archive werden in den Katalog aufgenommen…", false, null);
+        }
+
+        var summary = status.Summary;
+        if (summary is null)
+        {
+            return ("Automatisches Entpacken beendet", false, null);
+        }
+
+        var problems = summary.Problems;
+        var lines = problems.Select(p => $"{p.Name}: {p.Message ?? DescribeState(p.State)}").ToList();
+        if (summary.ScanError is not null)
+        {
+            lines.Add($"Katalog nicht aktualisiert: {summary.ScanError}");
+        }
+
+        if (summary.Canceled)
+        {
+            lines.Add("Automatisches Entpacken abgebrochen.");
+        }
+
+        var details = lines.Count > 0 ? string.Join(Environment.NewLine, lines) : null;
+        var notExtracted = summary.Items.Count - summary.ExtractedCount;
+        string text;
+        if (summary.ExtractedCount > 0)
+        {
+            text = $"Automatisch entpackt: {Plural(summary.ExtractedCount, "Archiv", "Archive")} · {summary.FilesExtracted:N0} Dateien";
+            if (summary.RecycledCount > 0)
+            {
+                text += $" · {summary.RecycledCount:N0} im Papierkorb";
+            }
+
+            if (notExtracted > 0)
+            {
+                text += $" · {notExtracted:N0} nicht entpackt";
+            }
+            else if (problems.Count > 0)
+            {
+                text += " · mit Hinweisen";
+            }
+        }
+        else if (problems.Count == 1)
+        {
+            var p = problems[0];
+            text = $"Archiv nicht automatisch entpackt: {p.Name} — {p.Message ?? DescribeState(p.State)}";
+        }
+        else if (problems.Count > 1)
+        {
+            text = $"{problems.Count:N0} Archive nicht automatisch entpackt";
+        }
+        else
+        {
+            text = summary.Canceled ? "Automatisches Entpacken abgebrochen" : "Automatisches Entpacken beendet";
+        }
+
+        return (text, summary.HasProblems, details);
+    }
+
+    private static string DescribeState(ArchiveAutoExtractItemState state) => state switch
+    {
+        ArchiveAutoExtractItemState.ExtractedWithErrors => "mit Fehlern entpackt",
+        ArchiveAutoExtractItemState.Failed => "nicht entpackt",
+        ArchiveAutoExtractItemState.Skipped => "übersprungen",
+        _ => "entpackt",
+    };
+
+    private static string Plural(int count, string one, string many) => count == 1 ? $"1 {one}" : $"{count:N0} {many}";
+
     public void Dispose()
     {
+        _archiveTimer.Stop();
         _thumbnailTimer.Stop();
         _resultTimer.Stop();
         _recoveryTimer.Stop();

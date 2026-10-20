@@ -129,6 +129,24 @@
                     <Border Style="{StaticResource StatusSeparator}" />
                 </StackPanel>
 
+                <!-- Automatisches Entpacken (Services/Archive, ADR-0032): Fortschritt bzw. Ergebnis, Tooltip = gemeldete Archive -->
+                <StackPanel Orientation="Horizontal"
+                            AutomationProperties.Name="Automatisches Entpacken"
+                            ToolTip="{Binding ArchiveDetails}"
+                            Visibility="{Binding ArchiveText, Converter={StaticResource NullToVis}}">
+                    <ui:ProgressRing IsIndeterminate="True" Width="12" Height="12" Margin="0,0,8,0" VerticalAlignment="Center"
+                                     Visibility="{Binding ArchiveIsRunning, Converter={StaticResource BoolToVis}}" />
+                    <ui:SymbolIcon Symbol="FolderZip24"
+                                   Style="{StaticResource StatusIcon}"
+                                   Visibility="{Binding ArchiveIsWarning, Converter={StaticResource InvBoolToVis}}" />
+                    <ui:SymbolIcon Symbol="Warning16"
+                                   Style="{StaticResource StatusIcon}"
+                                   Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                   Visibility="{Binding ArchiveIsWarning, Converter={StaticResource BoolToVis}}" />
+                    <TextBlock Style="{StaticResource StatusText}" Text="{Binding ArchiveText}" MaxWidth="560" TextTrimming="CharacterEllipsis" />
+                    <Border Style="{StaticResource StatusSeparator}" />
+                </StackPanel>
+
                 <StackPanel Orientation="Horizontal"
                             Visibility="{Binding HintText, Converter={StaticResource NullToVis}}">
                     <ui:SymbolIcon Symbol="Warning16"

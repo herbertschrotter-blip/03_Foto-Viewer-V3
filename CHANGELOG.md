@@ -3,6 +3,43 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.25] — 2026-10-20
+
+### Neu (ADR-0032)
+- **Archive automatisch entpacken** (Einstellungen → **Archive**, Standard **aus**, global): findet ein Incremental-Scan
+  („Aktualisieren“ oder Ordnerüberwachung) ein **neues** Archiv unter einer **Eingangs-Wurzel**, entpackt der neue
+  `IArchiveAutoExtractService` (Services/Archive) es **nach dem Scan** vollständig in den Ordner mit dem Archivnamen daneben
+  (verschachtelte Archive über das bestehende Runden-System bis Tiefe 3) und startet danach einen Incremental-Scan.
+  Optional (zweiter Schalter, ebenfalls aus) wandert das Archiv nach fehlerfreiem Entpacken über
+  `IFileOperationService.RecycleAsync` protokolliert in den Papierkorb.
+- Unberührt bleiben Archive unter der Archiv-Wurzel, Archive aus Fresh-Scan/„Neu aufbauen“, Archive in einem aus einem
+  Archiv entstandenen Ordner (neue `ArchiveExtractedMessage` des `ArchiveService`, manuell wie automatisch — keine
+  Schleife) und Archive, deren Zielordner schon existiert. Passwortgeschützte, beschädigte und leere Archive bleiben liegen.
+- **Sperren**: entpackt wird je Archiv mit `IScanGate.AcquireForFileOperationAsync` (wartet auf das Ende des Scans),
+  Papierkorb und Folge-Scan holen die Sperre danach selbst (nicht wiedereintrittsfähig, ADR-0025). Kein Eingriff in den
+  ScanService.
+- **Ordnerüberwachung**: neues `IOwnChangeScope.AddTree` (Ordner und alles darunter gilt als eigen); die Zielordner sind bis
+  nach dem Folge-Scan angemeldet — kein zweiter automatischer Scan.
+- **Statusleiste**: Fortschritt („Archiv 1/3 wird automatisch entpackt: …“), Ergebnis („Automatisch entpackt: n Archive ·
+  m Dateien · k im Papierkorb“), gemeldete Archive als Warnung mit Name und Grund im Tooltip.
+
+### Tests
+- `tests/PhotoViewerV3.Tests`: 434 (+10): `Archive/ArchiveAutoExtractServiceTests` (9: Standard aus, aus = kein Entpacken,
+  an = Entpacken neben dem Archiv + Folge-Scan + eigene Ordnerbäume, Papierkorb protokolliert, nur Eingang, verschlüsselt/
+  beschädigt/Zielordner vorhanden bleiben liegen und werden gemeldet, wartet auf gehaltene Sperre und kein Deadlock mit
+  gemeinsamem ScanGate, verschachtelte Reste ohne Schleife, Archive aus manuellem Entpacken unberührt),
+  `Watch/OwnChangeRegistryTests` (+1: `AddTree`).
+- `tests/PhotoViewerV3.Wpf.Tests`: 173 (+5): `Settings/SettingsAutoExtractTests` (Laden, Schalter speichern, Speicherfehler
+  setzt zurück, ohne Dienst deaktiviert, Statusleisten-Text).
+- Rauchtest 21/21 OK, 0 WPF-Binding-Fehler (Einstellung im Rauchtest aus; kein eigener Schritt).
+- Hinweis: bei stark ausgelasteter Maschine (mehrere parallele Läufe) schlugen bestehende Fenster-Tests
+  (`EarlyCloseWindowTests`, `AppDialogWindowTests`, `GalleryToolbarLayoutTests`, `ArchiveUiTests`-Fenster) gelegentlich mit
+  Dispatcher-Timeout fehl; einzeln und im erneuten Gesamtlauf grün.
+
+### Offen
+- Einstellung nur global (nicht je Bibliothek); Archive, die vor dem Einschalten schon im Katalog standen, und Archive
+  eines Fresh-Scans bleiben manuell. Kein eigener Rauchtest-Schritt für das automatische Entpacken.
+
 ## [0.2.24] — 2026-10-20
 
 ### Behoben (ADR-0028, offener Punkt aus 0.2.14)

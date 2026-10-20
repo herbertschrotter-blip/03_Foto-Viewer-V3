@@ -8,6 +8,7 @@ using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
+using PhotoViewerV3.Services.Archive;
 using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Database.Relocation;
 using PhotoViewerV3.Services.Infrastructure;
@@ -20,7 +21,7 @@ namespace PhotoViewerV3.Settings;
 
 /// <summary>
 /// Einstellungen: Farbschema, Speicherorte (DB, Logs; DB samt Thumbnails umziehen, ADR-0026), Thumbnail-Cache (Größe, Leeren), FFmpeg-Status,
-/// unterstützte Formate, Ordnerüberwachung (Schalter, Ruhezeit) und App-Version.
+/// unterstützte Formate, Ordnerüberwachung (Schalter, Ruhezeit), automatisches Entpacken von Archiven (ADR-0032) und App-Version.
 /// </summary>
 public sealed partial class SettingsViewModel : ObservableObject
 {
@@ -37,7 +38,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     private readonly IDatabaseRelocationService _relocation;
     private readonly IAppRestartService _restart;
     private readonly ILogger<SettingsViewModel> _logger;
+    private readonly IArchiveAutoExtractService? _autoExtract;
 
+    /// <param name="autoExtract">Automatisches Entpacken (ADR-0032); optional, damit ältere Tests ohne den Dienst auskommen.</param>
     public SettingsViewModel(
         ILibraryContextFactory factory,
         IAppDataPaths paths,
@@ -49,7 +52,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         ILibraryWatchService watch,
         IDatabaseRelocationService relocation,
         IAppRestartService restart,
-        ILogger<SettingsViewModel> logger)
+        ILogger<SettingsViewModel> logger,
+        IArchiveAutoExtractService? autoExtract = null)
     {
         _factory = factory;
         _paths = paths;
@@ -62,6 +66,66 @@ public sealed partial class SettingsViewModel : ObservableObject
         _relocation = relocation;
         _restart = restart;
         _logger = logger;
+        _autoExtract = autoExtract;
+    }
+
+    // ---- Archive automatisch entpacken (Services/Archive, ADR-0032) ---------------------------------
+
+    [ObservableProperty] private bool _isAutoExtractEnabled;
+    [ObservableProperty] private bool _isAutoExtractRecycle;
+    private bool _autoExtractLoading;
+
+    /// <summary>false, wenn der Dienst fehlt (dann bleibt der Abschnitt deaktiviert).</summary>
+    public bool IsAutoExtractAvailable => _autoExtract is not null;
+
+    internal void LoadAutoExtractSettings()
+    {
+        if (_autoExtract is null)
+        {
+            return;
+        }
+
+        _autoExtractLoading = true;
+        try
+        {
+            IsAutoExtractEnabled = _autoExtract.IsEnabled;
+            IsAutoExtractRecycle = _autoExtract.RecycleAfterExtract;
+        }
+        finally
+        {
+            _autoExtractLoading = false;
+        }
+    }
+
+    partial void OnIsAutoExtractEnabledChanged(bool value)
+    {
+        if (!_autoExtractLoading && _autoExtract is { } service)
+        {
+            _ = ApplyAutoExtractAsync(() => service.SetEnabledAsync(value), "Automatisches Entpacken");
+        }
+    }
+
+    partial void OnIsAutoExtractRecycleChanged(bool value)
+    {
+        if (!_autoExtractLoading && _autoExtract is { } service)
+        {
+            _ = ApplyAutoExtractAsync(() => service.SetRecycleAfterExtractAsync(value), "Papierkorb nach dem Entpacken");
+        }
+    }
+
+    /// <summary>Sofort anwenden und speichern; bei Fehler Fehler-InfoBar und Schalter auf den gespeicherten Stand zurück.</summary>
+    internal async Task ApplyAutoExtractAsync(Func<Task> apply, string what)
+    {
+        try
+        {
+            await apply().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"{what} konnte nicht gespeichert werden: {ex.Message}";
+            _logger.LogError(ex, "Automatisches Entpacken: {What} konnte nicht gespeichert werden", what);
+            LoadAutoExtractSettings();
+        }
     }
 
     // ---- Ordnerüberwachung (Services/Watch) ---------------------------------------------------------
@@ -195,6 +259,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         AppVersionText = BuildVersionText();
         NotifyThemeChanged();
         LoadWatchSettings();
+        LoadAutoExtractSettings();
 
         await RefreshCacheStatsAsync().ConfigureAwait(true);
     }

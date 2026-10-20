@@ -203,8 +203,15 @@ Vorschaubild, die Kachel zeigt ein Archiv-Symbol mit Endung und Größe. Die Fil
   Dateien erscheinen sofort in der Galerie.
 - Passwortgeschützte Archive werden angezeigt, aber mit klarer Meldung nicht entpackt (kein Passwort-Dialog); Einträge
   mit Pfaden außerhalb des Zielordners („Zip-Slip“, `..\..\`) werden übersprungen und als Fehler gemeldet.
-- Entpackt wird in der App über SharpCompress (keine Installation von 7-Zip/WinRAR nötig, ADR-0022). Automatisches
-  Entpacken beim Scan gibt es noch nicht.
+- Entpackt wird in der App über SharpCompress (keine Installation von 7-Zip/WinRAR nötig, ADR-0022).
+- **Automatisch entpacken** (0.2.25, ADR-0032, Standard aus): Einstellungen → **Archive** → „Neue Archive in
+  Eingangsordnern automatisch entpacken“, optional „Archiv nach fehlerfreiem Entpacken in den Papierkorb verschieben“.
+  Findet „Aktualisieren“ oder die Ordnerüberwachung ein **neues** Archiv in einem **Eingangsordner**, entpackt die App es
+  nach dem Scan vollständig (alle Dateien, verschachtelte Archive bis 3 Ebenen) in einen Ordner mit dem Archivnamen
+  daneben und aktualisiert die Bibliothek erneut. Unberührt bleiben: Archive im Archivordner, Archive, die schon vor dem
+  Einschalten im Katalog standen, Archive in bereits entpackten Ordnern und Archive, deren Zielordner schon existiert.
+  Passwortgeschützte oder beschädigte Archive bleiben liegen; die Statusleiste zeigt Fortschritt und Ergebnis, gemeldete
+  Archive mit Grund im Tooltip.
 
 ### Ordner
 Links der Ordnerbaum der aktiven Bibliothek (Dateizähler direkt / gesamt), rechts die Galerie. Umschalter „mit

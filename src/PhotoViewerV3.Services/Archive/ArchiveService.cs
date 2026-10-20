@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Logging;
 using PhotoViewerV3.Domain.Enums;
 using PhotoViewerV3.Services.Media;
@@ -39,19 +40,23 @@ public sealed class ArchiveService : IArchiveService
     private readonly ILogger<ArchiveService> _logger;
     private readonly IScanService? _scanner;
     private readonly IFileOperationService? _fileOps;
+    private readonly IMessenger _messenger;
 
     /// <param name="scanner">Optional: Incremental-Scan nach dem Entpacken (null = kein Scan, z. B. in Tests).</param>
     /// <param name="fileOps">Optional: Papierkorb für das Archiv nach dem Entpacken (null = nie).</param>
+    /// <param name="messenger">Optional (Tests); produktiv WeakReferenceMessenger.Default — für <see cref="ArchiveExtractedMessage"/>.</param>
     public ArchiveService(
         IMediaFormatRegistry formats,
         ILogger<ArchiveService> logger,
         IScanService? scanner = null,
-        IFileOperationService? fileOps = null)
+        IFileOperationService? fileOps = null,
+        IMessenger? messenger = null)
     {
         _formats = formats;
         _logger = logger;
         _scanner = scanner;
         _fileOps = fileOps;
+        _messenger = messenger ?? WeakReferenceMessenger.Default;
     }
 
     public bool IsArchive(string? path)
@@ -103,6 +108,20 @@ public sealed class ArchiveService : IArchiveService
 
         // Hauptarchiv (Runde 0) und verschachtelte Runden — synchrone I/O auf dem Thread-Pool.
         await Task.Run(() => ExtractRounds(run, options, progress, ct), CancellationToken.None).ConfigureAwait(false);
+
+        // Vor dem Scan melden, welcher Ordner aus dem Archiv entstand: das automatische Entpacken (ADR-0032) fasst darin
+        // gefundene Archive nicht noch einmal an (verschachtelte Archive behandelt allein das Runden-System oben).
+        if (Directory.Exists(run.TargetFolder))
+        {
+            try
+            {
+                _messenger.Send(new ArchiveExtractedMessage(archivePath, run.TargetFolder));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Empfänger der ArchiveExtractedMessage warf eine Ausnahme");
+            }
+        }
 
         // Nachlauf: Papierkorb und Scan nur nach vollständigem, fehlerfreiem Lauf.
         var recycled = false;

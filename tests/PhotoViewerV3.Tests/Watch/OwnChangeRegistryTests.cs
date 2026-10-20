@@ -110,4 +110,27 @@ public sealed class OwnChangeRegistryTests
         registry.IsOwn(string.Empty).Should().BeFalse();
         registry.IsOwn("   ").Should().BeFalse();
     }
+
+    [Fact]
+    public void AddTree_covers_the_folder_and_everything_below_for_the_grace_period()
+    {
+        var time = new ManualTime();
+        var registry = new OwnChangeRegistry(TimeSpan.FromSeconds(10), time);
+        var folder = Path.Combine(Root, "Eingang", "urlaub");
+        var scope = registry.Begin();
+
+        scope.AddTree(folder + Path.DirectorySeparatorChar);
+
+        registry.IsOwn(folder).Should().BeTrue("der Ordner selbst (Ereignis „Ordner angelegt“)");
+        registry.IsOwn(Path.Combine(folder, "sub", "IMG_0001.jpg")).Should().BeTrue("alles darunter, Pfade stehen vorher nicht fest");
+        registry.IsOwn(Path.Combine(Root, "Eingang", "urlaub-2", "IMG_0001.jpg")).Should().BeFalse("nur echte Unterpfade, kein Namenspräfix");
+        registry.IsOwn(Path.Combine(Root, "Eingang", "IMG_0001.jpg")).Should().BeFalse("der Ordner darüber gehört nicht dazu");
+
+        scope.Dispose();
+        time.Now += TimeSpan.FromSeconds(9);
+        registry.IsOwn(Path.Combine(folder, "IMG_0002.jpg")).Should().BeTrue("Nachlaufzeit wie bei einzelnen Pfaden");
+        time.Now += TimeSpan.FromSeconds(2);
+        registry.IsOwn(Path.Combine(folder, "IMG_0002.jpg")).Should().BeFalse();
+        registry.IsOwn(folder).Should().BeFalse();
+    }
 }
