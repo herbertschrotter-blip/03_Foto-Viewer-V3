@@ -128,8 +128,9 @@ der Ansichtsumschaltung, nur in der Kachelansicht: Kachelbreite 120–320 px in 
 Fenstern (bzw. rechts auf der Ordner-Seite) rutscht die Suche in eine eigene Zeile, statt gequetscht zu werden. Ein Ordnerfilter erscheint als
 Chip und lässt sich dort wieder aufheben. Kacheln: Herz = Favorit, Sterne = Bewertung, Badge „fehlt“ bei Dateien, die
 beim letzten Scan nicht mehr auf der Platte lagen. Ordner ohne direkte Dateien zeigen ihre Unterordner als Kacheln.
-Bei einer Auswahl erscheint unten die Aktionsleiste (Favorit setzen/entfernen, Bewertung, Verschieben nach…,
-Ins Archiv…, Papierkorb, Auswahl aufheben); **Rückgängig** nimmt die letzte Verschiebung/Umbenennung (auch eine
+**Alle auswählen** (Knopf rechts in der Kopfzeile neben „Rückgängig“, wie Strg+A) wählt alle Dateien der aktuellen
+Seite. Bei einer Auswahl erscheint unten die Aktionsleiste (Favorit setzen/entfernen, Bewertung, Verschieben nach…,
+Ins Archiv…, Papierkorb, Alle auswählen, Auswahl aufheben); **Rückgängig** nimmt die letzte Verschiebung/Umbenennung (auch eine
 Ordner-Umbenennung) zurück.
 
 | Taste | Wirkung |

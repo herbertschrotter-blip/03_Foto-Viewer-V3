@@ -354,7 +354,13 @@ public sealed class GalleryToolbarLayoutTests(ITestOutputHelper output)
 
         public bool HasLibrary => true;
 
+        public bool HasCategories => false;
+
+        public string CategoryFilterText => "Kategorien";
+
         public ICommand SearchCommand => Noop;
+
+        public ICommand SelectAllCommand => Noop;
 
         public ICommand ClearSearchCommand => Noop;
 

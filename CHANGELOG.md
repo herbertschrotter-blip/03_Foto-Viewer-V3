@@ -3,6 +3,21 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.27] — 2026-10-20
+
+### Neu
+- **Knopf „Alle auswählen“** in der Galerie: rechts in der Kopfzeile neben „Rückgängig“ (immer sichtbar) und in der
+  Aktionsleiste neben „Auswahl aufheben“; wählt wie Strg+A alle Dateien der aktuellen Seite (`SelectAllCommand`).
+  Damit die Ansichtszeile bei 1024 px Fensterbreite einzeilig bleibt, sind Sortier-Auswahl (150 px) und
+  Vorschaugrößen-Regler (72 px, ohne Symbol davor) etwas schmaler.
+
+### Tests
+- Kopfzeilen-Layouttest (9 Breiten/Varianten) weiter grün mit dem neuen Knopf; Wpf-Tests 168, Rauchtest 21/21.
+
+### Offen
+- `AppDialogWindowTests` und `ArchiveUiTests` (echte Fenster) scheitern in der vollen Wpf-Suite gelegentlich (einzeln
+  stabil grün, schon bei 0.2.20 beobachtet) — Fokus/Timing, nicht an diese Änderung gebunden.
+
 ## [0.2.26] — 2026-10-20
 
 ### Neu (ADR-0029)

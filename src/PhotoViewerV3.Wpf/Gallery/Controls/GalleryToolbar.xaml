@@ -201,7 +201,7 @@
             <StackPanel Orientation="Horizontal">
                 <ui:SymbolIcon Symbol="ArrowSort24" FontSize="16" Margin="0,0,6,0"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                <ComboBox MinWidth="170"
+                <ComboBox MinWidth="150"
                           AutomationProperties.AutomationId="GallerySortCombo"
                           AutomationProperties.Name="Sortierung"
                           ItemsSource="{Binding SortOptions}"
@@ -227,9 +227,7 @@
             <!-- Vorschaugröße (nur Kachelansicht, 0.2.19): 120–320 px in 20er-Stufen; auch Strg+Mausrad, Strg+Plus/Minus -->
             <StackPanel Orientation="Horizontal" Margin="0,0,8,0"
                         Visibility="{Binding IsGridView, Converter={StaticResource BoolToVis}}">
-                <ui:SymbolIcon Symbol="ImageMultiple24" FontSize="14" Margin="0,0,4,0" VerticalAlignment="Center"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                <Slider Width="90" VerticalAlignment="Center"
+                <Slider Width="72" VerticalAlignment="Center"
                         AutomationProperties.AutomationId="GalleryTileSizeSlider"
                         AutomationProperties.Name="Vorschaugröße"
                         ToolTip="Vorschaugröße (Strg+Mausrad)"
@@ -262,6 +260,13 @@
                              IsChecked="{Binding ViewMode, Converter={StaticResource EnumEquals}, ConverterParameter=List}">
                     <ui:SymbolIcon Symbol="AppsListDetail24" FontSize="16" />
                 </RadioButton>
+                <!-- Alle auswählen (wie Strg+A): alle Dateien der aktuellen Seite -->
+                <ui:Button Icon="{ui:SymbolIcon SelectAllOn24}"
+                           ToolTip="Alle Dateien dieser Seite auswählen (Strg+A)"
+                           AutomationProperties.AutomationId="GallerySelectAllButton"
+                           AutomationProperties.Name="Alle auswählen"
+                           Command="{Binding SelectAllCommand}"
+                           Margin="0,0,4,0" />
                 <ui:Button Content="Rückgängig"
                            Icon="{ui:SymbolIcon ArrowUndo24}"
                            ToolTip="Letzte Datei-Operation rückgängig machen"

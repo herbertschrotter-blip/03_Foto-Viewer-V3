@@ -554,6 +554,10 @@
 
                         <Border Width="1" Margin="6,4,6,4" Background="{DynamicResource ControlStrokeColorDefaultBrush}" />
 
+                        <ui:Button Appearance="Transparent" ToolTip="Alle Dateien dieser Seite auswählen (Strg+A)"
+                                   AutomationProperties.Name="Alle auswählen"
+                                   Icon="{ui:SymbolIcon SelectAllOn24}"
+                                   Command="{Binding SelectAllCommand}" />
                         <ui:Button Appearance="Transparent" ToolTip="Auswahl aufheben (Esc)"
                                    AutomationProperties.Name="Auswahl aufheben"
                                    Icon="{ui:SymbolIcon Dismiss24}"
