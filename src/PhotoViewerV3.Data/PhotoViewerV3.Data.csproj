@@ -13,9 +13,12 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <!-- Nur für 'dotnet ef' (Migrationen). Ohne „contentfiles“: sonst kopiert Microsoft.CodeAnalysis.Workspaces.MSBuild
+         (transitiv) die Ordner BuildHost-net472/-netcore (~4 MB, 46 Dateien) als Inhaltsdateien in jede Ausgabe bis ins
+         veröffentlichte Paket; 'dotnet ef migrations add' braucht sie nicht (ADR-0029, Nachtrag 0.2.31). -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
       <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <IncludeAssets>runtime; build; native; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.Data.Sqlite" />
   </ItemGroup>

@@ -1,6 +1,6 @@
 # ADR-0029: Portable Auslieferung als self-contained Ordner (win-x64) mit Version aus dem CHANGELOG
 
-- **Status:** Accepted
+- **Status:** Accepted (Nachtrag 0.2.31: `BuildHost-net472/-netcore` nicht mehr im Paket — EF-Design-Paket im Data-Projekt ohne `contentfiles`, `publish.ps1` prüft es; 734 statt 780 Dateien, 252,8 statt 256,8 MB, ZIP 112,3 statt 114,1 MB)
 - **Datum:** 2026-10-20
 - **Entscheider:** Herbert Schrotter
 - **Bezogen auf:** [ADR-0001](0001-runtime-and-ui-stack.md) (Runtime- und UI-Stack), [ADR-0003](0003-catalog-modell.md) (zentrale DB unter `%LocalAppData%`), [ADR-0026](0026-speicherort-katalog-waehlbar.md) (Speicherort wählbar)

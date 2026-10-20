@@ -96,6 +96,10 @@ foreach ($item in $required) {
     if (-not (Test-Path -LiteralPath (Join-Path $outDir $item))) { throw "Pflichtbestandteil fehlt im Paket: $item" }
 }
 if (Test-Path -LiteralPath (Join-Path $outDir 'libvlc\win-x86')) { throw 'libvlc\win-x86 sollte nicht im x64-Paket liegen.' }
+# Werkzeuge für 'dotnet ef' gehören nicht ins Paket (Data-Projekt: EF-Design-Paket ohne contentfiles, 0.2.31).
+$designOnly = @(Get-ChildItem -LiteralPath $outDir -Directory -Filter 'BuildHost-*') +
+              @(Get-ChildItem -LiteralPath $outDir -File -Filter 'Microsoft.EntityFrameworkCore.Design.dll')
+if ($designOnly.Count -gt 0) { throw "Design-Zeit-Bestandteile im Paket: $($designOnly.Name -join ', ')" }
 
 $files = Get-ChildItem -LiteralPath $outDir -Recurse -File
 $folderMb = [math]::Round(($files | Measure-Object Length -Sum).Sum / 1MB, 1)

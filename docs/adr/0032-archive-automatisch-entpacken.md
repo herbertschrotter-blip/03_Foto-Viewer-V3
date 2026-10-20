@@ -1,6 +1,6 @@
 # ADR-0032: Neue Archive in Eingangsordnern optional automatisch entpacken
 
-- **Status:** Accepted
+- **Status:** Accepted (Entscheidung 1 „Einstellung global“ abgelöst durch [ADR-0033](0033-auto-entpacken-je-bibliothek.md): je Bibliothek, 0.2.31)
 - **Datum:** 2026-10-20
 - **Entscheider:** Claude (Auftrag ohne Rückfragemöglichkeit — Annahmen unten, Abnahme durch Herbert Schrotter offen)
 - **Bezogen auf:** ADR-0012 (Operation-Logging), ADR-0017 (Nachrichten), ADR-0018 (Datei-Operationen nur über Service),

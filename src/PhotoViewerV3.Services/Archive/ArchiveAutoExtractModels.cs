@@ -3,15 +3,25 @@ using PhotoViewerV3.Services.Scanning;
 namespace PhotoViewerV3.Services.Archive;
 
 /// <summary>
-/// Einstellungen des automatischen Entpackens (ADR-0032), global in der Settings-Tabelle. Beides standardmäßig aus:
-/// ohne Zustimmung des Benutzers legt die App keine Ordner an und verschiebt kein Archiv in den Papierkorb.
+/// Einstellungen des automatischen Entpackens einer Bibliothek (ADR-0032, je Bibliothek seit 0.2.31 / ADR-0033) in der
+/// Settings-Tabelle unter <c>archives.autoExtract.enabled.{LibraryId}</c> und <c>archives.autoExtract.recycle.{LibraryId}</c>.
+/// Beides standardmäßig aus: ohne Zustimmung des Benutzers legt die App keine Ordner an und verschiebt kein Archiv in den
+/// Papierkorb. Die globalen Schlüssel bis 0.2.30 (<see cref="LegacyEnabledKey"/>, <see cref="LegacyRecycleKey"/>) übernimmt
+/// der Store einmalig als Vorgabe für die bestehenden Bibliotheken und entfernt sie danach.
 /// </summary>
 public sealed record ArchiveAutoExtractSettings(bool Enabled, bool RecycleAfterExtract)
 {
-    public const string EnabledKey = "archives.autoExtract.enabled";
-    public const string RecycleKey = "archives.autoExtract.recycle";
+    /// <summary>Globaler Schalter bis 0.2.30 — nur noch für die einmalige Übernahme gelesen.</summary>
+    public const string LegacyEnabledKey = "archives.autoExtract.enabled";
+
+    /// <summary>Globaler Papierkorb-Schalter bis 0.2.30 — nur noch für die einmalige Übernahme gelesen.</summary>
+    public const string LegacyRecycleKey = "archives.autoExtract.recycle";
 
     public static ArchiveAutoExtractSettings Default { get; } = new(false, false);
+
+    public static string EnabledKeyFor(int libraryId) => LegacyEnabledKey + "." + libraryId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    public static string RecycleKeyFor(int libraryId) => LegacyRecycleKey + "." + libraryId.ToString(System.Globalization.CultureInfo.InvariantCulture);
 }
 
 /// <summary>Wie ein einzelnes Archiv beim automatischen Entpacken ausging.</summary>

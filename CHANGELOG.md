@@ -3,6 +3,61 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.31] — 2026-10-20
+
+### Neu (ADR-0033, offene Punkte aus 0.2.25)
+- **Automatisches Entpacken je Bibliothek** statt global: Schlüssel `archives.autoExtract.enabled.{LibraryId}` und
+  `archives.autoExtract.recycle.{LibraryId}` in der Settings-Tabelle (keine Schema-Änderung), Standard aus. Beim ersten
+  Start übernimmt jede bestehende Bibliothek ohne eigenen Eintrag die bisherige globale Einstellung (Entpacken und
+  Papierkorb), danach werden die globalen Schlüssel entfernt — die Übernahme läuft genau einmal, neue Bibliotheken
+  starten mit „aus“.
+- Einstellungen → **Archive** zeigt die Schalter der **aktiven Bibliothek** („Gilt für die aktive Bibliothek „Name““);
+  ohne aktive Bibliothek ist der Abschnitt deaktiviert. Die Bibliotheksseite bleibt unverändert.
+- **„Vorhandene Archive in Eingängen jetzt entpacken…“** (nur bei eingeschaltetem Schalter): zählt Archive der aktiven
+  Bibliothek unter Eingangs-Wurzeln, deren Zielordner noch fehlt, fragt mit Anzahl nach und reiht denselben Lauf wie
+  nach einem Scan ein (Sperre je Archiv, Papierkorb nach Einstellung, ein Folge-Scan, Statusleiste). Früher entpackte
+  Archive (Zielordner vorhanden) zählen nicht und werden nicht als „übersprungen“ gemeldet.
+- `IArchiveAutoExtractService`: `GetSettings(libraryId)`, `SetEnabledAsync`/`SetRecycleAfterExtractAsync` mit LibraryId,
+  `CountExistingAsync`, `ExtractExistingAsync`; `IArchiveAutoExtractSettingsStore`: je Bibliothek, `LoadAllAsync`,
+  `MigrateGlobalDefaultAsync`. ADR-0032 mit Statusvermerk (Entscheidung „global“ abgelöst).
+
+### Geändert (ADR-0029, Nachtrag)
+- **Portable Version ohne `BuildHost-net472/-netcore`**: `Microsoft.EntityFrameworkCore.Design` im Data-Projekt ohne
+  `contentfiles` (bleibt `PrivateAssets=all`); die Ordner kamen als Inhaltsdateien von
+  `Microsoft.CodeAnalysis.Workspaces.MSBuild` in jede Ausgabe bis ins Paket. `build/publish.ps1` bricht ab, wenn
+  `BuildHost-*` oder `Microsoft.EntityFrameworkCore.Design.dll` im Paket liegen.
+- Paket gemessen (gleicher Code, nur diese Änderung): **vorher 780 Dateien / 256,8 MB / ZIP 114,1 MB, nachher 734 Dateien
+  / 252,8 MB / ZIP 112,3 MB** — Unterschied genau die 46 BuildHost-Dateien (2,2 + 1,8 MB).
+- `dotnet ef migrations add` im Data-Projekt geprüft (Probe-Migration erzeugt, leer, wieder entfernt; Snapshot unverändert);
+  `dotnet ef migrations list` listet alle vier Migrationen.
+
+### Tests
+- `tests/PhotoViewerV3.Tests`: 466 (+7 `Archive/ArchiveAutoExtractPerLibraryTests`: Store je Bibliothek getrennt,
+  einmalige Übernahme der globalen Vorgabe (eigener Eintrag hat Vorrang, zweiter Start ändert nichts, neue Bibliothek
+  aus), ohne globale Einstellung alles aus, Start übernimmt und entpackt in beiden Bibliotheken, Entpacken nur in der
+  Bibliothek mit „an“ (auch nach Umschalten), Papierkorb-Schalter je Bibliothek, vorhandene Archive nachholen (nur bei
+  „an“, ohne schon entpackte, Archiv-Wurzel und andere Bibliothek); `ArchiveAutoExtractServiceTests` auf die neue API).
+- `tests/PhotoViewerV3.Wpf.Tests`: 203 (+1): `Settings/SettingsAutoExtractTests` (aktive Bibliothek laden/wechseln,
+  Speichern mit LibraryId, ohne Dienst oder ohne aktive Bibliothek deaktiviert, „Vorhandene Archive“ mit Rückfrage,
+  Abbrechen, Papierkorb-Hinweis, nichts vorhanden). Volle Suite 3× hintereinander grün; Build ohne Warnungen.
+- **Rauchtest 23/23 OK**, 0 WPF-Binding-Fehler — neuer Schritt **„Auto-Entpacken“** vor „Ordnerüberwachung“
+  (`Shell/Smoke/SmokeScenario.AutoExtract.cs`): zweiter Eingang `<Bibliothek>-Auto-Eingang` mit einem ZIP vor dem
+  Einschalten (bleibt unberührt), Schalter der aktiven Bibliothek auf der Einstellungsseite (DB-Schlüssel, kein globaler
+  Schlüssel), ZIP in den Eingang kopieren → Aktualisieren → automatisch entpackt → Folge-Scan (Added 2) → Katalog,
+  Galerie und Statusleiste, danach „Vorhandene Archive jetzt entpacken“ für das ältere ZIP; am Ende Schalter aus,
+  Eingang entfernt. Screenshots `15-einstellungen-auto-entpacken`, `15-galerie-auto-entpackt`.
+- Rauchtest zusätzlich mit der **veröffentlichten** EXE (Paket 0.2.31 ohne BuildHost,
+  `build/run-smoke.ps1 -Exe <Paket>\PhotoViewerV3.exe -TestLib <Testbibliothek>`): 23/23 OK, 0 WPF-Binding-Fehler, kein
+  ERR/FTL im Log.
+
+### Offen
+- Die Einstellung einer nicht aktiven Bibliothek ist nur nach Wechsel der aktiven Bibliothek änderbar (Schalter auf der
+  Bibliotheksseite wäre über dieselbe Service-API nachrüstbar).
+- „Vorhandene Archive nachholen“ erkennt Archive in Ordnern, die in einer **früheren** Sitzung aus einem Archiv
+  entstanden, nicht (nur Reste an der Tiefengrenze 3 betroffen). Settings-Einträge gelöschter Bibliotheken bleiben liegen.
+- Archive eines Fresh-Scans (neue Bibliothek) und von „Neu aufbauen“ werden weiterhin nicht automatisch entpackt — über
+  „Vorhandene Archive jetzt entpacken…“ aber nachholbar.
+
 ## [0.2.30] — 2026-10-20
 
 ### Geändert (ADR-0031, offene Punkte aus 0.2.23)

@@ -112,7 +112,7 @@ public sealed class ArchiveAutoExtractServiceTests
             fx.WriteInboxFile("vorhanden.jpg");
             beforeFreshScan?.Invoke(fx);
             var env = new Env(fx, library.Id);
-            await env.Store.SaveAsync(new ArchiveAutoExtractSettings(enabled, recycle));
+            await env.Store.SaveAsync(library.Id, new ArchiveAutoExtractSettings(enabled, recycle));
             await env.Service.StartAsync();
             await env.Scanner.ScanAsync(library.Id, ScanMode.Fresh, null, CancellationToken.None);
             await env.Service.WhenIdleAsync().WaitAsync(Timeout);
@@ -149,12 +149,13 @@ public sealed class ArchiveAutoExtractServiceTests
         using var fx = await TempLibraryFixture.CreateAsync();
         var store = new ArchiveAutoExtractSettingsStore(fx.ContextFactory);
 
-        (await store.LoadAsync()).Should().Be(ArchiveAutoExtractSettings.Default);
+        (await store.LoadAsync(1)).Should().Be(ArchiveAutoExtractSettings.Default);
         ArchiveAutoExtractSettings.Default.Enabled.Should().BeFalse();
         ArchiveAutoExtractSettings.Default.RecycleAfterExtract.Should().BeFalse();
 
-        await store.SaveAsync(new ArchiveAutoExtractSettings(true, true));
-        (await store.LoadAsync()).Should().Be(new ArchiveAutoExtractSettings(true, true));
+        await store.SaveAsync(1, new ArchiveAutoExtractSettings(true, true));
+        (await store.LoadAsync(1)).Should().Be(new ArchiveAutoExtractSettings(true, true));
+        (await store.LoadAsync(2)).Should().Be(ArchiveAutoExtractSettings.Default, "je Bibliothek (ADR-0033)");
     }
 
     [Fact]
@@ -166,7 +167,7 @@ public sealed class ArchiveAutoExtractServiceTests
         var scan = await env.IncrementalAndWaitAsync();
 
         scan.Added.Should().Be(1, "das Archiv selbst kommt in den Katalog");
-        env.Service.IsEnabled.Should().BeFalse();
+        env.Service.GetSettings(env.LibraryId).Enabled.Should().BeFalse();
         env.Archives.Calls.Should().Be(0);
         Directory.Exists(Path.Combine(env.Inbox, "neu")).Should().BeFalse();
         File.Exists(zip).Should().BeTrue();

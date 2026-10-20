@@ -71,7 +71,9 @@ pwsh -File build\publish.ps1
 Erzeugt per `dotnet publish` (Release, `win-x64`, **self-contained**, kein Single-File, kein Trimming) den Ordner
 `artifacts\PhotoViewerV3-<Version>-win-x64\` und daneben dieselbe Version als ZIP. Ordner bzw. ZIP an einen beliebigen
 Ort kopieren und `PhotoViewerV3.exe` starten — ein installiertes .NET ist nicht nötig. Das Skript bricht ab, wenn die
-Produktversion der EXE nicht zum CHANGELOG passt oder SQLite (`e_sqlite3.dll`) bzw. LibVLC (`libvlc\win-x64\`) fehlen.
+Produktversion der EXE nicht zum CHANGELOG passt, SQLite (`e_sqlite3.dll`) bzw. LibVLC (`libvlc\win-x64\`) fehlen oder
+Werkzeuge für `dotnet ef` (`BuildHost-*`, `Microsoft.EntityFrameworkCore.Design.dll`) im Paket liegen (seit 0.2.31 nicht
+mehr: 734 Dateien, ~253 MB, ZIP ~112 MB).
 `artifacts\` ist per `.gitignore` ausgenommen; mit `-OutputRoot <Ordner>` landet das Paket außerhalb des Repos (z. B.
 außerhalb von OneDrive), `-NoZip` lässt das ZIP weg, `-FrameworkDependent` baut ein kleineres Paket, das die
 „.NET 10 Desktop Runtime“ (x64) voraussetzt.
@@ -232,14 +234,21 @@ Vorschaubild, die Kachel zeigt ein Archiv-Symbol mit Endung und Größe. Die Fil
 - Passwortgeschützte Archive werden angezeigt, aber mit klarer Meldung nicht entpackt (kein Passwort-Dialog); Einträge
   mit Pfaden außerhalb des Zielordners („Zip-Slip“, `..\..\`) werden übersprungen und als Fehler gemeldet.
 - Entpackt wird in der App über SharpCompress (keine Installation von 7-Zip/WinRAR nötig, ADR-0022).
-- **Automatisch entpacken** (0.2.25, ADR-0032, Standard aus): Einstellungen → **Archive** → „Neue Archive in
-  Eingangsordnern automatisch entpacken“, optional „Archiv nach fehlerfreiem Entpacken in den Papierkorb verschieben“.
+- **Automatisch entpacken** (0.2.25, ADR-0032; **je Bibliothek** seit 0.2.31, ADR-0033; Standard aus): Einstellungen →
+  **Archive** → „Neue Archive in Eingangsordnern automatisch entpacken“, optional „Archiv nach fehlerfreiem Entpacken in
+  den Papierkorb verschieben“ — beide Schalter gelten für die **aktive Bibliothek** (der Abschnitt nennt sie); für eine
+  andere Bibliothek diese zuerst auf der Bibliotheksseite aktivieren. Eine bis 0.2.30 global eingeschaltete Einstellung
+  übernehmen beim ersten Start alle bestehenden Bibliotheken; neue Bibliotheken starten mit „aus“.
   Findet „Aktualisieren“ oder die Ordnerüberwachung ein **neues** Archiv in einem **Eingangsordner**, entpackt die App es
   nach dem Scan vollständig (alle Dateien, verschachtelte Archive bis 3 Ebenen) in einen Ordner mit dem Archivnamen
   daneben und aktualisiert die Bibliothek erneut. Unberührt bleiben: Archive im Archivordner, Archive, die schon vor dem
   Einschalten im Katalog standen, Archive in bereits entpackten Ordnern und Archive, deren Zielordner schon existiert.
   Passwortgeschützte oder beschädigte Archive bleiben liegen; die Statusleiste zeigt Fortschritt und Ergebnis, gemeldete
   Archive mit Grund im Tooltip.
+- **Vorhandene Archive in Eingängen jetzt entpacken…** (Knopf im selben Abschnitt, nur bei eingeschaltetem Schalter):
+  holt das Entpacken für Archive nach, die schon vor dem Einschalten im Katalog standen — nennt die Anzahl, fragt nach
+  und entpackt wie die Automatik (Zielordner neben dem Archiv, Papierkorb nach Einstellung, danach ein Aktualisieren).
+  Archive, deren Zielordner schon existiert (z. B. früher manuell entpackt), zählen nicht.
 
 ### Ordner
 Links der Ordnerbaum der aktiven Bibliothek (Dateizähler direkt / gesamt), rechts die Galerie. Umschalter „mit
@@ -407,7 +416,9 @@ Mediendateien, damit der Mass-Missing-Guard beim Incremental-Schritt nicht greif
 `Unsortiert\smoke-archiv.zip` an, entpackt es nach `Unsortiert\smoke-archiv\` und verschiebt das ZIP in den
 Windows-Papierkorb (der Ordner wird beim nächsten Lauf vorab entfernt). Die Ordnerüberwachung ist während des Laufs
 ausgeschaltet und wird erst im letzten Schritt (Ruhezeit 1 s, `Unsortiert\smoke-watch.jpg` kopieren und löschen)
-eingeschaltet. Der Schritt „Eingang → Archiv“
+eingeschaltet. Der Schritt „Auto-Entpacken“ davor legt den Geschwisterordner `<Bibliothek>-Auto-Eingang` als Eingang an,
+schaltet das automatische Entpacken für die Bibliothek ein und am Ende wieder aus und entfernt Eingang und Ordner wieder.
+Der Schritt „Eingang → Archiv“
 legt den Geschwisterordner `<Bibliothek>-Eingang` als Eingangs-Wurzel an (wird am Ende wieder entfernt) und hinterlässt
 in der Bibliothek die leeren Ordner `2026\Smoke-Archiv` und `2026\Smoke-Umbenannt` (beim nächsten Lauf vorab entfernt)
 — deshalb immer gegen eine Kopie laufen lassen.

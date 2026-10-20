@@ -12,6 +12,7 @@ using PhotoViewerV3.Services.Archive;
 using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Database.Relocation;
 using PhotoViewerV3.Services.Infrastructure;
+using PhotoViewerV3.Services.Library;
 using PhotoViewerV3.Services.Media;
 using PhotoViewerV3.Services.Thumbnails;
 using PhotoViewerV3.Services.Watch;
@@ -21,7 +22,7 @@ namespace PhotoViewerV3.Settings;
 
 /// <summary>
 /// Einstellungen: Farbschema, Speicherorte (DB, Logs; DB samt Thumbnails umziehen, ADR-0026), Thumbnail-Cache (Größe, Leeren), FFmpeg-Status,
-/// unterstützte Formate, Ordnerüberwachung (Schalter, Ruhezeit), automatisches Entpacken von Archiven (ADR-0032) und App-Version.
+/// unterstützte Formate, Ordnerüberwachung (Schalter, Ruhezeit), automatisches Entpacken von Archiven (ADR-0032, je aktiver Bibliothek ADR-0033) und App-Version.
 /// </summary>
 public sealed partial class SettingsViewModel : ObservableObject
 {
@@ -39,8 +40,10 @@ public sealed partial class SettingsViewModel : ObservableObject
     private readonly IAppRestartService _restart;
     private readonly ILogger<SettingsViewModel> _logger;
     private readonly IArchiveAutoExtractService? _autoExtract;
+    private readonly ILibraryService? _libraries;
 
     /// <param name="autoExtract">Automatisches Entpacken (ADR-0032); optional, damit ältere Tests ohne den Dienst auskommen.</param>
+    /// <param name="libraries">Aktive Bibliothek für die Einstellung je Bibliothek (ADR-0033); optional wie <paramref name="autoExtract"/>.</param>
     public SettingsViewModel(
         ILibraryContextFactory factory,
         IAppDataPaths paths,
@@ -53,7 +56,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         IDatabaseRelocationService relocation,
         IAppRestartService restart,
         ILogger<SettingsViewModel> logger,
-        IArchiveAutoExtractService? autoExtract = null)
+        IArchiveAutoExtractService? autoExtract = null,
+        ILibraryService? libraries = null)
     {
         _factory = factory;
         _paths = paths;
@@ -67,49 +71,89 @@ public sealed partial class SettingsViewModel : ObservableObject
         _restart = restart;
         _logger = logger;
         _autoExtract = autoExtract;
+        _libraries = libraries;
     }
 
-    // ---- Archive automatisch entpacken (Services/Archive, ADR-0032) ---------------------------------
+    // ---- Archive automatisch entpacken (Services/Archive, ADR-0032; je Bibliothek, ADR-0033) ---------
 
     [ObservableProperty] private bool _isAutoExtractEnabled;
     [ObservableProperty] private bool _isAutoExtractRecycle;
+
+    /// <summary>Dienst vorhanden und eine aktive Bibliothek gewählt — sonst bleibt der Abschnitt deaktiviert.</summary>
+    [ObservableProperty] private bool _isAutoExtractAvailable;
+
+    /// <summary>Für welche Bibliothek die Schalter gelten („Gilt für die aktive Bibliothek „Fotos““).</summary>
+    [ObservableProperty] private string _autoExtractLibraryText = "Keine Bibliothek ausgewählt.";
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ExtractExistingArchivesCommand))]
+    private bool _isExtractingExisting;
+
     private bool _autoExtractLoading;
 
-    /// <summary>false, wenn der Dienst fehlt (dann bleibt der Abschnitt deaktiviert).</summary>
-    public bool IsAutoExtractAvailable => _autoExtract is not null;
+    /// <summary>Bibliothek, deren Einstellung der Abschnitt zeigt (die aktive beim Laden der Seite).</summary>
+    internal int? AutoExtractLibraryId { get; private set; }
 
-    internal void LoadAutoExtractSettings()
+    /// <summary>Aktive Bibliothek lesen und deren Einstellungen anzeigen (ohne sie neu zu speichern).</summary>
+    internal async Task LoadAutoExtractSettingsAsync()
     {
         if (_autoExtract is null)
         {
             return;
         }
 
+        LibraryInfo? active = null;
+        try
+        {
+            active = _libraries is null ? null : await _libraries.GetActiveAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Automatisches Entpacken: aktive Bibliothek nicht lesbar");
+        }
+
+        AutoExtractLibraryId = active?.Id;
+        AutoExtractLibraryText = active is null
+            ? "Keine Bibliothek ausgewählt — die Einstellung gilt je Bibliothek."
+            : $"Gilt für die aktive Bibliothek „{active.Name}“ (je Bibliothek einzeln, Standard aus).";
+        ShowAutoExtractSettings();
+    }
+
+    private void ShowAutoExtractSettings()
+    {
         _autoExtractLoading = true;
         try
         {
-            IsAutoExtractEnabled = _autoExtract.IsEnabled;
-            IsAutoExtractRecycle = _autoExtract.RecycleAfterExtract;
+            var settings = _autoExtract is not null && AutoExtractLibraryId is { } id
+                ? _autoExtract.GetSettings(id)
+                : ArchiveAutoExtractSettings.Default;
+            IsAutoExtractAvailable = _autoExtract is not null && AutoExtractLibraryId is not null;
+            IsAutoExtractEnabled = settings.Enabled;
+            IsAutoExtractRecycle = settings.RecycleAfterExtract;
         }
         finally
         {
             _autoExtractLoading = false;
         }
+
+        ExtractExistingArchivesCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnIsAutoExtractEnabledChanged(bool value)
     {
-        if (!_autoExtractLoading && _autoExtract is { } service)
+        if (!_autoExtractLoading && _autoExtract is { } service && AutoExtractLibraryId is { } id)
         {
-            _ = ApplyAutoExtractAsync(() => service.SetEnabledAsync(value), "Automatisches Entpacken");
+            _ = ApplyAutoExtractAsync(() => service.SetEnabledAsync(id, value), "Automatisches Entpacken");
         }
+
+        ExtractExistingArchivesCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnIsAutoExtractRecycleChanged(bool value)
     {
-        if (!_autoExtractLoading && _autoExtract is { } service)
+        if (!_autoExtractLoading && _autoExtract is { } service && AutoExtractLibraryId is { } id)
         {
-            _ = ApplyAutoExtractAsync(() => service.SetRecycleAfterExtractAsync(value), "Papierkorb nach dem Entpacken");
+            _ = ApplyAutoExtractAsync(() => service.SetRecycleAfterExtractAsync(id, value), "Papierkorb nach dem Entpacken");
         }
     }
 
@@ -124,9 +168,71 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             ErrorMessage = $"{what} konnte nicht gespeichert werden: {ex.Message}";
             _logger.LogError(ex, "Automatisches Entpacken: {What} konnte nicht gespeichert werden", what);
-            LoadAutoExtractSettings();
+            ShowAutoExtractSettings();
         }
     }
+
+    private bool CanExtractExistingArchives() => IsAutoExtractAvailable && IsAutoExtractEnabled && !IsExtractingExisting;
+
+    /// <summary>
+    /// „Vorhandene Archive in Eingängen jetzt entpacken…“: zählt die Archive, die schon vor dem Einschalten im Katalog
+    /// standen (Zielordner fehlt noch), fragt nach und reiht den Lauf ein — Fortschritt und Ergebnis in der Statusleiste.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanExtractExistingArchives))]
+    private async Task ExtractExistingArchivesAsync()
+    {
+        if (_autoExtract is not { } service || AutoExtractLibraryId is not { } id)
+        {
+            return;
+        }
+
+        IsExtractingExisting = true;
+        try
+        {
+            var count = await service.CountExistingAsync(id).ConfigureAwait(true);
+            if (count == 0)
+            {
+                InfoMessage = "Keine vorhandenen Archive in den Eingangsordnern, die noch nicht entpackt sind.";
+                return;
+            }
+
+            var recycle = IsAutoExtractRecycle ? " Nach fehlerfreiem Entpacken wandern die Archive in den Papierkorb." : " Die Archive bleiben liegen.";
+            var confirmed = await _dialogs.ConfirmAsync(
+                "Vorhandene Archive entpacken",
+                $"{ArchiveCountText(count)} in den Eingangsordnern werden jetzt jeweils in einen Ordner mit dem Archivnamen daneben entpackt; danach wird die Bibliothek aktualisiert.{recycle}",
+                "Entpacken").ConfigureAwait(true);
+            if (confirmed)
+            {
+                await StartExtractExistingAsync().ConfigureAwait(true);
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Vorhandene Archive konnten nicht entpackt werden: {ex.Message}";
+            _logger.LogError(ex, "Vorhandene Archive entpacken fehlgeschlagen");
+        }
+        finally
+        {
+            IsExtractingExisting = false;
+        }
+    }
+
+    /// <summary>Reiht den Lauf ohne Rückfrage ein (nach der Bestätigung bzw. im Rauchtest) und liefert die Zahl der Archive.</summary>
+    internal async Task<int> StartExtractExistingAsync()
+    {
+        if (_autoExtract is not { } service || AutoExtractLibraryId is not { } id)
+        {
+            return 0;
+        }
+
+        var queued = await service.ExtractExistingAsync(id).ConfigureAwait(true);
+        InfoMessage = queued == 0
+            ? "Keine vorhandenen Archive zum Entpacken."
+            : $"{ArchiveCountText(queued)} werden entpackt — Fortschritt und Ergebnis in der Statusleiste.";
+        return queued;
+    }
+
+    private static string ArchiveCountText(int count) => count == 1 ? "1 Archiv" : $"{count} Archive";
 
     // ---- Ordnerüberwachung (Services/Watch) ---------------------------------------------------------
 
@@ -259,7 +365,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         AppVersionText = BuildVersionText();
         NotifyThemeChanged();
         LoadWatchSettings();
-        LoadAutoExtractSettings();
+        await LoadAutoExtractSettingsAsync().ConfigureAwait(true);
 
         await RefreshCacheStatsAsync().ConfigureAwait(true);
     }

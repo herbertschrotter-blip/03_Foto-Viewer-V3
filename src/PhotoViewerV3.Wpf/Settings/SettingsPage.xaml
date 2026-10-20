@@ -215,10 +215,13 @@
                 </StackPanel>
             </Border>
 
-            <!-- Archive automatisch entpacken (Services/Archive, ADR-0032) -->
-            <Border Style="{StaticResource SectionCard}" IsEnabled="{Binding IsAutoExtractAvailable, Mode=OneTime}">
+            <!-- Archive automatisch entpacken (Services/Archive, ADR-0032; je aktiver Bibliothek, ADR-0033) -->
+            <Border Style="{StaticResource SectionCard}" IsEnabled="{Binding IsAutoExtractAvailable}">
                 <StackPanel>
                     <ui:TextBlock Style="{StaticResource SectionTitle}" Text="Archive (ZIP, RAR, 7z …)" />
+                    <TextBlock Margin="0,0,0,8" FontSize="12" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Text="{Binding AutoExtractLibraryText}" />
                     <ui:ToggleSwitch Content="Neue Archive in Eingangsordnern automatisch entpacken"
                                      IsChecked="{Binding IsAutoExtractEnabled, Mode=TwoWay}"
                                      AutomationProperties.Name="Neue Archive in Eingangsordnern automatisch entpacken" />
@@ -229,6 +232,14 @@
                     <TextBlock Margin="0,8,0,0" FontSize="12" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                Text="Findet „Aktualisieren“ oder die Ordnerüberwachung ein neues Archiv in einem Eingangsordner, wird es nach dem Scan vollständig in einen Ordner mit dem Archivnamen daneben entpackt (verschachtelte Archive bis Tiefe 3) und die Bibliothek erneut aktualisiert. Archive im Archivordner, Archive in bereits entpackten Ordnern und Archive, deren Zielordner schon existiert, bleiben unberührt. Passwortgeschützte oder beschädigte Archive bleiben liegen und werden in der Statusleiste gemeldet." />
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <ui:Button Content="Vorhandene Archive in Eingängen jetzt entpacken…"
+                                   Command="{Binding ExtractExistingArchivesCommand}"
+                                   AutomationProperties.Name="Vorhandene Archive in Eingängen jetzt entpacken" />
+                    </StackPanel>
+                    <TextBlock Margin="0,4,0,0" FontSize="12" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Text="Archive, die schon vor dem Einschalten im Katalog standen, entpackt die Automatik nicht. Dieser Knopf holt das für die aktive Bibliothek nach (nur bei eingeschalteter Einstellung; Archive, deren Zielordner schon existiert, zählen nicht)." />
                 </StackPanel>
             </Border>
 

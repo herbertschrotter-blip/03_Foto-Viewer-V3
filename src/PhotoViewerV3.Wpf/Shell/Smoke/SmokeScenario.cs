@@ -155,6 +155,7 @@ internal sealed partial class SmokeScenario
         _categoryManagement = services.GetRequiredService<CategoryManagementViewModel>();
         _sorterPage = services.GetRequiredService<SorterPageViewModel>();
         _scanGate = services.GetRequiredService<IScanGate>();
+        _autoExtract = services.GetRequiredService<IArchiveAutoExtractService>();
         _messenger.Register<SmokeScenario, ScanCompletedMessage>(this, static (r, m) => r._lastScan = m.Result);
     }
 
@@ -212,6 +213,7 @@ internal sealed partial class SmokeScenario
         await StepAsync("Sortierer: Eingang → Archiv (Wurzel-Auswahl, gesperrtes Ziel, Katalog, Rückgängig, Flatten im Eingang)", SorterInboxToArchiveAsync).ConfigureAwait(true);
         await StepAsync("Wartezustände: Datei-Operation wartet auf Scan (Statusleiste, Abbrechen), Scan wartet auf Datei-Batch (Bibliotheksseite)", GateWaitAsync).ConfigureAwait(true);
         await StepAsync("Katalog gesperrt: Bewertung wartet auf die Schreibsperre (Statusleiste), kommt danach an", CatalogWriteWaitAsync).ConfigureAwait(true);
+        await StepAsync("Auto-Entpacken: ZIP in den Eingang kopieren → Scan → entpackt → Katalog (Einstellung je Bibliothek, vorhandene Archive nachholen)", AutoExtractAsync).ConfigureAwait(true);
         await StepAsync("Ordnerüberwachung: Datei kopieren → automatischer Diff-Scan → Galerie", WatchAsync).ConfigureAwait(true);
         if (_cleanup)
         {

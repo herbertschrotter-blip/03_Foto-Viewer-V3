@@ -50,9 +50,10 @@ public sealed class ArchiveAutoExtractService : IArchiveAutoExtractService
     /// <summary>Ordner, die aus einem Archiv entstanden sind (normalisiert) — Archive darin werden nie automatisch entpackt.</summary>
     private readonly HashSet<string> _producedFolders = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Einstellungen je Bibliothek (ADR-0033); fehlt eine Bibliothek, gilt <see cref="ArchiveAutoExtractSettings.Default"/>.</summary>
+    private readonly Dictionary<int, ArchiveAutoExtractSettings> _settings = new();
+
     private Task _tail = Task.CompletedTask;
-    private volatile bool _enabled;
-    private volatile bool _recycle;
     private volatile ArchiveAutoExtractSummary? _lastSummary;
     private bool _started;
     private bool _disposed;
@@ -80,20 +81,37 @@ public sealed class ArchiveAutoExtractService : IArchiveAutoExtractService
         _messenger = messenger ?? WeakReferenceMessenger.Default;
     }
 
-    public bool IsEnabled => _enabled;
-
-    public bool RecycleAfterExtract => _recycle;
-
     public ArchiveAutoExtractSummary? LastSummary => _lastSummary;
+
+    public ArchiveAutoExtractSettings GetSettings(int libraryId)
+    {
+        lock (_sync)
+        {
+            return _settings.GetValueOrDefault(libraryId, ArchiveAutoExtractSettings.Default);
+        }
+    }
+
+    private bool IsEnabledFor(int libraryId) => GetSettings(libraryId).Enabled;
 
     public async Task StartAsync(CancellationToken ct = default)
     {
-        var settings = await _store.LoadAsync(ct).ConfigureAwait(false);
+        // Einmalige Übernahme der globalen Einstellung bis 0.2.30 als Vorgabe für die bestehenden Bibliotheken (ADR-0033)
+        var adopted = await _store.MigrateGlobalDefaultAsync(ct).ConfigureAwait(false);
+        if (adopted > 0)
+        {
+            _logger.LogInformation("Automatisches Entpacken: globale Einstellung für {Count} Bibliothek(en) übernommen", adopted);
+        }
+
+        var all = await _store.LoadAllAsync(ct).ConfigureAwait(false);
         lock (_sync)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            _enabled = settings.Enabled;
-            _recycle = settings.RecycleAfterExtract;
+            _settings.Clear();
+            foreach (var (libraryId, settings) in all)
+            {
+                _settings[libraryId] = settings;
+            }
+
             if (_started)
             {
                 return;
@@ -107,29 +125,62 @@ public sealed class ArchiveAutoExtractService : IArchiveAutoExtractService
         _messenger.Register<ArchiveAutoExtractService, ScanCompletedMessage>(this, static (r, m) => r.OnScanCompleted(m));
         _messenger.Register<ArchiveAutoExtractService, ScanAbortedMessage>(this, static (r, m) => r.OnScanAborted(m));
         _messenger.Register<ArchiveAutoExtractService, ArchiveExtractedMessage>(this, static (r, m) => r.OnArchiveExtracted(m));
-        _logger.LogInformation("Automatisches Entpacken: {State}, Papierkorb danach: {Recycle}", settings.Enabled ? "an" : "aus", settings.RecycleAfterExtract ? "ja" : "nein");
+        var on = all.Where(p => p.Value.Enabled).Select(p => p.Key).Order().ToList();
+        _logger.LogInformation("Automatisches Entpacken: an für Bibliothek(en) {Libraries}", on.Count == 0 ? "keine" : string.Join(", ", on));
     }
 
-    public async Task SetEnabledAsync(bool enabled, CancellationToken ct = default)
+    public async Task SetEnabledAsync(int libraryId, bool enabled, CancellationToken ct = default)
     {
-        await _store.SaveAsync(new ArchiveAutoExtractSettings(enabled, _recycle), ct).ConfigureAwait(false);
+        var settings = GetSettings(libraryId) with { Enabled = enabled };
+        await _store.SaveAsync(libraryId, settings, ct).ConfigureAwait(false);
         lock (_sync)
         {
-            _enabled = enabled;
+            _settings[libraryId] = _settings.GetValueOrDefault(libraryId, ArchiveAutoExtractSettings.Default) with { Enabled = enabled };
             if (!enabled)
             {
-                _collecting.Clear();
+                _collecting.Remove(libraryId);
             }
         }
 
-        _logger.LogInformation("Automatisches Entpacken {State}", enabled ? "eingeschaltet" : "ausgeschaltet");
+        _logger.LogInformation("Automatisches Entpacken für Bibliothek {LibraryId} {State}", libraryId, enabled ? "eingeschaltet" : "ausgeschaltet");
     }
 
-    public async Task SetRecycleAfterExtractAsync(bool recycle, CancellationToken ct = default)
+    public async Task SetRecycleAfterExtractAsync(int libraryId, bool recycle, CancellationToken ct = default)
     {
-        await _store.SaveAsync(new ArchiveAutoExtractSettings(_enabled, recycle), ct).ConfigureAwait(false);
-        _recycle = recycle;
-        _logger.LogInformation("Automatisches Entpacken: Papierkorb danach {State}", recycle ? "an" : "aus");
+        var settings = GetSettings(libraryId) with { RecycleAfterExtract = recycle };
+        await _store.SaveAsync(libraryId, settings, ct).ConfigureAwait(false);
+        lock (_sync)
+        {
+            _settings[libraryId] = _settings.GetValueOrDefault(libraryId, ArchiveAutoExtractSettings.Default) with { RecycleAfterExtract = recycle };
+        }
+
+        _logger.LogInformation("Automatisches Entpacken für Bibliothek {LibraryId}: Papierkorb danach {State}", libraryId, recycle ? "an" : "aus");
+    }
+
+    public async Task<int> CountExistingAsync(int libraryId, CancellationToken ct = default)
+        => (await LoadExistingCandidatesAsync(libraryId, ct).ConfigureAwait(false)).Count;
+
+    public async Task<int> ExtractExistingAsync(int libraryId, CancellationToken ct = default)
+    {
+        if (!IsEnabledFor(libraryId))
+        {
+            _logger.LogInformation("Vorhandene Archive entpacken: Bibliothek {LibraryId} hat das automatische Entpacken aus — nichts eingereiht", libraryId);
+            return 0;
+        }
+
+        var candidates = await LoadExistingCandidatesAsync(libraryId, ct).ConfigureAwait(false);
+        lock (_sync)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+        }
+
+        if (candidates.Count > 0)
+        {
+            _logger.LogInformation("Vorhandene Archive entpacken: {Count} Archiv(e) der Bibliothek {LibraryId} eingereiht", candidates.Count, libraryId);
+            Enqueue(libraryId, candidates.Select(c => c.FileId).ToList());
+        }
+
+        return candidates.Count;
     }
 
     public async Task WhenIdleAsync()
@@ -159,7 +210,7 @@ public sealed class ArchiveAutoExtractService : IArchiveAutoExtractService
     {
         lock (_sync)
         {
-            if (_enabled && !_disposed)
+            if (IsEnabledFor(libraryId) && !_disposed)
             {
                 _collecting[libraryId] = new HashSet<int>();
             }
@@ -193,7 +244,7 @@ public sealed class ArchiveAutoExtractService : IArchiveAutoExtractService
         {
             if (_collecting.Remove(message.LibraryId, out var collected)
                 && collected.Count > 0
-                && _enabled
+                && IsEnabledFor(message.LibraryId)
                 && !_disposed
                 && message.Result.Mode == ScanMode.Incremental)
             {
@@ -282,7 +333,7 @@ public sealed class ArchiveAutoExtractService : IArchiveAutoExtractService
 
     private async Task RunAsync(int libraryId, IReadOnlyList<int> ids, CancellationToken ct)
     {
-        if (!_enabled || ct.IsCancellationRequested)
+        if (!IsEnabledFor(libraryId) || ct.IsCancellationRequested)
         {
             return;
         }
@@ -319,7 +370,7 @@ public sealed class ArchiveAutoExtractService : IArchiveAutoExtractService
                 for (var i = 0; i < candidates.Count; i++)
                 {
                     ct.ThrowIfCancellationRequested();
-                    if (!_enabled)
+                    if (!IsEnabledFor(libraryId))
                     {
                         _logger.LogInformation("Automatisches Entpacken ausgeschaltet — {Left} Archiv(e) bleiben unberührt", candidates.Count - i);
                         break;
@@ -357,6 +408,7 @@ public sealed class ArchiveAutoExtractService : IArchiveAutoExtractService
 
     private async Task<ArchiveAutoExtractItem> ProcessOneAsync(int libraryId, Candidate candidate, IOwnChangeScope own, CancellationToken ct)
     {
+        var recycle = GetSettings(libraryId).RecycleAfterExtract;
         if (!File.Exists(candidate.Path))
         {
             return Item(candidate, ArchiveAutoExtractItemState.Skipped, null, "Archiv nicht mehr vorhanden.");
@@ -425,10 +477,10 @@ public sealed class ArchiveAutoExtractService : IArchiveAutoExtractService
         if (result.HasErrors)
         {
             return Item(candidate, ArchiveAutoExtractItemState.ExtractedWithErrors, target,
-                FirstErrors(result) + (_recycle ? " — Archiv bleibt erhalten." : string.Empty), result.FilesExtracted);
+                FirstErrors(result) + (recycle ? " — Archiv bleibt erhalten." : string.Empty), result.FilesExtracted);
         }
 
-        if (!_recycle)
+        if (!recycle)
         {
             return Item(candidate, ArchiveAutoExtractItemState.Extracted, target, null, result.FilesExtracted);
         }
@@ -496,17 +548,7 @@ public sealed class ArchiveAutoExtractService : IArchiveAutoExtractService
         await using var ctx = _factory.Create();
         foreach (var chunk in ids.Chunk(IdChunkSize))
         {
-            var rows = await (
-                    from f in ctx.Files.AsNoTracking()
-                    join d in ctx.Folders.AsNoTracking() on f.FolderId equals d.Id
-                    join r in ctx.LibraryRoots.AsNoTracking() on d.RootId equals (int?)r.Id
-                    where chunk.Contains(f.Id)
-                          && f.LibraryId == libraryId
-                          && f.MediaType == MediaType.Archive
-                          && !f.Missing
-                          && r.LibraryId == libraryId
-                          && r.Role == LibraryRootRole.Inbox
-                    select new { f.Id, FolderPath = d.Path, f.Name })
+            var rows = await InboxArchives(ctx, libraryId, chunk)
                 .ToListAsync(ct)
                 .ConfigureAwait(false);
             result.AddRange(rows.Select(r => new Candidate(r.Id, Path.Combine(r.FolderPath, r.Name), r.Name)));
@@ -515,6 +557,52 @@ public sealed class ArchiveAutoExtractService : IArchiveAutoExtractService
         result.Sort((a, b) => StringComparer.OrdinalIgnoreCase.Compare(a.Path, b.Path));
         return result;
     }
+
+    /// <summary>
+    /// Alle Archive (nicht fehlend) unter Eingangs-Wurzeln der Bibliothek, deren Zielordner noch nicht existiert und die nicht
+    /// in einem entpackten Ordner dieser Sitzung liegen — „Vorhandene Archive in Eingängen jetzt entpacken“ (ADR-0033).
+    /// Schon entpackte Archive (Zielordner vorhanden) zählen nicht und werden auch nicht als „übersprungen“ gemeldet.
+    /// </summary>
+    private async Task<List<Candidate>> LoadExistingCandidatesAsync(int libraryId, CancellationToken ct)
+    {
+        List<InboxArchive> rows;
+        await using (var ctx = _factory.Create())
+        {
+            rows = await InboxArchives(ctx, libraryId, null).ToListAsync(ct).ConfigureAwait(false);
+        }
+
+        var result = new List<Candidate>();
+        foreach (var row in rows)
+        {
+            var path = Path.Combine(row.FolderPath, row.Name);
+            if (IsInProducedFolder(path))
+            {
+                continue;
+            }
+
+            var target = _archives.GetDefaultTargetFolder(path);
+            if (!Directory.Exists(target) && !File.Exists(target))
+            {
+                result.Add(new Candidate(row.Id, path, row.Name));
+            }
+        }
+
+        result.Sort((a, b) => StringComparer.OrdinalIgnoreCase.Compare(a.Path, b.Path));
+        return result;
+    }
+
+    /// <param name="ids">Nur diese FileIds (Chunk) oder null für alle.</param>
+    private static IQueryable<InboxArchive> InboxArchives(PhotoViewerV3.Data.LibraryContext ctx, int libraryId, int[]? ids)
+        => from f in ctx.Files.AsNoTracking()
+           join d in ctx.Folders.AsNoTracking() on f.FolderId equals d.Id
+           join r in ctx.LibraryRoots.AsNoTracking() on d.RootId equals (int?)r.Id
+           where (ids == null || ids.Contains(f.Id))
+                 && f.LibraryId == libraryId
+                 && f.MediaType == MediaType.Archive
+                 && !f.Missing
+                 && r.LibraryId == libraryId
+                 && r.Role == LibraryRootRole.Inbox
+           select new InboxArchive(f.Id, d.Path, f.Name);
 
     private void Publish(ArchiveAutoExtractStatus status)
     {
@@ -547,4 +635,6 @@ public sealed class ArchiveAutoExtractService : IArchiveAutoExtractService
     }
 
     private sealed record Candidate(int FileId, string Path, string Name);
+
+    private sealed record InboxArchive(int Id, string FolderPath, string Name);
 }
