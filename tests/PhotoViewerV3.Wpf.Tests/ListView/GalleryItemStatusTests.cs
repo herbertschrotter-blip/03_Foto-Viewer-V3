@@ -8,7 +8,7 @@ public sealed class GalleryItemStatusTests
 {
     [Theory]
     [InlineData(0, false, "Eingang")]
-    [InlineData(1, false, "Archiv")]
+    [InlineData(1, false, "Bibliothek")]
     [InlineData(null, false, "")]
     [InlineData(0, true, "fehlt")]
     [InlineData(1, true, "fehlt")]

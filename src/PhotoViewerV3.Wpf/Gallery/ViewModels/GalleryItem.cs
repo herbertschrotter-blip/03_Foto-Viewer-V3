@@ -66,7 +66,7 @@ public sealed partial class GalleryItem : ObservableObject
     public bool IsArchived { get; }
 
     /// <summary>Spalte „Status“ der Listenansicht: „fehlt“ vor „Eingang“/„Archiv“, leer bei unbekannter Wurzel.</summary>
-    public string StatusText => Missing ? "fehlt" : IsInbox ? "Eingang" : IsArchived ? "Archiv" : string.Empty;
+    public string StatusText => Missing ? "fehlt" : IsInbox ? "Eingang" : IsArchived ? "Bibliothek" : string.Empty;
 
     [ObservableProperty] private bool _isFavorite;
 

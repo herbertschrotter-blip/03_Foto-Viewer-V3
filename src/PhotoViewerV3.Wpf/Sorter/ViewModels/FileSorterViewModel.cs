@@ -205,7 +205,7 @@ public sealed partial class FileSorterViewModel : ObservableObject
 
     private static string LibraryStatus(SorterLibraryInfo? library) => library is null
         ? "Keine Bibliothek vorhanden — bitte zuerst eine Bibliothek anlegen und scannen."
-        : $"Bibliothek „{library.Name}“ · {library.Roots.Count(r => r.IsInbox)} Eingang/Eingänge, Archiv {library.RootPath}";
+        : $"Bibliothek „{library.Name}“ · {library.Roots.Count(r => r.IsInbox)} Eingang/Eingänge, Bibliotheksordner {library.RootPath}";
 
     partial void OnIsBusyChanged(bool value) => Location.IsEnabled = !value;
 

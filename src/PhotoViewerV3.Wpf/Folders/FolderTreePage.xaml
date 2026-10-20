@@ -75,6 +75,38 @@
                                 IsOpen="{Binding HintText, Converter={StaticResource NullToBool}, Mode=OneWay}"
                                 Visibility="{Binding HintText, Converter={StaticResource NullToVis}}"
                                 Margin="0,0,0,6" />
+                    <!-- Ergebnis der letzten Ordner-Aktion (ADR-0034), mit ✕ ausblendbar -->
+                    <Border Margin="0,0,0,6"
+                            Padding="10,8,4,8"
+                            CornerRadius="6"
+                            BorderThickness="1"
+                            BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                            Visibility="{Binding ResultText, Converter={StaticResource NullToVis}}">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorSecondaryBrush}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding ResultIsWarning}" Value="True">
+                                        <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBackgroundBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="{Binding ResultText}" TextWrapping="Wrap" FontSize="12" />
+                            <ui:Button Grid.Column="1"
+                                       Appearance="Transparent"
+                                       Padding="4"
+                                       VerticalAlignment="Top"
+                                       Icon="{ui:SymbolIcon Dismiss16}"
+                                       ToolTip="Ausblenden"
+                                       Command="{Binding DismissResultCommand}" />
+                        </Grid>
+                    </Border>
                     <ui:InfoBar Message="{Binding ErrorMessage}"
                                 Severity="Error"
                                 IsClosable="False"
@@ -107,6 +139,36 @@
                                                       Icon="{ui:SymbolIcon Rename24}"
                                                       IsEnabled="{Binding CanRename}"
                                                       Command="{Binding PlacementTarget.Tag.RenameFolderCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                      CommandParameter="{Binding}" />
+                                            <!-- ADR-0034: Ordner aus dem Eingang in die Bibliothek übernehmen; Ordner bewerten/kategorisieren -->
+                                            <Separator Visibility="{Binding IsInInbox, Converter={StaticResource BoolToVis}}" />
+                                            <MenuItem Header="In die Bibliothek übernehmen…"
+                                                      Icon="{ui:SymbolIcon FolderArrowRight24}"
+                                                      ToolTip="Ordner samt Unterordner-Struktur in den Bibliotheksordner verschieben (leere Zwischenordner werden zusammengezogen)"
+                                                      Visibility="{Binding IsInInbox, Converter={StaticResource BoolToVis}}"
+                                                      Command="{Binding PlacementTarget.Tag.AdoptFolderCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                      CommandParameter="{Binding}" />
+                                            <Separator />
+                                            <MenuItem Header="Bewertung für alle Dateien" Icon="{ui:SymbolIcon Star24}">
+                                                <MenuItem Header="★ 1 Stern" Command="{Binding RateAllCommand}" CommandParameter="1" />
+                                                <MenuItem Header="★★ 2 Sterne" Command="{Binding RateAllCommand}" CommandParameter="2" />
+                                                <MenuItem Header="★★★ 3 Sterne" Command="{Binding RateAllCommand}" CommandParameter="3" />
+                                                <MenuItem Header="★★★★ 4 Sterne" Command="{Binding RateAllCommand}" CommandParameter="4" />
+                                                <MenuItem Header="★★★★★ 5 Sterne" Command="{Binding RateAllCommand}" CommandParameter="5" />
+                                                <Separator />
+                                                <MenuItem Header="Bewertung entfernen" Command="{Binding RateAllCommand}" CommandParameter="0" />
+                                            </MenuItem>
+                                            <MenuItem Header="Favorit für alle" Icon="{ui:SymbolIcon Heart24}">
+                                                <MenuItem Header="Als Favorit markieren" Command="{Binding FavoriteAllCommand}" CommandParameter="true" />
+                                                <MenuItem Header="Favorit entfernen" Command="{Binding FavoriteAllCommand}" CommandParameter="false" />
+                                            </MenuItem>
+                                            <MenuItem Header="Kategorie für alle…"
+                                                      Icon="{ui:SymbolIcon Grid24}"
+                                                      Command="{Binding PlacementTarget.Tag.EditFolderCategoriesCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                      CommandParameter="{Binding}" />
+                                            <MenuItem Header="Tags für alle…"
+                                                      Icon="{ui:SymbolIcon Tag24}"
+                                                      Command="{Binding PlacementTarget.Tag.EditFolderTagsCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                                       CommandParameter="{Binding}" />
                                         </ContextMenu>
                                     </Setter.Value>

@@ -16,10 +16,10 @@ public sealed record LibraryRootInfo(
 
     public bool IsInbox => Role == LibraryRootRole.Inbox;
 
-    /// <summary>Anzeigetext der Rolle („Archiv“ / „Eingang“).</summary>
+    /// <summary>Anzeigetext der Rolle („Bibliotheksordner“ / „Eingang“; seit 0.2.32 statt „Archiv“, ADR-0034).</summary>
     public string RoleText => RoleLabel(Role);
 
-    public static string RoleLabel(LibraryRootRole role) => role == LibraryRootRole.Archive ? "Archiv" : "Eingang";
+    public static string RoleLabel(LibraryRootRole role) => role == LibraryRootRole.Archive ? "Bibliotheksordner" : "Eingang";
 }
 
 /// <summary>

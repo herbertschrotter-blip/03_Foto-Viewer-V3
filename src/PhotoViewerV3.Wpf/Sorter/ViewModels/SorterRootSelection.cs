@@ -114,7 +114,7 @@ public sealed partial class SorterRootSelection : ObservableObject
 
     public string TargetRootDisplay => TargetRoot ?? "= Quellordner";
 
-    /// <summary>Zielordner kurz: Wurzelname plus relativer Pfad („Fotos6“); außerhalb der Wurzeln der volle Pfad.</summary>
+    /// <summary>Zielordner kurz: Wurzelname plus relativer Pfad („Fotos\2026“); außerhalb der Wurzeln der volle Pfad.</summary>
     public string TargetFolderDisplay
     {
         get
@@ -153,7 +153,7 @@ public sealed partial class SorterRootSelection : ObservableObject
             }
 
             return SorterPaths.PathEquals(root.Path!, SafeNormalize(TargetRoot) ?? string.Empty)
-                ? $"{root.RoleText}-Wurzel „{root.Name}“"
+                ? $"{root.RoleText} „{root.Name}“"
                 : $"unter {root.RoleText} „{root.Name}“";
         }
     }

@@ -23,7 +23,7 @@ public sealed class ArchiveTargetViewModelTests
 
         var root = vm.Roots.Should().ContainSingle().Subject;
         root.IsRoot.Should().BeTrue();
-        root.DisplayName.Should().Be("archiv  (Archiv)");
+        root.DisplayName.Should().Be("archiv  (Bibliotheksordner)");
         root.Children.Select(c => c.Name).Should().Equal("2024", "2025");
         root.Children.Single(c => c.Name == "2024").FolderId.Should().NotBeNull();
         root.Children.Single(c => c.Name == "2025").IsFileSystemOnly.Should().BeTrue();

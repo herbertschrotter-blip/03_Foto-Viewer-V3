@@ -203,7 +203,7 @@
                     </Button>
                     <Button Style="{StaticResource LightboxOverlayButton}"
                             Command="{Binding ArchiveCurrentCommand}"
-                            ToolTip="Ins Archiv… (Strg+M)">
+                            ToolTip="In die Bibliothek… (Strg+M)">
                         <ui:SymbolIcon Symbol="Archive24" FontSize="18" />
                     </Button>
                     <Button Style="{StaticResource LightboxOverlayButton}"

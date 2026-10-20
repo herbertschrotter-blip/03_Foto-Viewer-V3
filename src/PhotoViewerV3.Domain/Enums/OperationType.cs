@@ -14,4 +14,10 @@ public enum OperationType
 
     /// <summary>Ordner umbenannt (Dateisystem + Folders-Zeilen; eine Operation je enthaltener Datei, ADR-0020).</summary>
     RenameFolder = 5,
+
+    /// <summary>
+    /// Ordner in die Bibliothek übernommen (ADR-0034): eine Ordner-Operation (Quelle → Zielordner), MkDir je neu
+    /// angelegtem Zielordner, Move je Datei (auch Nicht-Mediendateien), optional Recycle des Quellordners.
+    /// </summary>
+    AdoptFolder = 6,
 }

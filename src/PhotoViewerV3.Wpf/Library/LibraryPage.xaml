@@ -33,8 +33,25 @@
             <StackPanel Grid.Column="0" VerticalAlignment="Center">
                 <ui:TextBlock FontTypography="Title" Text="Bibliotheken" />
                 <ui:TextBlock FontTypography="Caption"
+                              TextWrapping="Wrap"
                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                              Text="Jede Bibliothek hat einen Archiv-Ordner und beliebig viele Eingangs-Ordner; „Ins Archiv…“ in der Galerie verschiebt Dateien aus dem Eingang ins Archiv. Galerie und Ordnerbaum zeigen die aktive Bibliothek. „Aktualisieren“ übernimmt Änderungen auf der Platte (alle Ordner), „Neu aufbauen“ erstellt den Katalog komplett neu." />
+                              Text="Jede Bibliothek hat einen Bibliotheksordner (dein sortiertes Fotoarchiv) und beliebig viele Eingänge (unsortierte Quellordner). Galerie und Ordnerbaum zeigen die aktive Bibliothek. „Aktualisieren“ übernimmt Änderungen auf der Platte (alle Ordner), „Neu aufbauen“ erstellt den Katalog komplett neu." />
+                <!-- ADR-0034: kurzer Ablauf + was die Datenbank ist -->
+                <Border Margin="0,10,0,0"
+                        Padding="12,8"
+                        CornerRadius="6"
+                        Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
+                        BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1">
+                    <StackPanel>
+                        <TextBlock FontWeight="SemiBold" Text="So funktioniert's" />
+                        <TextBlock Margin="0,2,0,0" TextWrapping="Wrap" FontSize="12"
+                                   Text="1. Eingang hinzufügen (unsortierter Quellordner)  →  2. ansehen, bewerten, kategorisieren (einzelne Dateien oder per Rechtsklick ganze Ordner im Ordnerbaum)  →  3. Ordner in die Bibliothek übernehmen (Struktur bleibt, leere Zwischenordner werden zusammengezogen)." />
+                        <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" FontSize="12"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   Text="Die Datenbank (Katalog) enthält nur Verweise auf deine Dateien samt Bewertungen, Favoriten, Tags und Kategorien — keine Bilder. Die Fotos bleiben in ihren Ordnern auf der Festplatte." />
+                    </StackPanel>
+                </Border>
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                 <ui:Button Content="Liste neu laden"
@@ -212,7 +229,7 @@
                                         </StackPanel>
                                         <TextBlock FontSize="12" Margin="0,2,0,0" Foreground="{DynamicResource TextFillColorTertiaryBrush}"><Run Text="{Binding CountsText, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding RootsText, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding TimestampText, Mode=OneWay}" /></TextBlock>
 
-                                        <!-- Wurzeln (ADR-0020): Archiv zuerst, dann Eingänge; je Zeile Rolle, Pfad, Erreichbarkeit, Aktionen -->
+                                        <!-- Wurzeln (ADR-0020): Bibliotheksordner zuerst, dann Eingänge; je Zeile Rolle, Pfad, Erreichbarkeit, Aktionen -->
                                         <ItemsControl ItemsSource="{Binding Roots}" Margin="0,8,0,0">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate DataType="{x:Type local:LibraryRootListItem}">
@@ -222,7 +239,7 @@
                                                             <ColumnDefinition Width="*" />
                                                             <ColumnDefinition Width="Auto" />
                                                         </Grid.ColumnDefinitions>
-                                                        <Border Grid.Column="0" Width="64" Padding="0,1" CornerRadius="8" VerticalAlignment="Center" Margin="0,0,8,0">
+                                                        <Border Grid.Column="0" MinWidth="64" Padding="8,1" CornerRadius="8" VerticalAlignment="Center" Margin="0,0,8,0">
                                                             <Border.Style>
                                                                 <Style TargetType="Border">
                                                                     <Setter Property="Background" Value="{DynamicResource AccentFillColorTertiaryBrush}" />
@@ -248,9 +265,15 @@
                                                         </StackPanel>
                                                         <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
                                                             <ui:Button Appearance="Transparent" Icon="{ui:SymbolIcon Archive24}" Padding="6,4"
-                                                                       ToolTip="Diesen Ordner zur Archiv-Wurzel machen (bisheriges Archiv wird Eingang)"
+                                                                       ToolTip="Diesen Ordner zum Bibliotheksordner machen (der bisherige Bibliotheksordner wird Eingang)"
                                                                        Visibility="{Binding CanMakeArchive, Converter={StaticResource BoolToVis}}"
                                                                        Command="{Binding DataContext.MakeArchiveRootCommand, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}"
+                                                                       CommandParameter="{Binding}" />
+                                                            <ui:Button Appearance="Transparent" Icon="{ui:SymbolIcon FolderArrowRight24}" Padding="6,4"
+                                                                       Content="In die Bibliothek übernehmen…"
+                                                                       ToolTip="Den ganzen Eingang samt Unterordner-Struktur in den Bibliotheksordner verschieben (Vorschau, leere Zwischenordner zusammenziehen, danach austragen)"
+                                                                       Visibility="{Binding IsInbox, Converter={StaticResource BoolToVis}}"
+                                                                       Command="{Binding DataContext.AdoptInboxCommand, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}"
                                                                        CommandParameter="{Binding}" />
                                                             <ui:Button Appearance="Transparent" Icon="{ui:SymbolIcon Rename24}" Padding="6,4"
                                                                        ToolTip="Anzeigename der Wurzel ändern"
@@ -271,7 +294,7 @@
                                                    Appearance="Secondary"
                                                    HorizontalAlignment="Left"
                                                    Margin="0,4,0,0"
-                                                   ToolTip="Weiteren Ordner als Eingang aufnehmen — Dateien darin gelten als „nicht archiviert“"
+                                                   ToolTip="Unsortierten Quellordner als Eingang aufnehmen — Dateien darin erscheinen im Filter „Noch im Eingang“"
                                                    Command="{Binding DataContext.AddInboxRootCommand, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}"
                                                    CommandParameter="{Binding}" />
                                     </StackPanel>

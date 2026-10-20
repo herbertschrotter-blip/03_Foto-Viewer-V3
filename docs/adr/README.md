@@ -52,6 +52,7 @@ Wenn eine ADR-Entscheidung revidiert wird: **neues ADR anlegen** + altes auf "Su
 | [0031](0031-kategorie-sortierung-segmentweise.md) | Kategorie-Sortierung segmentweise je Wert über einen abdeckenden Index; Zählung bis zur nächsten Änderung zwischengespeichert | Accepted |
 | [0032](0032-archive-automatisch-entpacken.md) | Neue Archive in Eingangsordnern optional automatisch entpacken (nach dem Scan, Standard aus) | Accepted (Einstellung global abgelöst durch 0033) |
 | [0033](0033-auto-entpacken-je-bibliothek.md) | Automatisches Entpacken je Bibliothek (Übernahme der globalen Vorgabe), Schalter für die aktive Bibliothek, vorhandene Archive nachholen | Accepted |
+| [0034](0034-ordner-uebernahme-mit-leerketten-zusammenzug.md) | Ordner in die Bibliothek übernehmen: Struktur bleibt, leere Zwischenordner werden zusammengezogen, ein AdoptFolder-Batch mit Rückgängig; Ordner bewerten; Begriff „Bibliotheksordner“ | Accepted |
 
 ## Quellen der Entscheidungen
 

@@ -47,7 +47,7 @@ public sealed class LibraryRootServiceTests
             .Should().ThrowAsync<InvalidOperationException>().WithMessage("*enthält die Wurzel*");
 
         await FluentActions.Awaiting(() => service.AddRootAsync(lib.Id, fx.OutsideDir, LibraryRootRole.Archive))
-            .Should().ThrowAsync<InvalidOperationException>().WithMessage("*bereits eine Archiv-Wurzel*");
+            .Should().ThrowAsync<InvalidOperationException>().WithMessage("*bereits einen Bibliotheksordner*");
 
         await FluentActions.Awaiting(() => service.AddRootAsync(lib.Id, Path.Combine(fx.RootDir, "gibt-es-nicht"), LibraryRootRole.Inbox))
             .Should().ThrowAsync<DirectoryNotFoundException>();

@@ -64,6 +64,7 @@ public static class ServiceCollectionExtensions
         services.AddArchives();
         services.AddTags();
         services.AddCategories(); // frei konfigurierbare Kategorien mit Werten (ADR-0027)
+        services.AddFolderAdoption(); // Ordner in die Bibliothek übernehmen, Ordner bewerten (ADR-0034)
 
         // Ordnerüberwachung (Services/Watch): FileSystemWatcher je Wurzel → Incremental-Scan nach Ruhezeit
         services.AddWatch();

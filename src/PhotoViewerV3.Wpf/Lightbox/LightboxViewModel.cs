@@ -973,11 +973,11 @@ public sealed partial class LightboxViewModel : ObservableObject, IDisposable
             var success = itemResult?.Success ?? result.Succeeded > 0;
             if (success)
             {
-                ShowStatus($"„{item.Name}“ ins Archiv verschoben.");
+                ShowStatus($"„{item.Name}“ in die Bibliothek verschoben.");
             }
             else
             {
-                ShowStatus($"Ins Archiv fehlgeschlagen: {itemResult?.Error ?? "unbekannter Fehler"}");
+                ShowStatus($"In die Bibliothek fehlgeschlagen: {itemResult?.Error ?? "unbekannter Fehler"}");
                 if (item.IsVideo && ReferenceEquals(CurrentItem, item))
                 {
                     _ = ShowCurrentAsync();
@@ -986,7 +986,7 @@ public sealed partial class LightboxViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            ShowStatus($"Ins Archiv fehlgeschlagen: {ex.Message}");
+            ShowStatus($"In die Bibliothek fehlgeschlagen: {ex.Message}");
             _logger.LogWarning(ex, "ArchiveAsync fehlgeschlagen für File {FileId}", item.FileId);
         }
     }

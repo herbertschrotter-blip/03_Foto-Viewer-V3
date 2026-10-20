@@ -13,7 +13,7 @@ public sealed record SorterRoot(int Id, string Path, LibraryRootRole Role, strin
     public bool IsInbox => Role == LibraryRootRole.Inbox;
 
     /// <summary>„Archiv“ / „Eingang“.</summary>
-    public string RoleText => IsArchive ? "Archiv" : "Eingang";
+    public string RoleText => IsArchive ? "Bibliotheksordner" : "Eingang";
 }
 
 /// <summary>Bibliothek und Wurzel, unter der ein Quellordner liegt, samt allen Wurzeln derselben Bibliothek.</summary>
@@ -37,13 +37,13 @@ public static class SorterTargetCheck
         if (targetRoot is null)
         {
             return $"Das Ziel „{normalizedTarget}“ liegt außerhalb der Wurzeln dieser Bibliothek. Die Dateien fielen aus dem "
-                   + "Katalog (Bewertung, Favorit und Tags gingen verloren) — bitte einen Ordner unter einer Eingangs- oder "
-                   + "Archiv-Wurzel wählen.";
+                   + "Katalog (Bewertung, Favorit und Tags gingen verloren) — bitte einen Ordner in einem Eingang oder "
+                   + "im Bibliotheksordner wählen.";
         }
 
         if (!Directory.Exists(targetRoot.Path))
         {
-            return $"Die {targetRoot.RoleText}-Wurzel „{targetRoot.Path}“ ist nicht erreichbar (Laufwerk offline?).";
+            return $"{targetRoot.RoleText} „{targetRoot.Path}“ ist nicht erreichbar (Laufwerk offline?).";
         }
 
         return null;

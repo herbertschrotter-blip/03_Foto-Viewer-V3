@@ -51,6 +51,27 @@ public sealed class FakeRecycleBin : IRecycleBin
             File.Delete(filePath);
         }
     }
+
+    /// <summary>Ordner (ADR-0034): merkt sich den Aufruf und löscht den Ordner samt Inhalt (simuliert „im Papierkorb“).</summary>
+    public void MoveDirectoryToRecycleBin(string directoryPath)
+    {
+        if (ThrowOnRecycle is not null)
+        {
+            throw ThrowOnRecycle;
+        }
+
+        OnRecycle?.Invoke(directoryPath);
+
+        lock (_gate)
+        {
+            _recycled.Add(directoryPath);
+        }
+
+        if (DeleteFiles)
+        {
+            Directory.Delete(directoryPath, recursive: true);
+        }
+    }
 }
 
 /// <summary>Bild-Renderer-Fake: schreibt eine Dummy-Datei oder scheitert mit konfigurierbarem ErrorCode.</summary>

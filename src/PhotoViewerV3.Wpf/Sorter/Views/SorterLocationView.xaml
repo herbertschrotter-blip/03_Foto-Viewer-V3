@@ -79,7 +79,7 @@
                   ItemTemplate="{StaticResource RootOptionTemplate}"
                   ItemContainerStyle="{StaticResource RootOptionContainerStyle}"
                   IsEnabled="{Binding IsEnabled}"
-                  ToolTip="Wurzel der Bibliothek (Eingang oder Archiv), aus der sortiert wird"
+                  ToolTip="Ordner der Bibliothek (Eingang oder Bibliotheksordner), aus dem sortiert wird"
                   AutomationProperties.Name="Quell-Wurzel"
                   Margin="0,0,8,0" />
         <ui:TextBox Grid.Row="0" Grid.Column="2"
@@ -99,7 +99,7 @@
                   ItemTemplate="{StaticResource RootOptionTemplate}"
                   ItemContainerStyle="{StaticResource RootOptionContainerStyle}"
                   IsEnabled="{Binding IsEnabled}"
-                  ToolTip="Wurzel, unter der die neuen Ordner entstehen (Standard: Archiv)"
+                  ToolTip="Ordner, unter dem die neuen Ordner entstehen (Standard: Bibliotheksordner)"
                   AutomationProperties.Name="Ziel-Wurzel"
                   Margin="0,8,8,0" />
         <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding TargetFolderDisplay}" VerticalAlignment="Center" Margin="0,8,0,0"

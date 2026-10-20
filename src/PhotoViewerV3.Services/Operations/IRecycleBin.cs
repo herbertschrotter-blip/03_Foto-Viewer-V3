@@ -11,4 +11,11 @@ public interface IRecycleBin
     /// Papierkorb nicht verfügbar) — der Aufrufer protokolliert das Item dann als Failed.
     /// </summary>
     void MoveToRecycleBin(string filePath);
+
+    /// <summary>
+    /// Verschiebt einen ganzen Ordner (samt Inhalt) in den Papierkorb — für „Ordner in die Bibliothek übernehmen“
+    /// (ADR-0034), nachdem alle Dateien daraus verschoben wurden. Standard: nicht unterstützt (Fakes ohne Ordner).
+    /// </summary>
+    void MoveDirectoryToRecycleBin(string directoryPath)
+        => throw new NotSupportedException("Dieser Papierkorb unterstützt keine Ordner.");
 }

@@ -55,7 +55,7 @@ public sealed partial class ArchiveFolderNode : ObservableObject
     /// <summary>Ordner nur auf der Platte, noch ohne Katalogzeile (wird beim Verschieben bzw. nächsten Scan angelegt).</summary>
     public bool IsFileSystemOnly => FolderId is null && !IsPlaceholder;
 
-    public string DisplayName => IsRoot ? $"{Name}  (Archiv)" : Name;
+    public string DisplayName => IsRoot ? $"{Name}  (Bibliotheksordner)" : Name;
 
     public ObservableCollection<ArchiveFolderNode> Children { get; } = new();
 

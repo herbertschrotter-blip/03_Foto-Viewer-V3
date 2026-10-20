@@ -280,6 +280,7 @@ Status (Stand 0.2.0): ✅ umgesetzt · 🟡 teilweise · ⬜ offen
 | ⬜ | Face Recognition |
 | 🟡 | Full-Recovery-Repair-UI — Hinweis in der Statusleiste + Undo, kein Reparatur-Dialog |
 | ✅ | File-Sorter (0.2.0 aus V2 portiert, Pattern-Engine + Multi-Level; ab 0.2.16 über alle Wurzeln: Eingang → Archiv, Ziele nur unter den Wurzeln, ADR-0024) |
+| ✅ | Ordner in die Bibliothek übernehmen (Struktur erhalten, leere Zwischenordner zusammenziehen, ein `AdoptFolder`-Batch mit Rückgängig) + Ordner bewerten/kategorisieren (0.2.32, ADR-0034; keine Schema-Änderung, `OperationType.AdoptFolder = 6`). In der Oberfläche heißt die Archiv-Wurzel seitdem „Bibliotheksordner“ |
 | ✅ | Archive: im Katalog, Inhaltsansicht, manuelles Entpacken ✅ (0.2.8, ADR-0022); Auto-Extract nach dem Scan für neue Archive in Eingängen ✅ (0.2.25, ADR-0032, Einstellung, Standard aus; je Bibliothek + vorhandene Archive nachholen ✅ 0.2.31, ADR-0033) |
 | ⬜ | pHash Duplikat-Erkennung |
 

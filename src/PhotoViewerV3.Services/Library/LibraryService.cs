@@ -263,7 +263,7 @@ public sealed class LibraryService : ILibraryService
             if (role == LibraryRootRole.Archive
                 && await ctx.LibraryRoots.AnyAsync(r => r.LibraryId == libraryId && r.Role == LibraryRootRole.Archive, ct).ConfigureAwait(false))
             {
-                throw new InvalidOperationException("Die Bibliothek hat bereits eine Archiv-Wurzel — eine Bibliothek hat genau eine.");
+                throw new InvalidOperationException("Die Bibliothek hat bereits einen Bibliotheksordner — eine Bibliothek hat genau einen.");
             }
 
             var maxSort = await ctx.LibraryRoots.Where(r => r.LibraryId == libraryId).Select(r => (int?)r.SortOrder).MaxAsync(ct).ConfigureAwait(false) ?? -1;
@@ -325,7 +325,7 @@ public sealed class LibraryService : ILibraryService
             if (role == LibraryRootRole.Inbox)
             {
                 throw new InvalidOperationException(
-                    "Die Archiv-Wurzel kann nicht zum Eingang werden — mache stattdessen eine andere Wurzel zum Archiv.");
+                    "Der Bibliotheksordner kann nicht zum Eingang werden — mache stattdessen einen anderen Ordner zum Bibliotheksordner.");
             }
 
             // Eingang → Archiv: bisherige Archiv-Wurzel wird Eingang, RootPath folgt der neuen Archiv-Wurzel.
@@ -357,7 +357,7 @@ public sealed class LibraryService : ILibraryService
                 ?? throw new InvalidOperationException($"Wurzel Id={rootId} nicht gefunden.");
             if (root.Role == LibraryRootRole.Archive)
             {
-                throw new InvalidOperationException("Die Archiv-Wurzel kann nicht entfernt werden — entferne die Bibliothek oder mache eine andere Wurzel zum Archiv.");
+                throw new InvalidOperationException("Der Bibliotheksordner kann nicht entfernt werden — entferne die Bibliothek oder mache einen anderen Ordner zum Bibliotheksordner.");
             }
 
             libraryId = root.LibraryId;

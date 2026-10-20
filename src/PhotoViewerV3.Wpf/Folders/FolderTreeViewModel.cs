@@ -38,6 +38,7 @@ public sealed partial class FolderTreeViewModel : ObservableObject
     private readonly ILibraryService _libraries;
     private readonly IFileOperationService _fileOps;
     private readonly IDialogService _dialogs;
+    private readonly FolderActions _folderActions;
     private readonly ILogger<FolderTreeViewModel> _logger;
     private readonly IMessenger _messenger = WeakReferenceMessenger.Default;
 
@@ -75,8 +76,10 @@ public sealed partial class FolderTreeViewModel : ObservableObject
         ILibraryService libraries,
         IFileOperationService fileOps,
         IDialogService dialogs,
+        FolderActions folderActions,
         ILogger<FolderTreeViewModel> logger)
     {
+        _folderActions = folderActions;
         _factory = factory;
         _libraries = libraries;
         _fileOps = fileOps;
@@ -518,7 +521,8 @@ public sealed partial class FolderTreeViewModel : ObservableObject
         _directCounts.GetValueOrDefault(row.Id),
         _totalCounts.GetValueOrDefault(row.Id),
         _childrenByParent.ContainsKey(row.Id),
-        RoleLabelOf(row));
+        RoleLabelOf(row),
+        row.RootId is { } rootId && _rootsById.TryGetValue(rootId, out var root) && root.IsInbox);
 
     private void ResetSelection()
     {

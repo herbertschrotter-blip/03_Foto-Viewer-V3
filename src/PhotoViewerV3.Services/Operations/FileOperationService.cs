@@ -41,7 +41,7 @@ namespace PhotoViewerV3.Services.Operations;
 /// Nachrichten: <see cref="FilesChangedMessage"/> (Moved/Removed/Added) je Library nach Batch-Ende —
 /// auch nach einem Abbruch für die bereits verarbeiteten Dateien.
 /// </summary>
-public sealed class FileOperationService : IFileOperationService, IDisposable
+public sealed partial class FileOperationService : IFileOperationService, IDisposable
 {
     private const int QueryChunkSize = 500;
     private const int ErrorMaxLen = 500;
@@ -430,7 +430,8 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
             await using var ctx = _factory.Create();
             var batchId = await ctx.OperationBatches
                 .Where(b => b.Status == BatchStatus.Applied
-                            && (b.OperationType == OperationType.Move || b.OperationType == OperationType.Rename || b.OperationType == OperationType.RenameFolder))
+                            && (b.OperationType == OperationType.Move || b.OperationType == OperationType.Rename || b.OperationType == OperationType.RenameFolder
+                                || b.OperationType == OperationType.AdoptFolder))
                 .OrderByDescending(b => b.Id)
                 .Select(b => (int?)b.Id)
                 .FirstOrDefaultAsync(ct)
@@ -1043,7 +1044,7 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
 
         if (!CanUndo(batch.OperationType, batch.Status))
         {
-            var reason = batch.OperationType is OperationType.Move or OperationType.Rename or OperationType.RenameFolder
+            var reason = batch.OperationType is OperationType.Move or OperationType.Rename or OperationType.RenameFolder or OperationType.AdoptFolder
                 ? $"Batch {batch.Id} hat Status {batch.Status} und ist nicht (mehr) rückgängig machbar."
                 : $"Batch {batch.Id} ({batch.OperationType}) ist nicht rückgängig machbar.";
             var items = ops.Count > 0
@@ -1062,6 +1063,10 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
             if (batch.OperationType == OperationType.RenameFolder)
             {
                 results.AddRange(await UndoRenameFolderAsync(ctx, ops, changes, own, ct).ConfigureAwait(false));
+            }
+            else if (batch.OperationType == OperationType.AdoptFolder)
+            {
+                results.AddRange(await UndoAdoptFolderAsync(ctx, ops, changes, own, ct).ConfigureAwait(false)); // ADR-0034
             }
             else
             {
@@ -1982,7 +1987,7 @@ public sealed class FileOperationService : IFileOperationService, IDisposable
     }
 
     private static bool CanUndo(OperationType type, BatchStatus status)
-        => status == BatchStatus.Applied && type is OperationType.Move or OperationType.Rename or OperationType.RenameFolder;
+        => status == BatchStatus.Applied && type is OperationType.Move or OperationType.Rename or OperationType.RenameFolder or OperationType.AdoptFolder;
 
     /// <summary>Voller Pfad ohne abschließende Trennzeichen; Laufwerks-/UNC-Wurzeln behalten ihres („E:\“).</summary>
     private static string NormalizeDirectoryPath(string path)

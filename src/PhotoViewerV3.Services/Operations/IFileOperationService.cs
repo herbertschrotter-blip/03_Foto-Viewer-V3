@@ -70,7 +70,23 @@ public interface IFileOperationService
     /// </summary>
     Task<FolderOperationResult> RenameFolderAsync(int folderId, string newName, CancellationToken ct = default);
 
-    /// <summary>Macht den jüngsten rückgängig machbaren Batch (Move/Rename/RenameFolder) rückgängig; null, wenn keiner existiert.</summary>
+    /// <summary>
+    /// „Ordner in die Bibliothek übernehmen“ (ADR-0034): führt einen <see cref="FolderAdoptionPlan"/> in EINEM
+    /// AdoptFolder-Batch aus — Zielordner anlegen (Folders.RootId = Wurzel des Ziels), jede Datei verschieben (FileId bleibt,
+    /// bei Namenskonflikt mit neuem Namen inkl. FTS; nicht katalogisierte Medien werden aufgenommen, Nicht-Medien nur
+    /// verschoben). Liegen danach keine Dateien mehr im Quellordner, kommt er bei <paramref name="recycleSource"/> in den
+    /// Papierkorb — bei <paramref name="keepSourceFolder"/> (Eingangs-Wurzel bleibt eingetragen) nur sein Inhalt.
+    /// Rückgängig machbar (Dateien zurück, Ordner neu angelegt, leere Zielordner entfernt, ausgetragener Eingang wieder eingetragen).
+    /// </summary>
+    Task<FolderAdoptionExecution> AdoptFolderAsync(
+        int libraryId,
+        FolderAdoptionPlan plan,
+        bool recycleSource,
+        bool keepSourceFolder = false,
+        IProgress<int>? progress = null,
+        CancellationToken ct = default);
+
+    /// <summary>Macht den jüngsten rückgängig machbaren Batch (Move/Rename/RenameFolder/AdoptFolder) rückgängig; null, wenn keiner existiert.</summary>
     Task<FileOperationBatchResult?> UndoLastAsync(CancellationToken ct = default);
 
     Task<FileOperationBatchResult?> UndoBatchAsync(int batchId, CancellationToken ct = default);

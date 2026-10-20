@@ -1,5 +1,7 @@
 using System.Collections.ObjectModel;
+using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 
 namespace PhotoViewerV3.Folders;
 
@@ -27,8 +29,9 @@ public sealed partial class FolderNode : ObservableObject
         Path = string.Empty;
     }
 
-    public FolderNode(FolderTreeViewModel owner, int id, string name, string path, int fileCount, int totalFileCount, bool hasChildren, string? roleLabel = null)
+    public FolderNode(FolderTreeViewModel owner, int id, string name, string path, int fileCount, int totalFileCount, bool hasChildren, string? roleLabel = null, bool isInInbox = false)
     {
+        IsInInbox = isInInbox;
         _owner = owner;
         Id = id;
         Name = name;
@@ -64,6 +67,19 @@ public sealed partial class FolderNode : ObservableObject
     public bool IsLibraryRoot => RoleLabel is not null;
 
     public bool IsPlaceholder => _owner is null;
+
+    /// <summary>Ordner liegt unter einer Eingangs-Wurzel (inkl. der Wurzel selbst) — „In die Bibliothek übernehmen…“ möglich (ADR-0034).</summary>
+    public bool IsInInbox { get; }
+
+    /// <summary>Kontextmenü „Bewertung für alle Dateien“: Parameter „1“–„5“, „0“ = Bewertung entfernen.</summary>
+    [RelayCommand]
+    private Task RateAllAsync(string? stars)
+        => _owner is null ? Task.CompletedTask : _owner.RateFolderAsync(this, byte.TryParse(stars, out var s) && s is >= 1 and <= 5 ? s : null);
+
+    /// <summary>Kontextmenü „Favorit für alle“: Parameter „true“ / „false“.</summary>
+    [RelayCommand]
+    private Task FavoriteAllAsync(string? value)
+        => _owner is null ? Task.CompletedTask : _owner.FavoriteFolderAsync(this, string.Equals(value, "true", System.StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Umbenennen nur für normale Ordner (Wurzeln sind Bibliothekseinstellung, Platzhalter nichts).</summary>
     public bool CanRename => !IsPlaceholder && !IsLibraryRoot;

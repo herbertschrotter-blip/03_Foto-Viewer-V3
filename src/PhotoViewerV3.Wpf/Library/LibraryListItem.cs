@@ -62,9 +62,9 @@ public sealed class LibraryListItem
 
     public string RootsText => InboxCount switch
     {
-        0 => "Archiv ohne Eingang",
-        1 => "Archiv + 1 Eingang",
-        _ => $"Archiv + {InboxCount} Eingänge",
+        0 => "Bibliotheksordner ohne Eingang",
+        1 => "Bibliotheksordner + 1 Eingang",
+        _ => $"Bibliotheksordner + {InboxCount} Eingänge",
     };
 
     public string TimestampText => LastOpenedAt is { } opened

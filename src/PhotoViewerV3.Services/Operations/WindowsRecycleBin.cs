@@ -24,6 +24,7 @@ public sealed class WindowsRecycleBin : IRecycleBin
     private const ushort FOF_ALLOWUNDO = 0x0040;
     private const ushort FOF_NOERRORUI = 0x0400;
     private const ushort FOF_NO_CONNECTED_ELEMENTS = 0x2000;
+    private const ushort FOF_WANTNUKEWARNING = 0x4000;
 
     private const string ExtendedPrefix = @"\\?\";
     private const string ExtendedUncPrefix = @"\\?\UNC\";
@@ -56,6 +57,44 @@ public sealed class WindowsRecycleBin : IRecycleBin
         if (File.Exists(fullPath))
         {
             throw new IOException($"Die Shell hat die Datei nicht in den Papierkorb verschoben: {fullPath}");
+        }
+    }
+
+    /// <summary>
+    /// Ordner samt Inhalt in den Papierkorb (ADR-0034) — dieselben Schutzregeln wie für Dateien: ohne Papierkorb auf dem
+    /// Laufwerk wird nichts gelöscht, Laufwerkswurzeln werden abgelehnt, danach muss der Ordner weg sein.
+    /// </summary>
+    public void MoveDirectoryToRecycleBin(string directoryPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(directoryPath);
+        var fullPath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(directoryPath));
+        if (string.Equals(Path.GetPathRoot(fullPath)?.TrimEnd('\\', '/'), fullPath.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase))
+        {
+            throw new IOException($"Eine Laufwerkswurzel kann nicht in den Papierkorb verschoben werden: {fullPath}");
+        }
+
+        var reason = GetUnavailableReason(fullPath);
+        if (reason is not null)
+        {
+            throw new IOException($"Papierkorb nicht verfügbar — {reason} Der Ordner wurde nicht gelöscht: {fullPath}");
+        }
+
+        if (!Directory.Exists(fullPath))
+        {
+            throw new DirectoryNotFoundException($"Der Ordner wurde nicht gefunden: {fullPath}");
+        }
+
+        // FOF_WANTNUKEWARNING: passt der Ordner nicht in den Papierkorb, fragt die Shell, statt ihn endgültig zu löschen.
+        var result = ShellDelete(fullPath, out var aborted, FOF_WANTNUKEWARNING);
+        if (result != 0 || aborted)
+        {
+            throw new IOException(
+                $"Verschieben in den Papierkorb fehlgeschlagen ({DescribeShellError(result, aborted)}): {fullPath}");
+        }
+
+        if (Directory.Exists(fullPath))
+        {
+            throw new IOException($"Die Shell hat den Ordner nicht in den Papierkorb verschoben: {fullPath}");
         }
     }
 
@@ -113,9 +152,9 @@ public sealed class WindowsRecycleBin : IRecycleBin
         return hr == 0 ? null : $"Laufwerk {root} ({driveType}) hat keinen Papierkorb (HRESULT 0x{hr:X8}).";
     }
 
-    private static int ShellDelete(string fullPath, out bool aborted)
+    private static int ShellDelete(string fullPath, out bool aborted, ushort extraFlags = 0)
     {
-        const ushort flags = FOF_ALLOWUNDO | FOF_SILENT | FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_NO_CONNECTED_ELEMENTS;
+        var flags = (ushort)(FOF_ALLOWUNDO | FOF_SILENT | FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_NO_CONNECTED_ELEMENTS | extraFlags);
         var from = fullPath + "\0"; // pFrom ist doppelt nullterminiert (Liste); der Marshaller hängt das zweite \0 an
 
         if (IntPtr.Size == 8)

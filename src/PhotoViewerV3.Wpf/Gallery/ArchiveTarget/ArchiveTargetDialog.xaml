@@ -48,7 +48,7 @@
             <TextBlock FontSize="12"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                        TextTrimming="CharacterEllipsis">
-                <Run Text="Archiv: " /><Run Text="{Binding ArchiveRootPath, Mode=OneWay}" />
+                <Run Text="Bibliotheksordner: " /><Run Text="{Binding ArchiveRootPath, Mode=OneWay}" />
             </TextBlock>
             <Grid Margin="0,10,0,0">
                 <Grid.ColumnDefinitions>

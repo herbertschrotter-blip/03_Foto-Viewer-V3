@@ -3,6 +3,72 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.32] — 2026-10-20
+
+### Neu (ADR-0034)
+- **„In die Bibliothek übernehmen…“**: Rechtsklick auf einen Ordner unter einem Eingang (auch auf den Eingang selbst)
+  im Ordnerbaum bzw. Knopf je Eingang auf der Bibliotheksseite. Dialog (eigenes Fenster wie „In die Bibliothek…“) mit dem
+  Ordnerbaum des Bibliotheksordners (Suche, Neuer Ordner, zuletzt benutztes Ziel vorgewählt), Vorschau des Ergebnisbaums
+  „alt → neu“ mit Dateien je Ordner und Hinweisen (zusammengezogen, zusammengeführt, umbenannt) und den Optionen
+  **Leere Zwischenordner zusammenziehen**, **Quellordner danach in den Papierkorb**, **Eingang danach austragen** (alle
+  Standard an, Austragen nur bei ganzem Eingang).
+- **Zusammenziehen**: ein Ordner ohne Dateien mit genau einem nicht leeren Unterordner entfällt, bis zum ersten Ordner
+  mit Dateien oder mehreren Unterordnern (`Fotos\leer\leer\leer\inhalt` → `Fotos\inhalt`, auch der übernommene Ordner
+  selbst); Verzweigungen bleiben, leere Teilbäume werden nicht angelegt; Geschwister, die danach gleich hießen, werden an
+  dieser Stelle nicht zusammengezogen. Vorhandene Zielordner werden zusammengeführt, Namenskonflikte → „_1“, „_2“.
+  Reine Plan-Logik WPF-frei in `Services/Operations/FolderAdoptionPlanner.cs`; Quellbaum über
+  `FolderAdoptionSourceReader` (alle Dateien inkl. .xmp/.txt; Systemordner `.thumbs`, `.cache`, `.temp`, `.converted`,
+  `.thumbnails`, `@eaDir` und `Thumbs.db`/`desktop.ini`/`.DS_Store` werden nicht übernommen).
+- **Ausführung** in EINEM protokollierten Batch: `IFileOperationService.AdoptFolderAsync`, neuer
+  `OperationType.AdoptFolder = 6` (keine Schema-Änderung) mit Ordner-Operation, MkDir je neuem Ordner, Move je Datei,
+  Recycle des Quellordners; Scan-Sperre (ADR-0025), eigene Pfade für die Ordnerüberwachung, FileIds bleiben (Bewertung,
+  Tags, Kategorien, Vorschaubilder wandern mit), umbenannte Dateien mit FTS-'delete'/Insert, nicht katalogisierte Medien
+  werden aufgenommen, neue Ordner mit `Folders.RootId` des Bibliotheksordners. Der Quellordner kommt nur in den
+  Papierkorb, wenn keine Datei mehr darin liegt (`IRecycleBin.MoveDirectoryToRecycleBin`, Shell fragt, statt zu
+  große Ordner endgültig zu löschen); sonst Bericht mit den Resten. Bleibt der Eingang eingetragen, geht nur sein Inhalt
+  in den Papierkorb. Eingang austragen über `ILibraryService.RemoveRootAsync`, nur ohne Rest. Gelingt keine Datei, werden
+  angelegte Zielordner sofort wieder entfernt.
+- **Rückgängig** (Galerie) für Übernahmen: Dateien zurück an die alten Pfade (Ordner neu angelegt), leere Zielordner samt
+  Ordnerzeilen entfernt, ein ausgetragener Eingang wird wieder eingetragen (Name = Ordnername); überlappt er inzwischen
+  eine andere Wurzel, verweigert das Rückgängig, statt den Katalog zu verbiegen.
+- **Ordner bewerten / kategorisieren**: Kontextmenü im Ordnerbaum „Bewertung für alle Dateien“ (1–5, entfernen), „Favorit
+  für alle“, „Kategorie für alle…“ (Kategorie-Auswahl), „Tags für alle…“ (Tag-Auswahl) — rekursiv, Bestätigung mit
+  Anzahl, über die vorhandenen Dienste in Abschnitten zu 2 000 Dateien (`IFolderMetadataService`, Warte-Logik ADR-0030).
+  Ergebnis als ausblendbarer Hinweis über dem Baum.
+- `Wpf/Folders/FolderActions` (Ordner-Aktionen für Baum und Bibliotheksseite, Registrierung `AddFolderActions()`),
+  `IFolderAdoptionPicker` (Dialog bzw. Rauchtest-Fake), `AddFolderAdoption()` in `AddPhotoViewerServices`.
+
+### Geändert — klarere Begriffe (nur Oberfläche und README)
+- Archiv-Wurzel heißt **„Bibliotheksordner“** (Rollen-Chip, Bibliotheksliste, Sortierer, Fehlermeldungen); „Ins
+  Archiv…“ heißt **„In die Bibliothek…“** (Strg+M bleibt); Status-Filter **„Noch im Eingang“ / „In der Bibliothek“**,
+  Kachel-Badge „Bibliothek“; „Eingang“ = unsortierter Quellordner. Archiv-DATEIEN (ZIP/RAR/7z, Filter „Archive“,
+  „Entpacken…“, automatisches Entpacken) bleiben „Archive“. Keine Umbenennung von Code-Bezeichnern, Einstellungs-Schlüsseln
+  oder Katalogdaten, keine Migration bestehender Ordner.
+- Bibliotheksseite: Kasten **„So funktioniert's“** (Eingang hinzufügen → ansehen, bewerten, kategorisieren → Ordner in
+  die Bibliothek übernehmen) und ein Satz, was die Datenbank ist (Verweise und Bewertungen, keine Bilder); Erklärtext bricht um.
+
+### Tests
+- `tests/PhotoViewerV3.Tests`: 499 (+21): `Operations/FolderAdoptionPlannerTests` (Beispielkette, Wurzel als
+  Durchgangsordner, Verzweigung, Datei im Zwischenordner, leere Blätter, ohne Zusammenziehen, Namenskonflikte ohne
+  Groß-/Kleinschreibung, Zusammenführen mit vorhandenem Ordner, gleichnamige Geschwister, Datei mit Ordnernamen, leerer
+  Ordner / Ziel im Quellordner, Quellbaum mit Nicht-Medien und Systemordnern), `Operations/FolderAdoptionExecutionTests`
+  (ganzer Eingang mit Papierkorb, Austragen, FileIds/Bewertung/Tag/FTS/RootId und Rückgängig samt Wieder-Eintragen,
+  Unterordner, Eingang behalten, Rest-Dateien, nichts verschoben, gescheiterter Papierkorb, Namenskonflikt mit Undo,
+  kein Kontext außerhalb eines Eingangs, Ordner bewerten/Favorit/Tags/Kategorie).
+- `tests/PhotoViewerV3.Wpf.Tests`: 239 (+2): `ArchiveTarget/FolderAdoptionDialogTests` (Vorschau, Zusammenziehen an/aus,
+  Ziel außerhalb gesperrt; echtes Fenster liefert den Plan). Bestehende Tests auf die neuen Texte angepasst.
+- **Rauchtest 25/25 OK**, 0 WPF-Binding-Fehler — neuer Schritt **„Ordner übernehmen“** vor „Ordnerüberwachung“
+  (`Shell/Smoke/SmokeScenario.FolderAdoption.cs`): Eingang `<Bibliothek>-Uebernahme-Eingang` mit `leer\leer2\inhalt`,
+  `Reise\Tag1|Tag2` und notiz.txt, „Bewertung für alle Dateien“ (Reise → 5) und „Tags für alle…“ (inhalt) im Ordnerbaum,
+  Übernahme des ganzen Eingangs nach `2026\Smoke-Uebernahme` (Vorschau, Struktur, Papierkorb, Austragen, FileIds,
+  Bewertung, Tag, Batch-Typ), Rückgängig über die Galerie, Aufräumen. Screenshot `20-ordnerbaum-uebernommen`.
+
+### Offen
+- Kein Fortschrittsbalken während einer großen Übernahme (Ordnerbaum/Bibliotheksseite sind bis zum Ende gesperrt);
+  Rückgängig sehr großer Übernahmen lädt alle Operationen auf einmal (wie bei „Verschieben“).
+- Rückgängig holt Systemordner (`.thumbs` …) und deren Katalogzeilen nicht aus dem Papierkorb; ein wieder eingetragener
+  Eingang heißt wie sein Ordner, nicht wie vorher.
+
 ## [0.2.31] — 2026-10-20
 
 ### Neu (ADR-0033, offene Punkte aus 0.2.25)

@@ -259,7 +259,7 @@
                         <StackPanel Grid.Column="0">
                             <ui:TextBlock FontTypography="BodyStrong" Text="Quelle und Ziel" />
                             <TextBlock Style="{StaticResource HintText}" TextWrapping="Wrap"
-                                       Text="Sortiert werden die Dateien direkt im Quellordner; die Gruppenordner entstehen unter dem Ziel (Standard: Eingang → Archiv-Wurzel)." />
+                                       Text="Sortiert werden die Dateien direkt im Quellordner; die Gruppenordner entstehen unter dem Ziel (Standard: Eingang → Bibliotheksordner)." />
                         </StackPanel>
                         <ui:Button Grid.Column="1" Appearance="Primary" Content="Analysieren" Icon="{ui:SymbolIcon Search24}"
                                    Command="{Binding AnalyzeCommand}" Margin="8,0,0,0" VerticalAlignment="Top"

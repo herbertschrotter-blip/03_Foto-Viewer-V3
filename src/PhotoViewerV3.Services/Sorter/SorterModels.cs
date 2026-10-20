@@ -50,7 +50,7 @@ public sealed class SorterProfileException : Exception
 public sealed class FolderNotInLibraryException : InvalidOperationException
 {
     public FolderNotInLibraryException(string folder)
-        : base($"Der Ordner „{folder}“ gehört zu keiner Bibliothek (liegt unter keiner Eingangs- oder Archiv-Wurzel); "
+        : base($"Der Ordner „{folder}“ gehört zu keiner Bibliothek (liegt weder in einem Eingang noch im Bibliotheksordner); "
                + "bitte als Eingang hinzufügen oder als Bibliothek anlegen und scannen.")
     {
         Folder = folder;

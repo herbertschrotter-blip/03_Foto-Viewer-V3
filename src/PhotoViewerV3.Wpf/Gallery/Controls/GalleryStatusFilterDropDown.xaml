@@ -16,7 +16,7 @@
         <ToggleButton x:Name="Toggle"
                       AutomationProperties.AutomationId="GalleryStatusFilterButton"
                       AutomationProperties.Name="Status-Filter"
-                      ToolTip="Nach Ablage-Status filtern: Eingang (nicht archiviert) oder Archiv"
+                      ToolTip="Nach Ablage-Status filtern: noch im Eingang (unsortiert) oder schon in der Bibliothek"
                       Padding="10,4"
                       IsChecked="{Binding IsOpen, ElementName=StatusPopup, Mode=TwoWay}">
             <StackPanel Orientation="Horizontal">
@@ -27,12 +27,12 @@
                             <Setter Property="Text" Value="Status" />
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding Filter}" Value="NotArchived">
-                                    <Setter Property="Text" Value="Nicht archiviert" />
+                                    <Setter Property="Text" Value="Noch im Eingang" />
                                     <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
                                     <Setter Property="FontWeight" Value="SemiBold" />
                                 </DataTrigger>
                                 <DataTrigger Binding="{Binding Filter}" Value="Archived">
-                                    <Setter Property="Text" Value="Archiviert" />
+                                    <Setter Property="Text" Value="In der Bibliothek" />
                                     <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
                                     <Setter Property="FontWeight" Value="SemiBold" />
                                 </DataTrigger>
@@ -69,23 +69,23 @@
                                  IsChecked="{Binding Filter, Converter={StaticResource EnumEquals}, ConverterParameter=All}" />
                     <RadioButton GroupName="StatusFilter"
                                  Click="OnOptionClick"
-                                 AutomationProperties.Name="Nicht archiviert"
-                                 ToolTip="Dateien in Eingangs-Ordnern"
+                                 AutomationProperties.Name="Noch im Eingang"
+                                 ToolTip="Dateien in Eingängen (unsortierte Quellordner)"
                                  IsChecked="{Binding Filter, Converter={StaticResource EnumEquals}, ConverterParameter=NotArchived}">
                         <StackPanel>
-                            <TextBlock Text="Nicht archiviert" />
-                            <TextBlock Text="Dateien in Eingangs-Ordnern" FontSize="11"
+                            <TextBlock Text="Noch im Eingang" />
+                            <TextBlock Text="Dateien in Eingängen (unsortierte Quellordner)" FontSize="11"
                                        Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
                         </StackPanel>
                     </RadioButton>
                     <RadioButton GroupName="StatusFilter"
                                  Click="OnOptionClick"
-                                 AutomationProperties.Name="Archiviert"
-                                 ToolTip="Dateien im Archiv-Ordner"
+                                 AutomationProperties.Name="In der Bibliothek"
+                                 ToolTip="Dateien im Bibliotheksordner"
                                  IsChecked="{Binding Filter, Converter={StaticResource EnumEquals}, ConverterParameter=Archived}">
                         <StackPanel>
-                            <TextBlock Text="Archiviert" />
-                            <TextBlock Text="Dateien im Archiv-Ordner" FontSize="11"
+                            <TextBlock Text="In der Bibliothek" />
+                            <TextBlock Text="Dateien im Bibliotheksordner" FontSize="11"
                                        Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
                         </StackPanel>
                     </RadioButton>

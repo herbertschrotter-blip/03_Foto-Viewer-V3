@@ -393,7 +393,7 @@ public partial class GalleryView : UserControl
 
         menu.Items.Add(new MenuItem
         {
-            Header = "Ins Archiv…",
+            Header = "In die Bibliothek…",
             InputGestureText = "Strg+M",
             Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Archive24 },
             Command = _viewModel.ArchiveItemCommand,

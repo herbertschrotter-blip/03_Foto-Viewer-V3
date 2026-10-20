@@ -65,7 +65,7 @@ public sealed class SorterRootSelectionTests
         selection.SelectedSourceRoot!.RootId.Should().Be(3);
         selection.TargetRoot.Should().Be(Archive);
         selection.SelectedTargetRoot!.RootId.Should().Be(1);
-        selection.TargetHint.Should().Be("Archiv-Wurzel „Fotos“");
+        selection.TargetHint.Should().Be("Bibliotheksordner „Fotos“");
         selection.TargetFolderDisplay.Should().Be(@"Fotos\");
         selection.IsTargetBlocked.Should().BeFalse();
     }
@@ -115,7 +115,7 @@ public sealed class SorterRootSelectionTests
 
         selection.TargetRoot = Path.Combine(Archive, "2026");
         selection.SelectedTargetRoot!.RootId.Should().Be(1);
-        selection.TargetHint.Should().Be("unter Archiv „Fotos“");
+        selection.TargetHint.Should().Be("unter Bibliotheksordner „Fotos“");
         selection.TargetFolderDisplay.Should().Be(@"Fotos\2026");
 
         selection.TargetRoot = @"C:\Temp\Export";

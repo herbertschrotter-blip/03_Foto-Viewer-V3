@@ -55,14 +55,17 @@ public sealed partial class LibraryViewModel : ObservableObject
     private bool _gateWaitAborted;
 
     /// <param name="messenger">Optional (Tests); produktiv WeakReferenceMessenger.Default.</param>
+    /// <param name="folderActions">„In die Bibliothek übernehmen…“ je Eingang (ADR-0034); optional für Tests.</param>
     public LibraryViewModel(
         ILibraryService libraries,
         IScanService scanner,
         IDialogService dialogs,
         INavigationService navigation,
         ILogger<LibraryViewModel> logger,
-        IMessenger? messenger = null)
+        IMessenger? messenger = null,
+        Folders.FolderActions? folderActions = null)
     {
+        _folderActions = folderActions;
         _libraries = libraries;
         _scanner = scanner;
         _dialogs = dialogs;
@@ -95,7 +98,7 @@ public sealed partial class LibraryViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsScanPanelVisible))]
     [NotifyCanExecuteChangedFor(
         nameof(ScanCommand), nameof(RebuildCommand), nameof(RemoveCommand), nameof(CreateLibraryCommand), nameof(SetActiveCommand), nameof(RenameCommand), nameof(CancelScanCommand),
-        nameof(AddInboxRootCommand), nameof(MakeArchiveRootCommand), nameof(RenameRootCommand), nameof(RemoveRootCommand))]
+        nameof(AddInboxRootCommand), nameof(MakeArchiveRootCommand), nameof(RenameRootCommand), nameof(RemoveRootCommand), nameof(AdoptInboxCommand))]
     private bool _isScanning;
 
     [ObservableProperty]
@@ -367,7 +370,7 @@ public sealed partial class LibraryViewModel : ObservableObject
 
     // ---- Wurzeln (ADR-0020) ----
 
-    private bool CanModifyRoot(LibraryRootListItem? root) => !IsScanning;
+    private bool CanModifyRoot(LibraryRootListItem? root) => !IsScanning && !IsAdopting;
 
     /// <summary>Eingangs-Wurzel per Ordnerdialog hinzufügen; danach Angebot, die Bibliothek zu aktualisieren (Scan über alle Wurzeln).</summary>
     [RelayCommand(CanExecute = nameof(CanModifyItem))]
@@ -418,10 +421,10 @@ public sealed partial class LibraryViewModel : ObservableObject
         }
 
         var ok = await _dialogs.ConfirmAsync(
-            "Archiv-Wurzel wechseln?",
-            $"„{root.Path}“ wird die Archiv-Wurzel von „{root.Library.Name}“; der bisherige Archiv-Ordner „{root.Library.RootPath}“ wird zum Eingang. " +
-            "Dateien werden nicht verschoben — nur die Rollen ändern sich (Filter „Nicht archiviert“/„Archiviert“ und Ziel von „Ins Archiv…“).",
-            "Zum Archiv machen").ConfigureAwait(true);
+            "Bibliotheksordner wechseln?",
+            $"„{root.Path}“ wird der Bibliotheksordner von „{root.Library.Name}“; der bisherige Bibliotheksordner „{root.Library.RootPath}“ wird zum Eingang. " +
+            "Dateien werden nicht verschoben — nur die Rollen ändern sich (Filter „Noch im Eingang“/„In der Bibliothek“ und Ziel von „In die Bibliothek…“).",
+            "Zum Bibliotheksordner machen").ConfigureAwait(true);
         if (!ok)
         {
             return;

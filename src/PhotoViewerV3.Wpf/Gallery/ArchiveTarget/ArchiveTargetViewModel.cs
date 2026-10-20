@@ -63,7 +63,7 @@ public sealed partial class ArchiveTargetViewModel : ObservableObject
 
     public int FileCount => _request.FileIds.Count;
 
-    public string Title => FileCount == 1 ? "1 Datei ins Archiv verschieben" : $"{FileCount:N0} Dateien ins Archiv verschieben";
+    public string Title => FileCount == 1 ? "1 Datei in die Bibliothek verschieben" : $"{FileCount:N0} Dateien in die Bibliothek verschieben";
 
     public ObservableCollection<ArchiveFolderNode> Roots { get; } = new();
 

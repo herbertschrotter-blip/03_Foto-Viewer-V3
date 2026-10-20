@@ -324,8 +324,8 @@ public sealed partial class GalleryViewModel : ObservableObject
                 GalleryFilter.Videos => "Keine Videos in dieser Bibliothek.",
                 GalleryFilter.Favorites => "Noch keine Favoriten — markiere Dateien mit dem Herz.",
                 GalleryFilter.Archives => "Keine Archive (ZIP, RAR, 7z …) in dieser Bibliothek.",
-                GalleryFilter.NotArchived => "Nichts im Eingang — alle Dateien sind archiviert. Eingangs-Ordner verwaltest du unter „Bibliothek“.",
-                GalleryFilter.Archived => "Noch nichts archiviert — wähle Dateien und verschiebe sie mit „Ins Archiv…“ (Strg+M).",
+                GalleryFilter.NotArchived => "Nichts mehr im Eingang — alle Dateien sind in der Bibliothek. Eingänge verwaltest du unter „Bibliothek“.",
+                GalleryFilter.Archived => "Noch nichts in der Bibliothek — wähle Dateien und verschiebe sie mit „In die Bibliothek…“ (Strg+M) oder übernimm einen Ordner im Ordnerbaum.",
                 _ => "Diese Bibliothek enthält noch keine Dateien. Starte unter „Bibliothek“ einen Scan.",
             };
         }
@@ -1496,7 +1496,7 @@ public sealed partial class GalleryViewModel : ObservableObject
         }
 
         // Die aktuelle Ansicht bleibt (z. B. Filter „Nicht archiviert“): der Reload zeigt die restlichen Dateien.
-        return RunOperationAsync("Ins Archiv", async () =>
+        return RunOperationAsync("In die Bibliothek", async () =>
         {
             var result = await _archiveMove.ArchiveAsync(ids);
             if (result is null)
@@ -1504,7 +1504,7 @@ public sealed partial class GalleryViewModel : ObservableObject
                 return; // abgebrochen
             }
 
-            await ReportBatchResultAsync("Ins Archiv", result);
+            await ReportBatchResultAsync("In die Bibliothek", result);
             ScheduleReload();
         });
     }

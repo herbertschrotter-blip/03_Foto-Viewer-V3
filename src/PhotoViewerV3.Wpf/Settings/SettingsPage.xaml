@@ -231,7 +231,7 @@
                               AutomationProperties.Name="Archiv nach dem Entpacken in den Papierkorb verschieben" />
                     <TextBlock Margin="0,8,0,0" FontSize="12" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Text="Findet „Aktualisieren“ oder die Ordnerüberwachung ein neues Archiv in einem Eingangsordner, wird es nach dem Scan vollständig in einen Ordner mit dem Archivnamen daneben entpackt (verschachtelte Archive bis Tiefe 3) und die Bibliothek erneut aktualisiert. Archive im Archivordner, Archive in bereits entpackten Ordnern und Archive, deren Zielordner schon existiert, bleiben unberührt. Passwortgeschützte oder beschädigte Archive bleiben liegen und werden in der Statusleiste gemeldet." />
+                               Text="Findet „Aktualisieren“ oder die Ordnerüberwachung ein neues Archiv in einem Eingangsordner, wird es nach dem Scan vollständig in einen Ordner mit dem Archivnamen daneben entpackt (verschachtelte Archive bis Tiefe 3) und die Bibliothek erneut aktualisiert. Archive im Bibliotheksordner, Archive in bereits entpackten Ordnern und Archive, deren Zielordner schon existiert, bleiben unberührt. Passwortgeschützte oder beschädigte Archive bleiben liegen und werden in der Statusleiste gemeldet." />
                     <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                         <ui:Button Content="Vorhandene Archive in Eingängen jetzt entpacken…"
                                    Command="{Binding ExtractExistingArchivesCommand}"

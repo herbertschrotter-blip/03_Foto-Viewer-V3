@@ -27,7 +27,10 @@ großer Foto- und Video-Bibliotheken (50 000–500 000 Dateien). Nachfolger der 
   Filter „Archive“); die Lightbox zeigt ihren Inhalt, „Entpacken…“ legt die Dateien neben das Archiv und nimmt sie
   sofort in den Katalog auf (siehe [Archive](#archive)).
 - **Ordner**: Ordnerbaum der Bibliothek mit Dateizählern, rechts die Galerie des gewählten Ordners (mit oder ohne
-  Unterordner).
+  Unterordner); ganze Ordner bewerten, als Favorit markieren, kategorisieren oder taggen.
+- **Eingang und Bibliotheksordner** (0.2.32): unsortierte Quellordner als Eingang aufnehmen, ansehen und bewerten, dann
+  per **In die Bibliothek übernehmen…** samt Unterordner-Struktur in den Bibliotheksordner verschieben — leere
+  Zwischenordner werden zusammengezogen, Bewertungen wandern mit, alles mit einem Rückgängig umkehrbar.
 - **Sortieren**: Pattern-basierter File Sorter (Regex-Profile, Multi-Level, Vorschau, Import/Export der V2-Profile)
   und Flatten & Move — jede Verschiebung läuft protokolliert über die Datei-Operationen und ist rückgängig machbar.
 - **Einstellungen**: Speicherorte (Katalog samt Vorschaubildern umziehbar), Thumbnail-Cache, FFmpeg-Status, unterstützte Formate, Farbschema (Hell/Dunkel/System),
@@ -35,8 +38,8 @@ großer Foto- und Video-Bibliotheken (50 000–500 000 Dateien). Nachfolger der 
 - **Statusleiste**: Scan-Fortschritt und -Ergebnis, Thumbnail-Warteschlange, Hintergrund-Aktivität, Hinweise
   (Bibliothek offline, unvollständige Dateivorgänge, Datei-Operation wartet auf laufenden Scan — mit **Abbrechen**).
 - **Sicherheit der Daten**: Löschen geht immer in den Windows-Papierkorb (nie still hart löschen); Verschieben,
-  Umbenennen und Löschen werden in `OperationBatches`/`FileOperations` protokolliert; Move/Rename sind rückgängig
-  machbar.
+  Umbenennen und Löschen werden in `OperationBatches`/`FileOperations` protokolliert; Move/Rename und Ordner-Übernahmen sind
+  rückgängig machbar.
 
 ## Voraussetzungen
 
@@ -104,27 +107,58 @@ außerhalb von OneDrive), `-NoZip` lässt das ZIP weg, `-FrameworkDependent` bau
   laufende Datei-Operation…“; **Abbrechen** beendet das Warten, der Katalog bleibt unverändert. Bei nicht erreichbarem Ordner: Dialog „Bibliothek offline“ ([Erneut prüfen] [Andere Bibliothek
   wählen]); bei ungewöhnlich vielen fehlenden Dateien (> 10 000 oder > 20 %): Dialog ([Erneut prüfen]
   [Als fehlend markieren] [Abbrechen]).
-- Je Bibliothek die Liste ihrer Wurzelordner mit Rolle (siehe „Eingang und Archiv“): **Eingang hinzufügen…**,
-  Archiv-Symbol = diesen Ordner zur Archiv-Wurzel machen, Umbenennen (Anzeigename), Entfernen (nur Eingänge, nur aus
-  dem Katalog). Scannen/Aktualisieren läuft über alle Wurzeln.
+- Je Bibliothek die Liste ihrer Ordner mit Rolle (siehe „Eingang und Bibliotheksordner“): **Eingang hinzufügen…**,
+  je Eingang **In die Bibliothek übernehmen…**, Archiv-Symbol = diesen Ordner zum Bibliotheksordner machen, Umbenennen
+  (Anzeigename), Entfernen (nur Eingänge, nur aus dem Katalog). Scannen/Aktualisieren läuft über alle Ordner. Ein
+  Kasten „So funktioniert's“ erklärt den Ablauf; die Datenbank enthält nur Verweise und Bewertungen, keine Bilder.
 
-### Eingang und Archiv
-Eine Bibliothek hat genau einen **Archiv-Ordner** (der beim Anlegen gewählte Ordner) und beliebig viele
-**Eingangs-Ordner** (Kamera-Import, Handy-Upload, Downloads). Dateien unter einem Eingang gelten als „nicht archiviert“.
+### Eingang und Bibliotheksordner
+Eine Bibliothek hat genau einen **Bibliotheksordner** (der beim Anlegen gewählte Ordner — dein sortiertes Fotoarchiv;
+im Code „Archiv-Wurzel“) und beliebig viele **Eingänge** (unsortierte Quellordner: Kamera-Import, Handy-Upload,
+Downloads, alte Ordnersammlungen). Die Datenbank (Katalog) enthält nur Verweise auf die Dateien samt Bewertungen,
+Favoriten, Tags und Kategorien — keine Bilder.
+
+**Ablauf:** Eingang hinzufügen → ansehen, bewerten, kategorisieren (einzelne Dateien oder ganze Ordner) → Ordner in die
+Bibliothek übernehmen.
 - **Bibliothek → Eingang hinzufügen…**: Ordner wählen (darf nicht in oder über einem anderen Ordner der Bibliothek
   liegen), danach „Jetzt aktualisieren“ nimmt die Dateien in den Katalog auf.
-- **Galerie**: Dropdown **Status** mit **Nicht archiviert** (alles in Eingängen) und **Archiviert**; Kacheln im Eingang tragen das
-  Badge „Eingang“. Der Ordnerbaum zeigt die Wurzeln als oberste Knoten mit Rolle.
-- **Ins Archiv…** (Aktionsleiste, **Strg+M**, Kontextmenü der Kachel, in der Lightbox **Strg+M**): Dialog mit dem
-  Ordnerbaum des Archivs (auch Ordner, die nur auf der Platte existieren), Suchfeld, **Neuer Ordner…**,
-  **Umbenennen…**, Vorschlag „Jahr\Jahr-Monat“ aus Aufnahme- bzw. Dateidatum; der zuletzt benutzte Zielordner ist
-  vorgewählt. Verschoben wird protokolliert (Rückgängig wie bei „Verschieben nach…“); Favoriten, Bewertungen und
-  Vorschaubilder bleiben. Die Ansicht bleibt beim Filter und zeigt die restlichen Dateien.
+- **Galerie**: Dropdown **Status** mit **Noch im Eingang** (alles in Eingängen) und **In der Bibliothek**; Kacheln im
+  Eingang tragen das Badge „Eingang“, im Bibliotheksordner „Bibliothek“. Der Ordnerbaum zeigt die Wurzeln als oberste
+  Knoten mit Rolle.
+- **Ganze Ordner bewerten**: Rechtsklick auf einen Ordner im Ordnerbaum → **Bewertung für alle Dateien** (1–5 Sterne
+  oder entfernen), **Favorit für alle**, **Kategorie für alle…** (Kategorie-Auswahl wie Strg+K), **Tags für alle…**
+  (Tag-Auswahl wie Strg+T). Wirkt auf alle Dateien darunter (mit Unterordnern), nach einer Bestätigung mit Anzahl.
+- **In die Bibliothek übernehmen…** (Rechtsklick auf einen Ordner unter einem Eingang oder auf den Eingang selbst; auf
+  der Bibliotheksseite je Eingang): Dialog mit dem Ordnerbaum des Bibliotheksordners (Suche, **Neuer Ordner**,
+  zuletzt benutzter Zielordner vorgewählt) und einer **Vorschau** des Ergebnisbaums (alt → neu, Dateien je Ordner,
+  Hinweise auf zusammengezogene, zusammengeführte und umbenannte Einträge). Der Ordner landet samt Unterordner-Struktur
+  im gewählten Zielordner. Optionen:
+  - **Leere Zwischenordner zusammenziehen** (Standard an): ein Ordner ohne Dateien mit genau einem Unterordner entfällt,
+    der nächste rückt nach, bis zum ersten Ordner mit Dateien oder mehreren Unterordnern — dessen Name bleibt.
+    Beispiel `Fotos\leer\leer\leer\inhalt` → `Fotos\inhalt`; auch der übernommene Ordner selbst (`Import\leer\inhalt` →
+    `<Ziel>\inhalt`). Verzweigungen bleiben vollständig erhalten; leere Ordner werden nicht angelegt.
+  - **Quellordner danach in den Papierkorb** (Standard an): nur, wenn danach keine Datei mehr darin liegt — sonst bleibt
+    er und ein Bericht nennt die Reste. Systemordner wie `.thumbs`, `.cache`, `@eaDir` und `Thumbs.db` werden nicht
+    übernommen und gehen mit in den Papierkorb.
+  - **Eingang danach austragen** (nur bei einem ganzen Eingang, Standard an; nur aus dem Katalog). Ohne Austragen
+    bleibt der Eingangsordner leer bestehen, nur sein Inhalt kommt in den Papierkorb.
+  Vorhandene Zielordner werden zusammengeführt, gleichnamige Dateien bekommen „_1“, „_2“ …. Übernommen werden alle
+  Dateien, auch .xmp oder .txt. Bewertungen, Favoriten, Tags, Kategorien und Vorschaubilder wandern mit (gleiche
+  FileId). **Rückgängig** (Galerie) holt alles zurück: Dateien an die alten Pfade, die Ordner entstehen neu, leere
+  Zielordner verschwinden, ein ausgetragener Eingang wird wieder eingetragen (Name = Ordnername).
+- **In die Bibliothek…** für einzelne Dateien (Aktionsleiste, **Strg+M**, Kontextmenü der Kachel, in der Lightbox
+  **Strg+M**): Dialog mit dem Ordnerbaum des Bibliotheksordners (auch Ordner, die nur auf der Platte existieren),
+  Suchfeld, **Neuer Ordner…**, **Umbenennen…**, Vorschlag „Jahr\Jahr-Monat“ aus Aufnahme- bzw. Dateidatum; der zuletzt
+  benutzte Zielordner ist vorgewählt. Die Dateien landen flach im gewählten Ordner. Verschoben wird protokolliert
+  (Rückgängig wie bei „Verschieben nach…“); Favoriten, Bewertungen und Vorschaubilder bleiben. Die Ansicht bleibt beim
+  Filter und zeigt die restlichen Dateien.
 - Einen Eingang zu entfernen löscht nur seine Katalogdaten — die Dateien auf der Platte bleiben.
+- Nicht verwechseln: **Archive** (ZIP/RAR/7z — Filter „Archive“, „Entpacken…“, automatisches Entpacken) sind Dateien,
+  der Bibliotheksordner ist ein Ordner.
 
 ### Galerie
-Toolbar: Filter-Pills als Segmentgruppe (Alle / Bilder / Videos / Favoriten / Archive), Dropdown **Status** (Nicht archiviert /
-Archiviert), Tag-Filter, Suchfeld (Dateiname, Endung, Tag-Name, Kategorie-Wert oder Kategorie-Name; Wörter werden
+Toolbar: Filter-Pills als Segmentgruppe (Alle / Bilder / Videos / Favoriten / Archive), Dropdown **Status** (Noch im Eingang /
+In der Bibliothek), Tag-Filter, Suchfeld (Dateiname, Endung, Tag-Name, Kategorie-Wert oder Kategorie-Name; Wörter werden
 als Präfix gesucht, Sonderzeichen sind erlaubt; ✕ leert die Suche), Sortierung, Seitengröße, **Vorschaugröße** (Regler neben
 der Ansichtsumschaltung, nur in der Kachelansicht: Kachelbreite 120–320 px in 20er-Stufen, wird gemerkt), Pager, Aktualisieren. In schmalen
 Fenstern (bzw. rechts auf der Ordner-Seite) rutscht die Suche in eine eigene Zeile, statt gequetscht zu werden. Ein Ordnerfilter erscheint als
@@ -132,8 +166,8 @@ Chip und lässt sich dort wieder aufheben. Kacheln: Herz = Favorit, Sterne = Bew
 beim letzten Scan nicht mehr auf der Platte lagen. Ordner ohne direkte Dateien zeigen ihre Unterordner als Kacheln.
 **Alle auswählen** (Knopf rechts in der Kopfzeile neben „Rückgängig“, wie Strg+A) wählt alle Dateien der aktuellen
 Seite. Bei einer Auswahl erscheint unten die Aktionsleiste (Favorit setzen/entfernen, Bewertung, Verschieben nach…,
-Ins Archiv…, Papierkorb, Alle auswählen, Auswahl aufheben); **Rückgängig** nimmt die letzte Verschiebung/Umbenennung (auch eine
-Ordner-Umbenennung) zurück.
+In die Bibliothek…, Papierkorb, Alle auswählen, Auswahl aufheben); **Rückgängig** nimmt die letzte Verschiebung/Umbenennung (auch eine
+Ordner-Umbenennung oder eine Ordner-Übernahme) zurück.
 
 | Taste | Wirkung |
 |---|---|
@@ -146,7 +180,7 @@ Ordner-Umbenennung) zurück.
 | Strg+← / Strg+→ | Vorherige / nächste Seite |
 | Strg+Pos1 / Strg+Ende | Erste / letzte Seite |
 | F5 | Aktualisieren |
-| Strg+M | Auswahl ins Archiv… |
+| Strg+M | Auswahl in die Bibliothek… |
 | Strg+T | Tags der Auswahl bearbeiten (Tag-Auswahl) |
 | Strg+K | Kategorie-Werte der Auswahl zuweisen (Kategorie-Auswahl) |
 | Rechtsklick | Tag-Menü der Auswahl (nicht ausgewählte Kachel/Zeile wird zuerst gewählt) |
@@ -213,7 +247,7 @@ Gesetzte Kategorie-Werte stehen außerdem in der Titelleiste (z. B. „Projekt: 
 | Strg+D | Favorit umschalten |
 | Strg+1 … Strg+5 | Bewertung 1–5 Sterne |
 | Strg+0 | Bewertung löschen |
-| Strg+M | Ins Archiv… |
+| Strg+M | In die Bibliothek… |
 | Strg+T | Tags der Datei bearbeiten (die Titelleiste zeigt die Tags) |
 | Strg+K | Kategorie-Werte der Datei zuweisen (dieselbe Auswahl wie in der Galerie) |
 | Entf | In den Papierkorb (mit Bestätigung) |
@@ -253,18 +287,21 @@ Vorschaubild, die Kachel zeigt ein Archiv-Symbol mit Endung und Größe. Die Fil
 ### Ordner
 Links der Ordnerbaum der aktiven Bibliothek (Dateizähler direkt / gesamt), rechts die Galerie. Umschalter „mit
 Unterordnern“; „Gesamte Bibliothek“ hebt den Ordnerfilter auf. Nach Scans und Datei-Operationen lädt der Baum neu und
-behält Aufklapp-Zustand und Auswahl. Oberste Knoten sind die Wurzeln mit Rolle (Archiv, Eingang). Kontextmenü:
-**Neuer Ordner…** (Ordner auf der Platte + Katalogzeile) und **Umbenennen…** (nicht für Wurzeln; Ordner mit Dateien
-werden protokolliert umbenannt und lassen sich mit Rückgängig zurücknehmen).
+behält Aufklapp-Zustand und Auswahl. Oberste Knoten sind die Wurzeln mit Rolle (Bibliotheksordner, Eingang). Kontextmenü:
+**Neuer Ordner…** (Ordner auf der Platte + Katalogzeile), **Umbenennen…** (nicht für Wurzeln; Ordner mit Dateien
+werden protokolliert umbenannt und lassen sich mit Rückgängig zurücknehmen), **In die Bibliothek übernehmen…** (nur
+unter einem Eingang, siehe „Eingang und Bibliotheksordner“) sowie **Bewertung für alle Dateien** (1–5 Sterne oder
+entfernen), **Favorit für alle**, **Kategorie für alle…** und **Tags für alle…** — wirken auf alle Dateien des Ordners
+samt Unterordnern, nach einer Bestätigung mit Anzahl. Das Ergebnis steht über dem Baum (✕ blendet es aus).
 
 ### Sortieren
 - **Quelle und Ziel** (beide Bereiche): je eine Auswahl der Wurzeln der aktiven Bibliothek mit Rolle („Eingang“ /
-  „Archiv“) und Pfad, darunter ein frei wählbarer Ordner. Vorbelegt ist der erste erreichbare Eingang als Quelle und
-  die Archiv-Wurzel als Ziel — der Normalfall „aus dem Eingang ins Archiv sortieren“. Als Ziel geht auch
+  „Bibliotheksordner“) und Pfad, darunter ein frei wählbarer Ordner. Vorbelegt ist der erste erreichbare Eingang als Quelle und
+  den Bibliotheksordner als Ziel — der Normalfall „aus dem Eingang in die Bibliothek sortieren“. Als Ziel geht auch
   „Quellordner“ (die Ordner entstehen an Ort und Stelle). Offline-Wurzeln sind ausgegraut; Ziele außerhalb aller
   Wurzeln sind gesperrt, weil die Dateien sonst aus dem Katalog fielen und Bewertung, Favorit und Tags verlören
   (ADR-0024). Die Auswahl folgt Bibliothekswechseln und geänderten Wurzeln. Verschobene Dateien behalten ihre FileId
-  und wechseln im Katalog zur Zielwurzel (Galerie-Filter „Nicht archiviert“ / „Archiviert“).
+  und wechseln im Katalog zur Zielwurzel (Galerie-Filter „Noch im Eingang“ / „In der Bibliothek“).
 - **Sortieren**: Quellordner unter einer Wurzel der Bibliothek wählen, Patterns (Regex auf den Dateinamen ohne Endung, nach
   Priorität) und optional Sub-Level-Patterns (auf den vollen Dateinamen) pflegen — Profile liegen in der Datenbank,
   Import/Export im V2-JSON-Format. **Analysieren** zeigt die Gruppen (Zielordner änderbar, Gruppen zusammenführbar),
@@ -328,7 +365,7 @@ Aktualisierung in n s“, danach „Automatisch aktualisiert: …“. Regeln:
   Nicht-Mediendatei nicht zu unterscheiden und löst keinen Scan aus.
 - Wechselt die aktive Bibliothek während eines automatischen Scans, wird dessen Ergebnis (auch eine Sperre) verworfen und
   nicht der neuen Bibliothek zugeordnet.
-- Eigene Datei-Vorgänge der App (Verschieben, „Ins Archiv…“, Papierkorb) buchen den Katalog selbst; die Überwachung sieht
+- Eigene Datei-Vorgänge der App (Verschieben, „In die Bibliothek…“, Ordner übernehmen, Papierkorb) buchen den Katalog selbst; die Überwachung sieht
   ihre Dateiereignisse trotzdem und aktualisiert danach einmal automatisch (Ergebnis „keine Änderungen“). Entpacken
   aktualisiert am Ende selbst — die Ereignisse davor sind damit erledigt, ein zweiter automatischer Scan entfällt in der
   Regel.
@@ -346,7 +383,7 @@ Aktualisierung in n s“, danach „Automatisch aktualisiert: …“. Regeln:
 
 ### Statusleiste
 Links: aktive Bibliothek, Scan-Fortschritt bzw. -Ergebnis, Vorschaubilder in der Warteschlange und — solange eine
-Datei-Operation (Verschieben, Papierkorb, Ins Archiv, Umbenennen, Ordner anlegen/umbenennen, Rückgängig, Sortierer-Lauf)
+Datei-Operation (Verschieben, Papierkorb, In die Bibliothek, Ordner übernehmen, Umbenennen, Ordner anlegen/umbenennen, Rückgängig, Sortierer-Lauf)
 auf einen laufenden Scan derselben Bibliothek wartet — „Wartet auf laufenden Scan…“ mit **Abbrechen**: die Operation
 wird dann verworfen, bevor sie etwas ändert (beim Sortierer entfallen die restlichen Ziele; schon verschobene Dateien
 bleiben verschoben und sind rückgängig machbar). Rechts: Hinweise
@@ -420,8 +457,10 @@ eingeschaltet. Der Schritt „Auto-Entpacken“ davor legt den Geschwisterordner
 schaltet das automatische Entpacken für die Bibliothek ein und am Ende wieder aus und entfernt Eingang und Ordner wieder.
 Der Schritt „Eingang → Archiv“
 legt den Geschwisterordner `<Bibliothek>-Eingang` als Eingangs-Wurzel an (wird am Ende wieder entfernt) und hinterlässt
-in der Bibliothek die leeren Ordner `2026\Smoke-Archiv` und `2026\Smoke-Umbenannt` (beim nächsten Lauf vorab entfernt)
-— deshalb immer gegen eine Kopie laufen lassen.
+in der Bibliothek die leeren Ordner `2026\Smoke-Archiv` und `2026\Smoke-Umbenannt` (beim nächsten Lauf vorab entfernt).
+Der Schritt „Ordner übernehmen“ legt den Geschwisterordner `<Bibliothek>-Uebernahme-Eingang` als Eingang an, übernimmt
+ihn nach `2026\Smoke-Uebernahme` (der Quellordner geht dabei in den Windows-Papierkorb), macht das mit Rückgängig wieder
+rückgängig und entfernt Eingang und Ordner am Ende — deshalb immer gegen eine Kopie laufen lassen.
 
 Spike- und Benchmark-Harness: `dotnet run --project tests/PhotoViewerV3.PerfTests -c Release -- <spike>` (siehe
 [docs/spikes/](docs/spikes/)).

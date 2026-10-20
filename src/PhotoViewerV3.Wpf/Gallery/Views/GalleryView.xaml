@@ -538,9 +538,9 @@
                         <ui:Button Appearance="Transparent" Content="Verschieben nach…"
                                    Icon="{ui:SymbolIcon FolderArrowRight24}"
                                    Command="{Binding MoveSelectionCommand}" />
-                        <ui:Button Appearance="Transparent" Content="Ins Archiv…"
+                        <ui:Button Appearance="Transparent" Content="In die Bibliothek…"
                                    Icon="{ui:SymbolIcon Archive24}"
-                                   ToolTip="Auswahl in den Archiv-Ordner der Bibliothek verschieben (Strg+M)"
+                                   ToolTip="Auswahl in den Bibliotheksordner verschieben (Strg+M)"
                                    Command="{Binding ArchiveSelectionCommand}" />
                         <ui:Button Appearance="Transparent" Content="Papierkorb"
                                    Icon="{ui:SymbolIcon Delete24}"
