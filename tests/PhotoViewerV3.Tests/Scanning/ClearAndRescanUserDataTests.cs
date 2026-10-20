@@ -166,18 +166,31 @@ public sealed class ClearAndRescanUserDataTests
             Exec(connection, $"INSERT INTO FileTags(FileId, TagId) SELECT Id, {tagB} FROM Files WHERE Id % 10 = 0;");
         }
 
+        // Wie FullScanCatalogWriter (ADR-0028): Sichern, alte Zeilen löschen, neu einfügen, zurückschreiben und
+        // Suchindex in EINER Transaktion.
         var total = Stopwatch.StartNew();
-        using var carry = UserDataCarryOver.Capture(fx.ContextFactory, lib.Id);
-        await fx.CreateLibraryService().ClearAsync(lib.Id);
-        var folderOffset = rows / filesPerFolder + 10;
-        InsertCatalog(fx, writer, lib.Id, roots[0].Id, rows, filesPerFolder, firstFolderId: folderOffset, firstFileId: rows + 1, renameEvery: 100);
-        var report = carry.Restore();
+        UserDataCarryOver carry;
+        UserDataCarryOver.RestoreReport report;
+        using (var connection = fx.ContextFactory.OpenSqliteConnection())
+        using (var tx = connection.BeginTransaction())
+        {
+            carry = UserDataCarryOver.Capture(connection, tx, lib.Id);
+            Exec(connection, tx, $"DELETE FROM Thumbnails WHERE FileId IN (SELECT Id FROM Files WHERE LibraryId = {lib.Id});");
+            Exec(connection, tx, $"DELETE FROM Files WHERE LibraryId = {lib.Id};");
+            Exec(connection, tx, $"DELETE FROM Folders WHERE LibraryId = {lib.Id};");
+            var folderOffset = rows / filesPerFolder + 10;
+            InsertCatalog(fx, writer, lib.Id, roots[0].Id, rows, filesPerFolder, firstFolderId: folderOffset, firstFileId: rows + 1, renameEvery: 100, connection, tx);
+            report = carry.Restore();
+            new FtsIndexer().PopulateAll(connection, tx);
+            tx.Commit();
+        }
+
         total.Stop();
 
         _output.WriteLine(
             $"{rows:N0} Dateien: Sichern {carry.CaptureDuration.TotalMilliseconds:N0} ms ({carry.CapturedFiles:N0} Dateien, {carry.CapturedTagAssignments:N0} Tags), " +
             $"Zurückschreiben {report.Duration.TotalMilliseconds:N0} ms ({report.RestoredFiles:N0} Dateien, {report.TagAssignmentsRestored:N0} Tags), " +
-            $"gesamt inkl. Leeren + Neu-Einfügen {total.Elapsed.TotalSeconds:N2} s");
+            $"gesamt inkl. Löschen + Neu-Einfügen + Suchindex in einer Transaktion {total.Elapsed.TotalSeconds:N2} s");
 
         carry.CapturedFiles.Should().Be(rows);
         report.RestoredFiles.Should().Be(rows, "auch die in anderer Schreibweise zurückgekehrten Dateien");
@@ -198,7 +211,8 @@ public sealed class ClearAndRescanUserDataTests
 
     private static void InsertCatalog(
         TempLibraryFixture fx, BulkScanWriter writer, int libraryId, int rootId, int rows, int filesPerFolder,
-        int firstFolderId, int firstFileId, int renameEvery)
+        int firstFolderId, int firstFileId, int renameEvery,
+        Microsoft.Data.Sqlite.SqliteConnection? connection = null, Microsoft.Data.Sqlite.SqliteTransaction? tx = null)
     {
         var folders = new List<BulkScanWriter.FolderRow>();
         var files = new List<BulkScanWriter.FileRow>(rows);
@@ -222,15 +236,27 @@ public sealed class ClearAndRescanUserDataTests
                 null, null, null, null, false, null, false));
         }
 
-        using var connection = fx.ContextFactory.OpenSqliteConnection();
-        writer.InsertFolders(connection, folders);
-        writer.InsertFiles(connection, files);
-        new FtsIndexer().PopulateAll(connection);
+        if (connection is not null)
+        {
+            // In der Transaktion des Aufrufers; den Suchindex baut der Aufrufer.
+            writer.InsertFolders(connection, folders, tx);
+            writer.InsertFiles(connection, files, transaction: tx);
+            return;
+        }
+
+        using var own = fx.ContextFactory.OpenSqliteConnection();
+        writer.InsertFolders(own, folders);
+        writer.InsertFiles(own, files);
+        new FtsIndexer().PopulateAll(own);
     }
 
     private static void Exec(Microsoft.Data.Sqlite.SqliteConnection connection, string sql)
+        => Exec(connection, null, sql);
+
+    private static void Exec(Microsoft.Data.Sqlite.SqliteConnection connection, Microsoft.Data.Sqlite.SqliteTransaction? tx, string sql)
     {
         using var cmd = connection.CreateCommand();
+        cmd.Transaction = tx;
         cmd.CommandText = sql;
         cmd.ExecuteNonQuery();
     }

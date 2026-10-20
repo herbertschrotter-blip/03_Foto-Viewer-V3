@@ -555,7 +555,7 @@ public sealed class LibraryService : ILibraryService
     }
 
     /// <summary>Thumbnail-Cache-Ordner der Library löschen — best effort, Fehler werden nur geloggt.</summary>
-    private async Task DeleteThumbnailCacheAsync(int libraryId)
+    public async Task DeleteThumbnailCacheAsync(int libraryId)
     {
         var path = _paths.GetLibraryThumbnailsPath(libraryId);
         if (!Directory.Exists(path))

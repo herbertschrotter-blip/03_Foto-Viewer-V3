@@ -209,6 +209,8 @@ public sealed class SorterRootSelectionTests
 
         public Task ClearAsync(int libraryId, CancellationToken ct = default) => throw new NotSupportedException();
 
+        public Task DeleteThumbnailCacheAsync(int libraryId) => throw new NotSupportedException();
+
         public Task DeleteAsync(int libraryId, CancellationToken ct = default) => throw new NotSupportedException();
 
         public Task<IReadOnlyList<LibraryRootInfo>> GetRootsAsync(int libraryId, CancellationToken ct = default) => throw new NotSupportedException();

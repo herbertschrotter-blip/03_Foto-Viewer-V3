@@ -8,6 +8,8 @@ namespace PhotoViewerV3.Data.RawSql;
 /// Raw-SQLite Bulk-Inserter für Folders + Files, analog zum Pattern aus Spike #1.
 /// EF Core wäre zu langsam für 500k Inserts (siehe ADR-0004). Single Connection,
 /// eine Transaction für alle Files. INSERT OR IGNORE für Idempotenz.
+/// Mit <c>transaction</c> schreibt der Aufrufer in seine eigene, offene Transaktion (kein Commit hier) — so ersetzt
+/// „Neu aufbauen“ den Katalog atomar (ADR-0028).
 /// </summary>
 public sealed class BulkScanWriter
 {
@@ -34,10 +36,12 @@ public sealed class BulkScanWriter
 
     public sealed record InsertReport(int Attempted, int Inserted, TimeSpan Duration);
 
-    public InsertReport InsertFolders(SqliteConnection connection, IReadOnlyList<FolderRow> folders)
+    /// <param name="transaction">Offene Transaktion des Aufrufers; null = eigene Transaktion mit Commit.</param>
+    public InsertReport InsertFolders(SqliteConnection connection, IReadOnlyList<FolderRow> folders, SqliteTransaction? transaction = null)
     {
         var sw = Stopwatch.StartNew();
-        using var tx = connection.BeginTransaction();
+        using var ownTx = transaction is null ? connection.BeginTransaction() : null;
+        var tx = transaction ?? ownTx!;
         using var cmd = connection.CreateCommand();
         cmd.Transaction = tx;
         cmd.CommandText = """
@@ -67,20 +71,23 @@ public sealed class BulkScanWriter
             inserted += cmd.ExecuteNonQuery();
         }
 
-        tx.Commit();
+        ownTx?.Commit();
         sw.Stop();
         return new InsertReport(folders.Count, inserted, sw.Elapsed);
     }
 
+    /// <param name="transaction">Offene Transaktion des Aufrufers; null = eigene Transaktion mit Commit.</param>
     public InsertReport InsertFiles(
         SqliteConnection connection,
         IEnumerable<FileRow> files,
         Action<int, TimeSpan>? onProgress = null,
         int progressEvery = 25_000,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        SqliteTransaction? transaction = null)
     {
         var sw = Stopwatch.StartNew();
-        using var tx = connection.BeginTransaction();
+        using var ownTx = transaction is null ? connection.BeginTransaction() : null;
+        var tx = transaction ?? ownTx!;
         using var cmd = connection.CreateCommand();
         cmd.Transaction = tx;
         cmd.CommandText = """
@@ -143,7 +150,7 @@ public sealed class BulkScanWriter
             }
         }
 
-        tx.Commit();
+        ownTx?.Commit();
         sw.Stop();
         return new InsertReport(attempted, inserted, sw.Elapsed);
     }

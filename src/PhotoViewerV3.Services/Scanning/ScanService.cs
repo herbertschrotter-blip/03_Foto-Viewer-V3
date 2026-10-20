@@ -42,9 +42,10 @@ internal sealed record ScanRoot(int Id, string Path, LibraryRootRole Role);
 /// (PLAN Kap. 12), dann je nach Modus
 /// <list type="bullet">
 /// <item>Fresh/ClearAndRescan: alle Wurzeln müssen erreichbar sein (ein Offline-Laufwerk darf den Katalog nie
-/// leeren); (optional Katalog leeren — Favoriten, Bewertungen und Tags übernimmt <see cref="UserDataCarryOver"/>,
-/// ADR-0023,) jede Wurzel traversieren, Folders (mit RootId) + Files via Raw-SQLite
-/// Bulk-Insert persistieren, FTS5 komplett aufbauen;</item>
+/// leeren); jede Wurzel traversieren, dann in EINER Transaktion (<see cref="FullScanCatalogWriter"/>, ADR-0028)
+/// bei ClearAndRescan die Benutzerdaten sichern und die alten Zeilen ersetzen, Folders (mit RootId) + Files per
+/// Raw-SQLite-Bulk-Insert schreiben, Favoriten/Bewertungen/Tags/Kategorie-Werte zurückschreiben
+/// (<see cref="UserDataCarryOver"/>, ADR-0023) und FTS5 komplett aufbauen — Abbruch oder Fehler ändern nichts;</item>
 /// <item>Incremental: je Wurzel ein Diff gegen den Katalog mit stabilen FileIds, Offline- und Mass-Missing-Guard
 /// je Wurzel (<see cref="IncrementalScanRunner"/>); eine nicht erreichbare Wurzel wird übersprungen, die übrigen
 /// werden abgeglichen.</item>
@@ -55,8 +56,6 @@ internal sealed record ScanRoot(int Id, string Path, LibraryRootRole Role);
 /// </summary>
 public sealed class ScanService : IScanService
 {
-    private const int InsertProgressEvery = 25_000;
-
     private readonly ILibraryContextFactory _contextFactory;
     private readonly FolderEnumerator _enumerator;
     private readonly BulkScanWriter _bulkWriter;
@@ -270,20 +269,15 @@ public sealed class ScanService : IScanService
             }
         }
 
-        // 3) ClearAndRescan: Favoriten/Bewertungen/Tags sichern (ADR-0023), dann bestehende Katalogdaten dieser
-        //    Library löschen (FileIds werden neu vergeben)
-        using var carryOver = mode == ScanMode.ClearAndRescan ? CaptureUserData(libraryId) : null;
-        if (mode == ScanMode.ClearAndRescan)
+        // 3) Fresh-Check: keine bestehenden Folders/Files für diese Library. ClearAndRescan lässt den bisherigen
+        //    Katalog bis zum Commit in Schritt 7 unangetastet (ADR-0028) — Abbruch oder Fehler davor ändern nichts.
+        if (mode == ScanMode.Fresh)
         {
-            reporter.Report(new ScanProgress(0, 0, 0, null) { Phase = ScanPhase.Clearing }, force: true);
-            await _libraryService.ClearAsync(libraryId, ct).ConfigureAwait(false);
+            await EnsureLibraryIsEmptyAsync(libraryId, ct).ConfigureAwait(false);
         }
 
-        // 4) Fresh-Check: keine bestehenden Folders/Files für diese Library
-        await EnsureLibraryIsEmptyAsync(libraryId, ct).ConfigureAwait(false);
-
-        // 5) Start-Ids: fortlaufend über alle Libraries und nie wiederverwendet (sqlite_sequence) —
-        //    sonst kollidieren die Ids einer zweiten Library und INSERT OR IGNORE verwirft Zeilen still.
+        // 4/5) Start-Ids: fortlaufend über alle Libraries und nie wiederverwendet (sqlite_sequence; bei ClearAndRescan
+        //    hinter den noch vorhandenen alten Ids) — sonst kollidieren Ids und INSERT OR IGNORE verwirft Zeilen still.
         var (nextFolderId, nextFileId) = ReadNextIds();
 
         _logger.LogInformation(
@@ -376,58 +370,21 @@ public sealed class ScanService : IScanService
         // Abbruch vor der Persistenz: nichts schreiben
         ct.ThrowIfCancellationRequested();
 
-        // 7) Persistenz via Raw-SQLite
+        // 7) Persistenz via Raw-SQLite in EINER Transaktion (ADR-0028): ClearAndRescan sichert die Benutzerdaten,
+        //    ersetzt die alten Zeilen, schreibt die Daten zurück und baut den Suchindex — alles oder nichts.
         var persistSw = Stopwatch.StartNew();
-        BulkScanWriter.InsertReport folderReport;
-        BulkScanWriter.InsertReport fileReport;
-        FtsIndexer.FtsReport ftsReport;
-        var ftsPopulated = false;
-
+        FullScanCatalogWriter.Report report;
         using (var connection = _contextFactory.OpenSqliteConnection())
         {
-            try
-            {
-                reporter.Report(new ScanProgress(folderRows.Count, 0, totalBytes, null) { Phase = ScanPhase.Persisting }, force: true);
-                folderReport = _bulkWriter.InsertFolders(connection, folderRows);
-                _logger.LogInformation(
-                    "Folders insert: {In}/{At} in {Ms:N0} ms",
-                    folderReport.Inserted, folderReport.Attempted, folderReport.Duration.TotalMilliseconds);
+            report = new FullScanCatalogWriter(_bulkWriter, _ftsIndexer, _logger)
+                .Write(connection, libraryId, mode, folderRows, fileRows, totalBytes, reporter, ct);
+        }
 
-                fileReport = _bulkWriter.InsertFiles(
-                    connection,
-                    fileRows,
-                    onProgress: (count, elapsed) =>
-                    {
-                        _logger.LogInformation(
-                            "Files insert progress: {Count}/{Total} ({Pct:N1} %) in {Sec:N1} s",
-                            count, fileRows.Count, 100.0 * count / Math.Max(1, fileRows.Count), elapsed.TotalSeconds);
-                        reporter.Report(new ScanProgress(folderRows.Count, count, totalBytes, null) { Phase = ScanPhase.Persisting }, force: true);
-                    },
-                    progressEvery: InsertProgressEvery,
-                    ct: ct);
-                _logger.LogInformation(
-                    "Files insert: {In}/{At} in {Sec:N2} s",
-                    fileReport.Inserted, fileReport.Attempted, fileReport.Duration.TotalSeconds);
-
-                if (carryOver is not null)
-                {
-                    RestoreUserData(carryOver, libraryId);
-                }
-
-                reporter.Report(new ScanProgress(folderRows.Count, fileRows.Count, totalBytes, null) { Phase = ScanPhase.Indexing }, force: true);
-                ftsReport = _ftsIndexer.PopulateAll(connection);
-                ftsPopulated = true;
-                _logger.LogInformation(
-                    "FTS5 populated: {Rows} rows in {Ms:N0} ms",
-                    ftsReport.RowsInserted, ftsReport.Duration.TotalMilliseconds);
-            }
-            catch
-            {
-                // Keine halben Zustände: alles, was dieser Scan bereits geschrieben hat, wieder entfernen.
-                // Die Library war vor dem Scan leer, daher ist "alles dieser Library löschen" exakt der Vorzustand.
-                RollbackPartialScan(connection, libraryId, ftsPopulated);
-                throw;
-            }
+        // 8) Erst nach dem Commit: Vorschaubilder der alten FileIds verwerfen (best effort; FileIds werden nie
+        //    wiederverwendet, ein Rest nach einem Absturz genau hier ist nur toter Platz).
+        if (mode == ScanMode.ClearAndRescan)
+        {
+            await _libraryService.DeleteThumbnailCacheAsync(libraryId).ConfigureAwait(false);
         }
 
         persistSw.Stop();
@@ -436,38 +393,18 @@ public sealed class ScanService : IScanService
         return new ScanResult(
             LibraryId: libraryId,
             RootPath: ArchivePath(roots),
-            FoldersInserted: folderReport.Inserted,
-            FilesInserted: fileReport.Inserted,
-            FtsRowsInserted: (int)ftsReport.RowsInserted,
+            FoldersInserted: report.Folders.Inserted,
+            FilesInserted: report.Files.Inserted,
+            FtsRowsInserted: (int)report.Fts.RowsInserted,
             TotalBytes: totalBytes,
             TotalDuration: totalSw.Elapsed,
             EnumerationDuration: enumSw.Elapsed,
-            PersistenceDuration: persistSw.Elapsed - ftsReport.Duration,
-            FtsDuration: ftsReport.Duration)
+            PersistenceDuration: persistSw.Elapsed - report.Fts.Duration,
+            FtsDuration: report.Fts.Duration)
         {
             Mode = mode,
             RootsScanned = roots.Count,
         };
-    }
-
-    // ---- Neu aufbauen: Benutzerdaten übernehmen (ADR-0023) ---------------------------------------
-
-    private UserDataCarryOver CaptureUserData(int libraryId)
-    {
-        var carry = UserDataCarryOver.Capture(_contextFactory, libraryId);
-        _logger.LogInformation(
-            "Benutzerdaten gesichert: Library={LibraryId} — {Files} Dateien mit Favorit/Bewertung/Tags/Kategorien, {Tags} Tag-Zuweisungen, {Categories} Kategorie-Werte in {Ms:N0} ms",
-            libraryId, carry.CapturedFiles, carry.CapturedTagAssignments, carry.CapturedCategoryValues, carry.CaptureDuration.TotalMilliseconds);
-        return carry;
-    }
-
-    /// <summary>Direkt nach dem Bulk-Insert, vor dem FTS-Aufbau; ein Fehler rollt den Scan wie jeder Persistenzfehler zurück.</summary>
-    private void RestoreUserData(UserDataCarryOver carry, int libraryId)
-    {
-        var report = carry.Restore();
-        _logger.LogInformation(
-            "Benutzerdaten übernommen: Library={LibraryId} — {Restored}/{Captured} Dateien ({Values} mit Favorit/Bewertung, {Tags} Tag-Zuweisungen, {Categories} Kategorie-Werte), {Lost} nicht mehr vorhanden, in {Ms:N0} ms",
-            libraryId, report.RestoredFiles, report.CapturedFiles, report.FavoritesOrRatingsRestored, report.TagAssignmentsRestored, report.CategoryValuesRestored, report.LostFiles, report.Duration.TotalMilliseconds);
     }
 
     // ---- Gemeinsame Helfer ----------------------------------------------------------------------
@@ -530,31 +467,7 @@ public sealed class ScanService : IScanService
     }
 
     private static int ReadNextId(SqliteConnection connection, string table)
-    {
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = $"""
-            SELECT MAX(
-                (SELECT COALESCE(MAX(Id), 0) FROM {table}),
-                (SELECT COALESCE(MAX(seq), 0) FROM sqlite_sequence WHERE name = $table)) + 1;
-            """;
-        cmd.Parameters.AddWithValue("$table", table);
-        return Convert.ToInt32(cmd.ExecuteScalar());
-    }
-
-    private void RollbackPartialScan(SqliteConnection connection, int libraryId, bool ftsPopulated)
-    {
-        try
-        {
-            var result = LibraryCatalogCleanup.DeleteLibraryRows(connection, libraryId, _logger, ftsEntriesExpected: ftsPopulated);
-            _logger.LogWarning(
-                "Unvollständiger Scan zurückgerollt: Library={LibraryId} ({Files} Files, {Folders} Folders entfernt, FTS-Rebuild: {Rebuilt})",
-                libraryId, result.Files, result.Folders, result.FtsRebuilt);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Rollback des unvollständigen Scans fehlgeschlagen: Library={LibraryId}", libraryId);
-        }
-    }
+        => FullScanCatalogWriter.ReadNextId(connection, transaction: null, table);
 
     private static string FolderDisplayName(string fullPath)
     {

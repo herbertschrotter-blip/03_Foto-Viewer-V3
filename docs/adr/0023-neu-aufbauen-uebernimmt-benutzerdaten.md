@@ -1,6 +1,10 @@
 # ADR-0023: „Neu aufbauen“ übernimmt Favoriten, Bewertungen und Tags über den Pfad
 
-- **Status:** Accepted
+- **Status:** Accepted (Ablauf „vor dem Leeren in einer eigenen Verbindung sichern, nach dem Bulk-Insert
+  zurückschreiben“ und Konsequenz „Abbruch zwischen Leeren und Zurückschreiben verliert die Daten“ abgelöst durch
+  ADR-0028, 0.2.24; Schlüssel und Mengenlogik gelten weiter)
+- **Ergänzt durch:** [ADR-0028](0028-neu-aufbauen-in-einer-transaktion.md) — Sichern, Ersetzen und Zurückschreiben in
+  einer Transaktion nach der Enumeration; Kategorie-Werte (ADR-0027) gehören zu den übernommenen Benutzerdaten
 - **Datum:** 2026-10-19
 - **Entscheider:** Herbert Schrotter, Claude
 - **Bezogen auf:** ADR-0019 (Incremental-Scan, löst dort den Punkt „ClearAndRescan … Favoriten und Bewertungen gehen

@@ -41,11 +41,12 @@ Wenn eine ADR-Entscheidung revidiert wird: **neues ADR anlegen** + altes auf "Su
 | [0020](0020-bibliothek-mehrere-wurzeln-rollen.md) | Bibliothek mit mehreren Wurzeln und Rollen (Eingang / Archiv) | Accepted |
 | [0021](0021-tags-eigene-tabellen.md) | Tags als eigene Tabellen mit Katalog-Zuweisung | Accepted |
 | [0022](0022-archive-als-katalog-eintraege.md) | Archive als Katalog-Einträge, Entpacken über SharpCompress | Accepted |
-| [0023](0023-neu-aufbauen-uebernimmt-benutzerdaten.md) | „Neu aufbauen“ übernimmt Favoriten, Bewertungen und Tags über den Pfad | Accepted |
+| [0023](0023-neu-aufbauen-uebernimmt-benutzerdaten.md) | „Neu aufbauen“ übernimmt Favoriten, Bewertungen und Tags über den Pfad | Accepted (Ablauf abgelöst durch 0028) |
 | [0024](0024-sortierer-ziel-nur-unter-bibliothekswurzeln.md) | Sortierer und Flatten: Quelle und Ziel nur unter den Wurzeln der Bibliothek | Accepted |
 | [0025](0025-scan-sperre-fuer-datei-operationen.md) | Scan und Datei-Batch einer Bibliothek schließen sich aus; eigene Schreibvorgänge zählen nicht für die Ordnerüberwachung | Accepted |
 | [0026](0026-speicherort-katalog-waehlbar.md) | Speicherort von Katalog-DB und Thumbnail-Cache ist wählbar; Umzug per geprüfter Kopie und Neustart | Accepted |
 | [0027](0027-kategorien-mit-festen-werten.md) | Frei konfigurierbare Kategorien mit festen Werten: ein Wert je Datei, Filter und Listenspalte | Accepted (Nachtrag 0.2.23: Strg+K, Lightbox, Suche per Join, serverseitige Sortierung) |
+| [0028](0028-neu-aufbauen-in-einer-transaktion.md) | „Neu aufbauen“ ersetzt den Katalog in einer Transaktion nach der Enumeration — kein Verlust von Katalog und Benutzerdaten bei Abbruch oder Absturz | Accepted |
 
 ## Quellen der Entscheidungen
 

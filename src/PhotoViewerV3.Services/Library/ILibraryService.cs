@@ -76,6 +76,12 @@ public interface ILibraryService
     /// </summary>
     Task ClearAsync(int libraryId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Löscht nur den Thumbnail-Cache-Ordner der Library (best effort, Fehler werden geloggt) — für „Neu aufbauen“,
+    /// das die Katalogzeilen selbst in einer Transaktion ersetzt (ADR-0028) und den Cache erst nach dem Commit räumt.
+    /// </summary>
+    Task DeleteThumbnailCacheAsync(int libraryId);
+
     /// <summary>ClearAsync + Library-Zeile und Wurzeln löschen.</summary>
     Task DeleteAsync(int libraryId, CancellationToken ct = default);
 

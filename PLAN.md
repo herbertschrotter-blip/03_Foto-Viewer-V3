@@ -183,7 +183,8 @@ FilesFts           -- FTS5 virtual table (Files.Name, Extension)
   `CategoryValues (Id, CategoryId → Categories ON DELETE CASCADE, Name COLLATE NOCASE, SortOrder, UNIQUE (CategoryId, Name))`,
   `FileCategoryValues (FileId → Files, CategoryId → Categories, ValueId → CategoryValues — alle ON DELETE CASCADE,
   PK (FileId, CategoryId) = ein Wert je Kategorie und Datei, IX_FileCategoryValues_Value, IX_FileCategoryValues_Category)`.
-  Global wie Tags; „Neu aufbauen“ trägt die Werte über `UserDataCarryOver` (ADR-0023) mit.
+  Global wie Tags; „Neu aufbauen“ trägt die Werte über `UserDataCarryOver` (ADR-0023) mit — seit 0.2.24 in derselben
+  Transaktion, die die alten Zeilen ersetzt (ADR-0028, keine Schema-Änderung).
 - Albums / AlbumFiles (V0.3+)
 - Plans / PlanFolders / PlanAssignments (V0.3)
 - FileHashes (V0.3+ separat von Files)
@@ -507,6 +508,9 @@ AggressiveBackgroundThumbs:     false  ← Bilder ja, Videos nur on-demand
 - **Mehrere Wurzeln (ADR-0020, ab 0.2.5):** Erreichbarkeit, Root-Recheck und Mass-Missing-Guard gelten je Wurzel.
   Fresh/ClearAndRescan starten nur, wenn alle Wurzeln erreichbar sind; der Incremental-Scan überspringt eine
   Offline-Wurzel (keine Missing-Markierung dort), gleicht die übrigen ab und meldet `LibraryOffline` mit ihrem Pfad.
+- **Neu aufbauen (ADR-0028, ab 0.2.24):** der bisherige Katalog bleibt während der Enumeration unangetastet; Sichern
+  der Benutzerdaten, Löschen der alten Zeilen, Einfügen, Zurückschreiben und Suchindex laufen in einer Transaktion —
+  Abbruch, Offline-Fehler, Ausnahme oder Absturz davor lassen Katalog und Benutzerdaten unverändert.
 
 ### UI bei Storage offline
 ```

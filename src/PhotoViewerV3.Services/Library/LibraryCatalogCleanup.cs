@@ -6,7 +6,8 @@ namespace PhotoViewerV3.Services.Library;
 /// <summary>
 /// Löscht Katalogzeilen einer Library (FTS-Einträge, Thumbnails, Files, Folders) in einer Transaktion — ganz
 /// (<see cref="DeleteLibraryRows"/>) oder nur unterhalb einer Wurzel (<see cref="DeleteRootRows"/>, ADR-0020).
-/// Gemeinsam genutzt von <see cref="LibraryService"/> und dem Rollback eines unvollständigen Scans.
+/// Genutzt von <see cref="LibraryService"/> (Leeren, Löschen, Wurzel entfernen) und von „Neu aufbauen“
+/// (<see cref="DeleteLibraryRowsBeforeFtsRebuild"/>, ADR-0028; ein fehlgeschlagener Scan rollt seine Transaktion zurück).
 /// Schneller Weg: FTS-Einträge gezielt mit den alten Werten austragen (CLAUDE.md-Regel für external content).
 /// Meldet FTS5 dabei „database disk image is malformed“ (Index und Files-Tabelle passen nicht zusammen),
 /// werden die Zeilen gelöscht und der Index per <c>'rebuild'</c> aus der Files-Tabelle neu aufgebaut.
@@ -26,6 +27,15 @@ internal static class LibraryCatalogCleanup
     /// <param name="ftsEntriesExpected">false, wenn die Files dieser Library sicher noch nicht indexiert wurden (dann direkt Rebuild-Pfad).</param>
     public static Result DeleteLibraryRows(SqliteConnection connection, int libraryId, ILogger logger, bool ftsEntriesExpected = true)
         => Delete(connection, libraryId, rootId: null, logger, ftsEntriesExpected);
+
+    /// <summary>
+    /// Löscht Thumbnails-, Files- und Folders-Zeilen der Library in der offenen Transaktion des Aufrufers, OHNE die
+    /// FTS-Einträge auszutragen: nur für „Neu aufbauen“ (ADR-0028), das den Index in derselben Transaktion per
+    /// <c>'rebuild'</c> aus der Files-Tabelle neu aufbaut — der Index ist damit beim Commit konsistent, und ein
+    /// Rollback lässt Zeilen und Index unverändert. Thumbnail-Cache-Dateien räumt der Aufrufer nach dem Commit.
+    /// </summary>
+    public static Result DeleteLibraryRowsBeforeFtsRebuild(SqliteConnection connection, SqliteTransaction transaction, int libraryId)
+        => DeleteRows(connection, transaction, libraryId, rootId: null);
 
     /// <summary>Löscht nur die Zeilen unterhalb einer Wurzel (Folders.RootId); Thumbnail-Cache-Dateien räumt der Aufrufer.</summary>
     public static Result DeleteRootRows(SqliteConnection connection, int libraryId, int rootId, ILogger logger)

@@ -26,11 +26,13 @@ public sealed class FtsIndexer
     /// (eine Zeile je Dokument; Standard columnsize=1). 'rebuild' indexiert alle Libraries neu —
     /// für V0.1 (eine Library, Fresh-Scan) der einfachste konsistente Weg.
     /// </remarks>
-    public FtsReport PopulateAll(SqliteConnection connection)
+    /// <param name="transaction">Offene Transaktion des Aufrufers (ADR-0028: „Neu aufbauen“ in einer Transaktion); sonst null.</param>
+    public FtsReport PopulateAll(SqliteConnection connection, SqliteTransaction? transaction = null)
     {
         var sw = Stopwatch.StartNew();
         using (var rebuildCmd = connection.CreateCommand())
         {
+            rebuildCmd.Transaction = transaction;
             rebuildCmd.CommandText = "INSERT INTO FilesFts(FilesFts) VALUES('rebuild');";
             rebuildCmd.ExecuteNonQuery();
         }
@@ -38,6 +40,7 @@ public sealed class FtsIndexer
         long count;
         using (var countCmd = connection.CreateCommand())
         {
+            countCmd.Transaction = transaction;
             countCmd.CommandText = "SELECT COUNT(*) FROM FilesFts_docsize;";
             count = (long)(countCmd.ExecuteScalar() ?? 0L);
         }

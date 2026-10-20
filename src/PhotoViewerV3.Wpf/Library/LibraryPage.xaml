@@ -290,7 +290,7 @@
                                         <!-- Sekundär: „Neu aufbauen“ (ClearAndRescan nach Bestätigung), nur bei vorhandenem Katalog -->
                                         <ui:Button Content="Neu aufbauen"
                                                    Icon="{ui:SymbolIcon ArrowReset24}"
-                                                   ToolTip="Katalog dieser Bibliothek löschen und komplett neu aufbauen — Favoriten, Bewertungen und Tags bleiben erhalten"
+                                                   ToolTip="Katalog dieser Bibliothek komplett neu aufbauen — Favoriten, Bewertungen, Tags und Kategorien bleiben erhalten; bis zum Abschluss bleibt der bisherige Katalog bestehen"
                                                    Visibility="{Binding CanRebuild, Converter={StaticResource BoolToVis}}"
                                                    Command="{Binding DataContext.RebuildCommand, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}"
                                                    CommandParameter="{Binding}"

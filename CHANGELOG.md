@@ -3,6 +3,48 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.24] — 2026-10-20
+
+### Behoben (ADR-0028, offener Punkt aus 0.2.14)
+- **„Neu aufbauen“ verliert bei Abbruch oder Absturz keine Benutzerdaten mehr.** Bisher wurde der Katalog vor der
+  Enumeration geleert und committet; brach der Lauf danach ab (Abbrechen, Ausnahme, App-Absturz), waren Katalog,
+  Favoriten, Bewertungen, Tags und Kategorie-Werte weg. Jetzt bleibt der bisherige Katalog während der Enumeration
+  unangetastet und benutzbar; danach laufen Sichern der Benutzerdaten, Löschen der alten Zeilen, Bulk-Insert,
+  Zurückschreiben und Suchindex in **einer** Schreibtransaktion (`Services/Scanning/FullScanCatalogWriter`). Abbruch
+  oder Fehler an jeder Stelle rollen zurück, ein Absturz hinterlässt eine nie committete Transaktion, die SQLite beim
+  nächsten Öffnen verwirft — keine Wiederaufnahme-Logik, keine Schema-Änderung. Der Thumbnail-Cache-Ordner wird erst
+  nach dem Commit gelöscht (`ILibraryService.DeleteThumbnailCacheAsync`).
+- Kategorie-Werte (0.2.20) wurden bereits übernommen; sie sind jetzt in allen Fehlerfällen mit abgedeckt. Bewertungen
+  oder Tags, die während der Enumeration noch vergeben werden, gehen ebenfalls mit über.
+- Fresh-Scan nutzt denselben Schreibpfad; der eigene Aufräum-Rollback (`RollbackPartialScan`) entfällt.
+- Start-Ids werden unter der Schreibsperre erneut geprüft: Hatte ein Scan einer anderen Bibliothek während der
+  Enumeration dieselben Ids vergeben, verwarf `INSERT OR IGNORE` bisher still Dateien und Ordner (im Test: 1 statt 3
+  Dateien) — jetzt werden die Zeilen samt ParentId/FolderId nach hinten verschoben.
+- `UserDataCarryOver` arbeitet in der Transaktion des Aufrufers statt mit eigener Verbindung; `BulkScanWriter`
+  (`InsertFolders`/`InsertFiles`) und `FtsIndexer.PopulateAll` nehmen optional eine offene Transaktion entgegen.
+- Bestätigungsdialog und Tooltip „Neu aufbauen“ nennen Kategorien und dass der bisherige Katalog bis zum Abschluss
+  bestehen bleibt.
+- ADR-0028 (neu), ADR-0023 mit Statusvermerk „Ablauf abgelöst durch ADR-0028“, PLAN Kap. 4 und 12 nachgezogen.
+
+### Tests
+- `tests/PhotoViewerV3.Tests`: 434 (+10 `Scanning/ClearAndRescanFailureTests`: Abbruch in jeder Phase — Enumeration,
+  direkt nach dem Löschen der alten Zeilen, beim Einfügen, vor dem Suchindex —, Ausnahme in drei Phasen samt
+  erfolgreichem Folgelauf, simulierter Absturz vor dem Commit (DB-Dateien in diesem Moment kopiert, geöffnet, alter
+  Katalog samt Benutzerdaten unverändert, Folgelauf übernimmt sie), erfolgreicher Neuaufbau mit Kategorien und einer
+  Bewertung aus der Enumeration, Scan einer zweiten Bibliothek während der Enumeration vergibt die Start-Ids; jeweils
+  FileIds, Suchindex, Thumbnail-Zeilen, Tags und Kategorie-Werte verglichen).
+  `Mengen_Messung_synthetischer_Katalog` misst jetzt den ganzen Transaktionsblock: 500 000 Dateien (jede mit Bewertung,
+  jede zehnte mit zwei Tags) — Sichern 5,4 s, Zurückschreiben 3,3 s, Löschen + Einfügen + Zurückschreiben + Suchindex
+  in einer Transaktion 27,8 s (Rechner parallel mit weiteren Builds belastet).
+- `tests/PhotoViewerV3.Wpf.Tests`: 168 (unverändert; Fake von `ILibraryService` um `DeleteThumbnailCacheAsync` ergänzt).
+- Rauchtest 21/21 OK, 0 WPF-Binding-Fehler (Schritt „Aktualisieren + Neu aufbauen“ prüft Favoriten/Bewertungen nach ClearAndRescan).
+
+### Offen
+- Die Schreibtransaktion am Ende von „Neu aufbauen“ ist bei sehr großen Bibliotheken lang (500k: ~30 s); andere
+  Schreiber (Bewertung setzen, Tags, Thumbnail-Status) scheitern in dieser Zeit nach `busy_timeout` 5 s mit „database
+  is locked“ — die einzelne Aktion schlägt fehl, der Katalog nicht. Denkbar: Bedienung während der Phase „Katalog wird
+  geschrieben…“ sperren oder Schreiber mit Wiederholung.
+
 ## [0.2.23] — 2026-10-20
 
 ### Neu (ADR-0027, Nachtrag 0.2.23)

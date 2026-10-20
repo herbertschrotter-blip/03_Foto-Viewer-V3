@@ -262,8 +262,9 @@ public sealed partial class LibraryViewModel : ObservableObject
 
         var ok = await _dialogs.ConfirmAsync(
             "Bibliothek neu aufbauen?",
-            "Der Katalog dieser Bibliothek wird gelöscht und neu aufgebaut; Vorschaubilder werden neu erzeugt. " +
-            "Favoriten, Bewertungen und Tags bleiben für Dateien erhalten, die noch am selben Ort liegen.\n\n" +
+            "Der Katalog dieser Bibliothek wird neu aufgebaut; Vorschaubilder werden neu erzeugt. " +
+            "Favoriten, Bewertungen, Tags und Kategorien bleiben für Dateien erhalten, die noch am selben Ort liegen. " +
+            "Bis der neue Katalog fertig ist, bleibt der bisherige bestehen — ein Abbruch ändert nichts.\n\n" +
             "Tipp: „Aktualisieren“ übernimmt nur Änderungen und ist deutlich schneller.",
             "Neu aufbauen",
             isDestructive: true).ConfigureAwait(true);
