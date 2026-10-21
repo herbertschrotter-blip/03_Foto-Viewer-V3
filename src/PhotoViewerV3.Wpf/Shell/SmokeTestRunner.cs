@@ -61,6 +61,9 @@ public static class SmokeTestRunner
         services.AddSingleton<Folders.Adoption.IFolderAdoptionPicker>(sp => sp.GetRequiredService<SmokeFolderAdoptionPicker>());
         // Gesichtserkennung ohne Modelle (ADR-0035): Replace, weil AddPhotoViewerServices schon registriert hat
         services.Replace(ServiceDescriptor.Singleton<Services.Faces.IFaceAnalyzerFactory, SmokeFaceAnalyzerFactory>());
+        // Personen-Seite (ADR-0037): Dialoge mit vorgegebenen Antworten, vor AddPersonsUi (TryAdd)
+        services.AddSingleton<SmokePersonsDialogs>();
+        services.AddSingleton<Persons.IPersonsDialogService>(sp => sp.GetRequiredService<SmokePersonsDialogs>());
         return services;
     }
 

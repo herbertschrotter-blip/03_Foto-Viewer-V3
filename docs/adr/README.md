@@ -55,6 +55,7 @@ Wenn eine ADR-Entscheidung revidiert wird: **neues ADR anlegen** + altes auf "Su
 | [0034](0034-ordner-uebernahme-mit-leerketten-zusammenzug.md) | Ordner in die Bibliothek übernehmen: Struktur bleibt, leere Zwischenordner werden zusammengezogen, ein AdoptFolder-Batch mit Rückgängig; Ordner bewerten; Begriff „Bibliotheksordner“ | Accepted |
 | [0035](0035-gesichtserkennung-buffalo-l-directml.md) | Gesichtserkennung mit InsightFace buffalo_l (SCRFD + ArcFace), Modell per Benutzer-Download mit Prüfsumme, DirectML mit CPU-Rückfall, Hintergrund-Index; Gesichter überstehen „Neu aufbauen“ | Accepted (Teil 1) |
 | [0036](0036-gesichter-lernen-und-gruppieren.md) | Gesichter lernen nur aus bestätigten Beispielen (k-NN k = 3 + linearer Klassifikator je Person, Distanzprüfung, Ablehnungen, Ausreißer-Prüfung); strenge Gruppen-Vorschläge per Average Linkage | Accepted |
+| [0037](0037-gesichter-zuordnen-personen-seite.md) | Gesichter zuordnen: ein Zuordnungsdienst (Modell je aktiver Bibliothek, Neu-Lernen nach jeder Korrektur, Vorschläge per bedingtem UPDATE, Ablehnen → sofort nächstbester), Gruppen-Cache über unbekannte Gesichter, Gesichts-Ausschnitte im Thumbnail-Ordner, Personen-Seite mit abgewählten Ausreißern | Accepted |
 
 ## Quellen der Entscheidungen
 

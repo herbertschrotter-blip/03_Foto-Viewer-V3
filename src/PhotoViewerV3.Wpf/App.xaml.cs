@@ -14,6 +14,9 @@ using PhotoViewerV3.Services.Thumbnails;
 using PhotoViewerV3.Services.Archive;
 using PhotoViewerV3.Services.Watch;
 using PhotoViewerV3.Lightbox;
+using PhotoViewerV3.Persons;
+using PhotoViewerV3.Services.Faces.Assignment;
+using PhotoViewerV3.Services.Faces.Crops;
 using PhotoViewerV3.Settings;
 using PhotoViewerV3.Settings.CategoryManagement;
 using PhotoViewerV3.Settings.TagManagement;
@@ -121,6 +124,7 @@ public partial class App : Application
         services.AddTagManagement(); // Seite „Tags“ (Wpf/Settings/TagManagement, ADR-0021)
         services.AddCategoryManagement(); // Seite „Kategorien“ (Wpf/Settings/CategoryManagement, ADR-0027)
         services.AddFacesUi(); // Gesichtserkennung: WIC-Lader + Einstellungs-Abschnitt (Wpf/Faces, ADR-0035)
+        services.AddPersonsUi(); // Seite „Personen“: Zuordnen, Gruppen, Gesichts-Ausschnitte (Wpf/Persons, ADR-0037)
 
         services.AddSingleton<MainWindow>();
     }
@@ -199,6 +203,17 @@ public partial class App : Application
             catch (Exception faceEx)
             {
                 Log.Warning(faceEx, "Gesichtserkennung konnte nicht gestartet werden");
+            }
+
+            // Gesichter-Zuordnung (ADR-0037): Vorschläge nach Index-Stapeln und Training im Hintergrund, Ausschnitt-Cache
+            try
+            {
+                _host.Services.GetRequiredService<IFaceRecognitionService>().Start();
+                _host.Services.GetRequiredService<IFaceCropService>().Start();
+            }
+            catch (Exception personsEx)
+            {
+                Log.Warning(personsEx, "Gesichter-Zuordnung konnte nicht gestartet werden");
             }
 
             var mainWindow = _host.Services.GetRequiredService<MainWindow>();

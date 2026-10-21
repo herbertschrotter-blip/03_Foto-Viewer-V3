@@ -367,6 +367,35 @@ Filter nach Personen folgen in Teil 2.
 - Videos werden noch nicht analysiert; Fotos, die WIC nicht dekodieren kann (z. B. HEIC ohne Codec), werden als
   „nicht dekodierbar“ vermerkt. „Neu aufbauen“ der Bibliothek behält alle Gesichter (kein erneutes Analysieren).
 
+### Personen
+Gefundene Gesichter benennen; PhotoViewer lernt daraus und schlägt die Personen auf weiteren Fotos vor (ADR-0036/0037).
+Gelernt wird **nur aus dem, was du bestätigst** — eigene Vorschläge lernen nie mit.
+1. **Einschalten:** Einstellungen → Gesichtserkennung → „Gesichter im Hintergrund erkennen“ (einmalig das Modell
+   herunterladen). Die Statusleiste zeigt den Fortschritt; die Seite **Personen** zeigt oben, wie viele Fotos schon
+   analysiert sind, und weist darauf hin, wenn die Erkennung aus ist („Einstellungen öffnen“).
+2. **Gruppen benennen:** Unter „Unbenannte Gruppen“ stehen Gesichter, die vermutlich dieselbe Person zeigen (größte
+   zuerst). Eine Gruppe öffnen: die Gesichter sind nach Ähnlichkeit sortiert; **zweifelhafte stehen am Ende, sind rot
+   markiert („Ausreißer?“) und abgewählt**. Klick wählt ein Gesicht ab oder an, Doppelklick öffnet das Foto.
+   - **Als neue Person benennen…** — Name eingeben; nur die ausgewählten Gesichter werden bestätigt.
+   - **Zu Person hinzufügen…** — Person aus der Liste wählen (ähnelt die Gruppe einer bekannten Person, ist sie
+     vorgewählt).
+   - **Kein Gesicht / ignorieren** — Fehlerkennungen; sie erscheinen nirgends mehr.
+   Passt ein ausgewähltes Gesicht nicht gut zur Person (bzw. ähnelt es einer anderen bekannten Person), fragt
+   PhotoViewer nach: **Ohne diese bestätigen** / **Trotzdem alle bestätigen** / **Abbrechen**.
+3. **Vorschläge prüfen:** Nach dem Benennen lernt PhotoViewer im Hintergrund (wenige Sekunden) und schlägt die Person
+   auf weiteren Fotos vor. Person öffnen → Reiter **Vorschläge**: je Gesicht ✓ (bestätigen) oder ✗ (ablehnen), oder
+   mehrere auswählen bzw. **Alle sichtbaren bestätigen/ablehnen** (die gerade auf dem Bildschirm stehen). Abgelehnt
+   heißt „das ist nicht diese Person“ — sie wird für dieses Gesicht nie wieder vorgeschlagen, der nächstbeste Kandidat
+   rückt sofort nach.
+4. **Korrigieren:** Reiter **Bestätigt** → falsche Gesichter auswählen → **Aus Person entfernen** (danach wird ohne sie
+   neu gelernt), **Als Titelbild**. Oben: **Umbenennen…**, **Zusammenführen mit…** (z. B. zwei Einträge derselben
+   Person), **Ausblenden** (aus der Übersicht; „Ausgeblendete zeigen“ holt sie zurück), **Löschen…** (die Gesichter
+   bleiben und sind wieder unbenannt).
+- Personen gelten für alle Bibliotheken, Zähler und Vorschläge für die aktive. Neue Gesichter aus dem laufenden Index
+  erscheinen in den Gruppen nach **Aktualisieren**.
+- Die Gesichts-Ausschnitte (128 × 128) liegen im Vorschaubild-Ordner (`thumbs\<Bibliothek>\faces\`) und werden nur für
+  sichtbare Kacheln erzeugt.
+
 ### Ordnerüberwachung
 Die Bibliotheksordner der aktiven Bibliothek werden im Hintergrund überwacht (`FileSystemWatcher` je Wurzel, rekursiv).
 Neue, gelöschte, umbenannte oder geänderte Fotos und Videos (nur Formate aus dem Formatregister; `.tmp`/`.part`,

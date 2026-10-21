@@ -7,6 +7,7 @@ using PhotoViewerV3.Services.Categories;
 using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Database.Relocation;
 using PhotoViewerV3.Services.Faces;
+using PhotoViewerV3.Services.Faces.Assignment;
 using PhotoViewerV3.Services.Infrastructure;
 using PhotoViewerV3.Services.Library;
 using PhotoViewerV3.Services.Media;
@@ -75,6 +76,9 @@ public static class ServiceCollectionExtensions
 
         // Gesichtserkennung Teil 1: Modell, ONNX-Analysator, Hintergrund-Index (Services/Faces, ADR-0035)
         services.AddFaces();
+
+        // Gesichtserkennung Teil 3: Zuordnung, Vorschläge, Gruppen, Gesichts-Ausschnitte (Services/Faces/Assignment, ADR-0037)
+        services.AddFaceRecognition();
 
         return services;
     }

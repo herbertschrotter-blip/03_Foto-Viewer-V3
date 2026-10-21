@@ -3,6 +3,57 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.37] — 2026-10-21
+
+### Neu (ADR-0037) — Gesichtserkennung Teil 3: Personen-Seite, Benennen, Vorschläge bestätigen
+- **Zuordnungsdienst** `IFaceRecognitionService` (`Services/Faces/Assignment`, `AddFaceRecognition()` registriert ihn mit
+  `FaceRecognizer`/`FaceClusterer` als Singletons): Modell im Speicher je aktiver Bibliothek, gelernt nur aus
+  bestätigten Gesichtern (häufigste Modell-Kennung, Ablehnungen aus `FaceRejections`); nach jeder Bestätigung/Korrektur
+  entprellt neu gelernt und Vorschläge für alle offenen Gesichter geschrieben (Zustand 1 mit Person/Score bzw. zurück
+  auf 0), nach jedem Index-Stapel (`FacesChangedMessage`) nur für dessen Dateien — nie auf dem UI-Thread, stapelweise,
+  per bedingtem UPDATE (eine Bestätigung zwischen Lesen und Schreiben gewinnt immer), Warte-Logik ADR-0030.
+  Operationen: Person anlegen/umbenennen (Name ohne Groß-/Kleinschreibung eindeutig)/zusammenführen/ausblenden/löschen,
+  bestätigen (einzeln/mehrere), Vorschlag ablehnen (sofort der nächstbeste Kandidat), aus Person entfernen (+ Ablehnung),
+  ignorieren, Titelbild; Ausreißer-Prüfung vor dem Bestätigen (`CheckOutliersAsync`, bei neuer Person: ähnelt einer
+  bekannten). Gruppen-Vorschläge über unbekannte Gesichter (abschnittsweise je 50 000), zwischengespeichert, eigene
+  Zuordnungen nehmen Gesichter sofort heraus. Nachricht `PersonsChangedMessage`. Vereinbarte Schnittstelle für Galerie/
+  Lightbox: `GetFacesForFilesAsync`, `GetPersonsAsync`, `ConfirmAsync`, `ConfirmNewPersonAsync`, `RejectSuggestionAsync`,
+  `IgnoreFaceAsync`.
+- **Gesichts-Ausschnitte** 128 × 128 im Thumbnail-Ordner (`thumbs\{libraryId}\faces\{faceId}.jpg`, `IFaceCropService`),
+  gerendert über WIC im Wpf-Projekt (`WicFaceCropRenderer`, je Datei ein Dekodieren in passender Größe), nur für
+  sichtbare Kacheln, gebündelt mit Background-Priorität an den UI-Thread; bei neu analysierten Dateien verworfen,
+  verwaiste (gelöschte Gesichter) und alte `.tmp` per Abgleich gelöscht, `DeleteAll()` für „Gesichtsdaten löschen“.
+- **Seite „Personen“** (Navigation, `Wpf/Persons`): benannte Personen (Titelbild, Name, Fotos/Vorschläge, Ausgeblendete
+  zeigen) und unbenannte Gruppen (größte zuerst, „ähnelt …?“); Detail einer Person mit Reitern Vorschläge/Bestätigt
+  (✓/✗ je Gesicht, Auswahl und „alle sichtbaren“ bestätigen/ablehnen, aus Person entfernen, Titelbild, umbenennen,
+  zusammenführen mit…, ausblenden, löschen, Doppelklick → Lightbox); Gruppenansicht nach Nähe sortiert, **Ausreißer am
+  Ende rot markiert und abgewählt**, „Als neue Person benennen…“, „Zu Person hinzufügen…“ (Vorschlag aus dem
+  Gruppenzentrum), „Kein Gesicht / ignorieren“; Ausreißer-Rückfrage (AppDialogWindow) „Ohne diese bestätigen / Trotzdem
+  alle / Abbrechen“. Kopfzeile mit Indexstand und Hinweis „Gesichtserkennung ausgeschaltet → Einstellungen öffnen“.
+  Kachel-Listen virtualisiert (`VirtualizingTilePanel`) mit Blatt-Automation-Peers (`TileListBox`).
+
+### Tests
+- `tests/PhotoViewerV3.Tests`: 592 (+14, 1 übersprungen ohne Modell): `Faces/Assignment/FaceRecognitionServiceTests`
+  (Bestätigen → Training → Vorschläge, P2-Schnittstelle + Namen, Ablehnen → nächstbester und bleibt nach Neu-Lernen,
+  Entfernen → Neu-Lernen, Zusammenführen, Löschen, Ausreißer-Prüfung, Gruppen ohne bestätigte/ignorierte mit Ausreißer
+  am Ende und sofortiger Aktualisierung, Index-Meldung → neue Vorschläge, Ignorieren, Thread-Verhalten bei gesperrtem
+  Katalog, Bestätigung gewinnt gegen Hintergrund-Vorschlag), `FaceCropServiceTests` (Cache-Pfad, ein Render je Datei,
+  Verwerfen bei Index-Meldung, Abgleich, alles löschen, kein Endlos-Wiederholen); Hilfe `FaceAssignmentWorld`
+  (synthetische Fingerabdrücke in migrierter Test-DB).
+- `tests/PhotoViewerV3.Wpf.Tests`: 260 (+11, 1 übersprungen), dreimal hintereinander grün: `Persons/PersonsViewModelTests`
+  (Ausreißer abgewählt, Benennen mit Rückfrage/Abbrechen/vorhandener Name, Hinzufügen mit Vorschlag, Ignorieren,
+  Vorschläge einzeln/Auswahl/sichtbare, Zusammenführen, Kopfzeile), `Persons/PersonsPageUiTests` (echte Seite: 2 000
+  Gesichter → < 120 Container, Blatt-Peers, Ausschnitte nur für sichtbaren Bereich; Personenauswahl).
+- Rauchtest 27/27 OK, 0 Binding-Fehler — neuer Schritt **„Personen“** vor „Ordnerüberwachung“
+  (`Shell/Smoke/SmokeScenario.Persons.cs`): reproduzierbare synthetische Fingerabdrücke (2 Personen + Ausreißer) in die
+  Gesichter des Fake-Analysators, Gruppe benennen (Ausreißer abgewählt), Vorschlag bestätigen/ablehnen,
+  Ausreißer-Prüfung, zweite Gruppe benennen und zusammenführen, Lightbox, Ausschnitte im Cache.
+
+### Offen
+- Schwellen weiter aus synthetischen Daten (ADR-0036); Kalibrierung an echten Fingerabdrücken.
+- Modell je aktiver Bibliothek (Personen global, Lernbeispiele nur aus der aktiven Bibliothek).
+- Neue Index-Gesichter erscheinen in den Gruppen erst nach „Aktualisieren“/erneutem Öffnen.
+
 ## [0.2.36] — 2026-10-21
 
 ### Doku

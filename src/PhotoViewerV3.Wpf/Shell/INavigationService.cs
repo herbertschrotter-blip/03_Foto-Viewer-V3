@@ -10,6 +10,7 @@ public static class NavigationTags
     public const string Folders = "folders";
     public const string Tags = "tags";
     public const string Categories = "categories";
+    public const string Persons = "persons"; // Seite „Personen“ (ADR-0037)
     public const string Settings = "settings";
 }
 

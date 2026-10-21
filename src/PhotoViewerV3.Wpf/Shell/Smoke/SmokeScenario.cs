@@ -158,6 +158,10 @@ internal sealed partial class SmokeScenario
         _autoExtract = services.GetRequiredService<IArchiveAutoExtractService>();
         _adoptionPicker = services.GetService<SmokeFolderAdoptionPicker>();
         _faceIndex = services.GetService<PhotoViewerV3.Services.Faces.Indexing.IFaceIndexService>(); // Schritt „Gesichter“ (ADR-0035)
+        // Schritt „Personen“ (ADR-0037)
+        _personsPage = services.GetService<PhotoViewerV3.Persons.ViewModels.PersonsViewModel>();
+        _recognition = services.GetService<PhotoViewerV3.Services.Faces.Assignment.IFaceRecognitionService>();
+        _personsDialogs = services.GetService<SmokePersonsDialogs>();
         _messenger.Register<SmokeScenario, ScanCompletedMessage>(this, static (r, m) => r._lastScan = m.Result);
     }
 
@@ -218,6 +222,7 @@ internal sealed partial class SmokeScenario
         await StepAsync("Auto-Entpacken: ZIP in den Eingang kopieren → Scan → entpackt → Katalog (Einstellung je Bibliothek, vorhandene Archive nachholen)", AutoExtractAsync).ConfigureAwait(true);
         await StepAsync("Ordner übernehmen: Eingang mit Kette leer/leer/inhalt und Verzweigung → Bibliothek, Struktur geprüft, Quelle im Papierkorb, Eingang ausgetragen, Bewertung/Tag wandert mit, Rückgängig (dazu Bewertung/Tags für alle Dateien eines Ordners)", FolderAdoptionAsync).ConfigureAwait(true);
         await StepAsync("Gesichter: Index mit Fake-Analyzer → FaceScans/Faces geschrieben, Statusleiste, Pause/Fortsetzen", FacesAsync).ConfigureAwait(true);
+        await StepAsync("Personen: Gruppe benennen (Ausreißer abgewählt), Vorschlag bestätigen/ablehnen, Zusammenführen", PersonsAsync).ConfigureAwait(true);
         await StepAsync("Ordnerüberwachung: Datei kopieren → automatischer Diff-Scan → Galerie", WatchAsync).ConfigureAwait(true);
         if (_cleanup)
         {
