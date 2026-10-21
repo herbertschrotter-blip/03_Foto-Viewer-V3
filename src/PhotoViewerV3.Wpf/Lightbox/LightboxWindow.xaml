@@ -167,6 +167,17 @@
                                    Margin="0,14,0,8" />
                         <ItemsControl ItemsSource="{Binding MediaInfoRows}" ItemTemplate="{StaticResource InfoRowTemplate}" />
 
+                        <!-- Motive (ADR-0052): erkannte Begriffe, wahrscheinlichste zuerst -->
+                        <StackPanel Visibility="{Binding HasCurrentMotifs, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Style="{StaticResource InfoHeader}" Text="MOTIVE" Margin="0,14,0,8" />
+                            <TextBlock Text="{Binding CurrentMotifsText}"
+                                       FontSize="12"
+                                       FontWeight="Medium"
+                                       TextWrapping="Wrap"
+                                       AutomationProperties.AutomationId="LightboxMotifs"
+                                       Foreground="{DynamicResource LightboxTextBrush}" />
+                        </StackPanel>
+
                         <!-- Kategorien der Datei (ADR-0027): alle Kategorien, „—“ ohne Wert; Zuweisen öffnet den Strg+K-Dialog -->
                         <StackPanel Visibility="{Binding HasCategories, Converter={StaticResource BoolToVis}}">
                             <TextBlock Style="{StaticResource InfoHeader}" Text="KATEGORIEN" Margin="0,14,0,8" />

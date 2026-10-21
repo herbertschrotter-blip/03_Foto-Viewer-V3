@@ -133,8 +133,10 @@ public sealed partial class GalleryViewModel : ObservableObject
         IGalleryViewSettingsStore viewSettings,
         ILogger<GalleryViewModel> logger,
         PhotoViewerV3.Gallery.CaptureDates.CaptureDateActions? captureDateActions = null,
-        PhotoViewerV3.Gallery.Places.PlaceActions? placeActions = null)
+        PhotoViewerV3.Gallery.Places.PlaceActions? placeActions = null,
+        PhotoViewerV3.Services.Motifs.IMotifTermService? motifTerms = null)
     {
+        InitMotifs(motifTerms); // Bildinhalt-Suche (ADR-0052, GalleryViewModel.Motifs.cs)
         _contextFactory = contextFactory;
         _source = source;
         _thumbnails = thumbnails;
@@ -324,6 +326,11 @@ public sealed partial class GalleryViewModel : ObservableObject
                 return personsMessage;
             }
 
+            if (EmptyMessageMotifs is { } motifsMessage) // ADR-0052, GalleryViewModel.Motifs.cs
+            {
+                return motifsMessage;
+            }
+
             if (FolderId is not null)
             {
                 return "In diesem Ordner liegen keine Dateien, die zum Filter passen.";
@@ -383,6 +390,7 @@ public sealed partial class GalleryViewModel : ObservableObject
         }
 
         await LoadPersonsAsync(); // Personen-Filter mit Zählern der Bibliothek (0.2.38)
+        await LoadMotifsAsync(); // Motiv-Filter mit Zählern des Bereichs (ADR-0052)
         await ReloadTotalAndPageAsync(restoreSelection: false);
         await RefreshCanUndoAsync();
     }
@@ -408,6 +416,7 @@ public sealed partial class GalleryViewModel : ObservableObject
             ResetTagFilter();
             ResetCategoryFilter();
             ResetPersonFilter();
+            ResetMotifFilter(); // ADR-0052
         }
         finally
         {
@@ -493,6 +502,7 @@ public sealed partial class GalleryViewModel : ObservableObject
         _messenger.Register<GalleryViewModel, CategoriesChangedMessage>(
             this, static (r, m) => r.RunOnUi(() => r.HandleCategoriesChangedAsync(m)));
         RegisterPersonMessages(); // Personen (0.2.38, GalleryViewModel.Persons.cs)
+        RegisterMotifMessages(); // Motive (ADR-0052, GalleryViewModel.Motifs.cs)
     }
 
     /// <summary>Wurzeln geändert (ADR-0020): Archiv-Wurzel bzw. Anzeigepfad kann wechseln, Status-Filter liefert andere Treffer → Library neu laden.</summary>
@@ -796,7 +806,8 @@ public sealed partial class GalleryViewModel : ObservableObject
         FireAndForget(() => ApplyTagsToItemsAsync(rows.Select(r => r.Id).ToList(), ct));
         FireAndForget(() => ApplyCategoriesToItemsAsync(rows.Select(r => r.Id).ToList(), ct)); // ADR-0027
         FireAndForget(() => ApplyPersonsToItemsAsync(rows.Select(r => r.Id).ToList(), ct)); // Personen (0.2.38)
-        FireAndForget(() => ApplyPlacesToItemsAsync(rows.Select(r => r.Id).ToList(), ct)); // Orte (ADR-0050)
+        FireAndForget(() => ApplyPlacesToItemsAsync(rows.Select(r => r.Id).ToList(), ct)); // Orte (ADR-0050,
+        FireAndForget(() => ApplyMotifsToItemsAsync(rows.Select(r => r.Id).ToList(), ct)); // Motive (ADR-0052)
 
         SetLoadStatus($"{TotalCount:N0} Treffer · Seite {DisplayPageIndex} von {PageCount:N0} · {LastPageLoadMs:N1} ms");
         _logger.LogInformation(
@@ -867,7 +878,7 @@ public sealed partial class GalleryViewModel : ObservableObject
     private GalleryQuery BuildQuery()
     {
         var term = string.IsNullOrWhiteSpace(SearchTerm) ? null : SearchTerm.Trim();
-        return new GalleryQuery(_libraryId, FilterState, term, FolderId, IncludeSubfolders, SelectedSort.Sort, SelectedTagIds(), TagFilterMode, SelectedCategoryFilters(), SelectedSort.Category, SelectedPersonFilter());
+        return WithMotifs(new GalleryQuery(_libraryId, FilterState, term, FolderId, IncludeSubfolders, SelectedSort.Sort, SelectedTagIds(), TagFilterMode, SelectedCategoryFilters(), SelectedSort.Category, SelectedPersonFilter())); // Motive (ADR-0052)
     }
 
     /// <summary>

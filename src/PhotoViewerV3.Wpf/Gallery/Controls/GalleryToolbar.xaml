@@ -10,6 +10,7 @@
              xmlns:cats="clr-namespace:PhotoViewerV3.Gallery.Categories"
              xmlns:people="clr-namespace:PhotoViewerV3.Gallery.People"
              xmlns:places="clr-namespace:PhotoViewerV3.Gallery.Places"
+             xmlns:motifs="clr-namespace:PhotoViewerV3.Gallery.Motifs"
              xmlns:vm="clr-namespace:PhotoViewerV3.Gallery.ViewModels"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=vm:GalleryViewModel, IsDesignTimeCreatable=False}"
@@ -129,10 +130,10 @@
                 <ui:TextBox x:Name="SearchBox"
                             AutomationProperties.AutomationId="GallerySearchBox"
                             AutomationProperties.Name="Suche"
-                            AutomationProperties.HelpText="Suche nach Dateiname, Tag, Person oder Kategorie. Strg+F springt hierher, Enter sucht, Esc leert."
+                            AutomationProperties.HelpText="Suche nach Dateiname, Tag, Person, Motiv oder Kategorie. Strg+F springt hierher, Enter sucht, Esc leert."
                             Icon="{ui:SymbolIcon Search24}"
-                            PlaceholderText="Suchen: Name, Tag, Person oder Kategorie"
-                            ToolTip="Suche nach Dateiname, Endung, Tag, Person, Kategorie oder Kategorie-Wert (Strg+F, Enter sucht, Esc leert)"
+                            PlaceholderText="Suchen: Name, Tag, Person, Motiv …"
+                            ToolTip="Suche nach Dateiname, Endung, Tag, Person, Motiv, Kategorie oder Kategorie-Wert — „Motiv: Hund“ sucht nur Motive (Strg+F, Enter sucht, Esc leert)"
                             ClearButtonEnabled="False"
                             Padding="10,6,64,7"
                             Text="{Binding SearchTerm, UpdateSourceTrigger=PropertyChanged}">
@@ -264,6 +265,9 @@
 
                     <!-- Personen-Filter (0.2.38) — sobald Personen oder Gesichter da sind -->
                     <people:PersonFilterDropDown Visibility="{Binding ShowPersonFilter, Converter={StaticResource BoolToVis}}" />
+
+                    <!-- Motiv-Filter (ADR-0052) — sobald Motive erkannt wurden -->
+                    <motifs:MotifFilterDropDown Visibility="{Binding ShowMotifFilter, Converter={StaticResource BoolToVis}}" />
 
                     <!-- Kategorien-Filter (ADR-0027) — nur wenn Kategorien angelegt sind -->
                     <cats:CategoryFilterDropDown Visibility="{Binding HasCategories, Converter={StaticResource BoolToVis}}" />

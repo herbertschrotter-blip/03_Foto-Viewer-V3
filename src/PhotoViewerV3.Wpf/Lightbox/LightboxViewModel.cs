@@ -82,7 +82,8 @@ public sealed partial class LightboxViewModel : ObservableObject, IDisposable
         PhotoViewerV3.Services.Faces.Assignment.IFaceRecognitionService? faceRecognition = null,
         PhotoViewerV3.Shell.IDialogService? dialogs = null,
         Gallery.ListView.IGalleryViewSettingsStore? viewSettings = null,
-        PhotoViewerV3.Services.Places.IGeoCatalogReader? geoReader = null)
+        PhotoViewerV3.Services.Places.IGeoCatalogReader? geoReader = null,
+        PhotoViewerV3.Services.Motifs.IMotifTermService? motifs = null)
     {
         _vlc = vlc;
         _contextFactory = contextFactory;
@@ -102,7 +103,8 @@ public sealed partial class LightboxViewModel : ObservableObject, IDisposable
         InitCategories(categories, categoryPicker); // Kategorie-Werte anzeigen/zuweisen (LightboxViewModel.Categories.cs, ADR-0027)
         InitFaces(faceRecognition, dialogs, viewSettings); // Gesichtsrahmen, Taste F gemerkt (LightboxViewModel.Faces.cs, 0.2.38/0.2.39)
         InitCaptureDate(); // Zeile „Aufgenommen“ (LightboxViewModel.CaptureDate.cs, ADR-0046)
-        InitPlaces(geoReader); // Zeile „Ort“ (LightboxViewModel.Places.cs, ADR-0050)
+        InitPlaces(geoReader); // Zeile „Ort“ (LightboxViewModel.Places.cs, ADR-0050,
+        InitMotifs(motifs); // Info-Panel „Motive“ (LightboxViewModel.Motifs.cs, ADR-0052)
     }
 
     // ----- Anbindung an das Fenster (View-Mechanik) -----
@@ -278,6 +280,7 @@ public sealed partial class LightboxViewModel : ObservableObject, IDisposable
         UpdateHeader();
         _ = LoadCurrentTagsAsync();
         _ = LoadCurrentCategoriesAsync();
+        _ = LoadCurrentMotifsAsync(); // ADR-0052
         UpdateFacesForCurrent(); // 0.2.38
         _ = ShowCurrentAsync();
     }

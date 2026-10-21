@@ -42,6 +42,9 @@ public static class LicenseTexts
         "Ortsnamen: GeoNames (geonames.org) — Creative Commons Namensnennung 4.0 (CC BY 4.0)\n" +
         "  Datensatz „cities5000“ samt Länder- und Regionsnamen, verdichtet und in Lumora eingebettet\n" +
         "  (offline, keine Abfrage im Netz); deutsche Namen teils ergänzt. https://creativecommons.org/licenses/by/4.0/\n\n" +
+        "SigLIP 2 base (google/siglip2-base-patch16-224, ONNX von onnx-community; Motiv-Erkennung) — Apache-Lizenz 2.0\n" +
+        "  Copyright (c) Google LLC. Nicht Teil von Lumora: wird erst nach Bestätigung vom Benutzer selbst\n" +
+        "  heruntergeladen (Einstellungen › Motive) und weder im Quellcode noch in der portablen Version mitgeliefert.\n\n" +
         "FFmpeg (Video-Vorschaubilder) — LGPL/GPL je nach Build\n" +
         "  Nicht Teil von Lumora: wird, falls installiert (z. B. „winget install Gyan.FFmpeg“), als externes\n" +
         "  Programm aufgerufen.";

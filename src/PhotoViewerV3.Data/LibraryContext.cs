@@ -33,6 +33,9 @@ public sealed class LibraryContext : DbContext
     public DbSet<Face> Faces => Set<Face>();
     public DbSet<FaceRejection> FaceRejections => Set<FaceRejection>();
     public DbSet<FaceScan> FaceScans => Set<FaceScan>();
+    public DbSet<MotifTerm> MotifTerms => Set<MotifTerm>(); // Motive (ADR-0052)
+    public DbSet<FileEmbedding> FileEmbeddings => Set<FileEmbedding>();
+    public DbSet<FileMotif> FileMotifs => Set<FileMotif>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

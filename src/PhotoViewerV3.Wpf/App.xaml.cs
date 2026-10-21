@@ -21,6 +21,7 @@ using PhotoViewerV3.Services.Thumbnails;
 using PhotoViewerV3.Services.Archive;
 using PhotoViewerV3.Services.Watch;
 using PhotoViewerV3.Lightbox;
+using PhotoViewerV3.Motifs;
 using PhotoViewerV3.Persons;
 using PhotoViewerV3.Places;
 using PhotoViewerV3.Services.Faces.Assignment;
@@ -170,6 +171,7 @@ public partial class App : Application, ICatalogHostSwitcher
         services.AddFaceDataSettings(); // „Gesichtsdaten löschen…“ in den Einstellungen (Wpf/Settings/FaceData, 0.2.38)
         services.AddPersonRelationsSettings(); // „Personen & Beziehungen“ in den Einstellungen (Wpf/Settings/PersonRelations, ADR-0045)
         services.AddPlacesMap(); // Seite „Orte“: Weltkarte mit Foto-Gruppen, Verorten (Wpf/Places, ADR-0051)
+        services.AddMotifsUi(); // Einstellungen › Motive (Wpf/Motifs, ADR-0052)
 
         services.AddSingleton<MainWindow>();
     }
@@ -302,6 +304,16 @@ public partial class App : Application, ICatalogHostSwitcher
         }
 
         // Aufnahmedatum (ADR-0046): Nachtragen im Hintergrund nach jedem Scan und einmalig für bestehende Kataloge
+        // Motive (ADR-0052, Standard an, läuft erst mit Modell): Einstellungen lesen, Worker starten (erster Durchgang verzögert)
+        try
+        {
+            await _host.Services.GetRequiredService<PhotoViewerV3.Services.Motifs.IMotifIndexService>().StartAsync().ConfigureAwait(true);
+        }
+        catch (Exception motifEx)
+        {
+            Log.Warning(motifEx, "Motiv-Erkennung konnte nicht gestartet werden");
+        }
+
         _host.Services.GetRequiredService<PhotoViewerV3.Services.Metadata.ICaptureDateService>().Start();
 
         // Orte (ADR-0050): Koordinaten nachtragen im Hintergrund, Ortsnamen (GeoNames) vorladen

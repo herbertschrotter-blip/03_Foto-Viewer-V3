@@ -58,8 +58,11 @@ internal static class IncrementalCatalogWriter
 
     // Gesichtserkennung (ADR-0035): Inhalt an Ort und Stelle geändert → Datei zur erneuten Analyse freigeben (der Abgleich
     // über die Box behält bestätigte Zuordnungen). Läuft VOR dem Update, solange die alten Werte noch in der Zeile stehen.
+    // Motive (ADR-0052): ebenso Bild-Vektor und Treffer verwerfen — der Motiv-Index rechnet die Datei neu.
     private const string InvalidateFaceScanSql =
-        "DELETE FROM FaceScans WHERE FileId = $id AND EXISTS (SELECT 1 FROM Files WHERE Id = $id AND (Size <> $size OR ModifiedAtUtc <> $modified));";
+        "DELETE FROM FaceScans WHERE FileId = $id AND EXISTS (SELECT 1 FROM Files WHERE Id = $id AND (Size <> $size OR ModifiedAtUtc <> $modified));" +
+        "DELETE FROM FileMotifs WHERE FileId = $id AND EXISTS (SELECT 1 FROM Files WHERE Id = $id AND (Size <> $size OR ModifiedAtUtc <> $modified));" +
+        "DELETE FROM FileEmbeddings WHERE FileId = $id AND EXISTS (SELECT 1 FROM Files WHERE Id = $id AND (Size <> $size OR ModifiedAtUtc <> $modified));";
 
     private const string MarkMissingSql = "UPDATE Files SET Missing = 1 WHERE Id = $id AND Missing = 0;";
 

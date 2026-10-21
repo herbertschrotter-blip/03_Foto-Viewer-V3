@@ -254,6 +254,7 @@ public sealed partial class InfoViewModel : ObservableObject
             new("Datenbank", $"{sqlite} · {Named("Entity Framework Core", "Microsoft.EntityFrameworkCore.dll")}"),
             new("Archive", Named("SharpCompress", "SharpCompress.dll")),
             new("Gesichter", $"{Named("ONNX Runtime DirectML", "Microsoft.ML.OnnxRuntime.dll")} · InsightFace buffalo_l (nur nicht-kommerziell)"),
+            new("Motive", "SigLIP 2 base von Google (Apache-2.0, Download nach Bestätigung)"), // ADR-0052
             new("Video", $"{Named("LibVLCSharp", "LibVLCSharp.dll")} · FFmpeg (extern)"),
             new("Karte", "OpenStreetMap-Kacheln (ODbL, © OpenStreetMap-Mitwirkende) · eigene Kachelkarte"), // ADR-0051
             new("Orte", "Ortsnamen: GeoNames (geonames.org), CC BY 4.0 · offline eingebettet"), // ADR-0050

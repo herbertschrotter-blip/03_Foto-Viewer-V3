@@ -26,7 +26,7 @@ namespace PhotoViewerV3.Gallery.Data;
 /// Kategorie und ersetzt dann <paramref name="Sort"/>. <paramref name="Filter"/> = Datei-Teil (Dateiart, Favoriten,
 /// Ablage, Mindest-Bewertung, ADR-0041); alle Teile wirken mit UND.
 /// </summary>
-public sealed record GalleryQuery(
+public sealed partial record GalleryQuery(
     int LibraryId,
     GalleryFilterState Filter,
     string? SearchTerm,
@@ -450,6 +450,7 @@ public sealed partial class GalleryPageSource : IDisposable
               {BuildTagClause(query)}
               {BuildCategoryClause(query)}
               {BuildPersonClause(query)}
+              {BuildMotifClause(query)}
               {folderClause}
             ORDER BY {orderBy}
             LIMIT $limit OFFSET $offset;
@@ -466,6 +467,7 @@ public sealed partial class GalleryPageSource : IDisposable
               {BuildTagClause(query)}
               {BuildCategoryClause(query)}
               {BuildPersonClause(query)}
+              {BuildMotifClause(query)}
               {folderClause};
             """;
     }
@@ -482,7 +484,7 @@ public sealed partial class GalleryPageSource : IDisposable
     /// auch Personennamen (bestätigte Gesichter, <see cref="PersonSearchUnion"/>). Ohne Suche einfach <c>Files f</c>.
     /// </summary>
     private static string BuildFilesSource(GalleryQuery query) => query.HasSearch
-        ? """
+        ? query.MotifOnlySearchTerm is not null ? MotifOnlySource : """
           (SELECT rowid AS Id FROM FilesFts WHERE FilesFts MATCH $term
            UNION
            SELECT ft.FileId FROM FileTags ft
@@ -493,7 +495,7 @@ public sealed partial class GalleryPageSource : IDisposable
            UNION
            SELECT fcn.FileId FROM FileCategoryValues fcn
            WHERE fcn.CategoryId IN (SELECT k.Id FROM Categories k WHERE k.Name LIKE $tagLike ESCAPE '\')
-          """ + PersonSearchUnion + """
+          """ + PersonSearchUnion + "\n" + MotifSearchUnion /* Motive (ADR-0052) */ + """
           ) hit
           CROSS JOIN Files f ON f.Id = hit.Id
           """
@@ -603,6 +605,7 @@ public sealed partial class GalleryPageSource : IDisposable
         }
 
         BindPersonParams(cmd, query); // Personen-Filter (0.2.38)
+        BindMotifParams(cmd, query); // Motiv-Filter und „Motiv: …“ (ADR-0052)
 
         var categoryFilters = query.ActiveCategoryFilters;
         for (var i = 0; i < categoryFilters.Count; i++)

@@ -13,6 +13,7 @@ using PhotoViewerV3.Services.Infrastructure;
 using PhotoViewerV3.Services.Library;
 using PhotoViewerV3.Services.Media;
 using PhotoViewerV3.Services.Metadata;
+using PhotoViewerV3.Services.Motifs;
 using PhotoViewerV3.Services.Operations;
 using PhotoViewerV3.Services.Places;
 using PhotoViewerV3.Services.Scanning;
@@ -86,6 +87,9 @@ public static class ServiceCollectionExtensions
 
         // Gesichtserkennung Teil 3: Zuordnung, Vorschläge, Gruppen, Gesichts-Ausschnitte (Services/Faces/Assignment, ADR-0037)
         services.AddFaceRecognition();
+
+        // Motive: SigLIP 2 lokal, Begriffe, Treffer, Hintergrund-Index, GPU-Sperre mit den Gesichtern (Services/Motifs, ADR-0052)
+        services.AddMotifs();
 
         return services;
     }

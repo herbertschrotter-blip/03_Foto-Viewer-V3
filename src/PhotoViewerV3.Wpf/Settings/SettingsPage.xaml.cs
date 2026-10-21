@@ -27,11 +27,13 @@ public partial class SettingsPage : UserControl
         TagManagementPage tags,
         CategoryManagementPage categories,
         InfoViewModel info,
-        Shell.HiddenLibraries.HiddenLibrariesViewModel? hiddenLibraries = null)
+        Shell.HiddenLibraries.HiddenLibrariesViewModel? hiddenLibraries = null,
+        Motifs.MotifSettingsViewModel? motifs = null)
     {
         _sections = sections;
         InitializeComponent();
         DataContext = viewModel;
+        MotifsView.DataContext = motifs; // Reiter „Motive“ (ADR-0052); ohne Dienst leer
 
         LibraryTab.Content = library;
         TagsTab.Content = tags;

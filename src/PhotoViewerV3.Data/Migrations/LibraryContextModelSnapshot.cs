@@ -237,6 +237,51 @@ namespace PhotoViewerV3.Data.Migrations
                     b.ToTable("FileCategoryValues", (string)null);
                 });
 
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.FileEmbedding", b =>
+                {
+                    b.Property<int>("FileId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<byte[]>("Embedding")
+                        .HasColumnType("BLOB");
+
+                    b.Property<string>("ErrorCode")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ModelVersion")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("FileId");
+
+                    b.HasIndex("FileId", "ModelVersion")
+                        .HasDatabaseName("IX_FileEmbeddings_File_Model");
+
+                    b.ToTable("FileEmbeddings", (string)null);
+                });
+
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.FileMotif", b =>
+                {
+                    b.Property<int>("FileId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("TermId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<float>("Score")
+                        .HasColumnType("REAL");
+
+                    b.HasKey("FileId", "TermId");
+
+                    b.HasIndex("TermId", "FileId")
+                        .HasDatabaseName("IX_FileMotifs_Term_File");
+
+                    b.ToTable("FileMotifs", (string)null);
+                });
+
             modelBuilder.Entity("PhotoViewerV3.Domain.Entities.FileOperation", b =>
                 {
                     b.Property<int>("Id")
@@ -554,6 +599,47 @@ namespace PhotoViewerV3.Data.Migrations
                     b.ToTable("Files", (string)null);
                 });
 
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.MotifTerm", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("LibraryId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
+
+                    b.Property<string>("Prompt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<byte[]>("TextEmbedding")
+                        .HasColumnType("BLOB");
+
+                    b.Property<string>("TextModelVersion")
+                        .HasColumnType("TEXT");
+
+                    b.Property<double?>("Threshold")
+                        .HasColumnType("REAL");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LibraryId", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("UX_MotifTerms_Library_Name");
+
+                    b.ToTable("MotifTerms", (string)null);
+                });
+
             modelBuilder.Entity("PhotoViewerV3.Domain.Entities.OperationBatch", b =>
                 {
                     b.Property<int>("Id")
@@ -847,6 +933,30 @@ namespace PhotoViewerV3.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.FileEmbedding", b =>
+                {
+                    b.HasOne("PhotoViewerV3.Domain.Entities.MediaFile", null)
+                        .WithOne()
+                        .HasForeignKey("PhotoViewerV3.Domain.Entities.FileEmbedding", "FileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.FileMotif", b =>
+                {
+                    b.HasOne("PhotoViewerV3.Domain.Entities.MediaFile", null)
+                        .WithMany()
+                        .HasForeignKey("FileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("PhotoViewerV3.Domain.Entities.MotifTerm", null)
+                        .WithMany()
+                        .HasForeignKey("TermId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("PhotoViewerV3.Domain.Entities.FileTag", b =>
                 {
                     b.HasOne("PhotoViewerV3.Domain.Entities.MediaFile", null)
@@ -867,6 +977,15 @@ namespace PhotoViewerV3.Data.Migrations
                     b.HasOne("PhotoViewerV3.Domain.Entities.FileOperation", null)
                         .WithOne()
                         .HasForeignKey("PhotoViewerV3.Domain.Entities.GeoTagUndo", "FileOperationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.MotifTerm", b =>
+                {
+                    b.HasOne("PhotoViewerV3.Domain.Entities.Library", null)
+                        .WithMany()
+                        .HasForeignKey("LibraryId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

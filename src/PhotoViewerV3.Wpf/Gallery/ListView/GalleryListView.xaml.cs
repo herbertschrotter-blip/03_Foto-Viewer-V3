@@ -198,6 +198,14 @@ public partial class GalleryListView : UserControl
             case GalleryListColumnKey.Persons:
                 // 0.2.38: bestätigte Namen, Vorschläge kursiv/grau mit „?“; Sortierung nur innerhalb der Page.
                 return new DataGridTemplateColumn { CellTemplate = (DataTemplate)Resources["PersonsCell"], SortMemberPath = nameof(GalleryItem.PersonsSortKey) };
+            case GalleryListColumnKey.Motifs:
+                // ADR-0052: „Strand, Meer“ (wahrscheinlichste zuerst); Sortierung nur innerhalb der Page.
+                return new DataGridTextColumn
+                {
+                    Binding = new Binding(nameof(GalleryItem.MotifsText)) { Mode = BindingMode.OneWay },
+                    SortMemberPath = nameof(GalleryItem.MotifsText),
+                    ElementStyle = TrimmedTextStyle(),
+                };
             case GalleryListColumnKey.Captured:
                 // Aufnahmedatum (ADR-0046): „12.07.2024 15:30“ / „ca. 1982“, Herkunft im Tooltip; Kopfklick sortiert die ganze Trefferliste.
                 return new DataGridTextColumn

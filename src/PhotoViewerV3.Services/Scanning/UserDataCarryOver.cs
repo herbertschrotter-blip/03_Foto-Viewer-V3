@@ -93,7 +93,8 @@ public sealed partial class UserDataCarryOver
                OR EXISTS (SELECT 1 FROM FileTags t WHERE t.FileId = f.Id)
                OR EXISTS (SELECT 1 FROM FileCategoryValues v WHERE v.FileId = f.Id)
                OR EXISTS (SELECT 1 FROM FaceScans s WHERE s.FileId = f.Id)
-               OR EXISTS (SELECT 1 FROM Faces x WHERE x.FileId = f.Id))
+               OR EXISTS (SELECT 1 FROM Faces x WHERE x.FileId = f.Id)
+               OR EXISTS (SELECT 1 FROM FileEmbeddings e WHERE e.FileId = f.Id))
         ORDER BY f.Missing, f.Id;
         """;
 
@@ -213,6 +214,7 @@ public sealed partial class UserDataCarryOver
         carry.CapturedTagAssignments = Execute(connection, transaction, CaptureTagsSql, libraryId);
         carry.CapturedCategoryValues = Execute(connection, transaction, CaptureCategoriesSql, libraryId);
         carry.ParkFaces(); // Gesichter + FaceScans (ADR-0035, UserDataCarryOver.Faces.cs)
+        carry.ParkMotifs(); // Bild-Vektoren + Motiv-Treffer (ADR-0052, UserDataCarryOver.Motifs.cs)
         carry.CaptureDuration = sw.Elapsed;
         return carry;
     }
@@ -246,6 +248,7 @@ public sealed partial class UserDataCarryOver
         var tags = Execute(_connection, tx, RestoreTagsSql, _libraryId);
         var categories = Execute(_connection, tx, RestoreCategoriesSql, _libraryId);
         var faces = RestoreFaces(); // ADR-0035
+        RestoreMotifs(); // ADR-0052
 
         return new RestoreReport(CapturedFiles, mapped, CapturedFiles - mapped, files, tags, sw.Elapsed, categories, faces, captureDates, geo);
     }

@@ -241,6 +241,20 @@ FilesFts           -- FTS5 virtual table (Files.Name, Extension)
   SegmentOffset, OldModifiedTicks (UTC-Ticks), OldSize)` — „Rückgängig“ von „Ort setzen/entfernen“ (`OperationBatches.OperationType = 8
   SetGeoLocation`, je Datei eine FileOperation). Gefüllt vom Nachtragen im Hintergrund; manuelle Orte überleben „Neu
   aufbauen“ und Inhaltsänderungen wie das Aufnahmedatum.
+- Motive — umgesetzt in 0.2.55 (Migration `AddMotifs`, ADR-0052):
+  `MotifTerms (Id, LibraryId → Libraries ON DELETE CASCADE, Name COLLATE NOCASE, Prompt NULL (Beschreibung fürs
+  Modell), Threshold NULL (= globale Schwelle), SortOrder, TextEmbedding BLOB NULL (768 float32), TextModelVersion NULL,
+  CreatedAtUtc; UX_MotifTerms_Library_Name (LibraryId, Name) eindeutig)` — Begriffe je Bibliotheks-Bereich (vorerst
+  `LibraryId`, die Bibliotheks-Trennung stellt auf Gruppen um); Standard-Liste (82 Begriffe) einmal je Bibliothek
+  (Merker `Settings.motifs.seeded.{id}`).
+  `FileEmbeddings (FileId PK → Files ON DELETE CASCADE, ModelVersion, ErrorCode NULL, CreatedAtUtc, Embedding BLOB NULL
+  = 768 float16 = 1 536 Bytes L2-normiert, als letzte Spalte; IX_FileEmbeddings_File_Model (FileId, ModelVersion)
+  abdeckend fürs Zählen)` — Bild-Vektor je Foto bzw. Video-Vorschaubild, bleibt bei Begriffs-Änderungen.
+  `FileMotifs (FileId → Files, TermId → MotifTerms — beide ON DELETE CASCADE, PK (FileId, TermId), Score REAL = SigLIP-
+  Wahrscheinlichkeit; IX_FileMotifs_Term_File (TermId, FileId))` — nur Treffer über der Schwelle.
+  Settings: `motifs.enabled` (Standard an), `motifs.useGpu`, `motifs.threshold` (Standard 0,01). „Neu aufbauen“ parkt
+  FileEmbeddings/FileMotifs wie die Gesichter (`UserDataCarryOver.Motifs.cs`); der Incremental-Scan verwirft Vektor und
+  Treffer an Ort und Stelle geänderter Dateien.
 
 ### Pflicht-Indizes V0.1
 ```sql

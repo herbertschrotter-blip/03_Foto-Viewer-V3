@@ -202,6 +202,40 @@
                     <Border Style="{StaticResource StatusSeparator}" />
                 </StackPanel>
 
+                <!-- Motiv-Index (Services/Motifs, ADR-0052): Fortschritt, Pause/Fortsetzen, Abbrechen; Fehler als Warnung -->
+                <StackPanel Orientation="Horizontal"
+                            AutomationProperties.Name="Motiv-Erkennung"
+                            ToolTip="{Binding MotifIndexToolTip}"
+                            Visibility="{Binding MotifIndexText, Converter={StaticResource NullToVis}}">
+                    <ui:SymbolIcon Symbol="ImageSearch24"
+                                   Style="{StaticResource StatusIcon}"
+                                   Visibility="{Binding MotifIndexIsWarning, Converter={StaticResource InvBoolToVis}}" />
+                    <ui:SymbolIcon Symbol="Warning16"
+                                   Style="{StaticResource StatusIcon}"
+                                   Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                   Visibility="{Binding MotifIndexIsWarning, Converter={StaticResource BoolToVis}}" />
+                    <TextBlock Style="{StaticResource StatusText}" Text="{Binding MotifIndexText}" MaxWidth="420" TextTrimming="CharacterEllipsis" />
+                    <ui:Button Content="Pause"
+                               Appearance="Transparent"
+                               Command="{Binding PauseMotifIndexCommand}"
+                               Visibility="{Binding MotifIndexShowPause, Converter={StaticResource BoolToVis}}"
+                               AutomationProperties.Name="Motiv-Erkennung pausieren"
+                               FontSize="12" Height="22" Padding="8,0" Margin="8,0,0,0" VerticalAlignment="Center" />
+                    <ui:Button Content="Fortsetzen"
+                               Appearance="Transparent"
+                               Command="{Binding ResumeMotifIndexCommand}"
+                               Visibility="{Binding MotifIndexIsPaused, Converter={StaticResource BoolToVis}}"
+                               AutomationProperties.Name="Motiv-Erkennung fortsetzen"
+                               FontSize="12" Height="22" Padding="8,0" Margin="8,0,0,0" VerticalAlignment="Center" />
+                    <ui:Button Content="Abbrechen"
+                               Appearance="Transparent"
+                               Command="{Binding CancelMotifIndexCommand}"
+                               Visibility="{Binding MotifIndexIsActive, Converter={StaticResource BoolToVis}}"
+                               AutomationProperties.Name="Motiv-Erkennung abbrechen"
+                               FontSize="12" Height="22" Padding="8,0" Margin="4,0,0,0" VerticalAlignment="Center" />
+                    <Border Style="{StaticResource StatusSeparator}" />
+                </StackPanel>
+
                 <!-- Aufnahmedatum nachtragen (Services/Metadata, ADR-0046) -->
                 <StackPanel Orientation="Horizontal"
                             AutomationProperties.Name="Aufnahmedatum"

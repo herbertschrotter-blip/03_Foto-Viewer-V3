@@ -76,7 +76,8 @@ public sealed partial class StatusBarViewModel : ObservableObject, IDisposable
         IScanGate scanGate,
         ILogger<StatusBarViewModel> logger,
         IMessenger? messenger = null,
-        PhotoViewerV3.Services.Faces.Indexing.IFaceIndexService? faceIndex = null)
+        PhotoViewerV3.Services.Faces.Indexing.IFaceIndexService? faceIndex = null,
+        PhotoViewerV3.Services.Motifs.IMotifIndexService? motifIndex = null)
     {
         _messenger = messenger ?? WeakReferenceMessenger.Default;
         _thumbnails = thumbnails;
@@ -107,6 +108,7 @@ public sealed partial class StatusBarViewModel : ObservableObject, IDisposable
         _messenger.Register<StatusBarViewModel, ArchiveAutoExtractStatusMessage>(this, static (r, m) => UiThread.Post(() => r.OnAutoExtractStatus(m.Status)));
         InitCatalogWriteWait(); // Schreibvorgänge warten auf die Katalog-DB (ADR-0030, StatusBarViewModel.CatalogWriteWait.cs)
         InitFaceIndex(faceIndex); // Gesichts-Index (ADR-0035, StatusBarViewModel.FaceIndex.cs)
+        InitMotifIndex(motifIndex); // Motiv-Index (ADR-0052, StatusBarViewModel.MotifIndex.cs)
         InitCaptureDate(); // Aufnahmedatum nachtragen (ADR-0046, StatusBarViewModel.CaptureDate.cs)
         InitPlaces(); // Orte nachtragen (ADR-0050, StatusBarViewModel.Places.cs)
     }
@@ -315,6 +317,11 @@ public sealed partial class StatusBarViewModel : ObservableObject, IDisposable
         if (FaceIndexIsActive && !FaceIndexIsPaused)
         {
             parts.Add("Gesichter");
+        }
+
+        if (MotifIndexIsActive && !MotifIndexIsPaused)
+        {
+            parts.Add("Motive"); // ADR-0052
         }
 
         IsBackgroundActive = parts.Count > 0;

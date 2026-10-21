@@ -89,6 +89,10 @@
             <TabItem Header="Gesichter" Tag="{x:Static shell:NavigationTags.SettingsFaces}">
                 <sections:SettingsFacesSection />
             </TabItem>
+            <!-- Motive (ADR-0052): DataContext = MotifSettingsViewModel (Code-Behind) -->
+            <TabItem Header="Motive" Tag="{x:Static shell:NavigationTags.SettingsMotifs}">
+                <sections:SettingsMotifsSection x:Name="MotifsView" />
+            </TabItem>
             <TabItem Header="Archive" Tag="{x:Static shell:NavigationTags.SettingsArchives}">
                 <sections:SettingsArchivesSection />
             </TabItem>

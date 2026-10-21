@@ -485,6 +485,29 @@ einen Fingerabdruck (512 Werte) im Katalog (ADR-0035) — vollständig auf diese
 - Videos werden noch nicht analysiert; Fotos, die WIC nicht dekodieren kann (z. B. HEIC ohne Codec), werden als
   „nicht dekodierbar“ vermerkt. „Neu aufbauen“ der Bibliothek behält alle Gesichter (kein erneutes Analysieren).
 
+### Motive (seit 0.2.55, ADR-0052)
+Erkennt, was auf den Fotos zu sehen ist — Sonnenuntergang, Meer, Hund, Torte, Quittung … — vollständig auf diesem PC.
+Je Foto (Videos: Vorschaubild) entsteht im Hintergrund ein Bild-Vektor im Katalog; die Begriffe werden damit verglichen.
+- **Einstellungen › Motive**: „Motive im Hintergrund erkennen“ (Standard an — läuft erst mit Modell), „Grafikkarte
+  verwenden“, Modellstatus, Index mit **Neu analysieren**, **Schwelle** für alle Begriffe (Standard 1 %; kleiner = mehr
+  Treffer). Darunter die **Begriffe** der aktiven Bibliothek mit Anzahl Treffern: **anlegen** (Begriff + optionale
+  Beschreibung, englisch trennt am besten, z. B. „a photo of a lighthouse“), **umbenennen**, **Beschreibung ändern**,
+  **eigene Schwelle**, **löschen**. Neue oder geänderte Begriffe wirken sofort aus den gespeicherten Vektoren — kein Foto
+  wird dafür neu analysiert. Beim ersten Start legt Lumora je Bibliothek ≈ 80 Begriffe an.
+- **Modell**: Fehlt es, steht dort **„Motiv-Modell herunterladen… (≈ 690 MB, SigLIP 2 von Google, Apache-2.0)“**: nach
+  Bestätigung (Dateien, Quelle, Größen, Lizenz) lädt Lumora SigLIP 2 base als ONNX von Hugging Face
+  (onnx-community/siglip2-base-patch16-224-ONNX), prüft jede Datei per SHA-256 und legt sie unter
+  `%LocalAppData%\PhotoViewerV3\models\siglip2-base-patch16-224\` ab (Fortschritt, abbrechbar). Ohne Klick wird nichts
+  geladen, ohne Modell ist die Motiv-Erkennung aus. Das Modell liegt nie im Repo oder im portablen Paket.
+- **Galerie**: Chip **„Motive“** in der Zeile „Inhalt“ (sobald es Treffer gibt): Begriffe mit Anzahl, „eines der
+  gewählten“ oder „alle zusammen“; oben im Flyout **Bildinhalt beschreiben** („Hund am Strand“ → die 200 ähnlichsten
+  Fotos, auch ohne passenden Begriff). Die Bedingung steht in „Es gilt“. Die **Suche** findet Begriffe mit
+  (`strand` → Fotos mit dem Motiv „Strand“), **„Motiv: Hund“** sucht nur in den Motiven. Listenspalte **„Motive“**.
+- **Lightbox** (Info-Panel, Taste I): Abschnitt „Motive: Strand, Meer, Sonnenuntergang“ (wahrscheinlichste zuerst).
+- **Statusleiste**: „Motive: 1.234 / 19.556 · 26 ms/Foto“ mit Pause/Fortsetzen/Abbrechen. Startet 15 s nach dem
+  App-Start (bestehende Kataloge werden nachgeholt), nach jedem Scan und bei neuen Dateien; ruht während eines Scans und
+  rechnet nie gleichzeitig mit der Gesichtserkennung auf der Grafikkarte.
+
 ### Personen
 Gefundene Gesichter benennen; PhotoViewer lernt daraus und schlägt die Personen auf weiteren Fotos vor (ADR-0036/0037).
 Gelernt wird **nur aus dem, was du bestätigst** — eigene Vorschläge lernen nie mit.
@@ -693,6 +716,7 @@ dort, Protokolle und `database-location.json` bleiben hier:
 | `logs\photoviewer-YYYYMMDD.log` | Serilog-Protokoll, täglich rollierend, 14 Tage |
 | `cache\maptiles\z\x\y.png` | Kartenkacheln der Seite „Orte“ (OpenStreetMap), höchstens 500 MB, am längsten unbenutzte zuerst gelöscht |
 | `models\buffalo_l\` | Nur nach dem Download in den Einstellungen: Modelle der Gesichtserkennung (`det_10g.onnx`, `w600k_r50.onnx`); bleibt beim Umzug des Katalogs hier |
+| `models\siglip2-base-patch16-224\` | Nur nach dem Download in den Einstellungen: Motiv-Modell SigLIP 2 (`onnx\vision_model.onnx`, `onnx\text_model_int8.onnx`, `tokenizer.json` + Konfiguration); bleibt beim Umzug des Katalogs hier |
 
 Die Datenbank wird beim Start per EF-Core-Migration auf den aktuellen Stand gebracht; unterbrochene Thumbnail-Jobs
 werden dabei zurückgesetzt und unfertige Dateivorgänge gemeldet.
@@ -710,6 +734,8 @@ werden dabei zurückgesetzt und unfertige Dateivorgänge gemeldet.
 | `PHOTOVIEWERV3_FACE_MODELS` | Ordner mit `det_10g.onnx` und `w600k_r50.onnx` statt `models\buffalo_l\` (Entwicklung, Tests; dann kein Download). Tests mit echten Modellen laufen nur mit dieser Variable |
 | `PHOTOVIEWERV3_MAP_TILES` | `off` → keine Kartenkacheln laden (graue Karte, kein Netzzugriff); im Rauchtest immer aus |
 | `PV3_FACE_SAMPLE_DIR` | Nur für die lokale Messung (`FaceRecognitionMeasurementTests`): Ordner mit Fotos, aus dem eine Stichprobe gelesen wird; Ausgabe nur zusammengefasste Zahlen |
+| `PHOTOVIEWERV3_MOTIF_MODEL` | Ordner mit dem Motiv-Modell (SigLIP 2) statt `models\siglip2-base-patch16-224\` (Entwicklung, Tests; dann kein Download). Tests mit echtem Modell laufen nur mit dieser Variable |
+| `PV3_MOTIF_SAMPLE_DIR` | Nur für die lokale Messung (`MotifMeasurementTests`, Spike 14): Fotoordner für die Stichprobe (`PV3_MOTIF_SAMPLE` = Anzahl, Standard 200); Ausgabe nur zusammengefasste Zahlen |
 
 Das Ergebnis des Rauchtests steht in `<AppData>\smoke-result.txt` und im Log (Zeilen „Rauchtest …“).
 

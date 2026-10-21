@@ -24,6 +24,8 @@ public enum GalleryFilterConditionKind
 
     /// <summary>Kartenausschnitt (von der Karte, ADR-0050).</summary>
     MapArea,
+    /// <summary>Motive (ADR-0052).</summary>
+    Motifs,
 }
 
 /// <summary>

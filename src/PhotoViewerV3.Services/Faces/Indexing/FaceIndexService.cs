@@ -47,6 +47,7 @@ public sealed class FaceIndexService : IFaceIndexService, IDisposable
     private readonly IMessenger _messenger;
     private readonly FaceIndexOptions _options;
     private readonly FaceIndexStore _store;
+    private readonly PhotoViewerV3.Services.Infrastructure.IGpuGate? _gpuGate;
 
     private readonly Channel<bool> _wake = Channel.CreateBounded<bool>(new BoundedChannelOptions(1) { FullMode = BoundedChannelFullMode.DropWrite });
     private readonly CancellationTokenSource _stop = new();
@@ -74,8 +75,10 @@ public sealed class FaceIndexService : IFaceIndexService, IDisposable
         IFaceIndexSettingsStore settingsStore,
         ILogger<FaceIndexService> logger,
         IMessenger? messenger = null,
-        FaceIndexOptions? options = null)
+        FaceIndexOptions? options = null,
+        PhotoViewerV3.Services.Infrastructure.IGpuGate? gpuGate = null)
     {
+        _gpuGate = gpuGate; // gemeinsame GPU-Sperre mit der Motiv-Erkennung (ADR-0052)
         _libraries = libraries;
         _analyzers = analyzers;
         _loader = loader;
@@ -437,7 +440,13 @@ public sealed class FaceIndexService : IFaceIndexService, IDisposable
                     loads.Enqueue(StartLoad(candidates[next++]));
                 }
 
-                var result = Analyze(outcome, analyzer, state);
+                FaceFileResult? result;
+                // Nie zugleich mit der Motiv-Erkennung auf der Grafikkarte (ADR-0052): Sperre je Foto, nur mit DirectML.
+                using (await AcquireGpuAsync(analyzer, outcome, ct).ConfigureAwait(false))
+                {
+                    result = Analyze(outcome, analyzer, state);
+                }
+
                 if (result is not null)
                 {
                     pending.Add(result);
@@ -512,6 +521,11 @@ public sealed class FaceIndexService : IFaceIndexService, IDisposable
         state.Completed();
         return result;
     }
+
+    private async Task<IDisposable?> AcquireGpuAsync(IFaceAnalyzer analyzer, LoadOutcome outcome, CancellationToken ct)
+        => _gpuGate is not null && outcome.Image is not null && string.Equals(analyzer.ExecutionProvider, "DirectML", StringComparison.Ordinal)
+            ? await _gpuGate.AcquireAsync(ct).ConfigureAwait(false)
+            : null;
 
     private Task<LoadOutcome> StartLoad(FaceIndexCandidate candidate)
         => Task.Run(() =>

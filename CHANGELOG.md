@@ -3,6 +3,85 @@
 Alle nennenswerten Änderungen an Lumora (bis 0.2.48 „PhotoViewer V3“). Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.55] — 2026-10-21
+
+### Feature (ADR-0052) — Motive: Fotos lokal nach Inhalt erkennen (Sonnenuntergang, Meer, Hund …) und filtern
+- **Modell SigLIP 2 base** (google/siglip2-base-patch16-224, Apache-2.0, mehrsprachig) als ONNX über die vorhandene ONNX
+  Runtime DirectML: Bildmodell fp32 auf der Grafikkarte (Rückfall CPU), Sprachmodell int8 auf dem Prozessor (nur für
+  Begriffe und Freitext-Suche, nach 2 min Ruhe freigegeben). **Einstellungen › Motive › „Motiv-Modell herunterladen…“**
+  nur nach Bestätigung (Dateien, Quelle, Größen, Lizenz, ≈ 690 MB), SHA-256 je Datei fest im Code, Fortschritt,
+  Abbrechen, Ablage `<AppData>\models\siglip2-base-patch16-224\` (nie Repo/Paket); `PHOTOVIEWERV3_MOTIF_MODEL` für
+  Entwicklung/Tests. Ohne Modell ist die Funktion aus (Hinweis im Reiter).
+- **Vorverarbeitung exakt nach `preprocessor_config.json`** (`Services/Motifs/Siglip/SiglipPreprocessor`): 224 × 224,
+  Pillow-BILINEAR nachgebildet (Dreiecksfilter, 22-Bit-Festkomma, zwei Durchgänge), (x/255 − 0,5)/0,5, NCHW. Eingang:
+  fertiges Vorschaubild (≈ 1 ms) bzw. Original per WIC (längste Kante 448); Videos über ihr Vorschaubild.
+  **Tokenizer selbst** (`GemmaTokenizer`, BPE aus `tokenizer.json`, Byte-Fallback, `<eos>`, 64 Token) — kein neues
+  NuGet-Paket (`Microsoft.ML.Tokenizers` liest Gemma nur aus dem SentencePiece-Modell).
+- **Wahrscheinlichkeit wie SigLIP**: σ(cos · e^logit_scale + logit_bias) mit den Modellwerten (4,724453 / −16,77172);
+  Standard-Schwelle **1 %**, je Begriff einstellbar. Begriff = Mittel aus deutschem Wort und Beschreibung (Standard:
+  englische Foto-Vorlage — trennte an Referenzbildern am besten).
+- **Schema — Migration `AddMotifs`**: `MotifTerms` (je `LibraryId`, NOCASE-eindeutig, Text-Vektor + Version),
+  `FileEmbeddings` (Bild-Vektor float16, 1 536 Bytes), `FileMotifs` (Treffer, `IX_FileMotifs_Term_File`). Start-Liste mit
+  82 deutschen Begriffen einmal je Bibliothek. Begriffe anlegen/umbenennen/Beschreibung/Schwelle/löschen rechnet nur die
+  Treffer aus den gespeicherten Vektoren neu — kein Foto wird erneut analysiert.
+- **Hintergrund-Index** `IMotifIndexService` (Muster Gesichtserkennung): aktive Bibliothek, neueste zuerst, 3 Bilder
+  vorab, stapelweise schreiben, Pause/Fortsetzen/Abbrechen in der Statusleiste („Motive: 1.234 / 19.556 · 26 ms/Foto“),
+  startet 15 s nach dem App-Start (bestehende Kataloge werden nachgeholt), nach Scans, bei neuen Dateien und nach dem
+  Download; **ruht während eines Scans** (`IScanGate`). Neue **gemeinsame GPU-Sperre** `IGpuGate`: Gesichts- und
+  Motiv-Index rechnen nie gleichzeitig auf der Grafikkarte (Sperre je Foto, nur mit DirectML; `FaceIndexService` nimmt sie
+  optional entgegen).
+- **Galerie**: Chip **„Motive“** in der Zeile „Inhalt“ (Begriffe mit Anzahl, „eines der gewählten“/„alle zusammen“,
+  Suche im Flyout), Bedingung in „Es gilt“, ✕ entfernt sie, „Filter zurücksetzen“ hebt sie auf; **Suche** findet Begriffe
+  (UNION-Zweig, nur Begriffe des Bereichs), **„Motiv: Hund“** sucht nur Motive; **Bildinhalt beschreiben** (Bonus:
+  Freitext „Hund am Strand“ → die 200 ähnlichsten Fotos mit Kosinus ≥ 0,05 als Bedingung); Listenspalte **„Motive“**;
+  **Lightbox** Info-Panel „MOTIVE“.
+- **Einstellungen › Motive** (neuer Reiter nach „Gesichter“, `NavigationTags.SettingsMotifs`): Schalter (Standard an),
+  Grafikkarte, Modell, Index + „Neu analysieren“, globale Schwelle, Begriffsliste mit Treffern.
+- **Info › Bausteine/Lizenzen**: SigLIP 2 (Apache-2.0, Download nach Bestätigung).
+- „Neu aufbauen“ trägt Vektoren und Treffer mit (`UserDataCarryOver.Motifs.cs`); der Incremental-Scan verwirft Vektor und
+  Treffer an Ort und Stelle geänderter Dateien.
+- Bibliotheks-Trennung: Begriffe, Treffer, Zähler, Suche und Bildinhalt-Suche nur im aktiven Bereich (`LibraryId`);
+  Vektoren liegen im Katalog, außerhalb wird nichts abgelegt.
+
+### Messung (Spike 14, `docs/spikes/14-motive.md`)
+- 200 Handyfotos (nur Zahlen): Bildmodell DirectML **≈ 26 ms/Foto**, CPU 125–200 ms; Laden Original (≤ 448 px) 45–58 ms,
+  aus dem Vorschaubild ≈ 1 ms; Durchsatz mit 3 Originalen vorab **39,7 ms/Foto**. Hochrechnung DirectML: 50 000 Fotos
+  ≈ 23–33 min, 500 000 ≈ 3,8–5,5 h; CPU 500 000 ≈ 17–28 h. Katalog +1,5 KB je Datei (500 000 ≈ 0,8 GB).
+- Qualität: bei 1 % bekommen **85 von 200 Fotos** mindestens ein Motiv (Ø 0,56); Gegenprobe mit der Gesichtserkennung:
+  Fotos ohne Gesicht nur 3 von 126 mit Personen-Motiv, Fotos mit ≥ 3 Gesichtern 15 von 25. Referenzbilder (Hund, Katze,
+  Dokument, Bildschirm) jeweils auf Platz 1. Vorlagen-Vergleich: Wort + englische Vorlage trennt am besten (Ø +0,041).
+
+### Tests
+- `tests/PhotoViewerV3.Tests`: 763 (+28, 1 übersprungen ohne Modell): `Motifs/MotifMathTests` (Normierung, Pillow-
+  BILINEAR von Hand nachgerechnet 4 → 2 Pixel und 448 → 224 Gewichte, einfarbiges Bild NCHW, Seitenverhältnis ohne
+  Zuschnitt, float32/float16, SigLIP-Wahrscheinlichkeit und Umkehrung, Treffer je Schwelle, BPE an einer kleinen
+  tokenizer.json mit Rangfolge/Byte-Fallback/eos/Auffüllen/Kürzen), `MotifIndexServiceTests` (Vektoren und Treffer,
+  Videos nur mit Vorschaubild, Pause/Fortsetzen, ruht während eines Scans, **GPU-Sperre: Gesichter und Motive nie
+  gleichzeitig**, ohne Modell/aus, neue Dateien und Neu analysieren, globale Schwelle ohne neue Analyse, „Neu aufbauen“
+  trägt Vektoren mit, geänderte Datei verliert Vektor, Bibliotheks-Trennung), `MotifTermServiceTests` (Start-Liste einmal,
+  Prüfungen, neuer Begriff/Beschreibung/eigene Schwelle wirken auf gespeicherte Vektoren, ohne Modell später, Freitext-
+  Suche nur im Bereich), `MotifModelProviderTests` (Fake-HTTP: SHA-256 je Datei, Fortschritt, falsche Prüfsumme, Abbruch,
+  vorhandene Dateien, HTTP-Fehler, feste Liste).
+- `tests/PhotoViewerV3.Wpf.Tests`: 793 (+13, 5 übersprungen ohne Modell/Stichprobe), dreimal hintereinander grün:
+  `Motifs/GalleryPageSourceMotifTests` (ODER/UND, mit Suche und Datei-Filter, Suche nach Begriffen nur im Bereich,
+  „Motiv: …“, Bildinhalt-Ids, Zähler, Motive je Datei, Abfrageplan über `IX_FileMotifs_Term_File`),
+  `MotifSettingsViewModelTests` (Laden, Download nur nach Bestätigung mit Dateien/Größen/Quelle/Lizenz, Abbruch/Fehler,
+  Begriffe über den Dienst, Schwellen, Neu analysieren, Texte von Index und Statusleiste); mit echtem Modell
+  (`PHOTOVIEWERV3_MOTIF_MODEL`): `MotifModelTests` (Gemma-Token-Ids, Referenzbilder Hund/Katze/Dokument/Bildschirm/
+  Sonnenuntergang über alle 82 Begriffe, CPU = GPU), Messung `MotifMeasurementTests`; Reiter-Reihenfolge um „Motive“
+  ergänzt.
+- Rauchtest 35/35 OK, 0 Binding-Fehler — neuer Schritt **„Motive“** vor „Ordnerüberwachung“
+  (`Shell/Smoke/SmokeScenario.Motifs.cs`, `SmokeMotifEncoderFactory` ohne Modell): Standard-Begriffe, Einschalten im
+  Reiter, Statusleiste, Pause/Fortsetzen, Vektoren (float16) und Treffer = DB, Filter mit Zähler und „Es gilt“,
+  Bildinhalt-Suche, „Motiv: …“ und Begriffssuche, Listenspalte, Lightbox-Info, eigener Begriff ohne neue Analyse.
+  Screenshots `45-motive-einstellungen`, `46-motive-galerie-filter`, `47-motive-galerie-liste`. Die Erkennung ist in den
+  übrigen Schritten aus.
+
+### Offen
+- `MotifTerms.LibraryId` stellt die Bibliotheks-Trennung beim Zusammenbau auf ihre Gruppen um.
+- Standard-Schwelle an 200 unmarkierten Fotos und Referenzbildern gewählt — Feinabstimmung je Begriff mit Herberts
+  Rückmeldung. Bildinhalt-Suche sortiert nach der Galerie-Sortierung, nicht nach Ähnlichkeit.
+
 ## [0.2.54] — 2026-10-21
 
 ### Feature (ADR-0051) — Orte: Weltkarte mit Foto-Gruppen, die beim Zoomen feiner werden

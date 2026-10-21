@@ -30,6 +30,9 @@ public static class NavigationTags
     public const string Categories = "categories";
 
     public const string SettingsFaces = "settings-faces";
+
+    /// <summary>Einstellungen › Motive (ADR-0052).</summary>
+    public const string SettingsMotifs = "settings-motifs";
     public const string SettingsArchives = "settings-archives";
     public const string SettingsAppearance = "settings-appearance";
     public const string SettingsStorage = "settings-storage";
@@ -38,7 +41,7 @@ public static class NavigationTags
     /// <summary>Alle Reiter der Einstellungen in Anzeigereihenfolge.</summary>
     public static IReadOnlyList<string> SettingsSections { get; } =
     [
-        Library, Tags, Categories, SettingsFaces, SettingsArchives, SettingsAppearance, SettingsStorage, SettingsInfo,
+        Library, Tags, Categories, SettingsFaces, SettingsMotifs, SettingsArchives, SettingsAppearance, SettingsStorage, SettingsInfo,
     ];
 
     /// <summary>

@@ -37,6 +37,8 @@ public enum GalleryListColumnKey
 
     /// <summary>Ort („Wien, Österreich“, ADR-0050) — nur innerhalb der Page sortierbar.</summary>
     Place,
+    /// <summary>Erkannte Motive (ADR-0052), wahrscheinlichste zuerst — nur innerhalb der Page sortierbar.</summary>
+    Motifs,
 }
 
 /// <summary>Stammdaten einer Spalte: Überschrift, Startbreite, serverseitige Sortierung (auf/ab) oder null = nur innerhalb der Page.</summary>
@@ -67,6 +69,7 @@ public static class GalleryListColumns
         new(GalleryListColumnKey.Tags, "Tags", 180, null, null),
         new(GalleryListColumnKey.Persons, "Personen", 180, null, null),
         new(GalleryListColumnKey.Place, "Ort", 170, null, null), // ADR-0050
+        new(GalleryListColumnKey.Motifs, "Motive", 180, null, null), // ADR-0052
         new(GalleryListColumnKey.Status, "Status", 80, null, null),
     ];
 

@@ -1,0 +1,176 @@
+<UserControl x:Class="PhotoViewerV3.Settings.Sections.SettingsMotifsSection"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:motifs="clr-namespace:PhotoViewerV3.Motifs"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance motifs:MotifSettingsViewModel}"
+             d:DesignWidth="1000"
+             x:Name="Root">
+    <!-- Einstellungen › Motive (ADR-0052); DataContext = MotifSettingsViewModel (von der SettingsPage gesetzt) -->
+    <UserControl.Resources>
+        <ResourceDictionary Source="SettingsStyles.xaml" />
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Style="{StaticResource SectionPanel}">
+            <TextBlock Style="{StaticResource Lead}"
+                       Text="Erkennt, was auf den Fotos zu sehen ist — Sonnenuntergang, Meer, Hund, Torte … — und macht es in der Galerie filterbar und suchbar. Vollständig auf diesem PC." />
+
+            <!-- Erkennung und Modell -->
+            <Border Style="{StaticResource SectionCard}" AutomationProperties.Name="Motiv-Erkennung">
+                <StackPanel>
+                    <ui:TextBlock Style="{StaticResource SectionTitle}" Text="Motiv-Erkennung" />
+                    <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,8"
+                               Text="Berechnet im Hintergrund für jedes Foto (Videos: Vorschaubild) einen Bild-Vektor und vergleicht ihn mit den Begriffen unten. Die Vektoren bleiben im Katalog — neue oder geänderte Begriffe wirken sofort, ohne die Fotos erneut zu analysieren. Läuft nie gleichzeitig mit der Gesichtserkennung auf der Grafikkarte." />
+                    <ui:ToggleSwitch Content="Motive im Hintergrund erkennen"
+                                     IsChecked="{Binding IsEnabled, Mode=TwoWay}"
+                                     AutomationProperties.Name="Motive im Hintergrund erkennen" />
+                    <CheckBox Margin="0,8,0,0" Content="Grafikkarte verwenden (DirectML; sonst Prozessor)"
+                              IsChecked="{Binding UseGpu, Mode=TwoWay}"
+                              AutomationProperties.Name="Grafikkarte für die Motiv-Erkennung verwenden" />
+
+                    <Grid Margin="0,12,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource Label}" Text="Modell" />
+                        <TextBlock Grid.Row="0" Grid.Column="1" Style="{StaticResource ValueText}"
+                                   Text="{Binding ModelStatusText}" ToolTip="{Binding ModelFolder}"
+                                   AutomationProperties.AutomationId="MotifModelStatus" />
+                        <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource Label}" Text="Index" Margin="0,8,12,0" />
+                        <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource ValueText}" Margin="0,8,0,0"
+                                   Text="{Binding IndexStatusText}" ToolTip="{Binding IndexStatusText}"
+                                   AutomationProperties.AutomationId="MotifIndexStatus" />
+                        <ui:Button Grid.Row="1" Grid.Column="2" Content="Neu analysieren" Icon="{ui:SymbolIcon ArrowClockwise24}"
+                                   Margin="12,6,0,0"
+                                   Command="{Binding RebuildCommand}"
+                                   AutomationProperties.Name="Motive neu analysieren" />
+                        <TextBlock Grid.Row="2" Grid.Column="0" Style="{StaticResource Label}" Text="Schwelle" Margin="0,10,12,0" />
+                        <StackPanel Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="0,10,0,0">
+                            <ComboBox MinWidth="150"
+                                      ItemsSource="{Binding GlobalThresholdChoices}" DisplayMemberPath="Label"
+                                      SelectedItem="{Binding SelectedGlobalThreshold, Mode=TwoWay}"
+                                      AutomationProperties.Name="Schwelle für alle Begriffe" />
+                            <TextBlock Style="{StaticResource Hint}" Margin="12,0,0,0" VerticalAlignment="Center" MaxWidth="560"
+                                       Text="Ab dieser Wahrscheinlichkeit gilt ein Begriff als erkannt. Kleiner = mehr Treffer, größer = nur sichere. SigLIP-Werte für kurze Begriffe sind klein — 1 % ist schon deutlich." />
+                        </StackPanel>
+                    </Grid>
+
+                    <ui:Button Margin="0,12,0,0" Icon="{ui:SymbolIcon ArrowDownload24}"
+                               Content="{x:Static motifs:MotifSettingsViewModel.DownloadButtonText}"
+                               Command="{Binding DownloadModelCommand}"
+                               Visibility="{Binding IsModelReady, Converter={StaticResource InvBoolToVis}}"
+                               AutomationProperties.Name="Motiv-Modell herunterladen" />
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0"
+                                Visibility="{Binding IsDownloading, Converter={StaticResource BoolToVis}}">
+                        <ProgressBar Width="260" Height="4" Minimum="0" Maximum="100" VerticalAlignment="Center"
+                                     Value="{Binding DownloadPercent, Mode=OneWay}" />
+                        <TextBlock Style="{StaticResource ValueText}" Margin="12,0,0,0" Text="{Binding DownloadText}" />
+                        <ui:Button Content="Abbrechen" Margin="12,0,0,0"
+                                   Command="{Binding CancelDownloadCommand}"
+                                   AutomationProperties.Name="Motiv-Modell-Download abbrechen" />
+                    </StackPanel>
+
+                    <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
+                               Text="{Binding Message}"
+                               AutomationProperties.AutomationId="MotifSettingsMessage"
+                               Visibility="{Binding Message, Converter={StaticResource NullToVis}}">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding MessageIsError}" Value="True">
+                                        <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </StackPanel>
+            </Border>
+
+            <!-- Begriffe -->
+            <Border Style="{StaticResource SectionCard}" AutomationProperties.Name="Motiv-Begriffe">
+                <StackPanel>
+                    <ui:TextBlock Style="{StaticResource SectionTitle}" Text="Begriffe" />
+                    <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,8"
+                               Text="Wonach gesucht wird — gilt für die aktive Bibliothek. Die Beschreibung (optional, gern englisch) hilft dem Modell; ohne sie zählt nur der Begriff." />
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="220" />
+                            <ColumnDefinition Width="280" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <ui:TextBox Grid.Column="0" PlaceholderText="Neuer Begriff, z. B. Leuchtturm"
+                                    Icon="{ui:SymbolIcon Add24}"
+                                    AutomationProperties.AutomationId="NewMotifTermName"
+                                    AutomationProperties.Name="Neuer Begriff"
+                                    Text="{Binding NewTermName, UpdateSourceTrigger=PropertyChanged}" />
+                        <ui:TextBox Grid.Column="1" Margin="8,0,0,0" PlaceholderText="Beschreibung (optional)"
+                                    AutomationProperties.Name="Beschreibung des neuen Begriffs"
+                                    Text="{Binding NewTermPrompt, UpdateSourceTrigger=PropertyChanged}" />
+                        <ui:Button Grid.Column="2" Margin="8,0,0,0" Appearance="Primary" Content="Anlegen"
+                                   Icon="{ui:SymbolIcon Add24}"
+                                   Command="{Binding AddTermCommand}"
+                                   AutomationProperties.Name="Begriff anlegen" />
+                        <TextBlock Grid.Column="3" Margin="12,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap"
+                                   Text="{Binding TermsSummary}" FontSize="12"
+                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                    </Grid>
+
+                    <ItemsControl ItemsSource="{Binding Terms}" AutomationProperties.AutomationId="MotifTermList" Focusable="False">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type motifs:MotifTermRow}">
+                                <Grid Margin="0,2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="200" />
+                                        <ColumnDefinition Width="*" MinWidth="120" />
+                                        <ColumnDefinition Width="100" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}">
+                                        <Run Text="{Binding Name, Mode=OneWay}" FontWeight="SemiBold" />
+                                    </TextBlock>
+                                    <TextBlock Grid.Column="1" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="12"
+                                               Text="{Binding Prompt}" ToolTip="{Binding Prompt}"
+                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                                    <TextBlock Grid.Column="2" VerticalAlignment="Center" FontSize="12" Margin="8,0,0,0"
+                                               Text="{Binding FileCountText}"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                    <ComboBox Grid.Column="3" MinWidth="110" Margin="8,0,0,0" VerticalAlignment="Center"
+                                              ItemsSource="{Binding ThresholdChoices}" DisplayMemberPath="Label"
+                                              SelectedItem="{Binding SelectedThreshold, Mode=TwoWay}"
+                                              ToolTip="Schwelle dieses Begriffs (Standard = Schwelle oben)"
+                                              AutomationProperties.Name="{Binding Name, StringFormat='Schwelle für {0}'}" />
+                                    <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0,0,0">
+                                        <ui:Button Appearance="Transparent" Padding="6" Icon="{ui:SymbolIcon Rename24}"
+                                                   ToolTip="Umbenennen" AutomationProperties.Name="{Binding Name, StringFormat='{}{0} umbenennen'}"
+                                                   Command="{Binding DataContext.RenameTermCommand, ElementName=Root}" CommandParameter="{Binding}" />
+                                        <ui:Button Appearance="Transparent" Padding="6" Icon="{ui:SymbolIcon Edit24}"
+                                                   ToolTip="Beschreibung für die Erkennung" AutomationProperties.Name="{Binding Name, StringFormat='Beschreibung von {0}'}"
+                                                   Command="{Binding DataContext.EditPromptCommand, ElementName=Root}" CommandParameter="{Binding}" />
+                                        <ui:Button Appearance="Transparent" Padding="6" Icon="{ui:SymbolIcon Delete24}"
+                                                   ToolTip="Löschen" AutomationProperties.Name="{Binding Name, StringFormat='{}{0} löschen'}"
+                                                   Command="{Binding DataContext.DeleteTermCommand, ElementName=Root}" CommandParameter="{Binding}" />
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

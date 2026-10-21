@@ -301,6 +301,7 @@ public sealed partial class GalleryPageSource
                     {BuildTagClause(query)}
                     {BuildCategoryClause(query)}
                     {BuildPersonClause(query)}
+                    {BuildMotifClause(query)}
                     {folderClause}
                   GROUP BY scv.ValueId) g
             LEFT JOIN CategoryValues sv ON sv.Id = g.ValueId;
@@ -341,6 +342,7 @@ public sealed partial class GalleryPageSource
                     {BuildTagClause(query)}
                     {BuildCategoryClause(query)}
                     {BuildPersonClause(query)}
+                    {BuildMotifClause(query)}
                     {folderClause}
                   ORDER BY f.ModifiedAtUtc {direction}, f.Id {direction}
                   LIMIT $limit OFFSET $offset) p
