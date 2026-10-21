@@ -3,6 +3,13 @@
 Alle nennenswerten Änderungen an Lumora (bis 0.2.48 „PhotoViewer V3“). Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.4.5] — 2026-10-21
+
+### Docs — README ohne alten Namen
+- README nennt nur noch Lumora: Titel ohne „vormals …“, V2 ohne alten Ordnerpfad, Absatz zur Umbenennung durch die
+  heutigen Namen ersetzt (Datenordner einer älteren Version übernimmt der erste Start automatisch). Stand 0.4.5.
+- ADR-0056 heißt jetzt `docs/adr/0056-technische-namen-lumora.md` (Links in README, PLAN und ADR-Übersicht nachgezogen).
+
 ## [0.4.4] — 2026-10-21
 
 ### Docs — Auch die Doku und die Kurzform „pv3“ heißen Lumora (Nachtrag zu ADR-0056)

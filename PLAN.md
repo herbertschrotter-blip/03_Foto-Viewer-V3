@@ -91,7 +91,7 @@ Native Windows-Desktop-Anwendung zum Ansehen, Sortieren und Verschieben von Foto
 ## 3. Solution-Layout
 
 **Multi-Project ab Tag 1** (nicht Single-Project). Projekte, Ordner und Namespaces heißen seit 0.4.3 `Lumora.*`, vorher
-`PhotoViewerV3.*` ([ADR-0056](docs/adr/0056-umbenennung-photoviewerv3-zu-lumora.md)). Reales Layout seit 0.2.0 — Module statt technischer Ordner
+`PhotoViewerV3.*` ([ADR-0056](docs/adr/0056-technische-namen-lumora.md)). Reales Layout seit 0.2.0 — Module statt technischer Ordner
 (`Views/`, `ViewModels/`), jedes Modul mit eigener DI-Registrierung `AddXyz()` ([ADR-0017](docs/adr/0017-modul-entkopplung-messenger.md)):
 
 ```

@@ -1,15 +1,14 @@
-# Lumora (vormals PhotoViewer V3)
+# Lumora
 
 **Lumora** — aus *Lumen* (Licht) und *Memoria* (Erinnerung) — ist eine native Windows-Desktop-App (C# / .NET 10 / WPF mit WPF-UI 4, SQLite) zum Ansehen, Bewerten, Sortieren und Verschieben
-großer Foto- und Video-Bibliotheken (50 000–500 000 Dateien). Nachfolger der PowerShell-Web-App V2
-(`../03_Foto-Viewer-V2`), die bis zur Ablösung im Alltag weiterläuft. Stand: **0.4.4** (siehe [CHANGELOG.md](CHANGELOG.md)).
+großer Foto- und Video-Bibliotheken (50 000–500 000 Dateien). Nachfolger einer PowerShell-Web-App (V2), die bis zur
+Ablösung im Alltag weiterläuft. Stand: **0.4.5** (siehe [CHANGELOG.md](CHANGELOG.md)).
 
-Bis 0.2.48 hieß die App „PhotoViewer V3“. Seit 0.2.49 heißt sie sichtbar **Lumora**, die Programmdatei `Lumora.exe`
-(Schriftzug und App-Symbol: [Mockup 07](mockups/07-lumora-schriftzug.html), [ADR-0047](docs/adr/0047-produktname-lumora.md)).
-Seit 0.4.3 heißen auch Projekte, Namespaces und Ordner `Lumora.*` (`Lumora.slnx`), der Datenordner
-`%LocalAppData%\Lumora`, die Umgebungsvariablen `LUMORA_*` und die Protokolle `lumora-*.log`. Der alte Datenordner
-`%LocalAppData%\PhotoViewerV3` wird beim ersten Start einmal umbenannt; läuft dabei noch eine ältere Lumora, bleibt
-der alte Ordner bis zum nächsten Start in Gebrauch ([ADR-0056](docs/adr/0056-umbenennung-photoviewerv3-zu-lumora.md)).
+Programmdatei `Lumora.exe` (Schriftzug und App-Symbol: [Mockup 07](mockups/07-lumora-schriftzug.html),
+[ADR-0047](docs/adr/0047-produktname-lumora.md)), Projekte und Namespaces `Lumora.*` (`Lumora.slnx`), Datenordner
+`%LocalAppData%\Lumora`, Umgebungsvariablen `LUMORA_*`, Protokolle `lumora-*.log`. Einen Datenordner einer älteren
+Version übernimmt der erste Start automatisch; läuft dabei noch die ältere Version, geschieht das beim nächsten Start
+([ADR-0056](docs/adr/0056-technische-namen-lumora.md)).
 
 ## Features (0.2.0)
 
