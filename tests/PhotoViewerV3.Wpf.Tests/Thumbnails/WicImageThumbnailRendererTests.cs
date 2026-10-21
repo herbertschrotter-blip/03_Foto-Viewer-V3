@@ -6,8 +6,8 @@ using PhotoViewerV3.Wpf.Tests.Fixtures;
 namespace PhotoViewerV3.Wpf.Tests.Thumbnails;
 
 /// <summary>
-/// WIC-Renderer: EXIF-Orientierung, Alpha auf dunklem Hintergrund, Zielgröße auf der längeren Seite,
-/// kein Hochskalieren, stabile Fehlercodes. Läuft wie in Produktion auf Worker-Threads (kein STA nötig).
+/// WIC-Renderer: EXIF-Orientierung, Alpha auf dunklem Hintergrund, Zielgröße auf der KURZEN Seite (lange höchstens
+/// das Dreifache, ADR-0043), kein Hochskalieren, Maße des Originals nach Drehung, stabile Fehlercodes. Läuft wie in Produktion auf Worker-Threads (kein STA nötig).
 /// </summary>
 public sealed class WicImageThumbnailRendererTests : IDisposable
 {
@@ -33,11 +33,11 @@ public sealed class WicImageThumbnailRendererTests : IDisposable
     [Fact]
     public void Orientation6_RotatesClockwise_LeftHalfBecomesTop()
     {
-        // 400×200 Querformat, links rot / rechts blau, EXIF 6 → Hochkant 100 hoch, rote Hälfte oben
+        // 400×200 Querformat, links rot / rechts blau, EXIF 6 → kurze Kante 50 → Hochkant 50 × 100, rote Hälfte oben
         var source = Source("o6.jpg");
         TestImages.SaveJpeg(source, TestImages.LeftRedRightBlue(400, 200), exifOrientation: 6);
 
-        var result = _renderer.Render(source, Thumb("o6.jpg"), 100);
+        var result = _renderer.Render(source, Thumb("o6.jpg"), 50);
 
         result.Success.Should().BeTrue(result.ErrorMessage);
         result.Width.Should().Be(50);
@@ -47,6 +47,23 @@ public sealed class WicImageThumbnailRendererTests : IDisposable
         image.Height.Should().Be(100);
         TestImages.IsReddish(image.PixelAt(25, 15)).Should().BeTrue("die linke Hälfte landet nach 90° im Uhrzeigersinn oben");
         TestImages.IsBluish(image.PixelAt(25, 85)).Should().BeTrue("die rechte Hälfte landet unten");
+        (result.SourceWidth, result.SourceHeight).Should().Be((200, 400), "Files.Width/Height = Original so, wie es angezeigt wird");
+    }
+
+    [Fact]
+    public void ReadDimensions_reads_header_with_orientation()
+    {
+        var rotated = Source("dims6.jpg");
+        TestImages.SaveJpeg(rotated, TestImages.LeftRedRightBlue(400, 200), exifOrientation: 6);
+        var plain = Source("dims1.png");
+        TestImages.SavePng(plain, TestImages.LeftRedRightBlue(40, 30));
+        var garbage = Source("dims-garbage.jpg");
+        File.WriteAllBytes(garbage, Enumerable.Range(0, 512).Select(i => (byte)(i * 7 % 251)).ToArray());
+
+        _renderer.ReadDimensions(rotated).Should().Be((200, 400));
+        _renderer.ReadDimensions(plain).Should().Be((40, 30));
+        _renderer.ReadDimensions(garbage).Should().BeNull();
+        _renderer.ReadDimensions(Source("fehlt.jpg")).Should().BeNull();
     }
 
     [Fact]
@@ -55,7 +72,7 @@ public sealed class WicImageThumbnailRendererTests : IDisposable
         var source = Source("o8.jpg");
         TestImages.SaveJpeg(source, TestImages.LeftRedRightBlue(400, 200), exifOrientation: 8);
 
-        var result = _renderer.Render(source, Thumb("o8.jpg"), 100);
+        var result = _renderer.Render(source, Thumb("o8.jpg"), 50);
 
         result.Success.Should().BeTrue(result.ErrorMessage);
         var image = TestImages.Load(Thumb("o8.jpg"));
@@ -70,7 +87,7 @@ public sealed class WicImageThumbnailRendererTests : IDisposable
         var source = Source("o3.jpg");
         TestImages.SaveJpeg(source, TestImages.LeftRedRightBlue(400, 200), exifOrientation: 3);
 
-        _renderer.Render(source, Thumb("o3.jpg"), 100).Success.Should().BeTrue();
+        _renderer.Render(source, Thumb("o3.jpg"), 50).Success.Should().BeTrue();
 
         var image = TestImages.Load(Thumb("o3.jpg"));
         (image.Width, image.Height).Should().Be((100, 50));
@@ -84,7 +101,7 @@ public sealed class WicImageThumbnailRendererTests : IDisposable
         var source = Source("o2.jpg");
         TestImages.SaveJpeg(source, TestImages.LeftRedRightBlue(400, 200), exifOrientation: 2);
 
-        _renderer.Render(source, Thumb("o2.jpg"), 100).Success.Should().BeTrue();
+        _renderer.Render(source, Thumb("o2.jpg"), 50).Success.Should().BeTrue();
 
         var image = TestImages.Load(Thumb("o2.jpg"));
         (image.Width, image.Height).Should().Be((100, 50));
@@ -98,7 +115,7 @@ public sealed class WicImageThumbnailRendererTests : IDisposable
         var source = Source("o1.jpg");
         TestImages.SaveJpeg(source, TestImages.LeftRedRightBlue(400, 200), exifOrientation: 1);
 
-        _renderer.Render(source, Thumb("o1.jpg"), 100).Success.Should().BeTrue();
+        _renderer.Render(source, Thumb("o1.jpg"), 50).Success.Should().BeTrue();
 
         var image = TestImages.Load(Thumb("o1.jpg"));
         (image.Width, image.Height).Should().Be((100, 50));
@@ -133,13 +150,17 @@ public sealed class WicImageThumbnailRendererTests : IDisposable
 
         result.Success.Should().BeTrue(result.ErrorMessage);
         (result.Width, result.Height).Should().Be((40, 30));
+        (result.SourceWidth, result.SourceHeight).Should().Be((40, 30));
     }
 
     [Theory]
-    [InlineData(800, 400, 320, 160)]
-    [InlineData(400, 800, 160, 320)]
+    [InlineData(800, 400, 640, 320)]
+    [InlineData(400, 800, 320, 640)]
     [InlineData(640, 640, 320, 320)]
-    public void LongerSide_MatchesTarget(int width, int height, int expectedWidth, int expectedHeight)
+    [InlineData(900, 600, 480, 320)]
+    [InlineData(3000, 500, 960, 160)] // Panorama: lange Kante höchstens 3 × 320
+    [InlineData(300, 200, 300, 200)] // kleiner als das Ziel: unverändert
+    public void ShorterSide_MatchesTarget_LongerSideCapped(int width, int height, int expectedWidth, int expectedHeight)
     {
         var source = Source($"size-{width}x{height}.jpg");
         TestImages.SaveJpeg(source, TestImages.LeftRedRightBlue(width, height));
@@ -148,6 +169,7 @@ public sealed class WicImageThumbnailRendererTests : IDisposable
 
         result.Success.Should().BeTrue(result.ErrorMessage);
         (result.Width, result.Height).Should().Be((expectedWidth, expectedHeight));
+        (result.SourceWidth, result.SourceHeight).Should().Be((width, height));
         result.ByteSize.Should().BeGreaterThan(0);
         File.Exists(Thumb($"size-{width}x{height}.jpg") + ".tmp").Should().BeFalse("atomarer Move lässt keine .tmp zurück");
     }
@@ -182,7 +204,8 @@ public sealed class WicImageThumbnailRendererTests : IDisposable
 
         var decoded = WicImageThumbnailRenderer.DecodeThumbnail(source, 320);
 
-        decoded.IsFrozen.Should().BeTrue();
-        WicImageThumbnailRenderer.IsOpaque(decoded.Format).Should().BeTrue();
+        decoded.Image.IsFrozen.Should().BeTrue();
+        WicImageThumbnailRenderer.IsOpaque(decoded.Image.Format).Should().BeTrue();
+        (decoded.SourceWidth, decoded.SourceHeight).Should().Be((20, 10));
     }
 }

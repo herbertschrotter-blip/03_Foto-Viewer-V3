@@ -12,9 +12,10 @@ public interface IFallbackImageThumbnailRenderer
     /// <summary>False, wenn das Fallback-Werkzeug (FFmpeg) fehlt — dann bleibt es beim WIC-Fehler.</summary>
     bool IsAvailable { get; }
 
+    /// <summary>Standbild mit kurzer Kante <paramref name="targetShortEdge"/> (wie WIC, ADR-0043).</summary>
     Task<ThumbnailRenderResult> RenderAsync(
         string sourcePath,
         string targetThumbPath,
-        int targetWidth,
+        int targetShortEdge,
         CancellationToken cancellationToken);
 }

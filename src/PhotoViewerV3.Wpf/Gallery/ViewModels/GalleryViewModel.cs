@@ -52,7 +52,6 @@ public sealed record GallerySortOption(GallerySort Sort, string Label, GalleryCa
 /// </summary>
 public sealed partial class GalleryViewModel : ObservableObject
 {
-    private const int TileImageWidth = 180;
     private const int ReloadDebounceMs = 300;
 
     /// <summary>So lange bleibt eine Ergebnis-Meldung (Verschieben, Papierkorb, Favorit …) stehen, bevor der Lade-Status sie ersetzt.</summary>
@@ -97,7 +96,7 @@ public sealed partial class GalleryViewModel : ObservableObject
     /// dort nicht nebenläufig gelesen werden. Wird nach jeder Änderung durch eine neue Instanz ersetzt.
     /// </summary>
     private volatile HashSet<int> _currentIdsSnapshot = new();
-    private readonly ConcurrentQueue<(int FileId, ImageSource Image)> _readyThumbnails = new();
+    private readonly ConcurrentQueue<ReadyThumbnail> _readyThumbnails = new(); // ADR-0043: mit Datei und Dekodierfläche
     private int _thumbnailFlushScheduled;
 
     /// <summary>Vom Kachel-Panel gemeldeter sichtbarer Index-Bereich in <see cref="CurrentPage"/> (-1 = unbekannt); Thumbnails dafür zuerst.</summary>
@@ -827,7 +826,8 @@ public sealed partial class GalleryViewModel : ObservableObject
         var dispatcher = Application.Current?.Dispatcher;
         if (dispatcher is not null && !dispatcher.HasShutdownStarted)
         {
-            await dispatcher.InvokeAsync(() => { }, DispatcherPriority.Loaded);
+            // Nach dem Layout: Dekodierfläche aus Kachelgröße × Bildschirm-Skalierung (ADR-0043) auf dem UI-Thread lesen.
+            await dispatcher.InvokeAsync(UpdateThumbnailDecodeBox, DispatcherPriority.Loaded);
         }
 
         var ordered = OrderByVisibility(items, CurrentPage, _visibleFirstIndex, _visibleLastIndex);
@@ -1038,30 +1038,17 @@ public sealed partial class GalleryViewModel : ObservableObject
             return;
         }
 
-        // Bitmap auf dem Worker-Thread laden + freezen (hält den Decode vom UI-Thread fern),
-        // dann nur das Property-Setzen auf den UI-Thread dispatchen.
-        var image = TryLoadThumbnail(args.ThumbnailPath);
+        // Bitmap auf dem Worker-Thread laden + freezen (hält den Decode vom UI-Thread fern), passend zur Kachelfläche
+        // (ADR-0043), dann gebündelt und mit Background-Priorität auf den UI-Thread: beim Erstaufbau treffen hunderte
+        // Thumbnails in Sekunden ein; je ein Dispatcher-Aufruf pro Bild ließ Eingabe und Rendering verhungern.
+        var box = ThumbnailDecodeBox;
+        var image = TryLoadThumbnail(args.ThumbnailPath, box);
         if (image is null)
         {
             return;
         }
 
-        // Gebündelt und mit Background-Priorität auf den UI-Thread: beim Erstaufbau treffen hunderte
-        // Thumbnails in Sekunden ein; je ein Dispatcher-Aufruf pro Bild ließ Eingabe und Rendering verhungern.
-        _readyThumbnails.Enqueue((args.FileId, image));
-        if (Interlocked.CompareExchange(ref _thumbnailFlushScheduled, 1, 0) != 0)
-        {
-            return;
-        }
-
-        var dispatcher = Application.Current?.Dispatcher;
-        if (dispatcher is null)
-        {
-            Interlocked.Exchange(ref _thumbnailFlushScheduled, 0);
-            return;
-        }
-
-        _ = dispatcher.InvokeAsync(FlushReadyThumbnails, DispatcherPriority.Background);
+        EnqueueReadyThumbnail(new ReadyThumbnail(args.FileId, image, args.ThumbnailPath, box));
     }
 
     private void FlushReadyThumbnails()
@@ -1069,39 +1056,11 @@ public sealed partial class GalleryViewModel : ObservableObject
         Interlocked.Exchange(ref _thumbnailFlushScheduled, 0);
         while (_readyThumbnails.TryDequeue(out var entry))
         {
-            if (_currentItems.TryGetValue(entry.FileId, out var item))
+            if (_currentItems.TryGetValue(entry.FileId, out var item) && !IsOutdatedThumbnail(entry))
             {
                 item.Thumbnail = entry.Image;
+                RememberThumbnailSource(entry);
             }
-        }
-    }
-
-    private static ImageSource? TryLoadThumbnail(string path)
-    {
-        try
-        {
-            if (!File.Exists(path))
-            {
-                return null;
-            }
-
-            var bmp = new BitmapImage();
-            bmp.BeginInit();
-            bmp.CacheOption = BitmapCacheOption.OnLoad;
-            bmp.CreateOptions = BitmapCreateOptions.IgnoreColorProfile;
-            bmp.DecodePixelWidth = TileImageWidth;
-            using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
-            {
-                bmp.StreamSource = fs;
-                bmp.EndInit();
-            }
-
-            bmp.Freeze();
-            return bmp;
-        }
-        catch
-        {
-            return null;
         }
     }
 
@@ -2149,7 +2108,7 @@ public sealed partial class GalleryViewModel : ObservableObject
     private const double TileHeightAt180 = 160;
     private const double TileMediaRatio = 0.64;
 
-    /// <summary>Kachelbreite in px (120–320); wird gemerkt. Vorschaubilder sind 320 px groß — darüber würden sie unscharf.</summary>
+    /// <summary>Kachelbreite in DIP (120–320); wird gemerkt. Vorschaubilder werden passend dazu dekodiert (ADR-0043).</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(TileWidth), nameof(TileHeight))]
     private int _tileSize = DefaultTileSize;
@@ -2187,6 +2146,8 @@ public sealed partial class GalleryViewModel : ObservableObject
         {
             FireAndForget(() => _viewSettings.SetAsync(GalleryViewSettingsStore.TileSizeKey, value.ToString(System.Globalization.CultureInfo.InvariantCulture)));
         }
+
+        UpdateThumbnailDecodeBox(); // größere Kacheln → zu kleine Vorschaubilder neu dekodieren (ADR-0043)
     }
 
     partial void OnViewModeChanged(GalleryViewMode value)

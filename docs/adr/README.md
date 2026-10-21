@@ -27,7 +27,7 @@ Wenn eine ADR-Entscheidung revidiert wird: **neues ADR anlegen** + altes auf "Su
 | [0006](0006-bild-und-video-pipeline.md) | Bild- und Video-Pipeline (WIC + FFmpeg + LibVLC) | Accepted |
 | [0007](0007-thumbnail-scheduling.md) | Thumbnail-Scheduling (Multi-Channel Queue) | Accepted |
 | [0008](0008-storage-profile.md) | Storage-Profile (SSD/HDD/NAS) | Accepted |
-| [0009](0009-cache-strategie.md) | Cache-Strategie (lokal in LocalAppData) | Accepted |
+| [0009](0009-cache-strategie.md) | Cache-Strategie (lokal in LocalAppData) | Accepted (Größen „160 / 320 / 640“ teilweise ersetzt durch 0043) |
 | [0010](0010-ui-datenmodell-paging.md) | UI-Datenmodell mit Paging | Accepted |
 | [0011](0011-suche-und-filter-v01.md) | Suche und Filter in V0.1 | Accepted (Filter-Pills ersetzt durch 0041) |
 | [0012](0012-operation-logging.md) | Operation-Logging (Batches + Operations) | Accepted |
@@ -60,6 +60,7 @@ Wenn eine ADR-Entscheidung revidiert wird: **neues ADR anlegen** + altes auf "Su
 | [0040](0040-ignorierte-gesichter-und-mindestgroesse.md) | Ignorierte Gesichter: Ansicht mit „Zurückholen“, ganze Gruppe ignorieren; Mindestgröße (Standard 24 px) als automatisch ignoriert (Zustand 3 + Markierung in `SuggestionScore`, keine Migration), angewandt beim Einfügen durch den Index und einmal je Schwellenänderung durch den Zuordnungsdienst | Accepted |
 | [0041](0041-galerie-filter-unabhaengig-kombinierbar.md) | Galerie-Filter unabhängig kombinierbar: Dateiart, nur Favoriten, Ablage und Mindest-Bewertung als eigene Teile (`GalleryFilterState`), mit Tags/Personen/Kategorien/Suche/Ordner per UND; „Es gilt“-Zeile, Filter zurücksetzen (Ordnerauswahl bleibt), Sortierung Feld + Richtung getrennt | Accepted |
 | [0042](0042-navigation-und-einstellungen-mit-reitern.md) | Schlankere Navigation (Bibliotheks-Umschalter, Galerie, Ordner, Personen, Sortieren), Einstellungen mit Reitern (Bibliotheken & Eingänge, Tags, Kategorien als eingebettete Seiten; Reiter-Tags im `INavigationService`), „Eingang hinzufügen…“ auf der Ordner-Seite, Info mit Version = oberster CHANGELOG-Eintrag | Accepted |
+| [0043](0043-vorschaubilder-kurze-kante-und-bildmasse.md) | Vorschaubilder nach kurzer Kante 400 px (lange ≤ 1200, Q82), in der Galerie passend zu Kachel × Bildschirm-Skalierung dekodiert; alte Größe bis zum Ersatz gezeigt, Pflege im Hintergrund; Bildmaße (nach EXIF-Drehung) in `Files.Width/Height` | Accepted |
 
 ## Quellen der Entscheidungen
 

@@ -14,10 +14,14 @@ namespace PhotoViewerV3.Thumbnails;
 /// atomarer <c>.tmp</c>+Move. Zusätzlich:
 /// <list type="bullet">
 /// <item>EXIF-Orientierung (System.Photo.Orientation 1–8) wird angewandt — Hochkant-Handyfotos sonst gedreht.</item>
-/// <item>Die längere Seite der gespeicherten Pixel wird auf die Zielgröße dekodiert (Hochkant: DecodePixelHeight),
-/// kleinere Bilder werden nicht hochskaliert.</item>
+/// <item>Die KURZE Kante wird auf die Zielgröße dekodiert, die lange auf das Dreifache begrenzt
+/// (<see cref="ThumbnailSizing"/>, ADR-0043); kleinere Bilder werden nicht hochskaliert. Qualität
+/// <see cref="ThumbnailSizing.JpegQuality"/>.</item>
 /// <item>Bilder mit Alphakanal werden vor dem JPEG-Encode auf <see cref="AlphaBackground"/> gelegt
 /// (sonst schwarze Flächen/Artefakte).</item>
+/// <item>Die Pixelmaße des Originals nach Drehung gehen als <see cref="ThumbnailRenderResult.SourceWidth"/>/
+/// <see cref="ThumbnailRenderResult.SourceHeight"/> an den ThumbnailService (→ <c>Files.Width/Height</c>);
+/// <see cref="ReadDimensions"/> liest sie für das Nachtragen nur aus dem Dateikopf.</item>
 /// </list>
 /// Fehlercodes: <c>source_missing</c>, <c>wic_decode_failed</c> (löst den FFmpeg-Fallback im ThumbnailService aus)
 /// und <see cref="EncodeFailedErrorCode"/> für Fehler beim Schreiben (kein Fallback nötig).
@@ -25,36 +29,38 @@ namespace PhotoViewerV3.Thumbnails;
 /// </summary>
 public sealed class WicImageThumbnailRenderer : IImageThumbnailRenderer
 {
-    private const int JpegQuality = 80;
-
     /// <summary>Decode und Orientierung gelangen, aber JPEG-Encode/Schreiben scheiterte.</summary>
     public const string EncodeFailedErrorCode = "wic_encode_failed";
 
     /// <summary>Hintergrund für transparente Bereiche (PNG/GIF mit Alpha), passend zum dunklen Kachelhintergrund.</summary>
     public static readonly Color AlphaBackground = Color.FromRgb(0x20, 0x20, 0x20);
 
-    public ThumbnailRenderResult Render(string sourcePath, string targetThumbPath, int targetWidth)
+    /// <summary>Dekodiertes Vorschaubild samt Maßen des Originals nach EXIF-Drehung.</summary>
+    internal readonly record struct DecodedThumbnail(BitmapSource Image, int SourceWidth, int SourceHeight);
+
+    public ThumbnailRenderResult Render(string sourcePath, string targetThumbPath, int targetShortEdge)
     {
         if (!File.Exists(sourcePath))
         {
             return ThumbnailRenderResult.Fail(ThumbnailErrorCodes.SourceMissing, $"Quelldatei fehlt: {sourcePath}");
         }
 
-        BitmapSource frame;
+        DecodedThumbnail decoded;
         try
         {
-            frame = DecodeThumbnail(sourcePath, targetWidth);
+            decoded = DecodeThumbnail(sourcePath, targetShortEdge);
         }
         catch (Exception ex)
         {
             return ThumbnailRenderResult.Fail(ThumbnailErrorCodes.WicDecodeFailed, ex.Message);
         }
 
+        var frame = decoded.Image;
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(targetThumbPath)!);
             var tempPath = targetThumbPath + ".tmp";
-            var encoder = new JpegBitmapEncoder { QualityLevel = JpegQuality };
+            var encoder = new JpegBitmapEncoder { QualityLevel = ThumbnailSizing.JpegQuality };
             encoder.Frames.Add(BitmapFrame.Create(frame));
             using (var stream = File.Create(tempPath))
             {
@@ -63,7 +69,11 @@ public sealed class WicImageThumbnailRenderer : IImageThumbnailRenderer
 
             File.Move(tempPath, targetThumbPath, overwrite: true);
             var info = new FileInfo(targetThumbPath);
-            return ThumbnailRenderResult.Ok(frame.PixelWidth, frame.PixelHeight, info.Length);
+            return ThumbnailRenderResult.Ok(frame.PixelWidth, frame.PixelHeight, info.Length) with
+            {
+                SourceWidth = decoded.SourceWidth,
+                SourceHeight = decoded.SourceHeight,
+            };
         }
         catch (Exception ex)
         {
@@ -71,26 +81,32 @@ public sealed class WicImageThumbnailRenderer : IImageThumbnailRenderer
         }
     }
 
+    public (int Width, int Height)? ReadDimensions(string sourcePath)
+    {
+        try
+        {
+            var (width, height, orientation) = ReadHeader(sourcePath);
+            return width > 0 && height > 0 ? ThumbnailSizing.Oriented(width, height, orientation) : null;
+        }
+        catch
+        {
+            return null; // kein WIC-Codec (HEIC/RAW ohne Erweiterung), defekt oder gesperrt
+        }
+    }
+
     /// <summary>
-    /// Decodiert die Datei auf Thumbnail-Größe (längere Seite = <paramref name="targetSize"/>, kein Hochskalieren),
-    /// wendet die EXIF-Orientierung an und legt Alpha auf den dunklen Hintergrund. Ergebnis ist eingefroren.
+    /// Decodiert die Datei auf Vorschaugröße (kurze Kante = <paramref name="shortEdge"/>, lange höchstens das Dreifache,
+    /// kein Hochskalieren), wendet die EXIF-Orientierung an und legt Alpha auf den dunklen Hintergrund. Ergebnis ist
+    /// eingefroren.
     /// </summary>
-    internal static BitmapSource DecodeThumbnail(string sourcePath, int targetSize)
+    internal static DecodedThumbnail DecodeThumbnail(string sourcePath, int shortEdge)
     {
         // Pass 1: nur Header + Metadaten (Pixelmaße, Orientierung) — kein Pixel-Decode.
-        int sourceWidth;
-        int sourceHeight;
-        int orientation;
-        using (var header = OpenShared(sourcePath))
-        {
-            var decoder = BitmapDecoder.Create(header, BitmapCreateOptions.IgnoreColorProfile, BitmapCacheOption.None);
-            var first = decoder.Frames[0];
-            sourceWidth = first.PixelWidth;
-            sourceHeight = first.PixelHeight;
-            orientation = ReadOrientation(first.Metadata as BitmapMetadata);
-        }
+        var (sourceWidth, sourceHeight, orientation) = ReadHeader(sourcePath);
 
-        // Pass 2: Decode mit Zielgröße auf der längeren Seite der GESPEICHERTEN Pixel (Rotation folgt danach).
+        // Pass 2: Decode auf die Zielmaße der GESPEICHERTEN Pixel (die kurze Kante ist von der Drehung unabhängig).
+        // Nur eine Seite vorgeben — die andere folgt proportional, sonst verzerren Rundungen das Bild.
+        var (targetWidth, targetHeight) = ThumbnailSizing.Fit(sourceWidth, sourceHeight, shortEdge);
         var bitmap = new BitmapImage();
         using (var stream = OpenShared(sourcePath))
         {
@@ -98,16 +114,16 @@ public sealed class WicImageThumbnailRenderer : IImageThumbnailRenderer
             bitmap.StreamSource = stream;
             bitmap.CacheOption = BitmapCacheOption.OnLoad;
             bitmap.CreateOptions = BitmapCreateOptions.IgnoreColorProfile;
-            if (sourceWidth >= sourceHeight)
+            if (targetWidth > 0 && targetWidth < sourceWidth)
             {
-                if (sourceWidth > targetSize)
+                if (sourceWidth >= sourceHeight)
                 {
-                    bitmap.DecodePixelWidth = targetSize;
+                    bitmap.DecodePixelHeight = targetHeight;
                 }
-            }
-            else if (sourceHeight > targetSize)
-            {
-                bitmap.DecodePixelHeight = targetSize;
+                else
+                {
+                    bitmap.DecodePixelWidth = targetWidth;
+                }
             }
 
             bitmap.EndInit();
@@ -126,7 +142,20 @@ public sealed class WicImageThumbnailRenderer : IImageThumbnailRenderer
             result.Freeze();
         }
 
-        return result;
+        var (shownWidth, shownHeight) = ThumbnailSizing.Oriented(sourceWidth, sourceHeight, orientation);
+        return new DecodedThumbnail(result, shownWidth, shownHeight);
+    }
+
+    /// <summary>Pixelmaße der gespeicherten Pixel und EXIF-Orientierung — nur Dateikopf, kein Pixel-Decode.</summary>
+    private static (int Width, int Height, int Orientation) ReadHeader(string sourcePath)
+    {
+        using var header = OpenShared(sourcePath);
+        var decoder = BitmapDecoder.Create(
+            header,
+            BitmapCreateOptions.IgnoreColorProfile | BitmapCreateOptions.DelayCreation,
+            BitmapCacheOption.None);
+        var first = decoder.Frames[0];
+        return (first.PixelWidth, first.PixelHeight, ReadOrientation(first.Metadata as BitmapMetadata));
     }
 
     private static FileStream OpenShared(string path)

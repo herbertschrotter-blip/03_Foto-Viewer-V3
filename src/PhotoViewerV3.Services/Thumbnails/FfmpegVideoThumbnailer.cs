@@ -1,6 +1,8 @@
 using System;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -18,6 +20,9 @@ namespace PhotoViewerV3.Services.Thumbnails;
 /// für Leerzeichen, Sonderzeichen, nicht-ASCII), stdout wird mitgelesen (kein Pipe-Deadlock).
 /// Videos kürzer als 1 s liefern bei <c>-ss 1</c> kein Frame → zweiter Lauf ohne Seek.
 /// Schreibt atomar (.tmp + Move), sodass nie ein halbfertiges Thumbnail sichtbar wird.
+/// Größe wie beim WIC-Renderer (ADR-0043): kurze Kante = Zielgröße, lange höchstens das Dreifache, nie hochskaliert
+/// (Ausdruck im <c>scale</c>-Filter, nach der automatischen Drehung). Die Maße des Originals liest
+/// <see cref="FfmpegStreamInfo"/> aus der Eingabe-Beschreibung auf stderr (<c>-loglevel info</c>).
 /// </summary>
 public sealed class FfmpegVideoThumbnailer : IVideoThumbnailRenderer, IFallbackImageThumbnailRenderer
 {
@@ -40,9 +45,9 @@ public sealed class FfmpegVideoThumbnailer : IVideoThumbnailRenderer, IFallbackI
     public Task<ThumbnailRenderResult> RenderAsync(
         string sourcePath,
         string targetThumbPath,
-        int targetWidth,
+        int targetShortEdge,
         CancellationToken cancellationToken)
-        => RunAsync(sourcePath, targetThumbPath, targetWidth, seekIntoStream: true, cancellationToken);
+        => RunAsync(sourcePath, targetThumbPath, targetShortEdge, seekIntoStream: true, cancellationToken);
 
     /// <summary>
     /// Bild-Fallback: erstes (einziges) Frame ohne <c>-ss</c> — ein Standbild hat bei 1 s nichts
@@ -51,21 +56,21 @@ public sealed class FfmpegVideoThumbnailer : IVideoThumbnailRenderer, IFallbackI
     public Task<ThumbnailRenderResult> RenderImageAsync(
         string sourcePath,
         string targetThumbPath,
-        int targetWidth,
+        int targetShortEdge,
         CancellationToken cancellationToken)
-        => RunAsync(sourcePath, targetThumbPath, targetWidth, seekIntoStream: false, cancellationToken);
+        => RunAsync(sourcePath, targetThumbPath, targetShortEdge, seekIntoStream: false, cancellationToken);
 
     Task<ThumbnailRenderResult> IFallbackImageThumbnailRenderer.RenderAsync(
         string sourcePath,
         string targetThumbPath,
-        int targetWidth,
+        int targetShortEdge,
         CancellationToken cancellationToken)
-        => RenderImageAsync(sourcePath, targetThumbPath, targetWidth, cancellationToken);
+        => RenderImageAsync(sourcePath, targetThumbPath, targetShortEdge, cancellationToken);
 
     private async Task<ThumbnailRenderResult> RunAsync(
         string sourcePath,
         string targetThumbPath,
-        int targetWidth,
+        int targetShortEdge,
         bool seekIntoStream,
         CancellationToken cancellationToken)
     {
@@ -85,12 +90,12 @@ public sealed class FfmpegVideoThumbnailer : IVideoThumbnailRenderer, IFallbackI
         var tempPath = targetThumbPath + ".tmp";
         Directory.CreateDirectory(Path.GetDirectoryName(targetThumbPath)!);
 
-        var result = await ExecuteAsync(ffmpeg, sourcePath, tempPath, targetWidth, seekIntoStream, cancellationToken).ConfigureAwait(false);
+        var result = await ExecuteAsync(ffmpeg, sourcePath, tempPath, targetShortEdge, seekIntoStream, cancellationToken).ConfigureAwait(false);
         if (!result.Success && seekIntoStream && result.ErrorCode == ThumbnailErrorCodes.FfmpegFailed)
         {
             // Clip kürzer als der Seek (oder Seek im Container nicht möglich): erstes Frame nehmen.
             _logger.LogDebug("FFmpeg ohne Frame bei -ss 1 ({Path}) — zweiter Lauf ohne Seek", sourcePath);
-            result = await ExecuteAsync(ffmpeg, sourcePath, tempPath, targetWidth, seekIntoStream: false, cancellationToken).ConfigureAwait(false);
+            result = await ExecuteAsync(ffmpeg, sourcePath, tempPath, targetShortEdge, seekIntoStream: false, cancellationToken).ConfigureAwait(false);
         }
 
         if (!result.Success)
@@ -105,8 +110,8 @@ public sealed class FfmpegVideoThumbnailer : IVideoThumbnailRenderer, IFallbackI
             "{Kind}-Thumb via FFmpeg erzeugt: {Path} ({Bytes} B)",
             seekIntoStream ? "Video" : "Bild", targetThumbPath, info.Length);
 
-        // Pixelmaße werden ohne Re-Decode nicht ermittelt → 0/0; ByteSize ist gesetzt.
-        return ThumbnailRenderResult.Ok(0, 0, info.Length);
+        // Pixelmaße des Vorschaubilds werden ohne Re-Decode nicht ermittelt → 0/0; ByteSize und Originalmaße sind gesetzt.
+        return ThumbnailRenderResult.Ok(0, 0, info.Length) with { SourceWidth = result.SourceWidth, SourceHeight = result.SourceHeight };
     }
 
     /// <summary>Ein FFmpeg-Lauf; bei Erfolg liegt das Frame in <paramref name="tempPath"/> (noch nicht an den Zielpfad verschoben).</summary>
@@ -114,7 +119,7 @@ public sealed class FfmpegVideoThumbnailer : IVideoThumbnailRenderer, IFallbackI
         string ffmpeg,
         string sourcePath,
         string tempPath,
-        int targetWidth,
+        int targetShortEdge,
         bool seekIntoStream,
         CancellationToken cancellationToken)
     {
@@ -122,7 +127,9 @@ public sealed class FfmpegVideoThumbnailer : IVideoThumbnailRenderer, IFallbackI
 
         // -ss 1              : (nur Video) 1 s in den Stream springen (vermeidet schwarzes Intro-Frame)
         // -frames:v 1        : genau ein Frame greifen
-        // scale=w:-1         : Breite auf targetWidth begrenzen, Höhe proportional
+        // -loglevel info     : Eingabe-Beschreibung (Maße, Drehung) für Files.Width/Height; -nostats ohne Fortschritt
+        // scale=…            : kurze Kante auf targetShortEdge, lange höchstens das Dreifache, nie hochskalieren
+        //                      (FFmpeg dreht vorher automatisch → iw/ih sind die angezeigten Maße); Höhe gerade
         // -f image2 -update 1: Einzelbild-Muxer explizit — die .tmp-Endung lässt FFmpeg sonst
         //                      keinen Ausgabeformat-Rückschluss zu ("Unable to choose an output format")
         // -c:v mjpeg -q:v 4  : JPG-Encoder + Qualität (niedriger = besser, 2–5 typisch)
@@ -134,8 +141,9 @@ public sealed class FfmpegVideoThumbnailer : IVideoThumbnailRenderer, IFallbackI
             CreateNoWindow = true,
         };
         psi.ArgumentList.Add("-hide_banner");
+        psi.ArgumentList.Add("-nostats");
         psi.ArgumentList.Add("-loglevel");
-        psi.ArgumentList.Add("error");
+        psi.ArgumentList.Add("info");
         psi.ArgumentList.Add("-y");
         if (seekIntoStream)
         {
@@ -148,7 +156,7 @@ public sealed class FfmpegVideoThumbnailer : IVideoThumbnailRenderer, IFallbackI
         psi.ArgumentList.Add("-frames:v");
         psi.ArgumentList.Add("1");
         psi.ArgumentList.Add("-vf");
-        psi.ArgumentList.Add($"scale={targetWidth}:-1");
+        psi.ArgumentList.Add(BuildScaleFilter(targetShortEdge));
         psi.ArgumentList.Add("-f");
         psi.ArgumentList.Add("image2");
         psi.ArgumentList.Add("-update");
@@ -213,7 +221,8 @@ public sealed class FfmpegVideoThumbnailer : IVideoThumbnailRenderer, IFallbackI
         }
 
         sw.Stop();
-        var tail = TrimTail(stderr.ToString());
+        var stderrText = stderr.ToString();
+        var tail = TrimTail(stderrText);
 
         if (cancelled)
         {
@@ -232,7 +241,24 @@ public sealed class FfmpegVideoThumbnailer : IVideoThumbnailRenderer, IFallbackI
         }
 
         _logger.LogDebug("FFmpeg-Lauf ({Seek}) für {Path} in {Ms:N0} ms", seekIntoStream ? "-ss 1" : "ohne Seek", sourcePath, sw.Elapsed.TotalMilliseconds);
-        return ThumbnailRenderResult.Ok(0, 0, new FileInfo(tempPath).Length);
+        var size = FfmpegStreamInfo.TryParseDisplaySize(stderrText);
+        return ThumbnailRenderResult.Ok(0, 0, new FileInfo(tempPath).Length) with
+        {
+            SourceWidth = size?.Width ?? 0,
+            SourceHeight = size?.Height ?? 0,
+        };
+    }
+
+    /// <summary>
+    /// <c>scale</c>-Filter: Faktor = min(1, kurz/min(iw,ih), 3·kurz/max(iw,ih)); Breite auf gerade Zahl gerundet, Höhe proportional
+    /// und gerade (-2). Einfache Anführungszeichen schützen die Kommas vor dem Filtergraph-Parser.
+    /// </summary>
+    public static string BuildScaleFilter(int shortEdge)
+    {
+        var maxLong = ThumbnailSizing.MaxLongEdge(shortEdge);
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"scale=w='max(2,round(iw*min(1,min({shortEdge}/min(iw,ih),{maxLong}/max(iw,ih)))/2)*2)':h=-2");
     }
 
     private static void KillQuietly(Process proc)
@@ -304,6 +330,17 @@ public sealed class FfmpegVideoThumbnailer : IVideoThumbnailRenderer, IFallbackI
         }
     }
 
+    /// <summary>Kopf- und Statuszeilen von <c>-loglevel info</c>, die keinen Fehler beschreiben.</summary>
+    public static bool IsInfoLine(string line)
+        => char.IsWhiteSpace(line[0])
+           || line.StartsWith("frame=", StringComparison.Ordinal)
+           || line.StartsWith("Input #", StringComparison.Ordinal)
+           || line.StartsWith("Output #", StringComparison.Ordinal)
+           || line.StartsWith("Stream mapping", StringComparison.Ordinal)
+           || line.StartsWith("Press [q]", StringComparison.Ordinal)
+           || line.Contains("muxing overhead", StringComparison.Ordinal);
+
+    /// <summary>Letzte Zeilen von stderr ohne die Beschreibungs- und Statuszeilen von <c>-loglevel info</c>.</summary>
     private static string TrimTail(string raw)
     {
         if (string.IsNullOrWhiteSpace(raw))
@@ -311,7 +348,14 @@ public sealed class FfmpegVideoThumbnailer : IVideoThumbnailRenderer, IFallbackI
             return "(stderr leer)";
         }
 
-        var lines = raw.Split('\n', '\r', StringSplitOptions.RemoveEmptyEntries);
+        var lines = raw.Split('\n', '\r', StringSplitOptions.RemoveEmptyEntries)
+            .Where(l => !IsInfoLine(l))
+            .ToArray();
+        if (lines.Length == 0)
+        {
+            return "(stderr ohne Fehlermeldung)";
+        }
+
         return lines.Length <= StdErrTailLines
             ? string.Join(" | ", lines)
             : string.Join(" | ", lines[^StdErrTailLines..]);

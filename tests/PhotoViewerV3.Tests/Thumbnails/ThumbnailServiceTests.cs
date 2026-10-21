@@ -64,7 +64,7 @@ public sealed class ThumbnailServiceTests
     public async Task CacheHit_meldet_sofort_ThumbnailReady_ohne_Renderer()
     {
         using var fx = await TempLibraryFixture.CreateAsync();
-        var cachePath = Path.Combine(fx.Paths.GetLibraryThumbnailsPath(LibraryId), "5_320_still.jpg");
+        var cachePath = Path.Combine(fx.Paths.GetLibraryThumbnailsPath(LibraryId), $"5_{ThumbnailService.Size}_still.jpg");
         TempLibraryFixture.WriteFile(cachePath, 100);
         await SeedRowAsync(fx, 5, ThumbnailStatus.Generated, 1, cachePath);
         var image = new FakeImageRenderer();
@@ -100,7 +100,7 @@ public sealed class ThumbnailServiceTests
         await WaitForIdleAsync(svc);
 
         args.FileId.Should().Be(42);
-        args.ThumbnailPath.Should().Be(Path.Combine(fx.Paths.GetLibraryThumbnailsPath(LibraryId), "42_320_still.jpg"));
+        args.ThumbnailPath.Should().Be(Path.Combine(fx.Paths.GetLibraryThumbnailsPath(LibraryId), $"42_{ThumbnailService.Size}_still.jpg"));
         File.Exists(args.ThumbnailPath).Should().BeTrue();
         image.Calls.Should().Be(1);
 
@@ -202,7 +202,7 @@ public sealed class ThumbnailServiceTests
     public async Task MaxAttempts_verhindert_erneute_Versuche()
     {
         using var fx = await TempLibraryFixture.CreateAsync();
-        var cachePath = Path.Combine(fx.Paths.GetLibraryThumbnailsPath(LibraryId), "12_320_still.jpg");
+        var cachePath = Path.Combine(fx.Paths.GetLibraryThumbnailsPath(LibraryId), $"12_{ThumbnailService.Size}_still.jpg");
         await SeedRowAsync(fx, 12, ThumbnailStatus.Failed, ThumbnailService.MaxAttempts, cachePath, ThumbnailErrorCodes.WicDecodeFailed);
         var image = new FakeImageRenderer();
         using var svc = CreateService(fx, image);
@@ -221,7 +221,7 @@ public sealed class ThumbnailServiceTests
     public async Task Fehlgeschlagene_Datei_unter_MaxAttempts_wird_erneut_versucht_und_Versuche_gezaehlt()
     {
         using var fx = await TempLibraryFixture.CreateAsync();
-        var cachePath = Path.Combine(fx.Paths.GetLibraryThumbnailsPath(LibraryId), "13_320_still.jpg");
+        var cachePath = Path.Combine(fx.Paths.GetLibraryThumbnailsPath(LibraryId), $"13_{ThumbnailService.Size}_still.jpg");
         await SeedRowAsync(fx, 13, ThumbnailStatus.Failed, ThumbnailService.MaxAttempts - 1, cachePath, ThumbnailErrorCodes.WicDecodeFailed);
         var image = new FakeImageRenderer();
         using var svc = CreateService(fx, image);
@@ -266,6 +266,6 @@ public sealed class ThumbnailServiceTests
         svc.PendingCount.Should().Be(0);
         await using var ctx = fx.CreateContext();
         (await ctx.Thumbnails.CountAsync(t => t.Status == ThumbnailStatus.Generated)).Should().Be(6);
-        File.Exists(Path.Combine(fx.Paths.GetLibraryThumbnailsPath(LibraryId), "200_320_still.jpg")).Should().BeTrue();
+        File.Exists(Path.Combine(fx.Paths.GetLibraryThumbnailsPath(LibraryId), $"200_{ThumbnailService.Size}_still.jpg")).Should().BeTrue();
     }
 }

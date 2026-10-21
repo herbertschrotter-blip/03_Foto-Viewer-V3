@@ -555,9 +555,18 @@ Das kann passieren, wenn ein Laufwerk nicht vollständig verfügbar ist.
 `%LocalAppData%\PhotoViewerV3\thumbs\{libraryId}\{fileId}_{size}_{kind}.jpg` — bzw. `{Datenordner}\thumbs\…`, wenn der
 Katalog in den Einstellungen umgezogen ist: der Cache liegt immer neben `library.db` und zieht mit (ADR-0026).
 
-- **Naming**: `42_320_still.jpg` für File-ID 42 in 320px statisches Thumb
-- **Animierte (Phase 8)**: `42_320_hover.gif`
-- 3 Größen: 160 / 320 / 640
+- **Naming**: `42_400_still.jpg` für File-ID 42, statisches Thumb mit kurzer Kante 400 px (`Thumbnails.Size` = 400)
+- **Animierte (Phase 8)**: `42_400_hover.gif`
+- **Größe (ADR-0043, ersetzt „160 / 320 / 640“)**: eine Größe — kurze Kante 400 px, lange höchstens 1200 px, nie
+  hochskalieren, EXIF-Drehung, JPEG-Qualität 82 (`ThumbnailSizing`; WIC und FFmpeg gleich). Spike #11: ≈ 5,5 GB je
+  100 000 Fotos (≈ 27 GB bei 500 000), Erzeugung ≈ 28–34 min je 100 000 mit 4 Workern.
+- **Laden in der Galerie**: Dekodierfläche = Bildbereich der Kachel × Bildschirm-Skalierung; bei deutlich größerer Fläche
+  (> 15 %) werden nur die zu kleinen Kacheln im Hintergrund neu dekodiert.
+- **Übergang alter Größen** (320 px): zeigen, bis das neue fertig ist, dann Zeile (gleiche Transaktion) und Datei löschen;
+  Pflege im Hintergrund ersetzt den Rest in 32er-Stapeln bei leerer Warteschlange (nicht bei Pause, Scan-Sperre,
+  fehlender Quelle, Cloud-Platzhalter), Fortschritt in `PendingCount`.
+- **Bildmaße**: beim Erzeugen `Files.Width/Height` = Original nach EXIF-Drehung (gleiche Transaktion wie „Generated“;
+  Videos aus der FFmpeg-Eingabe); fehlende trägt die Pflege aus dem Dateikopf nach (0 × 0 = nicht lesbar).
 - Validation via DB: `Files.ModifiedAtUtc != Thumbnails.SourceModifiedAtUtc` → Re-generate
 
 ### Multi-Channel Queue (4 Prios)

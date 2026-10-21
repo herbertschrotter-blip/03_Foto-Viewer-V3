@@ -5,6 +5,7 @@
 - **Entscheider:** Herbert Schrotter, Claude, GPT-5
 - **Bezogen auf:** [ADR-0003](0003-catalog-modell.md), [ADR-0008](0008-storage-profile.md)
 - **Ergänzt durch:** [ADR-0026](0026-speicherort-katalog-waehlbar.md) — der Cache liegt immer neben `library.db` und zieht beim Umzug mit; weiterhin nur lokale Laufwerke
+- **Teilweise ersetzt durch:** [ADR-0043](0043-vorschaubilder-kurze-kante-und-bildmasse.md) — eine Größe: kurze Kante 400 px (`42_400_still.jpg`) statt „160 / 320 / 640“; Speicherort und Namensschema gelten weiter
 
 ## Kontext
 

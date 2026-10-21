@@ -83,6 +83,16 @@ public sealed class FakeImageRenderer : IImageThumbnailRenderer
 
     public int Calls => Volatile.Read(ref _calls);
 
+    /// <summary>Maße des Originals nach Drehung, die Render meldet (0 = unbekannt, ADR-0043).</summary>
+    public (int Width, int Height) SourceSize { get; set; }
+
+    /// <summary>Antwort von <see cref="ReadDimensions"/> (Nachtragen aus dem Dateikopf); null = nicht lesbar.</summary>
+    public (int Width, int Height)? HeaderSize { get; set; }
+
+    public int DimensionReads => Volatile.Read(ref _dimensionReads);
+
+    private int _dimensionReads;
+
     public ThumbnailRenderResult Render(string sourcePath, string targetThumbPath, int targetWidth)
     {
         Interlocked.Increment(ref _calls);
@@ -91,7 +101,17 @@ public sealed class FakeImageRenderer : IImageThumbnailRenderer
             return ThumbnailRenderResult.Fail(FailCode, "Fake-Bildrenderer scheitert absichtlich");
         }
 
-        return FakeRenderHelper.WriteThumb(targetThumbPath, targetWidth);
+        return FakeRenderHelper.WriteThumb(targetThumbPath, targetWidth) with
+        {
+            SourceWidth = SourceSize.Width,
+            SourceHeight = SourceSize.Height,
+        };
+    }
+
+    public (int Width, int Height)? ReadDimensions(string sourcePath)
+    {
+        Interlocked.Increment(ref _dimensionReads);
+        return HeaderSize;
     }
 }
 

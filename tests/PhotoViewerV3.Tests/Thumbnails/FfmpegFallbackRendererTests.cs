@@ -125,6 +125,106 @@ public sealed class FfmpegFallbackRendererTests
         File.Exists(target + ".tmp").Should().BeFalse();
     }
 
+    [Fact]
+    public async Task RenderImageAsync_kurze_Kante_auf_Ziel_lange_hoechstens_dreifach_und_Originalmasse()
+    {
+        var renderer = CreateRenderer();
+        if (!renderer.IsAvailable)
+        {
+            return;
+        }
+
+        using var fx = await TempLibraryFixture.CreateAsync();
+        var panorama = Path.Combine(fx.LibraryRoot, "pano.bmp");
+        WriteBmp(panorama, 900, 200);
+        var small = Path.Combine(fx.LibraryRoot, "klein.bmp");
+        WriteBmp(small, 60, 40);
+        var thumbs = fx.Paths.GetLibraryThumbnailsPath(1);
+
+        var pano = await renderer.RenderImageAsync(panorama, Path.Combine(thumbs, "6_100_still.jpg"), 100, CancellationToken.None);
+        var tiny = await renderer.RenderImageAsync(small, Path.Combine(thumbs, "7_100_still.jpg"), 100, CancellationToken.None);
+
+        pano.Success.Should().BeTrue(pano.ErrorMessage);
+        (pano.SourceWidth, pano.SourceHeight).Should().Be((900, 200));
+        ReadJpegSize(Path.Combine(thumbs, "6_100_still.jpg")).Should().Be((300, 66), "lange Kante 3 × 100, Höhe proportional und gerade");
+        tiny.Success.Should().BeTrue(tiny.ErrorMessage);
+        ReadJpegSize(Path.Combine(thumbs, "7_100_still.jpg")).Should().Be((60, 40), "kleine Originale werden nicht hochskaliert");
+    }
+
+    [Fact]
+    public async Task RenderAsync_gedrehtes_Video_meldet_angezeigte_Masse()
+    {
+        var renderer = CreateRenderer();
+        if (!renderer.IsAvailable)
+        {
+            return;
+        }
+
+        using var fx = await TempLibraryFixture.CreateAsync();
+        var plain = Path.Combine(fx.LibraryRoot, "quer.mp4");
+        var rotated = Path.Combine(fx.LibraryRoot, "hoch.mp4");
+        if (!RunFfmpeg("-f", "lavfi", "-i", "testsrc=duration=1.5:size=320x180:rate=10", "-c:v", "mpeg4", "-q:v", "5", plain)
+            || !RunFfmpeg("-display_rotation", "90", "-i", plain, "-c", "copy", rotated))
+        {
+            return; // Generator oder -display_rotation nicht verfügbar → kein Urteil möglich
+        }
+
+        var target = Path.Combine(fx.Paths.GetLibraryThumbnailsPath(1), "8_100_still.jpg");
+        var result = await renderer.RenderAsync(rotated, target, 100, CancellationToken.None);
+
+        result.Success.Should().BeTrue(result.ErrorMessage);
+        (result.SourceWidth, result.SourceHeight).Should().Be((180, 320), "FFmpeg dreht automatisch; Files.Width/Height wie angezeigt");
+        ReadJpegSize(target).Should().Be((100, 178));
+    }
+
+    /// <summary>Breite/Höhe aus dem SOF-Segment einer JPEG-Datei (ohne Bildbibliothek).</summary>
+    private static (int Width, int Height) ReadJpegSize(string path)
+    {
+        var bytes = File.ReadAllBytes(path);
+        for (var i = 2; i + 8 < bytes.Length; i++)
+        {
+            if (bytes[i] == 0xFF && bytes[i + 1] is 0xC0 or 0xC1 or 0xC2)
+            {
+                return ((bytes[i + 7] << 8) | bytes[i + 8], (bytes[i + 5] << 8) | bytes[i + 6]);
+            }
+        }
+
+        return (0, 0);
+    }
+
+    private static bool RunFfmpeg(params string[] args)
+    {
+        try
+        {
+            var psi = new System.Diagnostics.ProcessStartInfo("ffmpeg")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+            };
+            foreach (var arg in new[] { "-hide_banner", "-loglevel", "error", "-y" }.Concat(args))
+            {
+                psi.ArgumentList.Add(arg);
+            }
+
+            using var proc = System.Diagnostics.Process.Start(psi);
+            if (proc is null)
+            {
+                return false;
+            }
+
+            proc.StandardOutput.ReadToEnd();
+            proc.StandardError.ReadToEnd();
+            proc.WaitForExit(30_000);
+            return proc.ExitCode == 0 && File.Exists(args[^1]);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     /// <summary>Erzeugt mit FFmpeg (PATH) einen kurzen Testclip aus dem lavfi-Testbild; false, wenn das nicht klappt.</summary>
     private static bool TryCreateShortClip(string path, double seconds)
     {

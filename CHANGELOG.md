@@ -3,6 +3,70 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.45] — 2026-10-21
+
+### Fix (ADR-0043) — Scharfe Vorschaubilder, Bildmaße im Katalog
+- Befund („in der Kachelansicht ist schon alles verschwommen“): Vorschaubilder hatten die LANGE Kante 320 px (Querformat
+  320 × 180…240, Qualität 80), die Galerie dekodierte sie fest auf 180 px Breite — eine Kachel (Regler 120–320) bei
+  150 % Skalierung zog ein 180 × 120-Bild auf bis zu 480 px hoch. `Files.Width/Height` waren nie gefüllt.
+- **Erzeugung**: kurze Kante **400 px**, lange höchstens 1200 px, nie hochskalieren, EXIF-Drehung, Qualität **82**
+  (`Services/Thumbnails/ThumbnailSizing`); FFmpeg (Videos, Bild-Fallback) mit demselben Maß im `scale`-Filter. Datei
+  `{fileId}_400_still.jpg`. Gemessen an 200 Handyfotos (Spike #11, `docs/spikes/11-vorschaubild-groesse.md`): alt
+  14 KB je Bild (1,3 GB je 100 000), Vorgabe 480/Q85 87 KB (**8,3 GB** — über der Grenze von ≈ 6 GB), gewählt 400/Q82
+  57 KB (**5,5 GB je 100 000, 27 GB je 500 000**); Erzeugung ≈ 54–61 → 67–82 ms je Bild (+20–30 %, ≈ 28–34 min je
+  100 000 mit 4 Workern).
+- **Laden in der Galerie**: Dekodierfläche = Bildbereich der Kachel (Regler minus Rand und Namenszeile) ×
+  Bildschirm-Skalierung des Hauptfensters (`VisualTreeHelper.GetDpi`, `DpiChanged`), dekodiert so groß, dass der
+  Bildbereich bedeckt ist (`UniformToFill` skaliert nie hoch), nie größer als das Vorschaubild; ein verspätet
+  dekodiertes Bild alter Größe ersetzt nie ein schon gezeigtes neues. Regler größer bzw. höhere Skalierung: nur Kacheln mit > 15 % zu kleinem
+  Bild werden entprellt im Hintergrund neu dekodiert (sichtbare zuerst, gebündelt mit Background-Priorität);
+  kleiner ziehen dekodiert nichts neu (`Gallery/ViewModels/GalleryViewModel.ThumbnailDecode.cs`). Listenansicht nutzt
+  dieselben Bilder.
+- **Übergang**: Vorschaubilder der alten Größe (320) werden gezeigt, bis das neue fertig ist; danach löscht dieselbe
+  Transaktion die alte Zeile, die Datei folgt nach dem Commit; scheitert das neue, bleibt das alte. **Pflege im
+  Hintergrund** (`ThumbnailService.Maintenance.cs`, 20 s nach dem ersten Request, einmal je Sitzung): ersetzt die übrigen
+  in 32er-Stapeln nach FileId, jeden erst bei leerer Warteschlange (angeforderte Kacheln gehen vor); ruht bei Pause
+  (Umzug), Scan-Sperre der Bibliothek; überspringt fehlende Originale und Cloud-Platzhalter (kein OneDrive-Download).
+  Beim Start wird nur gezählt — die noch nicht eingereihten zählen in der Statusleiste („Vorschaubilder: N in
+  Warteschlange“) mit.
+- **Bildmaße**: beim Erzeugen schreibt der ThumbnailService die Maße des Originals nach EXIF-Drehung nach
+  `Files.Width/Height` (gleiche Transaktion wie „Generated“); Videos aus der FFmpeg-Eingabe-Beschreibung
+  (`FfmpegStreamInfo`: Maße, Display-Matrix/`rotate`, HEIF-Kachelgitter; FFmpeg läuft dafür mit `-loglevel info -nostats`).
+  Die Pflege trägt für Bilder mit neuem Vorschaubild, aber ohne Maße, die Maße aus dem Dateikopf nach
+  (`IImageThumbnailRenderer.ReadDimensions`, `DelayCreation`), 200 je Transaktion; nicht lesbare (z. B. HEIC ohne Codec)
+  bekommen 0 × 0 und werden nicht jede Sitzung neu gelesen. Maße werden nur für die gelesene Dateiversion geschrieben
+  (`Files.ModifiedAtUtc`). Eingebettete Titelbilder in Videos (`attached pic`) zählen nicht. Nach „Neu aufbauen“ entstehen sie mit
+  den Vorschaubildern neu. Keine Migration.
+- Dienst: `ThumbnailService` partial (+ optionale `IScanGate`-Abhängigkeit, `MaintenanceStartDelay`,
+  `RunMaintenancePassAsync`), `ThumbnailRenderResult.SourceWidth/SourceHeight`; Renderer-Parameter heißt jetzt
+  `targetShortEdge`. ADR-0009 (Größen „160 / 320 / 640“) teilweise ersetzt; PLAN Kap. 13 angepasst; README
+  (Speicherplatz).
+
+### Tests
+- `tests/PhotoViewerV3.Tests`: 647 (+45, 1 übersprungen ohne Modell): `Thumbnails/ThumbnailUpgradeTests` (Maße nach Files,
+  alt zeigen → neu → alt gelöscht, Fehlschlag behält alt, andere Dateiversion, Pflege ersetzt/überspringt, Maße aus dem
+  Dateikopf, nicht lesbare 0 × 0, Maße nur für die gelesene Version, Scan-Sperre, Pause, lokale Verfügbarkeit),
+  `Thumbnails/ThumbnailSizingTests` (kurze Kante/Grenze/kein Hochskalieren, Drehung, FFmpeg-Eingabe parsen inkl.
+  Titelbild, Fehlertext ohne Info-Zeilen, `scale`-Ausdruck), `FfmpegFallbackRendererTests` (+2 mit echtem
+  FFmpeg: Panorama-Grenze und kleine Bilder, gedrehtes Video meldet 180 × 320).
+- `tests/PhotoViewerV3.Wpf.Tests`: 327 (+22, 1 übersprungen), dreimal hintereinander grün: `WicImageThumbnailRendererTests`
+  (kurze Kante, Panorama, Originalmaße bei EXIF 6, `ReadDimensions`), `Gallery/GalleryThumbnailDecodeTests`
+  (Bildbereich × Skalierung, Dekodierbreite bedeckt ihn, Schwelle fürs Neu-Dekodieren, 150 %-Kachel scharf, alte
+  Größe am Dateinamen).
+- Perf-Harness `spike11-thumb-size` (`tests/PhotoViewerV3.PerfTests`).
+- Rauchtest 29/29 OK, 0 Binding-Fehler — neuer Schritt **„Vorschaubild-Größe und Bildmaße“** vor „Ordnerüberwachung“
+  (`Shell/Smoke/SmokeScenario.ThumbnailSize.cs`): EXIF-6-Foto 1200 × 600 → Vorschaubild 400 × 800, Files 600 × 1200;
+  alle Bilder kurze Kante = min(400, Original), Videos mit Maßen aus FFmpeg, keine alte Größe; Kachelbild bedeckt
+  Kachel × Skalierung, nach Regler auf 320 neu dekodiert. Screenshot `25-galerie-vorschaubilder-gross`.
+
+### Offen
+- Reglerstufen 300/320 bei 150 % Skalierung: Hochformate werden bis 1,14-fach vergrößert (400 statt 456 px, bewusst
+  wegen Speicher).
+- Gesichts-Ausschnitte der Personen-Seite sind 128 px groß und werden in Kreisen von 130 DIP gezeigt — bei 150 %
+  ebenfalls ≈ 1,5-fach vergrößert (ADR-0037, nicht Teil dieses Fixes).
+- Videos, deren Vorschaubild schon in 400 px vorliegt, bekommen Maße erst beim nächsten Erzeugen (kein Nachtragen
+  ohne FFmpeg-Lauf).
+
 ## [0.2.44] — 2026-10-21
 
 ### Neu (ADR-0042) — Schlankere Navigation, Einstellungen mit Reitern, Info-Seite (Mockup 06, Reiter „Navigation & Einstellungen“)

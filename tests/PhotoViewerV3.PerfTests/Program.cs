@@ -10,6 +10,7 @@ internal static class Program
     private const string SpikeFfmpegCancel = "spike05-ffmpeg-cancel";
     private const string SpikeStorageDetection = "spike06-storage-detection";
     private const string SpikeV01Scan = "spike-v01-scan";
+    private const string SpikeThumbSize = "spike11-thumb-size";
 
     public static async Task<int> Main(string[] args)
     {
@@ -26,6 +27,7 @@ internal static class Program
             SpikeFfmpegCancel => await Spikes.Ffmpeg.Spike05FfmpegBenchmark.RunAsync(args[1..]),
             SpikeStorageDetection => await Spikes.Storage.Spike06StorageDetection.RunAsync(args[1..]),
             SpikeV01Scan => await Spikes.V01Scan.SpikeV01Scan.RunAsync(args[1..]),
+            SpikeThumbSize => await Spikes.Wic.Spike11ThumbnailSize.RunAsync(args[1..]),
             _ => UnknownCommand(args[0]),
         };
     }
@@ -52,5 +54,7 @@ internal static class Program
         Console.WriteLine("    Storage-Profile-Detection für mehrere Pfade (lokal / UNC).");
         Console.WriteLine($"  {SpikeV01Scan} --root PATH [--name NAME] [--clear]");
         Console.WriteLine("    V0.1 End-to-End-Scan: Migration → Library → Scan → DB-Schreibe → FTS.");
+        Console.WriteLine($"  {SpikeThumbSize} --dir PATH --out PATH [--count 200]");
+        Console.WriteLine("    Vorschaubild-Größe alt (lange Kante 320) gegen kurze Kante 480/400 (ADR-0043).");
     }
 }

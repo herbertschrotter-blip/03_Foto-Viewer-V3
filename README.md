@@ -11,7 +11,8 @@ großer Foto- und Video-Bibliotheken (50 000–500 000 Dateien). Nachfolger der 
   Fehlende Dateien werden markiert, nicht gelöscht; ist das Laufwerk nicht erreichbar, wird nichts markiert
   (Offline-Guard), bei ungewöhnlich vielen fehlenden Dateien fragt die App nach (Mass-Missing-Guard).
 - **Galerie**: seitenweises, virtualisiertes Kachel-Grid (200/500/1000 pro Seite) mit echten Vorschaubildern (WIC,
-  EXIF-Orientierung; Videos und Formate ohne Windows-Codec über FFmpeg), Sortierung nach Datum/Name/Größe, Volltextsuche
+  EXIF-Orientierung; Videos und Formate ohne Windows-Codec über FFmpeg; scharf passend zu Vorschaugröße und
+  Bildschirm-Skalierung, Bildmaße im Katalog), Sortierung nach Datum/Name/Größe, Volltextsuche
   über Dateiname und Endung (FTS5), frei kombinierbare Filter (Dateiart, Favoriten, Bewertung, Ablage, Tags, Personen,
   Kategorien — alle mit UND, „Filter zurücksetzen“), Ordnerfilter, Unterordner-Kacheln für Ordner
   ohne direkte Dateien, Favorit und 1–5 Sterne je Kachel, Mehrfachauswahl mit Aktionsleiste (Favorit, Bewertung,
@@ -50,6 +51,7 @@ großer Foto- und Video-Bibliotheken (50 000–500 000 Dateien). Nachfolger der 
 | Entwicklung | [.NET 10 SDK](https://dotnet.microsoft.com/download) (Solution-Format `.slnx`); Visual Studio mit .NET-10-Workload oder die `dotnet`-CLI |
 | Video-Vorschaubilder | FFmpeg im `PATH`: `winget install Gyan.FFmpeg` (danach App neu starten). Ohne FFmpeg laufen Bilder normal, Videos bekommen keine Vorschaubilder; die Seite „Einstellungen“ zeigt den Status. |
 | Video-Wiedergabe | LibVLC kommt als NuGet-Paket (`VideoLAN.LibVLC.Windows`) mit — keine Installation nötig. |
+| Speicherplatz | Vorschaubilder (kurze Kante 400 px, ab 0.2.45) brauchen etwa **5,5 GB je 100 000 Fotos** (≈ 27 GB bei 500 000) im Ordner neben dem Katalog (Einstellungen → Speicherorte). Vorschaubilder älterer Versionen (320 px) werden nach dem Update im Hintergrund ersetzt — die Statusleiste zeigt „Vorschaubilder: N in Warteschlange“. |
 | Optional | Windows-Codec-Pakete aus dem Microsoft Store für HEIC/HEIF („HEIF-Bilderweiterungen“ + „HEVC-Videoerweiterungen“), WebP („Webp-Bilderweiterungen“) und Kamera-RAW („Raw-Bilderweiterung“). Ohne Codec erzeugt FFmpeg die Vorschaubilder, die Lightbox kann solche Bilder aber nicht anzeigen. |
 
 ## Build & Start

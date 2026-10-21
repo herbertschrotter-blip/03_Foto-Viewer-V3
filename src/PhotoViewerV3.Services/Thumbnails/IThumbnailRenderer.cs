@@ -6,7 +6,9 @@ namespace PhotoViewerV3.Services.Thumbnails;
 /// <summary>
 /// Ergebnis einer Thumbnail-Erzeugung. Im Erfolgsfall mit finalen Pixelmaßen und
 /// Dateigröße (für <c>Thumbnails.ByteSize</c>), im Fehlerfall mit stabilem ErrorCode
-/// + Klartext (für <c>Thumbnails.ErrorCode</c>/<c>ErrorMessage</c>).
+/// + Klartext (für <c>Thumbnails.ErrorCode</c>/<c>ErrorMessage</c>). <see cref="SourceWidth"/>/<see cref="SourceHeight"/>
+/// sind die Pixelmaße des ORIGINALS so, wie es angezeigt wird (nach EXIF-Drehung) — 0, wenn der Renderer sie nicht
+/// kennt; der ThumbnailService schreibt sie nach <c>Files.Width/Height</c> (ADR-0043).
 /// </summary>
 public sealed record ThumbnailRenderResult(
     bool Success,
@@ -21,6 +23,12 @@ public sealed record ThumbnailRenderResult(
 
     public static ThumbnailRenderResult Fail(string errorCode, string errorMessage)
         => new(false, 0, 0, 0, errorCode, errorMessage);
+
+    /// <summary>Breite des Originals nach EXIF-Drehung (0 = unbekannt).</summary>
+    public int SourceWidth { get; init; }
+
+    /// <summary>Höhe des Originals nach EXIF-Drehung (0 = unbekannt).</summary>
+    public int SourceHeight { get; init; }
 }
 
 /// <summary>
@@ -31,7 +39,17 @@ public sealed record ThumbnailRenderResult(
 /// </summary>
 public interface IImageThumbnailRenderer
 {
-    ThumbnailRenderResult Render(string sourcePath, string targetThumbPath, int targetWidth);
+    /// <summary>
+    /// Erzeugt das Vorschaubild mit kurzer Kante <paramref name="targetShortEdge"/> (lange Kante höchstens
+    /// <see cref="ThumbnailSizing.MaxLongEdge"/>, nie hochskaliert, ADR-0043) und meldet die Maße des Originals.
+    /// </summary>
+    ThumbnailRenderResult Render(string sourcePath, string targetThumbPath, int targetShortEdge);
+
+    /// <summary>
+    /// Pixelmaße des Originals nach EXIF-Drehung, nur aus dem Dateikopf (ohne die Pixel zu dekodieren) — für das
+    /// Nachtragen von <c>Files.Width/Height</c>. null = nicht lesbar oder nicht unterstützt (Standard).
+    /// </summary>
+    (int Width, int Height)? ReadDimensions(string sourcePath) => null;
 }
 
 /// <summary>
@@ -43,9 +61,10 @@ public interface IVideoThumbnailRenderer
     /// <summary>True, wenn eine ffmpeg.exe gefunden wurde (PATH oder winget-Links).</summary>
     bool IsAvailable { get; }
 
+    /// <summary>Standbild mit kurzer Kante <paramref name="targetShortEdge"/> (wie Bilder, ADR-0043).</summary>
     Task<ThumbnailRenderResult> RenderAsync(
         string sourcePath,
         string targetThumbPath,
-        int targetWidth,
+        int targetShortEdge,
         CancellationToken cancellationToken);
 }

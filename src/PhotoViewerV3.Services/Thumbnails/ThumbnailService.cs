@@ -11,7 +11,9 @@ using Microsoft.Extensions.Logging;
 using PhotoViewerV3.Domain.Entities;
 using PhotoViewerV3.Domain.Enums;
 using PhotoViewerV3.Services.Database;
+using PhotoViewerV3.Data;
 using PhotoViewerV3.Services.Infrastructure;
+using PhotoViewerV3.Services.Scanning;
 
 namespace PhotoViewerV3.Services.Thumbnails;
 
@@ -29,10 +31,18 @@ namespace PhotoViewerV3.Services.Thumbnails;
 /// bleiben für die Session gesperrt (kein Hämmern), außer bei „äußeren“ Ursachen
 /// (<see cref="ThumbnailErrorCodes.SourceMissing"/>, <see cref="ThumbnailErrorCodes.FfmpegNotFound"/>):
 /// die verbrauchen keinen <c>AttemptCount</c> und werden nach <see cref="RetryCooldown"/> erneut versucht.
+/// <para>
+/// Größe (ADR-0043): kurze Kante <see cref="Size"/> px (<see cref="ThumbnailSizing"/>). Vorschaubilder älterer Größen
+/// (<see cref="ThumbnailSizing.LegacySizes"/>) werden gezeigt, bis das neue fertig ist, und danach samt Zeile gelöscht;
+/// die Pflege im Hintergrund (<c>ThumbnailService.Maintenance.cs</c>) ersetzt die übrigen und trägt fehlende Bildmaße
+/// nach. Beim Erzeugen schreibt der Dienst die Maße des Originals nach <c>Files.Width/Height</c> — in derselben
+/// Transaktion wie den Status „Generated“.
+/// </para>
 /// </summary>
-public sealed class ThumbnailService : IThumbnailService, IDisposable
+public sealed partial class ThumbnailService : IThumbnailService, IDisposable
 {
-    public const int Size = 320;
+    /// <summary>Kurze Kante der Vorschaubilder in px (<c>Thumbnails.Size</c>, Dateiname <c>{fileId}_400_still.jpg</c>).</summary>
+    public const int Size = ThumbnailSizing.ShortEdge;
 
     /// <summary>Nach so vielen gescheiterten Versuchen wird eine Datei nicht mehr eingereiht.</summary>
     public const int MaxAttempts = 3;
@@ -50,6 +60,7 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
     private readonly IImageThumbnailRenderer _imageRenderer;
     private readonly IVideoThumbnailRenderer _videoRenderer;
     private readonly IFallbackImageThumbnailRenderer? _fallbackRenderer;
+    private readonly IScanGate? _scanGate;
     private readonly ILogger<ThumbnailService> _logger;
 
     private readonly Channel<ThumbnailRequest> _imageChannel =
@@ -72,8 +83,19 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
 
     private enum JobOutcome { Queued, Done, Failed }
 
-    /// <summary>Zustand je FileId; <c>Retryable</c>-Fehlschläge dürfen nach <see cref="RetryCooldown"/> erneut laufen.</summary>
-    private readonly record struct JobState(JobOutcome Outcome, DateTime SourceModifiedAtUtc, DateTime AtUtc, bool Retryable);
+    /// <summary>
+    /// Zustand je FileId; <c>Retryable</c>-Fehlschläge dürfen nach <see cref="RetryCooldown"/> erneut laufen.
+    /// <c>FallbackPath</c> = Vorschaubild einer älteren Größe, das gezeigt wird, solange das neue fehlt (ADR-0043);
+    /// <c>Background</c> = Auftrag der Pflege im Hintergrund (nach Erfolg wird der Eintrag verworfen, damit 500 000
+    /// ersetzte Dateien nicht im Speicher bleiben).
+    /// </summary>
+    private readonly record struct JobState(
+        JobOutcome Outcome,
+        DateTime SourceModifiedAtUtc,
+        DateTime AtUtc,
+        bool Retryable,
+        string? FallbackPath = null,
+        bool Background = false);
 
     public ThumbnailService(
         ILibraryContextFactory factory,
@@ -81,19 +103,22 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
         IImageThumbnailRenderer imageRenderer,
         IVideoThumbnailRenderer videoRenderer,
         ILogger<ThumbnailService> logger,
-        IFallbackImageThumbnailRenderer? fallbackRenderer = null)
+        IFallbackImageThumbnailRenderer? fallbackRenderer = null,
+        IScanGate? scanGate = null)
     {
         _factory = factory;
         _paths = paths;
         _imageRenderer = imageRenderer;
         _videoRenderer = videoRenderer;
         _fallbackRenderer = fallbackRenderer;
+        _scanGate = scanGate;
         _logger = logger;
     }
 
     public int ThumbnailSize => Size;
 
-    public int PendingCount => Volatile.Read(ref _pending);
+    /// <summary>Eingereihte/laufende Aufträge plus die noch zu ersetzenden Vorschaubilder älterer Größe (Statusleiste).</summary>
+    public int PendingCount => Volatile.Read(ref _pending) + Math.Max(0, Volatile.Read(ref _upgradeRemaining));
 
     public event Action<ThumbnailReadyEventArgs>? ThumbnailReady;
 
@@ -221,13 +246,29 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
         }
     }
 
-    public async Task RequestThumbnailsAsync(
+    public Task RequestThumbnailsAsync(
         IReadOnlyList<ThumbnailRequest> requests,
         CancellationToken cancellationToken = default)
+        => RequestCoreAsync(requests, background: false, cancellationToken);
+
+    /// <param name="background">
+    /// Auftrag der Pflege (<c>Maintenance</c>): meldet keine Treffer und keine Vorschaubilder älterer Größe (niemand
+    /// wartet darauf), nur neu erzeugte; der Zustand wird nach Erfolg verworfen.
+    /// </param>
+    /// <returns>false, wenn ein Pflege-Auftrag wegen Pause nicht angenommen wurde (die Pflege versucht ihn später).</returns>
+    private async Task<bool> RequestCoreAsync(
+        IReadOnlyList<ThumbnailRequest> requests,
+        bool background,
+        CancellationToken cancellationToken)
     {
         if (requests.Count == 0 || Volatile.Read(ref _disposed) != 0)
         {
-            return;
+            return true;
+        }
+
+        if (background && IsPaused)
+        {
+            return false; // nicht zurückstellen: Resume reichte sie sonst als Galerie-Anforderungen nach
         }
 
         if (TryDefer(requests))
@@ -235,7 +276,7 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
             // Katalog-DB zieht um (ADR-0026): sie ist gesperrt. Nach einer Rücknahme reicht Resume die Anforderungen
             // nach; nach Erfolg startet die App neu und die Galerie fordert ohnehin neu an.
             _logger.LogDebug("ThumbnailService pausiert — {Count} Anforderungen zurückgestellt", requests.Count);
-            return;
+            return true;
         }
 
         EnsureStarted();
@@ -250,7 +291,7 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
                 continue;
             }
 
-            if (TryHandleKnown(req))
+            if (TryHandleKnown(req, announce: !background))
             {
                 continue;
             }
@@ -260,29 +301,37 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
 
         if (toCheck.Count == 0)
         {
-            return;
+            return true;
         }
 
-        // 2) Batch-DB-Check: existierende Thumbnail-Einträge für diese FileIds (ein Query).
+        // 2) Batch-DB-Check: existierende Thumbnail-Einträge für diese FileIds (ein Query) — aktuelle Größe und ältere
+        //    Größen (ADR-0043: das alte wird gezeigt, bis das neue fertig ist).
         var ids = toCheck.Select(r => r.FileId).Distinct().ToList();
+        var legacySizes = ThumbnailSizing.LegacySizes;
         Dictionary<int, Thumbnail> existing;
+        Dictionary<int, Thumbnail> legacy;
         try
         {
             await using var ctx = _factory.Create();
-            existing = await ctx.Thumbnails
+            var rows = await ctx.Thumbnails
                 .AsNoTracking()
-                .Where(t => t.Size == Size && t.Kind == ThumbnailKind.Still && ids.Contains(t.FileId))
-                .ToDictionaryAsync(t => t.FileId, cancellationToken)
+                .Where(t => t.Kind == ThumbnailKind.Still && ids.Contains(t.FileId) && (t.Size == Size || legacySizes.Contains(t.Size)))
+                .ToListAsync(cancellationToken)
                 .ConfigureAwait(false);
+            existing = rows.Where(t => t.Size == Size).ToDictionary(t => t.FileId);
+            legacy = rows.Where(t => t.Size != Size && t.Status == ThumbnailStatus.Generated)
+                .GroupBy(t => t.FileId)
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(t => t.Size).First());
         }
         catch (OperationCanceledException)
         {
-            return;
+            return true;
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Thumbnail-Batch-Check fehlgeschlagen");
             existing = new Dictionary<int, Thumbnail>();
+            legacy = new Dictionary<int, Thumbnail>();
         }
 
         // 3) Pro Request entscheiden: cache-hit, skip (zu oft gescheitert / kein FFmpeg) oder enqueue.
@@ -295,14 +344,36 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
                 && File.Exists(row.CachePath);
             if (cacheHit)
             {
+                if (background)
+                {
+                    continue; // schon in der neuen Größe — nichts zu tun, nichts zu merken
+                }
+
                 SetState(req, JobOutcome.Done);
                 RaiseReady(new ThumbnailReadyEventArgs(req.LibraryId, req.FileId, row!.CachePath));
                 continue;
             }
 
+            // Älteres Vorschaubild derselben Dateiversion: sofort zeigen, das neue entsteht im Hintergrund.
+            string? fallback = null;
+            if (legacy.TryGetValue(req.FileId, out var old)
+                && old.SourceModifiedAtUtc == req.SourceModifiedAtUtc
+                && File.Exists(old.CachePath))
+            {
+                fallback = old.CachePath;
+                if (!background)
+                {
+                    RaiseReady(new ThumbnailReadyEventArgs(req.LibraryId, req.FileId, fallback));
+                }
+            }
+
             if (row is { Status: ThumbnailStatus.Failed } && row.AttemptCount >= MaxAttempts)
             {
-                SetState(req, JobOutcome.Failed);
+                if (!background)
+                {
+                    SetState(req, JobOutcome.Failed, fallbackPath: fallback); // Pflege merkt sich nichts (Speicher)
+                }
+
                 continue;
             }
 
@@ -313,11 +384,15 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
                     _logger.LogWarning("FFmpeg nicht gefunden — Video-Thumbnails werden in dieser Sitzung übersprungen");
                 }
 
-                SetState(req, JobOutcome.Failed);
+                if (!background)
+                {
+                    SetState(req, JobOutcome.Failed, fallbackPath: fallback);
+                }
+
                 continue;
             }
 
-            if (_states.TryAdd(req.FileId, new JobState(JobOutcome.Queued, req.SourceModifiedAtUtc, DateTime.UtcNow, false)))
+            if (_states.TryAdd(req.FileId, new JobState(JobOutcome.Queued, req.SourceModifiedAtUtc, DateTime.UtcNow, false, fallback, background)))
             {
                 var channel = req.MediaType == MediaType.Video ? _videoChannel : _imageChannel;
                 if (channel.Writer.TryWrite(req))
@@ -330,13 +405,16 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
                 }
             }
         }
+
+        return true;
     }
 
     /// <summary>
     /// Behandelt einen Request über den In-Memory-State. True = erledigt (Event gefeuert, läuft schon
     /// oder bewusst übersprungen); false = Eintrag fehlt/ungültig → DB-Prüfung nötig.
     /// </summary>
-    private bool TryHandleKnown(ThumbnailRequest req)
+    /// <param name="announce">false für Aufträge der Pflege: nichts melden.</param>
+    private bool TryHandleKnown(ThumbnailRequest req, bool announce)
     {
         if (!_states.TryGetValue(req.FileId, out var state))
         {
@@ -345,7 +423,13 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
 
         if (state.Outcome == JobOutcome.Queued)
         {
-            return true; // in Arbeit — auch für eine andere Version: der nächste Request validiert neu
+            // in Arbeit — auch für eine andere Version: der nächste Request validiert neu. Bis dahin das ältere zeigen.
+            if (announce && state.SourceModifiedAtUtc == req.SourceModifiedAtUtc)
+            {
+                AnnounceFallback(req, state);
+            }
+
+            return true;
         }
 
         if (state.SourceModifiedAtUtc != req.SourceModifiedAtUtc)
@@ -360,7 +444,11 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
             var path = BuildCachePath(req.LibraryId, req.FileId);
             if (File.Exists(path))
             {
-                RaiseReady(new ThumbnailReadyEventArgs(req.LibraryId, req.FileId, path));
+                if (announce)
+                {
+                    RaiseReady(new ThumbnailReadyEventArgs(req.LibraryId, req.FileId, path));
+                }
+
                 return true;
             }
 
@@ -376,11 +464,29 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
             return false;
         }
 
+        if (announce)
+        {
+            AnnounceFallback(req, state); // neues gescheitert: das ältere bleibt sichtbar
+        }
+
         return true;
     }
 
-    private void SetState(ThumbnailRequest req, JobOutcome outcome, bool retryable = false)
-        => _states[req.FileId] = new JobState(outcome, req.SourceModifiedAtUtc, DateTime.UtcNow, retryable);
+    private void AnnounceFallback(ThumbnailRequest req, JobState state)
+    {
+        if (state.FallbackPath is { } fallback && File.Exists(fallback))
+        {
+            RaiseReady(new ThumbnailReadyEventArgs(req.LibraryId, req.FileId, fallback));
+        }
+    }
+
+    /// <summary>Setzt den Zustand; <paramref name="fallbackPath"/> null übernimmt den Pfad des bisherigen Eintrags.</summary>
+    private void SetState(ThumbnailRequest req, JobOutcome outcome, bool retryable = false, string? fallbackPath = null)
+    {
+        _states.TryGetValue(req.FileId, out var previous);
+        _states[req.FileId] = new JobState(
+            outcome, req.SourceModifiedAtUtc, DateTime.UtcNow, retryable, fallbackPath ?? previous.FallbackPath, previous.Background);
+    }
 
     private void EnsureStarted()
     {
@@ -399,6 +505,9 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
 
         // Video: max. 1 Worker (FFmpeg ist teuer, ADR-0007).
         _workers.Add(Task.Run(() => WorkerLoopAsync(_videoChannel.Reader)));
+
+        // Pflege: ältere Größen ersetzen, fehlende Bildmaße nachtragen — verzögert und nur bei leerer Warteschlange.
+        StartMaintenance();
 
         // .tmp-Leichen aus abgestürzten Sitzungen entfernen (nur alte, damit laufende Jobs unberührt bleiben).
         _ = Task.Run(CleanupTempFiles);
@@ -480,7 +589,15 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
                     _logger.LogWarning(ex, "Thumb erzeugt, aber DB-Status konnte nicht geschrieben werden: File={FileId}", req.FileId);
                 }
 
-                SetState(req, JobOutcome.Done);
+                if (_states.TryGetValue(req.FileId, out var finished) && finished.Background)
+                {
+                    _states.TryRemove(req.FileId, out _); // Pflege: nicht 500 000 Einträge im Speicher halten
+                }
+                else
+                {
+                    SetState(req, JobOutcome.Done);
+                }
+
                 RaiseReady(new ThumbnailReadyEventArgs(req.LibraryId, req.FileId, cachePath));
             }
             else
@@ -560,10 +677,16 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
         ThumbnailRenderResult? result,
         int attemptDelta)
     {
+        List<string> legacyFiles = [];
         await _dbWriteLock.WaitAsync(_cts.Token).ConfigureAwait(false);
         try
         {
             await using var ctx = _factory.Create();
+
+            // „Generated“ ändert drei Dinge auf einmal (ADR-0043): Status, ältere Größen weg, Bildmaße in Files.
+            await using var tx = status == ThumbnailStatus.Generated
+                ? await ctx.Database.BeginTransactionAsync(_cts.Token).ConfigureAwait(false)
+                : null;
             var entity = await ctx.Thumbnails
                 .FindAsync(new object[] { req.FileId, Size, ThumbnailKind.Still }, _cts.Token)
                 .ConfigureAwait(false);
@@ -609,11 +732,66 @@ public sealed class ThumbnailService : IThumbnailService, IDisposable
                     break;
             }
 
+            if (status == ThumbnailStatus.Generated)
+            {
+                var fileId = req.FileId;
+                var oldRows = await ctx.Thumbnails
+                    .Where(t => t.FileId == fileId && t.Kind == ThumbnailKind.Still && t.Size != Size)
+                    .ToListAsync(_cts.Token)
+                    .ConfigureAwait(false);
+                legacyFiles = oldRows.Select(t => t.CachePath).ToList();
+                ctx.Thumbnails.RemoveRange(oldRows);
+            }
+
             await ctx.SaveChangesAsync(_cts.Token).ConfigureAwait(false);
+
+            if (status == ThumbnailStatus.Generated && result is { SourceWidth: > 0, SourceHeight: > 0 })
+            {
+                await WriteDimensionsAsync(ctx, req.FileId, req.SourceModifiedAtUtc, result.SourceWidth, result.SourceHeight, _cts.Token)
+                    .ConfigureAwait(false);
+            }
+
+            if (tx is not null)
+            {
+                await tx.CommitAsync(_cts.Token).ConfigureAwait(false);
+            }
         }
         finally
         {
             _dbWriteLock.Release();
+        }
+
+        // Erst nach dem Commit: eine Galerie, die das alte noch lädt, liest mit FileShare.Delete.
+        foreach (var path in legacyFiles)
+        {
+            TryDeleteFile(path);
+        }
+    }
+
+    /// <summary>
+    /// Schreibt die Maße des Originals (nach EXIF-Drehung) nach Files — nur für die Dateiversion, die gelesen wurde
+    /// (<paramref name="sourceModifiedAtUtc"/>; eine inzwischen ersetzte Datei bekommt keine alten Maße), und nur, wenn
+    /// sie sich ändern. 0 × 0 = „nicht lesbar“ (die Pflege versucht es dann nicht in jeder Sitzung erneut).
+    /// </summary>
+    private static Task<int> WriteDimensionsAsync(
+        LibraryContext ctx, int fileId, DateTime sourceModifiedAtUtc, int width, int height, CancellationToken ct)
+        => ctx.Files
+            .Where(f => f.Id == fileId && f.ModifiedAtUtc == sourceModifiedAtUtc
+                        && (f.Width == null || f.Height == null || f.Width != width || f.Height != height))
+            .ExecuteUpdateAsync(u => u.SetProperty(f => f.Width, width).SetProperty(f => f.Height, height), ct);
+
+    private void TryDeleteFile(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogDebug(ex, "Altes Vorschaubild konnte nicht gelöscht werden: {Path}", path);
         }
     }
 
