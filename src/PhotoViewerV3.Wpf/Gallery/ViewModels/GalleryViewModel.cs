@@ -1756,18 +1756,15 @@ public sealed partial class GalleryViewModel : ObservableObject
             return;
         }
 
-        var entries = new List<LightboxEntry>(CurrentPage.Count);
-        var startIndex = 0;
-        for (var i = 0; i < CurrentPage.Count; i++)
+        // Start per Referenz, sonst per FileId; fehlt das Item ganz, nur dieses eine öffnen (0.2.42).
+        var (entries, startIndex, match) = BuildLightboxSequence(CurrentPage, item);
+        if (match == LightboxStartMatch.NotInPage)
         {
-            var it = CurrentPage[i];
-            if (ReferenceEquals(it, item))
-            {
-                startIndex = i;
-            }
-
-            entries.Add(new LightboxEntry(
-                it.Id, it.SourcePath, it.Name, it.MediaType, it.IsFavorite, it.Rating, it.Size, it.SourceModifiedAtUtc));
+            _logger.LogWarning("Lightbox: File={FileId} steht nicht in der aktuellen Page ({Count} Einträge) — öffne nur diese Datei", item.Id, CurrentPage.Count);
+        }
+        else if (match == LightboxStartMatch.Id)
+        {
+            _logger.LogDebug("Lightbox: File={FileId} per Id statt per Referenz in der Page gefunden (Index {Index})", item.Id, startIndex);
         }
 
         try

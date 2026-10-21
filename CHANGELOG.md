@@ -3,6 +3,42 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.42] — 2026-10-21
+
+### Behoben — Doppelklick auf eine Kachel öffnete manchmal ein anderes Foto
+- **Fehlerbild:** Eine Kachel zeigte Datei A (Name und Vorschaubild passend zueinander), der Doppelklick öffnete die
+  Lightbox mit Datei B an deren Position („73 / 256“ statt der angezeigten Kachel). Nur manche Kacheln, Galerie und
+  Ordner-Seite (gleiche `GalleryView`), ebenso die Kachel-Listen der Personen-Seite (gleiches Panel).
+- **Ursache:** `VirtualizingTilePanel` (Recycling-Modus) bereitete wiederverwendete Container nicht vor. Der
+  `ItemContainerGenerator` liefert einen Container aus der Recycling-Warteschlange mit `newlyRealized == false` und setzt
+  dabei nur `DataContext` auf das neue Item; das Panel rief `PrepareItemContainer` nur bei `newlyRealized == true` auf.
+  `ListBoxItem.Content` blieb deshalb `DisconnectedItem`, und die Bindungen der Kachelvorlage behielten den Stand des
+  Items, das der Container vorher zeigte — der Doppelklick-Handler liest aber `ListBoxItem.DataContext` (das neue Item).
+  Sichtbar wurde es erst nach Scrollen über die Pufferzeile hinaus (dann erst recycelt das Panel); der vermutete
+  Reihenfolge-Fehler beim behaltenen Fokus-Container trat in den Tests nicht auf.
+- **Fix im Panel:** Ein vom Generator gelieferter Container, der noch nicht unter den Kindern des Panels liegt, kommt aus
+  der Recycling-Warteschlange und wird jetzt vorbereitet (`PrepareItemContainer` → `Content`, Vorlage, Auswahl).
+  Zusätzlich ordnen `ArrangeOverride`, `CleanUpOutside` und `MakeVisible` über den echten Item-Index des Containers an
+  (`ItemContainerGenerator.IndexFromContainer` bzw. dessen Generator-Position) statt über die Position unter den
+  Kindern: ein behaltener Fokus-Container liegt so immer an seinem eigenen Platz (außerhalb des Viewports), Recycle/Remove
+  trifft immer genau den entfernten Container. `ReplaceChildRange` bereitete schon immer vor; `PlaceChild` unverändert.
+- **Verteidigung in `GalleryViewModel.OpenInLightbox`** (neue partial `GalleryViewModel.Lightbox.cs`,
+  `BuildLightboxSequence`): Start erst per Referenz, dann per FileId in der Page; steht das Item gar nicht in der Page,
+  öffnet die Lightbox nur dieses eine Item (Warnung im Log) statt still bei Index 0 zu beginnen.
+
+### Tests
+- `TileContainerMappingTests` (WPF, 256 Items, 600 × 420, je Standard- und Recycling-Modus): für jeden sichtbaren
+  Platz per Treffertest den Container holen und prüfen — `DataContext`, `Content`, `ContentPresenter.Content`,
+  Vorlagen-DataContext und sichtbarer Dateiname = Item des Platzes. Szenarien: Item 72 fokussiert, in Mausrad-Rastungen
+  (mit Hin-und-her) nach oben, Sprünge; Fokus per Pfeiltasten; Lightbox-Fenster öffnen/schließen; Seiten-Reload mit
+  ersetzten/verschobenen/entfernten Items; reines Hin-und-her-Scrollen. Mit dem alten Panel scheiterten alle
+  Recycling-Fälle (z. B. Platz 66 zeigte „IMG_0011“, DataContext = Item 66).
+- `GalleryLightboxSequenceTests`: Start per Referenz, per FileId (andere Instanz), Item außerhalb der Page öffnet allein.
+- Rauchtest „Lightbox Bild + Video“ um einen Block erweitert: große Kacheln, letzte Kachel fokussieren und öffnen,
+  schließen, in Mausrad-Rastungen nach oben, jede sichtbare Kachel per Treffertest (angezeigter Name = DataContext =
+  Item des Platzes), eine Kachel per Container-DataContext „doppelklicken“ → Lightbox zeigt dieselbe Datei. Mit dem alten
+  Panel schlug der Block fehl (6 von 6 Kacheln zeigten eine andere Datei).
+
 ## [0.2.41] — 2026-10-21
 
 ### Tests

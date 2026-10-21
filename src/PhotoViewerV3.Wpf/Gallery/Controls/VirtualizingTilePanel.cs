@@ -309,7 +309,9 @@ public sealed class VirtualizingTilePanel : VirtualizingPanel, IScrollInfo
         var itemHeight = ItemHeight;
         for (var i = 0; i < children.Count; i++)
         {
-            var itemIndex = ItemIndexOfChildAt(i);
+            // Platz aus dem echten Item des Containers (0.2.42), nicht aus seiner Position unter den Kindern: ein
+            // behaltener Fokus-Container liegt so immer an SEINEM Platz (ggf. außerhalb des Viewports).
+            var itemIndex = ItemIndexOfChild(children[i]);
             if (itemIndex < 0)
             {
                 continue;
@@ -381,8 +383,13 @@ public sealed class VirtualizingTilePanel : VirtualizingPanel, IScrollInfo
                     break;
                 }
 
+                // Recycelte Container meldet der Generator mit newlyRealized == false; er setzt dabei nur den
+                // DataContext auf das neue Item, Content bleibt DisconnectedItem und die Kachel-Bindungen zeigen
+                // weiter das alte Item (0.2.42: Kachel zeigte Datei A, Doppelklick öffnete Datei B). Ein Container,
+                // der noch nicht unter unseren Kindern liegt, kommt aus der Recycling-Warteschlange → vorbereiten.
+                var needsPrepare = newlyRealized || !IsChildAt(children, childIndex, child) && children.IndexOf(child) < 0;
                 childIndex = PlaceChild(children, childIndex, child);
-                if (newlyRealized)
+                if (needsPrepare)
                 {
                     generator.PrepareItemContainer(child);
                 }
@@ -395,7 +402,7 @@ public sealed class VirtualizingTilePanel : VirtualizingPanel, IScrollInfo
     /// <summary>Stellt sicher, dass <paramref name="child"/> an Position <paramref name="childIndex"/> der Kinder liegt; liefert die tatsächliche Position.</summary>
     private int PlaceChild(UIElementCollection children, int childIndex, UIElement child)
     {
-        if (childIndex < children.Count && ReferenceEquals(children[childIndex], child))
+        if (IsChildAt(children, childIndex, child))
         {
             return childIndex;
         }
@@ -425,8 +432,10 @@ public sealed class VirtualizingTilePanel : VirtualizingPanel, IScrollInfo
     {
         for (var i = children.Count - 1; i >= 0; i--)
         {
-            var position = new GeneratorPosition(i, 0);
-            var itemIndex = generator.IndexFromGeneratorPosition(position);
+            // Generator-Position aus dem Item des Containers (0.2.42), nicht aus dem Kind-Index: so trifft Recycle/Remove
+            // immer genau diesen Container, auch wenn die Kinder-Reihenfolge einmal von der des Generators abwiche.
+            var itemIndex = ItemIndexOfChild(children[i]);
+            var position = itemIndex >= 0 ? generator.GeneratorPositionFromIndex(itemIndex) : default;
             if (itemIndex >= firstIndex && itemIndex <= lastIndex)
             {
                 continue;
@@ -437,7 +446,7 @@ public sealed class VirtualizingTilePanel : VirtualizingPanel, IScrollInfo
                 continue;
             }
 
-            if (itemIndex >= 0)
+            if (itemIndex >= 0 && position.Offset == 0)
             {
                 if (recycling && generator is IRecyclingItemContainerGenerator recycler)
                 {
@@ -563,16 +572,23 @@ public sealed class VirtualizingTilePanel : VirtualizingPanel, IScrollInfo
         return null;
     }
 
+    private static bool IsChildAt(UIElementCollection children, int childIndex, UIElement child)
+        => childIndex >= 0 && childIndex < children.Count && ReferenceEquals(children[childIndex], child);
+
+    /// <summary>
+    /// Item-Index des Containers laut Generator (<c>IndexFromContainer</c>); -1 für Container ohne Item (z. B. in der
+    /// Recycling-Warteschlange). Nur ohne konkreten Generator über die Position unter den Kindern.
+    /// </summary>
     private int ItemIndexOfChild(UIElement child)
     {
-        var childIndex = InternalChildren.IndexOf(child);
-        return childIndex < 0 ? -1 : ItemIndexOfChildAt(childIndex);
-    }
-
-    private int ItemIndexOfChildAt(int childIndex)
-    {
         var generator = ItemContainerGenerator;
-        return generator is null ? -1 : generator.IndexFromGeneratorPosition(new GeneratorPosition(childIndex, 0));
+        if (generator is ItemContainerGenerator concrete)
+        {
+            return concrete.IndexFromContainer(child);
+        }
+
+        var childIndex = InternalChildren.IndexOf(child);
+        return generator is null || childIndex < 0 ? -1 : generator.IndexFromGeneratorPosition(new GeneratorPosition(childIndex, 0));
     }
 
     private void ReportVisibleRange(int firstVisible, int lastVisible)

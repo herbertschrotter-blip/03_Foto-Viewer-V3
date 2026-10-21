@@ -968,6 +968,7 @@ internal sealed partial class SmokeScenario
         await WaitUntilAsync(() => !_lightbox.IsOpen, ShortWait, "Lightbox geschlossen").ConfigureAwait(true);
         await Task.Delay(300).ConfigureAwait(true);
         Check(!Application.Current.Windows.OfType<LightboxWindow>().Any(), "Lightbox-Fenster zerstört");
+        await TileDoubleClickTargetAsync().ConfigureAwait(true); // 0.2.42
     }
 
     private async Task FolderPageAsync()
