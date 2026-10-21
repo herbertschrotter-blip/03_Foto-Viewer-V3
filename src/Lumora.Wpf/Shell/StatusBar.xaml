@@ -283,6 +283,15 @@
                     <TextBlock Style="{StaticResource StatusText}" Text="{Binding DuplicateIndexText}" />
                     <Border Style="{StaticResource StatusSeparator}" />
                 </StackPanel>
+                <!-- Foto-Güte (ADR-0057) -->
+                <StackPanel Orientation="Horizontal"
+                            AutomationProperties.Name="Foto-Güte"
+                            ToolTip="Schärfe, Belichtung und Bildwirkung werden im Hintergrund aus den Vorschaubildern berechnet — Grundlage für die Highlights der Storys."
+                            Visibility="{Binding QualityIndexText, Converter={StaticResource NullToVis}}">
+                    <ui:SymbolIcon Symbol="Sparkle16" Style="{StaticResource StatusIcon}" />
+                    <TextBlock Style="{StaticResource StatusText}" Text="{Binding QualityIndexText}" />
+                    <Border Style="{StaticResource StatusSeparator}" />
+                </StackPanel>
                 <StackPanel Orientation="Horizontal"
                             Visibility="{Binding IsBackgroundActive, Converter={StaticResource BoolToVis}}">
                     <Ellipse Width="7" Height="7" Margin="0,0,6,0" VerticalAlignment="Center"

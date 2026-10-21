@@ -43,6 +43,7 @@ public sealed class LibraryContext : DbContext
     public DbSet<AlbumItem> AlbumItems => Set<AlbumItem>();
     public DbSet<FolderLink> FolderLinks => Set<FolderLink>();
     public DbSet<FileLinkUndo> FileLinkUndo => Set<FileLinkUndo>();
+    public DbSet<FileQuality> FileQuality => Set<FileQuality>(); // Foto-Güte (ADR-0057)
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -3,6 +3,28 @@
 Alle nennenswerten Änderungen an Lumora (bis 0.2.48 „PhotoViewer V3“). Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.4.7] — 2026-10-22
+
+### Feature (ADR-0057) — Foto-Güte und Highlights (Welle 6, Grundlage für Storys)
+- **Foto-Güte im Hintergrund**: jedes Foto (und Video über sein Vorschaubild) bekommt Schärfe (Laplace-Varianz der
+  schärfsten Kacheln, Porträts mit unscharfem Hintergrund zählen nach dem Gesicht) und Belichtung (Helligkeit,
+  ausgefressene/abgesoffene Flächen) aus dem Vorschaubild — nach jedem Scan, bei neuen Dateien, beim Bereichswechsel,
+  nur im aktuellen Bereich, ruht bei Scan-Sperre und Katalog-Umzug, liest keine Cloud-Platzhalter. Statusleiste
+  „Foto-Güte: x von y bewertet“. Geänderte Dateien werden neu bewertet (Gültigkeit über Größe/Änderungszeit).
+- **Bildwirkung ohne neues Modell**: aus den vorhandenen Motiv-Vektoren (SigLIP 2) gegen feste deutsch/englische
+  Beschreibungen („schönes, scharfes, gut belichtetes Foto“ gegen „verschwommenes, dunkles, missglücktes Foto“); ohne
+  Motiv-Modell bleibt sie leer, alles andere funktioniert.
+- **Highlights für Storys** (`IHighlightSelector`): wählt die besten Fotos einer Liste nach Schärfe, Belichtung,
+  Bildwirkung, bestätigten Personen, Favorit und Bewertung; Serien (ähnlich und ≤ 60 s) und Doppelte nur einmal mit
+  „+N ähnliche“, Verteilung über die Aufnahmestunden, Grund „warum ausgewählt“ (z. B. „scharf · 2 Personen · Favorit“),
+  Titelbild nie das unschärfste oder dunkelste. 5 000 Dateien in ≈ 90 ms.
+- Schema: neue Tabelle `FileQuality` (Migration `AddFileQuality`, nur CREATE TABLE). Messung in
+  `docs/spikes/16-foto-guete.md`: 1 000 Vorschaubilder ≈ 7 s, 500 000 ≈ 1 h einmalig im Hintergrund.
+
+### Offen
+- Gewichte und Schwellen an echten Storys nachjustieren (sobald die Story-Seite steht).
+- Werte über „Neu aufbauen“ mitnehmen (bewusst vertagt, ADR-0057 Punkt 8).
+
 ## [0.4.6] — 2026-10-21
 
 ### Docs — Mockup 09 „Storys“ (Welle 6), abgenommen

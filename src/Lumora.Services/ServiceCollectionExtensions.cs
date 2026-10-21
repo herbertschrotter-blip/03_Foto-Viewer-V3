@@ -18,6 +18,7 @@ using Lumora.Services.Metadata;
 using Lumora.Services.Motifs;
 using Lumora.Services.Operations;
 using Lumora.Services.Places;
+using Lumora.Services.Quality;
 using Lumora.Services.Scanning;
 using Lumora.Services.Sorter;
 using Lumora.Services.Tags;
@@ -98,6 +99,8 @@ public static class ServiceCollectionExtensions
         services.AddDuplicates();
         // Alben und Ordner-Verknüpfungen: Fotos verknüpfen statt kopieren (Services/Albums, ADR-0054)
         services.AddAlbums();
+        // Foto-Güte und Highlights: Schärfe, Belichtung, Bildwirkung, Auswahl für Storys (Services/Quality, ADR-0057)
+        services.AddQuality();
 
         return services;
     }

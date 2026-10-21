@@ -290,6 +290,12 @@ FilesFts           -- FTS5 virtual table (Files.Name, Extension)
   OperationBatches ON DELETE CASCADE, FileId, KeptFileId, Snapshot (JSON: Files-Zeile + alle per Kaskade abhängigen Zeilen),
   Transfer (JSON: was auf die behaltene Datei übertragen wurde), CreatedAtUtc, UndoneAtUtc, IX_DuplicateCleanupUndo_Batch)`.
   Settings: `duplicates.similarThreshold` (Standard 10), `duplicates.transferMetadata` (Standard an).
+- Foto-Güte — umgesetzt in 0.4.7 (Migration `AddFileQuality`, ADR-0057, nur CREATE TABLE):
+  `FileQuality (FileId PK → Files ON DELETE CASCADE, Sharpness REAL, Exposure REAL, Aesthetic REAL NULL (Bildwirkung aus
+  den Motiv-Vektoren), AestheticVersion NULL (Modell + Prompt-Satz), Version, SourceSize, SourceModifiedAt, ErrorCode NULL)`
+  — ein Wert gilt nur, solange Größe/Änderungszeit der Files-Zeile gleich sind und `Version` passt; kein weiterer Index.
+  Settings: `quality.aestheticVectors` (zwischengespeicherte Text-Vektoren der Bildwirkung). „Neu aufbauen“ rechnet die
+  Werte neu (keine Übernahme).
 
 ### Pflicht-Indizes V0.1
 ```sql
