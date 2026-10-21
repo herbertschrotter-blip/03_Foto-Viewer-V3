@@ -458,15 +458,15 @@ public sealed partial class SettingsViewModel : ObservableObject
             var result = await _relocation.RelocateAsync(check.TargetFolder, mode.Value, progress).ConfigureAwait(true);
             if (result.Success)
             {
-                RelocationStatus = "Umzug abgeschlossen — PhotoViewer startet neu…";
+                RelocationStatus = "Umzug abgeschlossen — Lumora startet neu…";
                 restarting = _restart.Restart();
                 if (!restarting)
                 {
                     _restart.SetInputBlocked(false);
                     await _dialogs.ShowErrorAsync(
-                        "Bitte PhotoViewer neu starten",
+                        "Bitte Lumora neu starten",
                         $"Der Katalog liegt jetzt unter\n{result.DatabasePath}\n\nDer automatische Neustart ist fehlgeschlagen. Bitte " +
-                        "PhotoViewer beenden und neu starten — bis dahin ist der Katalog gesperrt.").ConfigureAwait(true);
+                        "Lumora beenden und neu starten — bis dahin ist der Katalog gesperrt.").ConfigureAwait(true);
                 }
 
                 return;
@@ -475,7 +475,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             _restart.SetInputBlocked(false);
             await _dialogs.ShowErrorAsync(
                 "Umzug fehlgeschlagen",
-                $"{result.Error}\n\nPhotoViewer arbeitet weiter mit dem bisherigen Speicherort:\n{_relocation.CurrentFolder}").ConfigureAwait(true);
+                $"{result.Error}\n\nLumora arbeitet weiter mit dem bisherigen Speicherort:\n{_relocation.CurrentFolder}").ConfigureAwait(true);
         }
         catch (Exception ex)
         {
@@ -512,7 +512,7 @@ public sealed partial class SettingsViewModel : ObservableObject
                     "Katalog umziehen?",
                     $"Katalog (library.db) und {check.ThumbnailFiles:N0} Vorschaubilder werden nach\n{check.TargetFolder}\n" +
                     $"kopiert und geprüft (Platzbedarf etwa {Formatting.Bytes(check.RequiredBytes)}). Laufende Scans und " +
-                    "Datei-Operationen werden vorher abgewartet.\n\nDanach startet PhotoViewer neu und arbeitet mit dem neuen " +
+                    "Datei-Operationen werden vorher abgewartet.\n\nDanach startet Lumora neu und arbeitet mit dem neuen " +
                     "Ort; die alten Dateien werden beim Start gelöscht." + cloudHint,
                     "Umziehen und neu starten").ConfigureAwait(true);
                 return ok ? RelocationMode.Move : null;
@@ -525,9 +525,9 @@ public sealed partial class SettingsViewModel : ObservableObject
             var modified = existing.ModifiedAtUtc is { } at ? $", zuletzt geändert {at.ToLocalTime():g}" : string.Empty;
             var choice = await _dialogs.ChooseAsync(
                 "Im Zielordner liegt bereits ein Katalog",
-                $"{check.TargetFolder}\nenthält einen PhotoViewer-Katalog mit {existing.Libraries:N0} Bibliothek(en) und " +
+                $"{check.TargetFolder}\nenthält einen Lumora-Katalog mit {existing.Libraries:N0} Bibliothek(en) und " +
                 $"{existing.Files:N0} Dateien{modified}.\n\n" +
-                "Übernehmen: PhotoViewer arbeitet nach dem Neustart mit diesem Katalog; der bisherige bleibt unverändert unter\n" +
+                "Übernehmen: Lumora arbeitet nach dem Neustart mit diesem Katalog; der bisherige bleibt unverändert unter\n" +
                 $"{_relocation.CurrentFolder}\nerhalten.\n\n" +
                 "Ersetzen: der vorhandene Katalog samt Vorschaubildern wird beim nächsten Start gelöscht und durch den aktuellen " +
                 "ersetzt." + spaceHint + cloudHint,
@@ -727,6 +727,6 @@ public sealed partial class SettingsViewModel : ObservableObject
             ? $" · Build vom {File.GetLastWriteTime(location):g}"
             : string.Empty;
 
-        return $"PhotoViewer V3 {version}{buildDate}";
+        return $"Lumora {version}{buildDate}";
     }
 }

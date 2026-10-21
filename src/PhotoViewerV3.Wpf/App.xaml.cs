@@ -143,7 +143,7 @@ public partial class App : Application
         {
             await _host.StartAsync();
 
-            Log.Information("PhotoViewer V3 startet — AppData: {AppDataRoot}, Katalog: {Database}", _paths.AppDataRoot, _paths.LibraryDatabasePath);
+            Log.Information("Lumora startet — AppData: {AppDataRoot}, Katalog: {Database}", _paths.AppDataRoot, _paths.LibraryDatabasePath);
 
             var locationProblem = CheckDatabaseLocation();
             if (locationProblem is not null)
@@ -235,7 +235,7 @@ public partial class App : Application
         {
             // z. B. DI-Fehler oder XAML-Fehler beim Erzeugen des Hauptfensters — ohne diesen Fang stirbt die App stumm.
             Log.Fatal(ex, "App-Start fehlgeschlagen");
-            ShowFatal($"PhotoViewer V3 konnte nicht gestartet werden:\n{ex.Message}\n\nDetails stehen im Protokoll.");
+            ShowFatal($"Lumora konnte nicht gestartet werden:\n{ex.Message}\n\nDetails stehen im Protokoll.");
             Shutdown(1);
         }
     }
@@ -256,7 +256,7 @@ public partial class App : Application
         if (_paths.UsesCustomDataFolder && !File.Exists(_paths.LibraryDatabasePath))
         {
             return $"Die Katalog-Datenbank wurde nicht gefunden:\n{_paths.LibraryDatabasePath}\n\n" +
-                   "Ist das Laufwerk verbunden? Danach PhotoViewer neu starten.\n" +
+                   "Ist das Laufwerk verbunden? Danach Lumora neu starten.\n" +
                    $"Zurück zum Standardort: diese Datei löschen:\n{locationFile}";
         }
 
@@ -284,7 +284,7 @@ public partial class App : Application
     /// <summary>Synchron: nach einem await liefe die Fortsetzung auf einem Dispatcher, der gerade herunterfährt.</summary>
     protected override void OnExit(ExitEventArgs e)
     {
-        Log.Information("PhotoViewer V3 wird beendet (ExitCode {Code})", e.ApplicationExitCode);
+        Log.Information("Lumora wird beendet (ExitCode {Code})", e.ApplicationExitCode);
         try
         {
             // IDisposable-Singletons (GalleryPageSource, ThumbnailService, LightboxService → LibVlcHost …)
@@ -333,7 +333,7 @@ public partial class App : Application
 
         try
         {
-            MessageBox.Show(message, "PhotoViewer V3", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(message, "Lumora", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         catch (Exception ex)
         {

@@ -7,6 +7,7 @@ using System.Windows.Controls;
 using Microsoft.Extensions.DependencyInjection;
 using PhotoViewerV3.Settings;
 using PhotoViewerV3.Settings.Info;
+using PhotoViewerV3.Shell.Branding;
 using Wpf.Ui.Appearance;
 using Wpf.Ui.Controls;
 
@@ -17,6 +18,8 @@ namespace PhotoViewerV3.Shell.Smoke;
 /// Seiten Bibliothek/Tags/Kategorien sind Reiter der Einstellungen) und der Schritt „Einstellungen-Reiter und Info“ —
 /// linke Leiste ohne Bibliothek/Tags/Kategorien, alle Reiter öffnen und laden, Info zeigt die Version des obersten
 /// CHANGELOG-Eintrags, Bibliotheks-Umschalter, „Tags verwalten…“ von außen, „Eingang hinzufügen…“ auf der Ordner-Seite.
+/// Seit 0.2.49 (ADR-0047) zusätzlich der Produktname Lumora: Fenstertitel und -symbol, Programmdatei, Schriftzug oben in
+/// der Leiste und im Info-Kopf (Farben folgen Hell/Dunkel), Versionstexte „Lumora x.y.z“.
 /// </summary>
 internal sealed partial class SmokeScenario
 {
@@ -57,6 +60,16 @@ internal sealed partial class SmokeScenario
                 $"Navigation: {string.Join(", ", items)}");
             Check(footer.SequenceEqual([NavigationTags.Settings]), $"Fußleiste: {string.Join(", ", footer)}");
             Check(main.MainNav.PaneHeader is LibrarySwitcher, "Bibliotheks-Umschalter oben in der Leiste");
+
+            // Produktname Lumora (ADR-0047): Titel, Fenstersymbol, Programmdatei, Schriftzug im Kopf der Leiste
+            var exeName = Path.GetFileName(Environment.ProcessPath ?? string.Empty);
+            Check(main.Title == LumoraBrand.ProductName && main.Icon is not null && LumoraAppIcon.WindowIcon is not null,
+                $"Fenstertitel „{main.Title}“ mit Lumora-Symbol");
+            Check(string.Equals(exeName, LumoraBrand.ExecutableName, StringComparison.OrdinalIgnoreCase), $"Programmdatei {exeName}");
+            Check(main.MainNav.PaneHeader is LibrarySwitcher switcher
+                  && switcher.FindName("Wordmark") is LumoraWordmark { IsLoaded: true, ActualWidth: > 40 } navMark
+                  && navMark.FontSize == 22,
+                "Schriftzug „lumora“ oben in der Leiste");
         }
         else
         {
@@ -99,13 +112,23 @@ internal sealed partial class SmokeScenario
               && components.Contains("ONNX Runtime DirectML 1.", StringComparison.Ordinal) && components.Contains("nur nicht-kommerziell", StringComparison.Ordinal),
             $"Bausteine: {components}");
         var versionInfo = _info.BuildVersionInfo();
-        Check(versionInfo.StartsWith($"PhotoViewer V3 {top}", StringComparison.Ordinal) && !versionInfo.Contains('@'), "Versionsinfo ohne E-Mail-Adresse");
+        Check(versionInfo.StartsWith($"{LumoraBrand.ProductName} {top}", StringComparison.Ordinal) && !versionInfo.Contains('@'), "Versionsinfo ohne E-Mail-Adresse");
+
+        // Info-Kopf: großes Symbol + Schriftzug, Vorgänger nennt den früheren Namen
+        var infoMark = (_settingsPage.FindName("InfoView") as InfoSection)?.FindName("Wordmark") as LumoraWordmark;
+        Check(_info.AppName == LumoraBrand.ProductName && infoMark is { IsLoaded: true, ActualWidth: > 60 },
+            $"Info-Kopf „{_info.AppName}“ mit Schriftzug ({infoMark?.ActualWidth:N0} px)");
+        Check(_info.Development.Any(l => l.Label == "Vorgänger" && l.Value.Contains(LumoraBrand.FormerProductName, StringComparison.Ordinal)),
+            $"Info › Vorgänger nennt „{LumoraBrand.FormerProductName}“");
 
         _settings.IsThemeLight = true;
         await WaitUntilAsync(() => ApplicationThemeManager.GetAppTheme() == ApplicationTheme.Light, ShortWait, "Theme Hell").ConfigureAwait(true);
+        await WaitUntilAsync(() => WordmarkStartsWith(infoMark, LumoraPalette.Light), ShortWait, "Schriftzug hell").ConfigureAwait(true);
         await SnapshotAsync("30-einstellungen-info-hell").ConfigureAwait(true);
         _settings.IsThemeDark = true;
         await WaitUntilAsync(() => ApplicationThemeManager.GetAppTheme() == ApplicationTheme.Dark, ShortWait, "Theme Dunkel").ConfigureAwait(true);
+        await WaitUntilAsync(() => WordmarkStartsWith(infoMark, LumoraPalette.Dark), ShortWait, "Schriftzug dunkel").ConfigureAwait(true);
+        Check(WordmarkStartsWith(infoMark, LumoraPalette.Dark), "Schriftzug folgt dem dunklen Farbschema");
         await SnapshotAsync("31-einstellungen-info-dunkel").ConfigureAwait(true);
         await OpenSettingsSectionAsync(NavigationTags.Library, "Bibliotheken & Eingänge").ConfigureAwait(true);
         await Task.Delay(300).ConfigureAwait(true);
@@ -133,4 +156,9 @@ internal sealed partial class SmokeScenario
         _navigation.NavigateTo(NavigationTags.Gallery);
         await WaitUntilAsync(() => _navigation.CurrentTag == NavigationTags.Gallery, ShortWait, "zurück zur Galerie").ConfigureAwait(true);
     }
+
+    /// <summary>Schriftzug zeigt den Verlauf der Palette (erste Farbe = Indigo des Farbschemas).</summary>
+    private static bool WordmarkStartsWith(LumoraWordmark? mark, LumoraPalette palette)
+        => mark?.WordmarkBrush is System.Windows.Media.LinearGradientBrush { GradientStops.Count: > 0 } brush
+           && brush.GradientStops[0].Color == palette.Indigo;
 }

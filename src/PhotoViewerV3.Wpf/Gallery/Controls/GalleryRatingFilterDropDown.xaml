@@ -12,7 +12,7 @@
     <UserControl.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary Source="/PhotoViewerV3;component/Gallery/Controls/GalleryFilterStyles.xaml" />
+                <ResourceDictionary Source="GalleryFilterStyles.xaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </UserControl.Resources>

@@ -15,6 +15,7 @@ using PhotoViewerV3.Services.Faces.Models;
 using PhotoViewerV3.Services.Infrastructure;
 using PhotoViewerV3.Services.Library;
 using PhotoViewerV3.Shell;
+using PhotoViewerV3.Shell.Branding;
 
 namespace PhotoViewerV3.Settings.Info;
 
@@ -78,7 +79,7 @@ public sealed partial class InfoViewModel : ObservableObject
     [
         new("Programmierung", "Herbert Schrotter"),
         new("Mitarbeit", "Claude (Anthropic), KI-Assistent"),
-        new("Vorgänger", "PhotoViewer V2 (PowerShell-Web-App)"),
+        new("Vorgänger", $"{LumoraBrand.FormerProductName} (bis {LumoraBrand.LastFormerNameVersion}) · PhotoViewer V2 (PowerShell-Web-App)"),
     ];
 
     /// <summary>Karte „Dieses System“; gefüllt von <see cref="LoadAsync"/>.</summary>

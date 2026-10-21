@@ -19,7 +19,7 @@
         <ResourceDictionary>
         <!-- Collage-Vorlage (ADR-0044): eigenes Wörterbuch, damit Tests die echte Vorlage laden -->
         <ResourceDictionary.MergedDictionaries>
-            <ResourceDictionary Source="/PhotoViewerV3;component/Gallery/Views/GalleryCollageTemplates.xaml" />
+            <ResourceDictionary Source="GalleryCollageTemplates.xaml" />
         </ResourceDictionary.MergedDictionaries>
 
         <BooleanToVisibilityConverter x:Key="BoolToVis" />

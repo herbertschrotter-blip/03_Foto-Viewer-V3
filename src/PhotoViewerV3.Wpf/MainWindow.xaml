@@ -9,7 +9,8 @@
                  xmlns:gallery="clr-namespace:PhotoViewerV3.Gallery.Views"
                  xmlns:sorter="clr-namespace:PhotoViewerV3.Sorter"
                  xmlns:persons="clr-namespace:PhotoViewerV3.Persons"
-                 Title="PhotoViewer V3"
+                 xmlns:branding="clr-namespace:PhotoViewerV3.Shell.Branding"
+                 Title="{x:Static branding:LumoraBrand.ProductName}"
                  Height="800"
                  Width="1280"
                  WindowStartupLocation="CenterScreen"
@@ -23,7 +24,12 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <ui:TitleBar Grid.Row="0" Title="PhotoViewer V3" />
+        <!-- Titelleiste „Lumora“ mit App-Symbol (ADR-0047; unter 32 px die vereinfachte Variante) -->
+        <ui:TitleBar Grid.Row="0" Title="{x:Static branding:LumoraBrand.ProductName}">
+            <ui:TitleBar.Icon>
+                <ui:ImageIcon Source="{x:Static branding:LumoraIconImages.Small}" Width="16" Height="16" />
+            </ui:TitleBar.Icon>
+        </ui:TitleBar>
 
         <!-- Seiten werden über TargetPageType + INavigationViewPageProvider (DI, gecacht) aufgelöst;
              SelectionChanged feuert damit zuverlässig (WPF-UI navigiert nur bei gesetztem TargetPageType).

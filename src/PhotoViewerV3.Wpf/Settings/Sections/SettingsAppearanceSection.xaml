@@ -15,7 +15,7 @@
 
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <StackPanel Style="{StaticResource SectionPanel}">
-            <TextBlock Style="{StaticResource Lead}" Text="Wie PhotoViewer aussieht." />
+            <TextBlock Style="{StaticResource Lead}" Text="Wie Lumora aussieht." />
             <Border Style="{StaticResource SectionCard}">
                 <StackPanel>
                     <ui:TextBlock Style="{StaticResource SectionTitle}" Text="Farbschema" />
@@ -25,7 +25,7 @@
                         <RadioButton Content="System" GroupName="Theme" IsChecked="{Binding IsThemeSystem, Mode=TwoWay}" />
                     </StackPanel>
                     <TextBlock Style="{StaticResource Hint}" Margin="0,8,0,0"
-                               Text="„System“ folgt dem Windows-Farbschema auch während PhotoViewer läuft. Die Vorschaugröße stellst du in der Galerie ein." />
+                               Text="„System“ folgt dem Windows-Farbschema auch während Lumora läuft. Die Vorschaugröße stellst du in der Galerie ein." />
                 </StackPanel>
             </Border>
         </StackPanel>

@@ -1,7 +1,7 @@
 #Requires -Version 7
 <#
 .SYNOPSIS
-    Baut die portable Version von PhotoViewer V3 (Ordner + ZIP, win-x64) per dotnet publish.
+    Baut die portable Version von Lumora (vormals PhotoViewer V3; Ordner + ZIP, win-x64) per dotnet publish.
 
 .DESCRIPTION
     Standard: self-contained (kein installiertes .NET nötig), kein Single-File, kein Trimming (WPF verträgt es nicht).
@@ -9,12 +9,12 @@
     Skript bricht ab, wenn die veröffentlichte EXE eine andere Produktversion trägt.
 
     Ergebnis (Standard-Ausgabe artifacts\ in der Repo-Wurzel, per .gitignore ausgenommen):
-      artifacts\PhotoViewerV3-<Version>-win-x64\        Ordner mit PhotoViewerV3.exe
-      artifacts\PhotoViewerV3-<Version>-win-x64.zip     derselbe Ordner gepackt
+      artifacts\Lumora-<Version>-win-x64\        Ordner mit Lumora.exe
+      artifacts\Lumora-<Version>-win-x64.zip     derselbe Ordner gepackt
 
     Nicht im Paket: FFmpeg (Video-Vorschaubilder) — wird wie im Debug-Build im PATH bzw. unter den winget-Links gesucht
     („winget install Gyan.FFmpeg“). Daten liegen unabhängig vom Paketordner unter %LocalAppData%\PhotoViewerV3
-    (bzw. im Ordner aus database-location.json).
+    (bzw. im Ordner aus database-location.json) — der Ordnername bleibt trotz des Produktnamens Lumora (ADR-0047).
 
 .PARAMETER Runtime
     Runtime Identifier (nur win-x64 ist geprüft).
@@ -52,11 +52,11 @@ if (-not $match) { throw "Kein Eintrag '## [x.y.z]' in $changelog gefunden." }
 $version = $match.Matches[0].Groups[1].Value
 
 $flavor = if ($FrameworkDependent) { '-fdd' } else { '' }
-$packageName = "PhotoViewerV3-$version-$Runtime$flavor"
+$packageName = "Lumora-$version-$Runtime$flavor"
 $outDir = Join-Path $OutputRoot $packageName
 $zipPath = "$outDir.zip"
 
-Write-Host "PhotoViewer V3 $version → $outDir ($(if ($FrameworkDependent) { 'framework-dependent' } else { 'self-contained' }))"
+Write-Host "Lumora $version → $outDir ($(if ($FrameworkDependent) { 'framework-dependent' } else { 'self-contained' }))"
 if (Test-Path -LiteralPath $outDir) { Remove-Item -LiteralPath $outDir -Recurse -Force }
 if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath -Force }
 New-Item -ItemType Directory -Force -Path $OutputRoot | Out-Null
@@ -82,8 +82,10 @@ $publishArgs = @(
 if ($LASTEXITCODE -ne 0) { throw "dotnet publish fehlgeschlagen (ExitCode $LASTEXITCODE)." }
 
 # --- Prüfen -------------------------------------------------------------------------------------------------------
-$exe = Join-Path $outDir 'PhotoViewerV3.exe'
+$exe = Join-Path $outDir 'Lumora.exe'
 if (-not (Test-Path -LiteralPath $exe)) { throw "EXE fehlt im Paket: $exe" }
+$productName = (Get-Item -LiteralPath $exe).VersionInfo.ProductName
+if ($productName -ne 'Lumora') { throw "Produktname der EXE ($productName) ist nicht 'Lumora'." }
 
 $productVersion = (Get-Item -LiteralPath $exe).VersionInfo.ProductVersion
 if ($productVersion -ne $version) {

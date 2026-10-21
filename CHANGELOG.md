@@ -1,7 +1,48 @@
 # Changelog
 
-Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
+Alle nennenswerten Änderungen an Lumora (bis 0.2.48 „PhotoViewer V3“). Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
+
+## [0.2.49] — 2026-10-21
+
+### Feature (ADR-0047) — Neuer Produktname Lumora mit Schriftzug und App-Symbol
+- **Die App heißt jetzt „Lumora“** (*Lumen* + *Memoria*; Name und Design von Herbert gewählt, Mockup 07
+  „Gewählt · A + B + C“, jetzt `mockups/07-lumora-schriftzug.html`). Fenstertitel und Titelleiste des Hauptfensters
+  „Lumora“ mit App-Symbol, Lightbox-Fenstertitel „Dateiname – Lumora“ (Taskleiste/Alt+Tab; die schlanke Titelleiste
+  zeigt weiter nur den Dateinamen), Versionstexte „Lumora x.y.z“, Startfehler, Umzugs-/Download-/Lizenztexte und
+  „kein Lumora-Katalog“.
+- **Programmdatei heißt jetzt `Lumora.exe`** (`src\PhotoViewerV3.Wpf\bin\Debug\net10.0-windows\Lumora.exe`; Produkt,
+  Titel und Dateibeschreibung „Lumora“). Verknüpfungen auf die alte `PhotoViewerV3.exe` bitte neu anlegen — der Build
+  entfernt die alte EXE samt DLL aus dem Ausgabeordner (gesperrte Dateien einer noch laufenden alten App bleiben liegen).
+  Portables Paket: `artifacts\Lumora-<Version>-win-x64` (+ ZIP); `build/publish.ps1` prüft zusätzlich den Produktnamen,
+  `build/run-smoke.ps1` nimmt den Prozessnamen aus der übergebenen EXE.
+- **Daten bleiben unter `%LocalAppData%\PhotoViewerV3`** (bzw. im Ordner aus `database-location.json`) — kein Umzug,
+  der Katalog läuft unverändert weiter. Ebenfalls unverändert: Projekt-/Namespace-/Ordnernamen `PhotoViewerV3.*`, die
+  Umgebungsvariablen `PHOTOVIEWERV3_*` und die Protokolle `logs\photoviewer-*.log`.
+- **Schriftzug „lumora“** (`Shell/Branding/LumoraWordmark`): Segoe UI Variable Display im Verlauf Indigo → Violett →
+  Koralle → Bernstein über das ganze Wort (dunkel: #818CF8 → #A78BFA → #FB8A7A → #FBBF24), das „o“ eine dünne Linse
+  mit dem Funken in der Mitte, gemessen am echten „o“ der Schrift; bis 24 px normale Strichstärke und kräftige Linse.
+  Oben in der linken Leiste über dem Bibliotheks-Umschalter (Symbol + Schriftzug 22 px) und groß im Info-Kopf (Symbol
+  56 px + Schriftzug 30 px statt Bild-Symbol und „PhotoViewer V3“). Farben folgen Hell/Dunkel/System sofort
+  (`LumoraBrandDictionary` in `App.xaml`, DynamicResource). Info › Vorgänger: „PhotoViewer V3 (bis 0.2.48) ·
+  PhotoViewer V2 (PowerShell-Web-App)“.
+- **App-Symbol**: Indigo-Kachel mit gefächertem Fotostapel und Funke (unter 32 px ein Foto, großer Funke) als Vektor
+  (`Shell/Branding/LumoraIcon.xaml`) und als `Lumora.ico` mit 16/20/24/32/40/48/64/96/128/256 px — reproduzierbar
+  erzeugt mit `pwsh -File build\make-icon.ps1` (WPF `RenderTargetBitmap`, ICO-Container selbst geschrieben, keine neuen
+  Pakete). EXE-Symbol (`ApplicationIcon`), Fenster-Symbol aller Fenster (`AppFluentWindow`, Taskleiste), Titelleiste.
+- Eigene XAML-Ressourcen werden nicht mehr über den Assembly-Namen eingebunden (`/PhotoViewerV3;component/…` →
+  relativ; betraf die sechs Galerie-Filter-Verweise auf `GalleryFilterStyles.xaml`).
+
+### Tests
+- `tests/PhotoViewerV3.Wpf.Tests`: +16 — `Shell/LumoraBrandingTests` (Assembly/Produkt/Dateibeschreibung „Lumora“,
+  sichtbare Titel, kein „PhotoViewer“ in sichtbaren Texten, keine Pack-URIs mit Assembly-Namen, Info-Kopf und
+  Navigation mit Symbol + Schriftzug, Strichstärke je Größe, Pixel-Stichprobe Verlauf hell/dunkel, Pinsel folgen dem
+  Farbschema, Linse sitzt wie ein „o“ bei 22/30/68 px), `Shell/LumoraIconFileTests` (alle Größen, eingecheckte Datei =
+  Vektorquelle, kleine Größen vereinfacht, eingebettet + Fenster-Symbol). `InfoViewModelTests` auf „Lumora“.
+- Rauchtest: Schritt „Einstellungen-Reiter und Info“ prüft zusätzlich Fenstertitel + Symbol, Programmdatei
+  `Lumora.exe`, Schriftzug in der Leiste und im Info-Kopf, Vorgänger-Zeile, Schriftzug-Farben hell/dunkel,
+  Versionsinfo „Lumora x.y.z“; Screenshots `30-einstellungen-info-hell`/`31-einstellungen-info-dunkel` zeigen Leiste und
+  Info.
 
 ## [0.2.48] — 2026-10-21
 

@@ -17,7 +17,7 @@
     <UserControl.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary Source="/PhotoViewerV3;component/Gallery/Controls/GalleryFilterStyles.xaml" />
+                <ResourceDictionary Source="../Controls/GalleryFilterStyles.xaml" />
             </ResourceDictionary.MergedDictionaries>
             <BooleanToVisibilityConverter x:Key="BoolToVis" />
             <conv:EnumEqualsConverter x:Key="EnumEquals" />

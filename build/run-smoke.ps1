@@ -1,7 +1,7 @@
 #Requires -Version 7
 <#
 .SYNOPSIS
-    Integrations-Rauchtest (SmokeTestRunner) gegen eine beliebige PhotoViewerV3.exe — Debug-Build oder portables Paket.
+    Integrations-Rauchtest (SmokeTestRunner) gegen eine beliebige Lumora.exe — Debug-Build oder portables Paket.
 
 .DESCRIPTION
     Kopiert die Testbibliothek in einen frischen Arbeitsordner (der Rauchtest verschiebt/löscht dort Dateien), startet
@@ -10,8 +10,8 @@
     ExitCode des Skripts: 0 = alle Schritte OK, 1 = Fehler/Timeout.
 
 .PARAMETER Exe
-    Pfad zur PhotoViewerV3.exe, z. B. artifacts\PhotoViewerV3-0.2.26-win-x64\PhotoViewerV3.exe oder
-    src\PhotoViewerV3.Wpf\bin\Debug\net10.0-windows\PhotoViewerV3.exe.
+    Pfad zur Lumora.exe (bis 0.2.48 PhotoViewerV3.exe), z. B. artifacts\Lumora-0.2.49-win-x64\Lumora.exe oder
+    src\PhotoViewerV3.Wpf\bin\Debug\net10.0-windows\Lumora.exe.
 
 .PARAMETER TestLib
     Ordner der Testbibliothek (wird nur gelesen; mindestens 6 Dateien).
@@ -23,7 +23,7 @@
     Keine PNG-Screenshots der Hauptansichten (PHOTOVIEWERV3_SMOKE_SHOTS bleibt leer).
 
 .EXAMPLE
-    pwsh -File build\run-smoke.ps1 -Exe artifacts\PhotoViewerV3-0.2.26-win-x64\PhotoViewerV3.exe -TestLib D:\testlib
+    pwsh -File build\run-smoke.ps1 -Exe artifacts\Lumora-0.2.49-win-x64\Lumora.exe -TestLib D:\testlib
 #>
 [CmdletBinding()]
 param(
@@ -38,13 +38,15 @@ $ErrorActionPreference = 'Stop'
 
 $exePath = (Resolve-Path -LiteralPath $Exe).Path
 $testlib = (Resolve-Path -LiteralPath $TestLib).Path
+# Prozessname = Dateiname der EXE (Lumora seit 0.2.49, ältere Pakete PhotoViewerV3)
+$processName = [IO.Path]::GetFileNameWithoutExtension($exePath)
 if (-not $WorkDir) { $WorkDir = Join-Path ([IO.Path]::GetTempPath()) "PhotoViewerV3-smoke-$Tag" }
 $lib = Join-Path $WorkDir 'lib'
 $appdata = Join-Path $WorkDir 'appdata'
 $shots = Join-Path $WorkDir 'shots'
 
-if (Get-Process PhotoViewerV3 -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $exePath }) {
-    throw "PhotoViewerV3 aus $exePath läuft bereits"
+if (Get-Process $processName -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $exePath }) {
+    throw "$processName aus $exePath läuft bereits"
 }
 
 # Frische Testbibliothek (Verschieben/Löschen verändert die Kopie). Nur die eigenen Unterordner leeren, nie den
@@ -112,7 +114,7 @@ if (-not $NoShots) {
     Get-ChildItem -LiteralPath $shots -Filter *.png -ErrorAction SilentlyContinue | ForEach-Object { '{0,8} {1}' -f $_.Length, $_.Name }
 }
 Write-Output "`n== Prozesse =="
-$left = Get-Process PhotoViewerV3 -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $exePath }
+$left = Get-Process $processName -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $exePath }
 if ($left) { Write-Output "HÄNGEND: $($left.Id)" } else { Write-Output 'kein hängender Prozess' }
 
 exit $(if ($exit -eq 0) { 0 } else { 1 })

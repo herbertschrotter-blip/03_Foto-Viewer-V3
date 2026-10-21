@@ -5,6 +5,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:local="clr-namespace:PhotoViewerV3.Settings.Info"
+             xmlns:branding="clr-namespace:PhotoViewerV3.Shell.Branding"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance local:InfoViewModel}"
              d:DesignWidth="1000">
@@ -55,13 +56,11 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <Border Width="56" Height="56" CornerRadius="12" Margin="0,0,16,0" VerticalAlignment="Center"
-                            Background="{DynamicResource AccentFillColorDefaultBrush}">
-                        <ui:SymbolIcon Symbol="Image24" FontSize="28" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                       Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
-                    </Border>
+                    <!-- Lumora-Kopf (ADR-0047, Mockup 07 „Einstellungen › Info“): großes Symbol + Schriftzug -->
+                    <Image Width="56" Height="56" Margin="0,0,16,0" VerticalAlignment="Center"
+                           Source="{x:Static branding:LumoraIconImages.Full}" AutomationProperties.Name="Lumora-Symbol" />
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding AppName}" FontSize="20" FontWeight="SemiBold" />
+                        <branding:LumoraWordmark x:Name="Wordmark" FontSize="30" HorizontalAlignment="Left" />
                         <TextBlock Text="{Binding HeaderText}" Margin="0,2,0,0" FontSize="13"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                    AutomationProperties.Name="Version" />

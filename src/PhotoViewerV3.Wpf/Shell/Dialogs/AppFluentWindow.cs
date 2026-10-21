@@ -19,9 +19,18 @@ namespace PhotoViewerV3.Shell.Dialogs;
 /// Fenster bereits geschlossen ist. Kein Abonnent (TitleBar, eigener Code) sieht dann ein ContentRendered eines toten
 /// Fensters; im Normalfall ändert sich nichts.
 /// </para>
+/// <para>
+/// Außerdem bekommt jedes App-Fenster das Lumora-Symbol (Taskleiste, Alt+Tab; ADR-0047), solange XAML kein eigenes setzt.
+/// </para>
 /// </summary>
 public class AppFluentWindow : FluentWindow
 {
+    public AppFluentWindow()
+    {
+        // SetCurrentValue statt lokalem Wert: XAML-Attribute und Styles abgeleiteter Fenster dürfen es überschreiben
+        SetCurrentValue(IconProperty, PhotoViewerV3.Shell.Branding.LumoraAppIcon.WindowIcon);
+    }
+
     /// <summary>true, sobald <c>Closed</c> ausgelöst wurde.</summary>
     public bool IsClosed { get; private set; }
 

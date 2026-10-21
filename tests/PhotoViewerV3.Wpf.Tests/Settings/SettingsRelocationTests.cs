@@ -86,7 +86,7 @@ public sealed class SettingsRelocationTests
 
     private static RelocationTargetCheck Existing(bool valid)
         => new(RelocationTargetState.ExistingData, Target, null, 1_000_000, 10_000_000, true, false, 42,
-            new ExistingCatalogInfo(true, valid, 2, 1234, DateTime.UtcNow, valid ? null : "Die Datei ist kein PhotoViewer-Katalog."));
+            new ExistingCatalogInfo(true, valid, 2, 1234, DateTime.UtcNow, valid ? null : "Die Datei ist kein Lumora-Katalog."));
 
     private static (SettingsViewModel Vm, FakeRelocation Relocation, FakeRestart Restart, FakeDialogs Dialogs) Create()
     {
@@ -180,7 +180,7 @@ public sealed class SettingsRelocationTests
         await vm.MoveDatabaseCommand.ExecuteAsync(null);
 
         relocation.Mode.Should().Be(RelocationMode.ReplaceExisting);
-        dialogs.LastConfirmMessage.Should().Contain("kein PhotoViewer-Katalog");
+        dialogs.LastConfirmMessage.Should().Contain("kein Lumora-Katalog");
     }
 
     [Fact]

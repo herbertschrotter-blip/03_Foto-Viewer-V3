@@ -1048,7 +1048,7 @@ internal sealed partial class SmokeScenario
         // Schritt bei jeder neuen Version fehl („0.2.20“ enthält „0.2.0“ nicht).
         var assemblyVersion = typeof(SmokeScenario).Assembly.GetName().Version;
         var expectedVersion = assemblyVersion is null ? "?" : $"{assemblyVersion.Major}.{assemblyVersion.Minor}.{assemblyVersion.Build}";
-        Check(_settings.AppVersionText.StartsWith($"PhotoViewer V3 {expectedVersion}", StringComparison.Ordinal), $"Version: {_settings.AppVersionText}");
+        Check(_settings.AppVersionText.StartsWith($"Lumora {expectedVersion}", StringComparison.Ordinal), $"Version: {_settings.AppVersionText}");
         Check(_settings.IsFfmpegAvailable, $"FFmpeg: {_settings.FfmpegText}");
         Check(_settings.DatabasePath == _db.DatabasePath && _settings.DatabaseSizeText.Length > 0, $"DB: {_settings.DatabasePath} ({_settings.DatabaseSizeText})");
         Check(_settings.ImageFormatsText.Contains(".jpg", StringComparison.Ordinal) && _settings.VideoFormatsText.Contains(".mp4", StringComparison.Ordinal), "Formate angezeigt");

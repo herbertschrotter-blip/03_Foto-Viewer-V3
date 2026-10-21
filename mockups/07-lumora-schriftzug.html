@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Lumora — Schriftzug und App-Symbol (Entwurf 07)</title>
+<style>
+/* Grundfarben aus 04-fluent-light / 05-fluent-dark; Markenfarben neu: Indigo = App-Akzent, dazu Violett und Bernstein (Licht) */
+:root {
+  --mica-base: #F3F3F3; --layer-card: #FFFFFF; --text-primary: #1A1A1A; --text-secondary: #5C5C5C; --text-tertiary: #8B8B8B;
+  --stroke-divider: rgba(0,0,0,0.0803); --layer-secondary: rgba(0,0,0,0.04);
+  --accent: #5B5FC7;
+  --brand-indigo: #5B5FC7; --brand-violet: #8B5CF6; --brand-amber: #F5A524; --brand-coral: #F97362;
+}
+.dark {
+  --mica-base: #202020; --layer-card: #2C2C2C; --text-primary: #FFFFFF; --text-secondary: #D0D0D0; --text-tertiary: #A0A0A0;
+  --stroke-divider: rgba(255,255,255,0.0837); --layer-secondary: rgba(255,255,255,0.0418);
+  --accent: #818CF8;
+  --brand-indigo: #818CF8; --brand-violet: #A78BFA; --brand-amber: #FBBF24; --brand-coral: #FB8A7A;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: #E9E9EC; font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif; color: #1A1A1A; }
+header.page { padding: 18px 28px 6px; max-width: 1280px; margin: 0 auto; }
+header.page h1 { margin: 0; font: 600 22px 'Segoe UI Variable Display', 'Segoe UI', sans-serif; }
+header.page p { margin: 6px 0 0; color: #555; font-size: 13px; max-width: 900px; line-height: 1.5; }
+.variant { max-width: 1280px; margin: 18px auto; padding: 0 28px; }
+.variant h2 { font: 600 15px 'Segoe UI Variable Display', 'Segoe UI', sans-serif; margin: 0 0 8px; display: flex; gap: 10px; align-items: baseline; }
+.variant h2 small { font: 400 13px 'Segoe UI', sans-serif; color: #666; }
+.row { display: grid; grid-template-columns: 1fr 1fr 300px; gap: 12px; }
+.stage { background: var(--mica-base); border-radius: 10px; min-height: 190px; display: grid; place-items: center; padding: 24px;
+  border: 1px solid var(--stroke-divider); color: var(--text-primary); }
+.ctx { background: var(--mica-base); border-radius: 10px; border: 1px solid var(--stroke-divider); color: var(--text-primary); padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.ctx .lbl { font-size: 11px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: .05em; }
+.navhead { background: var(--layer-card); border-radius: 6px; padding: 10px 12px; display: flex; align-items: center; gap: 10px; border: 1px solid var(--stroke-divider); }
+.titlebar { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); padding: 4px 2px; }
+.icons { display: flex; align-items: flex-end; gap: 12px; }
+.icons span { font-size: 10px; color: var(--text-tertiary); display: block; text-align: center; margin-top: 3px; }
+
+/* Schriften: nur Systemschriften (Segoe UI Variable ist auf Windows 11 vorhanden) */
+.wm { font-family: 'Segoe UI Variable Display', 'Segoe UI', sans-serif; line-height: 1; display: inline-flex; align-items: center; white-space: nowrap; }
+
+/* Variante A: „Linse“ — das o ist ein Objektivring mit Lichtpunkt */
+.wa { font-weight: 600; font-size: 72px; letter-spacing: -1.5px; }
+.wa .o { display: inline-block; width: .56em; height: .56em; margin: .16em .02em 0 .04em; }
+
+/* Variante B: „Lichtstreif“ — leicht, Verlauf von Indigo zu Bernstein */
+.wb { font-weight: 300; font-size: 76px; letter-spacing: 1px;
+  background: linear-gradient(100deg, var(--brand-indigo) 10%, var(--brand-violet) 45%, var(--brand-coral) 75%, var(--brand-amber) 95%);
+  -webkit-background-clip: text; background-clip: text; color: transparent; }
+.wb-wrap { position: relative; display: inline-block; }
+.wb-wrap .spark { position: absolute; right: -14px; top: -6px; width: 22px; height: 22px; }
+
+.wbs { font-weight: 400; font-size: 22px; letter-spacing: .3px;
+  background: linear-gradient(100deg, var(--brand-indigo), var(--brand-violet) 45%, var(--brand-coral) 75%, var(--brand-amber));
+  -webkit-background-clip: text; background-clip: text; color: transparent; }
+.olens { display: inline-block; width: .52em; height: .52em; margin: .17em .03em 0 .05em; }
+.cmp { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.cmp .stage { position: relative; min-height: 150px; }
+.cmp .cap { position: absolute; left: 12px; top: 8px; font-size: 11px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: .05em; }
+.variant.chosen { background: #fff; border-radius: 12px; padding: 16px 28px 18px; box-shadow: 0 6px 24px rgba(0,0,0,.08); }
+/* Variante C: Bildmarke (gefächerte Fotos + Sonne) + Wortmarke */
+.wc { font-weight: 600; font-size: 60px; letter-spacing: -1px; gap: 16px; }
+
+/* Variante D: „Blende“ — Irisblende als Blüte, Versalien gesperrt */
+.wd { font-weight: 500; font-size: 46px; letter-spacing: 12px; gap: 20px; }
+
+.mock-bar { position: sticky; top: 0; z-index: 5; display: flex; gap: 12px; align-items: center; padding: 10px 28px; background: #2B2B33; color: #EEE; font-size: 13px; }
+.mock-bar button { background: #44444F; color: #EEE; border: 1px solid #5A5A66; border-radius: 4px; padding: 4px 10px; font: inherit; cursor: pointer; }
+.palette { display: flex; gap: 8px; align-items: center; margin-left: auto; }
+.palette i { width: 18px; height: 18px; border-radius: 4px; display: inline-block; }
+@media (max-width: 1000px) { .row { grid-template-columns: 1fr; } .row > * { grid-column: auto !important; } .stage { overflow: hidden; } }
+</style>
+</head>
+<body>
+<div class="mock-bar">
+  <b>Mockup 07</b> Lumora — vier Entwürfe, jeweils hell, dunkel und in der App
+  <span class="palette">Farben:
+    <i style="background:#5B5FC7" title="Indigo (heutiger App-Akzent)"></i>
+    <i style="background:#8B5CF6" title="Violett"></i>
+    <i style="background:#F97362" title="Koralle"></i>
+    <i style="background:#F5A524" title="Bernstein (Licht)"></i></span>
+</div>
+
+<header class="page">
+  <h1>Lumora — Schriftzug</h1>
+  <p>Idee hinter dem Namen: <b>Lumen</b> (Licht) + <b>Memoria</b> (Erinnerung). Die Entwürfe spielen mit Licht, Objektiv und Erinnerungsfotos.
+  Farben bauen auf dem heutigen App-Akzent Indigo auf und ergänzen warmes Bernstein für „Licht“. Schrift: Segoe UI Variable (Windows 11 eigen, keine Zusatzschrift nötig);
+  in der App wird der Schriftzug als Vektorgrafik eingebaut, damit er überall gleich aussieht.</p>
+</header>
+
+<!-- SVG-Bausteine -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <linearGradient id="gRing" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5B5FC7"/><stop offset=".55" stop-color="#8B5CF6"/><stop offset="1" stop-color="#F5A524"/>
+    </linearGradient>
+    <radialGradient id="gSun" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#FFE7A3"/><stop offset=".55" stop-color="#F5A524"/><stop offset="1" stop-color="#F97362"/>
+    </radialGradient>
+    <linearGradient id="gTile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6366F1"/><stop offset="1" stop-color="#4145A0"/>
+    </linearGradient>
+    <linearGradient id="gPhoto1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FDE68A"/><stop offset="1" stop-color="#F97362"/></linearGradient>
+    <linearGradient id="gPhoto2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#C4B5FD"/><stop offset="1" stop-color="#8B5CF6"/></linearGradient>
+    <linearGradient id="gBlade" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#5B5FC7"/><stop offset="1" stop-color="#F5A524"/>
+    </linearGradient>
+
+    <!-- Objektivring mit Lichtpunkt (Variante A) -->
+    <symbol id="lens" viewBox="0 0 100 100">
+      <circle cx="50" cy="50" r="40" fill="none" stroke="url(#gRing)" stroke-width="16"/>
+      <circle cx="50" cy="50" r="12" fill="url(#gSun)"/>
+    </symbol>
+
+    <!-- Funke (Variante B) -->
+    <symbol id="spark" viewBox="0 0 24 24">
+      <path d="M12 0 C13 8 16 11 24 12 C16 13 13 16 12 24 C11 16 8 13 0 12 C8 11 11 8 12 0Z" fill="url(#gSun)"/>
+    </symbol>
+
+    <!-- App-Symbol: gefächerte Fotos mit Sonne (Variante C) -->
+    <symbol id="tile" viewBox="0 0 128 128">
+      <rect x="0" y="0" width="128" height="128" rx="28" fill="url(#gTile)"/>
+      <g transform="rotate(-12 64 70)"><rect x="26" y="34" width="62" height="54" rx="7" fill="#FFFFFF" opacity=".55"/><rect x="31" y="39" width="52" height="38" rx="4" fill="url(#gPhoto2)"/></g>
+      <g transform="rotate(8 64 70)"><rect x="38" y="36" width="64" height="58" rx="7" fill="#FFFFFF"/>
+        <rect x="43" y="41" width="54" height="40" rx="4" fill="url(#gPhoto1)"/>
+        <circle cx="82" cy="53" r="7" fill="#FFF7DB"/>
+        <path d="M43 81 L58 64 L68 73 L77 66 L97 81 Z" fill="#4145A0" opacity=".85"/></g>
+    </symbol>
+
+    <!-- Dünne Linse passend zur leichten Schrift; Verlauf läuft über die Linse mit -->
+    <linearGradient id="gRingLight" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#8B5CF6"/><stop offset="1" stop-color="#F97362"/>
+    </linearGradient>
+    <symbol id="lensThin" viewBox="0 0 100 100">
+      <circle cx="50" cy="50" r="43" fill="none" stroke="url(#gRingLight)" stroke-width="9"/>
+      <circle cx="50" cy="50" r="27" fill="none" stroke="url(#gRingLight)" stroke-width="3" opacity=".55"/>
+      <circle cx="50" cy="50" r="9" fill="url(#gSun)"/>
+    </symbol>
+    <symbol id="lensSpark" viewBox="0 0 100 100">
+      <circle cx="50" cy="50" r="43" fill="none" stroke="url(#gRingLight)" stroke-width="9"/>
+      <circle cx="50" cy="50" r="27" fill="none" stroke="url(#gRingLight)" stroke-width="3" opacity=".45"/>
+      <use href="#spark" x="30" y="30" width="40" height="40"/>
+    </symbol>
+    <symbol id="lensSparkBold" viewBox="0 0 100 100">
+      <circle cx="50" cy="50" r="42" fill="none" stroke="url(#gRingLight)" stroke-width="12"/>
+      <use href="#spark" x="27" y="27" width="46" height="46"/>
+    </symbol>
+
+    <!-- Gewählt: Fotostapel mit Funke statt Sonne -->
+    <symbol id="tileSpark" viewBox="0 0 128 128">
+      <rect x="0" y="0" width="128" height="128" rx="28" fill="url(#gTile)"/>
+      <g transform="rotate(-12 64 70)"><rect x="26" y="34" width="62" height="54" rx="7" fill="#FFFFFF" opacity=".55"/><rect x="31" y="39" width="52" height="38" rx="4" fill="url(#gPhoto2)"/></g>
+      <g transform="rotate(8 64 70)"><rect x="38" y="36" width="64" height="58" rx="7" fill="#FFFFFF"/>
+        <rect x="43" y="41" width="54" height="40" rx="4" fill="url(#gPhoto1)"/>
+        <path d="M43 81 L58 64 L68 73 L77 66 L97 81 Z" fill="#4145A0" opacity=".85"/></g>
+      <use href="#spark" x="84" y="14" width="30" height="30"/>
+    </symbol>
+    <!-- Kleine Größen: nur ein Foto, kräftiger Funke -->
+    <symbol id="tileSmall" viewBox="0 0 128 128">
+      <rect x="0" y="0" width="128" height="128" rx="28" fill="url(#gTile)"/>
+      <g transform="rotate(6 64 70)"><rect x="26" y="34" width="76" height="66" rx="9" fill="#FFFFFF"/>
+        <rect x="33" y="41" width="62" height="44" rx="5" fill="url(#gPhoto1)"/>
+        <path d="M33 85 L52 64 L64 75 L75 67 L95 85 Z" fill="#4145A0"/></g>
+      <use href="#spark" x="80" y="8" width="40" height="40"/>
+    </symbol>
+
+    <!-- Irisblende (Variante D) -->
+    <symbol id="iris" viewBox="-50 -50 100 100">
+      <g>
+        <path id="blade" d="M0 -46 A46 46 0 0 1 39.8 -23 L10 -6 Z" fill="url(#gBlade)" opacity=".95"/>
+        <use href="#blade" transform="rotate(60)"/><use href="#blade" transform="rotate(120)"/>
+        <use href="#blade" transform="rotate(180)"/><use href="#blade" transform="rotate(240)"/><use href="#blade" transform="rotate(300)"/>
+      </g>
+      <circle r="11" fill="url(#gSun)"/>
+    </symbol>
+  </defs>
+</svg>
+
+<template id="tplA">
+  <span class="wm wa">Lum<svg class="o"><use href="#lens"/></svg>ra</span>
+</template>
+<template id="tplB">
+  <span class="wb-wrap"><span class="wm wb">lumora</span><svg class="spark"><use href="#spark"/></svg></span>
+</template>
+<template id="tplC">
+  <span class="wm wc"><svg width="76" height="76"><use href="#tile"/></svg>Lumora</span>
+</template>
+<template id="tplD">
+  <span class="wm wd"><svg width="70" height="70"><use href="#iris"/></svg>LUMORA</span>
+</template>
+
+<!-- Gewählt (Herbert 2026-10-21): Schriftzug aus B + Bildmarke aus C; der Funke aus B ersetzt im Symbol die Sonne -->
+<section class="variant chosen">
+  <h2>Gewählt · A + B + C <small>Schriftzug „lumora“ leicht im Lichtverlauf (B), das „o“ als Linse mit dem Funken darin (A), App-Symbol Fotostapel mit Funke (C). Gewählt von Herbert am 2026-10-21.</small></h2>
+  <div class="row">
+    <div class="stage"><span class="wm" style="gap:18px"><svg width="84" height="84"><use href="#tileSpark"/></svg><span class="wm wb" style="font-size:68px">lum<svg class="olens"><use href="#lensSpark"/></svg>ra</span></span></div>
+    <div class="stage dark"><span class="wm" style="gap:18px"><svg width="84" height="84"><use href="#tileSpark"/></svg><span class="wm wb" style="font-size:68px">lum<svg class="olens"><use href="#lensSpark"/></svg>ra</span></span></div>
+    <div class="ctx">
+      <div class="lbl">In der App · Navigation oben</div>
+      <div class="navhead"><svg width="28" height="28"><use href="#tileSpark"/></svg><span class="wm wbs">lum<svg class="olens"><use href="#lensSparkBold"/></svg>ra</span></div>
+      <div class="lbl">Titelleiste</div>
+      <div class="titlebar"><svg width="16" height="16"><use href="#tileSpark"/></svg> Lumora</div>
+      <div class="lbl">App-Symbol 16 · 24 · 32 · 48 · 64 · 128</div>
+      <div class="icons">
+        <div><svg width="16" height="16"><use href="#tileSmall"/></svg><span>16</span></div>
+        <div><svg width="24" height="24"><use href="#tileSmall"/></svg><span>24</span></div>
+        <div><svg width="32" height="32"><use href="#tileSpark"/></svg><span>32</span></div>
+        <div><svg width="48" height="48"><use href="#tileSpark"/></svg><span>48</span></div>
+        <div><svg width="64" height="64"><use href="#tileSpark"/></svg><span>64</span></div>
+      </div>
+    </div>
+    <div class="ctx dark" style="grid-column: 3">
+      <div class="lbl">Dunkel</div>
+      <div class="navhead"><svg width="28" height="28"><use href="#tileSpark"/></svg><span class="wm wbs">lum<svg class="olens"><use href="#lensSparkBold"/></svg>ra</span></div>
+    </div>
+  </div>
+  <div class="row" style="margin-top:12px">
+    <div class="stage" style="place-items:stretch; min-height:0">
+      <div class="lbl" style="font-size:11px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Einstellungen › Info</div>
+      <div style="display:flex;gap:16px;align-items:center;background:var(--layer-card);border:1px solid var(--stroke-divider);border-radius:8px;padding:16px 18px">
+        <svg width="56" height="56"><use href="#tileSpark"/></svg>
+        <div><span class="wm wb" style="font-size:30px;font-weight:350">lum<svg class="olens"><use href="#lensSpark"/></svg>ra</span>
+          <div style="color:var(--text-secondary);font-size:13px;margin-top:4px">Version 0.2.47 · Fotos und Videos ansehen, ordnen und erinnern</div></div>
+      </div>
+    </div>
+    <div class="stage dark" style="place-items:stretch; min-height:0">
+      <div class="lbl" style="font-size:11px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Einstellungen › Info (dunkel)</div>
+      <div style="display:flex;gap:16px;align-items:center;background:var(--layer-card);border:1px solid var(--stroke-divider);border-radius:8px;padding:16px 18px">
+        <svg width="56" height="56"><use href="#tileSpark"/></svg>
+        <div><span class="wm wb" style="font-size:30px;font-weight:350">lum<svg class="olens"><use href="#lensSpark"/></svg>ra</span>
+          <div style="color:var(--text-secondary);font-size:13px;margin-top:4px">Version 0.2.47 · Fotos und Videos ansehen, ordnen und erinnern</div></div>
+      </div>
+    </div>
+  </div>
+  <h2 style="margin-top:18px">Vergleich: „o“ zusätzlich als Linse? <small>Drei Stufen, jeweils hell und dunkel — gewählt ist Stufe 3.</small></h2>
+  <div class="cmp">
+    <div class="stage"><div class="cap">1 · wie gewählt (Funke außen)</div>
+      <span class="wm" style="gap:14px"><svg width="56" height="56"><use href="#tileSpark"/></svg><span class="wb-wrap"><span class="wm wb" style="font-size:52px">lumora</span><svg class="spark" style="width:18px;height:18px;right:-12px"><use href="#spark"/></svg></span></span></div>
+    <div class="stage"><div class="cap">2 · Linse + Funke außen</div>
+      <span class="wm" style="gap:14px"><svg width="56" height="56"><use href="#tileSpark"/></svg><span class="wb-wrap"><span class="wm wb" style="font-size:52px">lum<svg class="olens"><use href="#lensThin"/></svg>ra</span><svg class="spark" style="width:18px;height:18px;right:-12px"><use href="#spark"/></svg></span></span></div>
+    <div class="stage"><div class="cap">3 · Linse, Funke IN der Linse</div>
+      <span class="wm" style="gap:14px"><svg width="56" height="56"><use href="#tileSpark"/></svg><span class="wm wb" style="font-size:52px">lum<svg class="olens"><use href="#lensSpark"/></svg>ra</span></span></div>
+    <div class="stage dark"><div class="cap">1 · dunkel</div>
+      <span class="wm" style="gap:14px"><svg width="56" height="56"><use href="#tileSpark"/></svg><span class="wb-wrap"><span class="wm wb" style="font-size:52px">lumora</span><svg class="spark" style="width:18px;height:18px;right:-12px"><use href="#spark"/></svg></span></span></div>
+    <div class="stage dark"><div class="cap">2 · dunkel</div>
+      <span class="wm" style="gap:14px"><svg width="56" height="56"><use href="#tileSpark"/></svg><span class="wb-wrap"><span class="wm wb" style="font-size:52px">lum<svg class="olens"><use href="#lensThin"/></svg>ra</span><svg class="spark" style="width:18px;height:18px;right:-12px"><use href="#spark"/></svg></span></span></div>
+    <div class="stage dark"><div class="cap">3 · dunkel</div>
+      <span class="wm" style="gap:14px"><svg width="56" height="56"><use href="#tileSpark"/></svg><span class="wm wb" style="font-size:52px">lum<svg class="olens"><use href="#lensSpark"/></svg>ra</span></span></div>
+    <div class="stage" style="min-height:80px"><div class="cap">3 · Navigation</div>
+      <div class="navhead" style="width:200px"><svg width="28" height="28"><use href="#tileSpark"/></svg><span class="wm wbs">lum<svg class="olens" style="stroke-width:0"><use href="#lensSparkBold"/></svg>ra</span></div></div>
+    <div class="stage dark" style="min-height:80px"><div class="cap">3 · Navigation dunkel</div>
+      <div class="navhead" style="width:200px"><svg width="28" height="28"><use href="#tileSpark"/></svg><span class="wm wbs">lum<svg class="olens"><use href="#lensSparkBold"/></svg>ra</span></div></div>
+  </div>
+  <p style="font-size:12px;color:#666;margin:8px 0 0">Kleine Größen: Schriftzug ab 22 px mit normaler statt leichter Strichstärke, damit er nicht verblasst; Symbol unter 32 px ohne den hinteren Foto-Rahmen (klarer Umriss).</p>
+</section>
+
+<h2 style="max-width:1280px;margin:26px auto 0;padding:0 28px;font:600 13px 'Segoe UI';color:#777;text-transform:uppercase;letter-spacing:.06em">Die vier ursprünglichen Entwürfe</h2>
+
+<section class="variant" data-v="A">
+  <h2>A · Linse <small>Das „o“ ist ein Objektivring mit Lichtpunkt — ruhig, gut lesbar, eigenständig.</small></h2>
+</section>
+<section class="variant" data-v="B">
+  <h2>B · Lichtstreif <small>Leichte Kleinbuchstaben im Verlauf von Indigo zu Bernstein, ein Funke als Licht — elegant, eher „Foto-Studio“.</small></h2>
+</section>
+<section class="variant" data-v="C">
+  <h2>C · Fotostapel <small>Bildmarke aus gefächerten Fotos mit Sonne + kräftige Wortmarke — am klarsten als App-Symbol (Taskleiste, Handy).</small></h2>
+</section>
+<section class="variant" data-v="D">
+  <h2>D · Blende <small>Irisblende als Lichtblüte, Versalien gesperrt — technisch-edel, „Kamera“.</small></h2>
+</section>
+
+<script>
+// Je Variante: groß hell, groß dunkel, dazu Anwendung in der App (Navigation, Titelleiste, Symbolgrößen)
+const icons = {
+  A: s => `<svg width="${s}" height="${s}" viewBox="0 0 128 128"><rect width="128" height="128" rx="28" fill="${s < 24 ? '#5B5FC7' : 'url(#gTile)'}"/><use href="#lens" x="22" y="22" width="84" height="84" style="--x:0"/></svg>`,
+  B: s => `<svg width="${s}" height="${s}" viewBox="0 0 128 128"><rect width="128" height="128" rx="28" fill="#1F1F2E"/><use href="#spark" x="30" y="30" width="68" height="68"/></svg>`,
+  C: s => `<svg width="${s}" height="${s}"><use href="#tile" width="${s}" height="${s}"/></svg>`,
+  D: s => `<svg width="${s}" height="${s}" viewBox="0 0 128 128"><rect width="128" height="128" rx="28" fill="#1F1F2E"/><use href="#iris" x="14" y="14" width="100" height="100"/></svg>`,
+};
+const small = {
+  A: '<span class="wm" style="font-weight:600;font-size:20px;letter-spacing:-.3px">Lum<svg style="width:.56em;height:.56em;margin:.16em .02em 0 .04em"><use href="#lens"/></svg>ra</span>',
+  B: '<span class="wm" style="font-weight:300;font-size:22px;background:linear-gradient(100deg,var(--brand-indigo),var(--brand-violet) 45%,var(--brand-coral) 75%,var(--brand-amber));-webkit-background-clip:text;background-clip:text;color:transparent">lumora</span>',
+  C: '<span class="wm" style="font-weight:600;font-size:20px;letter-spacing:-.3px">Lumora</span>',
+  D: '<span class="wm" style="font-weight:500;font-size:15px;letter-spacing:4px">LUMORA</span>',
+};
+document.querySelectorAll('.variant[data-v]').forEach(sec => {
+  const v = sec.dataset.v, tpl = document.getElementById('tpl' + v).innerHTML;
+  const row = document.createElement('div'); row.className = 'row';
+  row.innerHTML = `
+    <div class="stage">${tpl}</div>
+    <div class="stage dark">${tpl}</div>
+    <div class="ctx">
+      <div class="lbl">In der App · Navigation oben</div>
+      <div class="navhead">${icons[v](28)}${small[v]}</div>
+      <div class="lbl">Titelleiste</div>
+      <div class="titlebar">${icons[v](16)} Lumora</div>
+      <div class="lbl">App-Symbol 16 · 24 · 32 · 48 · 64</div>
+      <div class="icons">${[16, 24, 32, 48, 64].map(s => `<div>${icons[v](s)}<span>${s}</span></div>`).join('')}</div>
+    </div>
+    <div class="ctx dark" style="grid-column: 3">
+      <div class="lbl">Dunkel</div>
+      <div class="navhead">${icons[v](28)}${small[v]}</div>
+    </div>`;
+  sec.appendChild(row);
+});
+</script>
+</body>
+</html>

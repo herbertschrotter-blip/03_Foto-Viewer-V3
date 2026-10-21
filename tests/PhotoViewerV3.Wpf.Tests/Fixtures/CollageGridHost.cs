@@ -87,7 +87,7 @@ internal sealed class CollageGridHost : IDisposable
 
         var templates = new ResourceDictionary
         {
-            Source = new Uri("pack://application:,,,/PhotoViewerV3;component/Gallery/Views/GalleryCollageTemplates.xaml", UriKind.Absolute),
+            Source = new Uri("pack://application:,,,/Lumora;component/Gallery/Views/GalleryCollageTemplates.xaml", UriKind.Absolute),
         };
         CollageTemplate = (DataTemplate)templates["CollageTemplate"];
 

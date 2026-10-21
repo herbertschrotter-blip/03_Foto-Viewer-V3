@@ -13,7 +13,8 @@ namespace PhotoViewerV3.Settings.Info;
 /// </summary>
 public static partial class AppInfo
 {
-    public const string AppName = "PhotoViewer V3";
+    /// <summary>Sichtbarer Produktname (ADR-0047; bis 0.2.48 „PhotoViewer V3“).</summary>
+    public const string AppName = PhotoViewerV3.Shell.Branding.LumoraBrand.ProductName;
 
     /// <summary>Name der Änderungsliste neben der EXE (per csproj ins Ausgabe- und Paketverzeichnis kopiert).</summary>
     public const string ChangelogFileName = "CHANGELOG.md";

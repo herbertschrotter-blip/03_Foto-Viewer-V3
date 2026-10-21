@@ -9,7 +9,7 @@ public static class LicenseTexts
     public const string Title = "Lizenzen der verwendeten Bausteine";
 
     public const string Intro =
-        "PhotoViewer V3 nutzt die folgenden Bausteine. Die vollständigen Lizenztexte liegen den jeweiligen Paketen bei " +
+        "Lumora nutzt die folgenden Bausteine. Die vollständigen Lizenztexte liegen den jeweiligen Paketen bei " +
         "(Quelle: nuget.org bzw. Projektseite).";
 
     public const string Details =
@@ -32,9 +32,9 @@ public static class LicenseTexts
         "Serilog (Extensions.Hosting, Sinks.File, Sinks.Console) — Apache-Lizenz 2.0\n" +
         "  Copyright (c) Serilog-Mitwirkende\n\n" +
         "InsightFace-Modell buffalo_l (Gesichtserkennung) — NUR NICHT-KOMMERZIELLE NUTZUNG\n" +
-        "  Nicht Teil von PhotoViewer: wird erst nach Bestätigung vom Benutzer selbst heruntergeladen\n" +
+        "  Nicht Teil von Lumora: wird erst nach Bestätigung vom Benutzer selbst heruntergeladen\n" +
         "  (Einstellungen › Gesichter) und weder im Quellcode noch in der portablen Version mitgeliefert.\n\n" +
         "FFmpeg (Video-Vorschaubilder) — LGPL/GPL je nach Build\n" +
-        "  Nicht Teil von PhotoViewer: wird, falls installiert (z. B. „winget install Gyan.FFmpeg“), als externes\n" +
+        "  Nicht Teil von Lumora: wird, falls installiert (z. B. „winget install Gyan.FFmpeg“), als externes\n" +
         "  Programm aufgerufen.";
 }

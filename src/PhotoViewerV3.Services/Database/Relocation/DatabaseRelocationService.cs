@@ -212,7 +212,7 @@ public sealed class DatabaseRelocationService : IDatabaseRelocationService, IDis
             var tables = ReadTableNames(connection);
             if (!tables.Contains("Libraries") || !tables.Contains("Files") || !tables.Contains("__EFMigrationsHistory"))
             {
-                return new ExistingCatalogInfo(true, false, 0, 0, modified, "Die Datei ist kein PhotoViewer-Katalog.");
+                return new ExistingCatalogInfo(true, false, 0, 0, modified, "Die Datei ist kein Lumora-Katalog.");
             }
 
             var libraries = Convert.ToInt32(ExecuteScalar(connection, "SELECT count(*) FROM Libraries;"));
@@ -532,7 +532,7 @@ public sealed class DatabaseRelocationService : IDatabaseRelocationService, IDis
             {
                 if (!counts.ContainsKey("Libraries") || !counts.ContainsKey("Files"))
                 {
-                    throw new RelocationException("Die Datei im Zielordner ist kein PhotoViewer-Katalog.");
+                    throw new RelocationException("Die Datei im Zielordner ist kein Lumora-Katalog.");
                 }
 
                 return;

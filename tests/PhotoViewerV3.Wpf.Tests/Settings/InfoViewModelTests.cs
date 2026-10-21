@@ -131,7 +131,7 @@ public sealed class InfoViewModelTests
         var actions = new RecordingActions();
         var vm = Create(actions, libraries, AppContext.BaseDirectory);
 
-        vm.AppName.Should().Be("PhotoViewer V3");
+        vm.AppName.Should().Be("Lumora");
         vm.HeaderText.Should().StartWith($"Version {AppInfo.Version} · erstellt am ");
         vm.Development.Select(l => l.Label).Should().Equal("Programmierung", "Mitarbeit", "Vorgänger");
         vm.Development.Should().Contain(new InfoLine("Programmierung", "Herbert Schrotter"));
@@ -156,7 +156,7 @@ public sealed class InfoViewModelTests
         vm.CopyVersionInfoCommand.Execute(null);
         actions.Copied.Should().ContainSingle();
         var copied = actions.Copied[0];
-        copied.Should().StartWith($"PhotoViewer V3 {AppInfo.Version}").And.Contain("Laufzeit: .NET").And.Contain("SharpCompress");
+        copied.Should().StartWith($"Lumora {AppInfo.Version}").And.Contain("Laufzeit: .NET").And.Contain("SharpCompress");
         copied.Should().NotContain("Katalog:", "keine Bibliotheksnamen/-zahlen in der kopierten Versionsinfo").And.NotContain(@"C:\");
         vm.Message.Should().Be("Versionsinfo in die Zwischenablage kopiert.");
     }

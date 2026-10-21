@@ -1,8 +1,14 @@
-# PhotoViewer V3
+# Lumora (vormals PhotoViewer V3)
 
-Native Windows-Desktop-App (C# / .NET 10 / WPF mit WPF-UI 4, SQLite) zum Ansehen, Bewerten, Sortieren und Verschieben
+**Lumora** — aus *Lumen* (Licht) und *Memoria* (Erinnerung) — ist eine native Windows-Desktop-App (C# / .NET 10 / WPF mit WPF-UI 4, SQLite) zum Ansehen, Bewerten, Sortieren und Verschieben
 großer Foto- und Video-Bibliotheken (50 000–500 000 Dateien). Nachfolger der PowerShell-Web-App V2
 (`../03_Foto-Viewer-V2`), die bis zur Ablösung im Alltag weiterläuft. Stand: **0.2.0** (siehe [CHANGELOG.md](CHANGELOG.md)).
+
+Bis 0.2.48 hieß die App „PhotoViewer V3“. Seit 0.2.49 heißt sie sichtbar **Lumora**, die Programmdatei `Lumora.exe`
+(Schriftzug und App-Symbol: [Mockup 07](mockups/07-lumora-schriftzug.html)). Bewusst unverändert bleiben die Projekt-,
+Namespace- und Ordnernamen (`PhotoViewerV3.*`, `PhotoViewerV3.slnx`), der Datenordner `%LocalAppData%\PhotoViewerV3`
+samt `database-location.json`, die Umgebungsvariablen `PHOTOVIEWERV3_*` und die Protokolle `photoviewer-*.log` —
+vorhandene Kataloge laufen ohne Umzug weiter ([ADR-0047](docs/adr/0047-produktname-lumora.md)).
 
 ## Features (0.2.0)
 
@@ -65,11 +71,17 @@ dotnet run --project src/PhotoViewerV3.Wpf -c Debug
 ```
 
 Oder in Visual Studio: `PhotoViewerV3.slnx` öffnen, `PhotoViewerV3.Wpf` als Startprojekt, **F5**.
+Die Programmdatei liegt danach unter `src\PhotoViewerV3.Wpf\bin\Debug\net10.0-windows\Lumora.exe` (bis 0.2.48
+`PhotoViewerV3.exe` — der Build räumt die alte EXE aus dem Ausgabeordner, Verknüpfungen neu auf `Lumora.exe` setzen).
 Beim ersten Start legt die App die Datenbank an (EF-Core-Migration) und öffnet Einstellungen › Bibliotheken &
 Eingänge („Neue Bibliothek…“).
 
 Die App-Version (Einstellungen › Info, Dateiversion der EXE) kommt aus dem obersten Eintrag in
 [CHANGELOG.md](CHANGELOG.md); `PhotoViewerV3.Wpf.csproj` liest sie beim Build aus.
+
+Das App-Symbol `src\PhotoViewerV3.Wpf\Shell\Branding\Lumora.ico` (16–256 px) ist eingecheckt und wird aus der
+Vektor-Quelle `LumoraIcon.xaml` erzeugt: nach einer Änderung am Symbol `pwsh -File build\make-icon.ps1` ausführen und
+die neue `.ico` mit einchecken (der Test `LumoraIconFileTests` meldet, wenn Datei und Vektor-Quelle auseinanderlaufen).
 
 ## Portable Version bauen
 
@@ -78,9 +90,9 @@ pwsh -File build\publish.ps1
 ```
 
 Erzeugt per `dotnet publish` (Release, `win-x64`, **self-contained**, kein Single-File, kein Trimming) den Ordner
-`artifacts\PhotoViewerV3-<Version>-win-x64\` und daneben dieselbe Version als ZIP. Ordner bzw. ZIP an einen beliebigen
-Ort kopieren und `PhotoViewerV3.exe` starten — ein installiertes .NET ist nicht nötig. Das Skript bricht ab, wenn die
-Produktversion der EXE nicht zum CHANGELOG passt, SQLite (`e_sqlite3.dll`) bzw. LibVLC (`libvlc\win-x64\`) fehlen oder
+`artifacts\Lumora-<Version>-win-x64\` und daneben dieselbe Version als ZIP. Ordner bzw. ZIP an einen beliebigen
+Ort kopieren und `Lumora.exe` starten — ein installiertes .NET ist nicht nötig. Das Skript bricht ab, wenn die
+Produktversion der EXE nicht zum CHANGELOG passt, der Produktname nicht „Lumora“ ist, SQLite (`e_sqlite3.dll`) bzw. LibVLC (`libvlc\win-x64\`) fehlen oder
 Werkzeuge für `dotnet ef` (`BuildHost-*`, `Microsoft.EntityFrameworkCore.Design.dll`) im Paket liegen (seit 0.2.31 nicht
 mehr: 734 Dateien, ~253 MB, ZIP ~112 MB).
 `artifacts\` ist per `.gitignore` ausgenommen; mit `-OutputRoot <Ordner>` landet das Paket außerhalb des Repos (z. B.
@@ -92,16 +104,16 @@ außerhalb von OneDrive), `-NoZip` lässt das ZIP weg, `-FrameworkDependent` bau
   Formatregister sind fest im Code, es gibt keine Konfigurationsdateien neben der EXE.
 - **FFmpeg** ist nicht im Paket; es wird wie beim Debug-Build im `PATH` bzw. unter den winget-Links gesucht
   (`winget install Gyan.FFmpeg`).
-- **Pfadlänge:** Die LibVLC-Plugins liegen bis zu ~120 Zeichen tief im Paket (`PhotoViewerV3-…\libvlc\win-x64\…`);
+- **Pfadlänge:** Die LibVLC-Plugins liegen bis zu ~120 Zeichen tief im Paket (`Lumora-…\libvlc\win-x64\…`);
   Paket bzw. `-OutputRoot` deshalb nicht tiefer als ~130 Zeichen ablegen, sonst scheitern Kopieren/Entpacken am
   260-Zeichen-Limit von Windows.
 - **Rauchtest gegen das Paket** (Testbibliothek siehe [Tests](#tests)):
-  `pwsh -File build\run-smoke.ps1 -Exe artifacts\PhotoViewerV3-<Version>-win-x64\PhotoViewerV3.exe -TestLib <Testbibliothek>`
+  `pwsh -File build\run-smoke.ps1 -Exe artifacts\Lumora-<Version>-win-x64\Lumora.exe -TestLib <Testbibliothek>`
 
 ## Bedienung
 
 ### Navigation (seit 0.2.44, ADR-0042)
-Die linke Leiste enthält oben den **Bibliotheks-Umschalter** (Name der aktiven Bibliothek; Klick → andere Bibliothek
+Die linke Leiste zeigt ganz oben das App-Symbol mit dem Schriftzug „lumora“, darunter den **Bibliotheks-Umschalter** (Name der aktiven Bibliothek; Klick → andere Bibliothek
 wählen oder **Bibliotheken verwalten…**), darunter **Galerie, Ordner, Personen, Sortieren** und unten
 **Einstellungen**. Bibliothek, Tags und Kategorien richtet man selten ein — sie sind Reiter der Einstellungen:
 **Bibliotheken & Eingänge · Tags · Kategorien · Gesichter · Archive · Darstellung · Speicher & Wartung · Info**.
@@ -403,7 +415,7 @@ Reiter oben (ADR-0042):
 - **Speicher & Wartung** — Speicherorte mit „Ordner öffnen“ und **Ändern…** (siehe „Speicherort des Katalogs“),
   Thumbnail-Cache (Belegung, **Cache leeren** — Vorschaubilder werden bei Bedarf neu erzeugt), FFmpeg-Status mit
   kopierbarem winget-Befehl, unterstützte Bild- und Videoformate.
-- **Info** — Version (= oberster Eintrag der CHANGELOG), Build-Datum, Debug/Release; Entwicklung, dieses System (.NET,
+- **Info** — Kopf mit App-Symbol und Schriftzug, Version (= oberster Eintrag der CHANGELOG), Build-Datum, Debug/Release; Entwicklung, dieses System (.NET,
   Windows, Grafikkarte, Gesichtsmodell, Katalogzahlen), Speicherorte zum Öffnen, verwendete Bausteine mit Versionen und
   **Alle Lizenzen anzeigen…**; **Versionsinfo kopieren** (für Fehlermeldungen, ohne Pfade) und **Änderungsprotokoll**
   (öffnet die CHANGELOG.md neben der App).
@@ -415,15 +427,15 @@ einen anderen Ordner (ADR-0026); **Standardort** holt sie nach `%LocalAppData%\P
   abgelehnt, ebenso Ordner in einer Bibliothekswurzel (die Vorschaubilder würden sonst als Fotos eingelesen). Er muss
   beschreibbar sein und genug Platz bieten (Katalog + Vorschaubilder + 10 % + 50 MB). OneDrive-Ordner gehen, aber mit
   Warnung: die Synchronisierung kann den laufenden Katalog beschädigen.
-- Liegt im Ziel schon ein Katalog: **Übernehmen** (PhotoViewer arbeitet danach mit diesem; der bisherige bleibt
+- Liegt im Ziel schon ein Katalog: **Übernehmen** (Lumora arbeitet danach mit diesem; der bisherige bleibt
   unverändert liegen) oder **Ersetzen** (der vorhandene wird beiseitegelegt und beim nächsten Start gelöscht).
 - Ablauf: laufende Scans und Datei-Operationen werden abgewartet (höchstens 30 s), Ordnerüberwachung und Vorschaubilder
   angehalten, der Katalog per SQLite-Backup kopiert und geprüft (Integrität, Zeilenzahl jeder Tabelle), dann die
-  Vorschaubilder kopiert. Erst danach gilt der neue Ort; PhotoViewer startet neu und löscht beim Start die alten Dateien.
+  Vorschaubilder kopiert. Erst danach gilt der neue Ort; Lumora startet neu und löscht beim Start die alten Dateien.
   Während des Umzugs ist das Fenster gesperrt.
-- Geht etwas schief (Platte voll, Prüfung fehlgeschlagen, Scan läuft noch), wird das Ziel aufgeräumt und PhotoViewer
+- Geht etwas schief (Platte voll, Prüfung fehlgeschlagen, Scan läuft noch), wird das Ziel aufgeräumt und Lumora
   arbeitet mit dem bisherigen Ort weiter; ein Dialog nennt den Grund.
-- Ist der gewählte Ordner beim Start nicht erreichbar (USB-Laufwerk abgezogen), startet PhotoViewer nicht und nennt die
+- Ist der gewählte Ordner beim Start nicht erreichbar (USB-Laufwerk abgezogen), startet Lumora nicht und nennt die
   Datei `database-location.json`, deren Löschen zum Standardort zurückführt.
 
 ### Gesichtserkennung
@@ -585,7 +597,8 @@ Hintergrund-Aktivität („Bereit“, wenn nichts läuft).
 
 ## Datenablage
 
-Alles liegt unter `%LocalAppData%\PhotoViewerV3` (Fotos und Videos bleiben an Ort und Stelle). Katalog und
+Alles liegt unter `%LocalAppData%\PhotoViewerV3` (Fotos und Videos bleiben an Ort und Stelle; der Ordnername bleibt
+trotz des Produktnamens Lumora, ADR-0047). Katalog und
 Vorschaubilder können in den Einstellungen in einen anderen Ordner umziehen; dann liegen `library.db` und `thumbs\`
 dort, Protokolle und `database-location.json` bleiben hier:
 
@@ -637,7 +650,7 @@ Dasselbe als Skript gegen eine beliebige EXE (Debug-Build oder portables Paket; 
 `%TEMP%\PhotoViewerV3-smoke-<Tag>\lib`, eigenes AppData daneben, ExitCode 0 = alle Schritte OK):
 
 ```powershell
-pwsh -File build\run-smoke.ps1 -Exe src\PhotoViewerV3.Wpf\bin\Debug\net10.0-windows\PhotoViewerV3.exe -TestLib <Testbibliothek>
+pwsh -File build\run-smoke.ps1 -Exe src\PhotoViewerV3.Wpf\bin\Debug\net10.0-windows\Lumora.exe -TestLib <Testbibliothek>
 ```
 
 Die Testbibliothek sollte Bilder (JPG/PNG), Videos (MP4/MOV), einen Ordner ohne direkte Dateien mit zwei
@@ -665,7 +678,8 @@ Spike- und Benchmark-Harness: `dotnet run --project tests/PhotoViewerV3.PerfTest
 ```
 PhotoViewerV3.slnx                 # Solution (.slnx)
 Directory.Packages.props           # Central Package Management inkl. transitiver Security-Pins
-build/                             # publish.ps1 (portable Version), run-smoke.ps1 (Rauchtest gegen eine beliebige EXE)
+build/                             # publish.ps1 (portable Version), run-smoke.ps1 (Rauchtest gegen eine beliebige EXE),
+                                   # make-icon.ps1 (Lumora.ico aus LumoraIcon.xaml)
 src/
   PhotoViewerV3.Domain/            # Entities, Enums — keine Abhängigkeiten
   PhotoViewerV3.Data/              # LibraryContext (EF Core), EntitiesMapping, Migrations,
@@ -674,7 +688,7 @@ src/
                                    # (Formatregister), Messaging, Operations, Scanning, Sorter, Tags, Thumbnails, Archive;
                                    # AddPhotoViewerServices() + AddXyz() je Modul
   PhotoViewerV3.Wpf/               # App.xaml.cs (Host + DI), MainWindow (NavigationView);
-                                   # Module Folders, Gallery, Library, Lightbox, Settings, Shell (+ Smoke), Sorter,
+                                   # Module Folders, Gallery, Library, Lightbox, Settings, Shell (+ Branding, Smoke), Sorter,
                                    # Thumbnails (WIC-Renderer)
 tests/
   PhotoViewerV3.Tests/             # xUnit: Services + Data (256 Tests)

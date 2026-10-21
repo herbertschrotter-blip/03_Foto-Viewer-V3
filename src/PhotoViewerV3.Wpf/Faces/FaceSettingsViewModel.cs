@@ -162,7 +162,7 @@ public sealed partial class FaceSettingsViewModel : ObservableObject, IDisposabl
         var info = _models.DownloadInfo;
         var ok = await _dialogs.ConfirmAsync(
             "Modell für die Gesichtserkennung herunterladen?",
-            $"PhotoViewer lädt das Modellpaket „InsightFace buffalo_l“ ({info.Size / 1024.0 / 1024.0:N0} MB) von\n{info.Source}\n" +
+            $"Lumora lädt das Modellpaket „InsightFace buffalo_l“ ({info.Size / 1024.0 / 1024.0:N0} MB) von\n{info.Source}\n" +
             "herunter, prüft die Prüfsumme und entpackt davon nur det_10g.onnx (Erkennung) und w600k_r50.onnx (Fingerabdruck) nach\n" +
             $"{_models.ModelFolder}\n\n" +
             "Lizenz: Die InsightFace-Modelle sind nur für die nicht-kommerzielle Nutzung freigegeben.\n\n" +
