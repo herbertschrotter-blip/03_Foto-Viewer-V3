@@ -3,6 +3,24 @@
 Alle nennenswerten Änderungen an Lumora (bis 0.2.48 „PhotoViewer V3“). Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.4.0] — 2026-10-21
+
+### Release — Abschluss der Welle „Doppelte und Alben“ (0.3.1–0.3.2)
+Nach der Versionsregel des Projektprofils (MINOR beim Abschluss einer Welle). Enthalten:
+- **0.3.1 Doppelte erkennen** (ADR-0053): exakt gleiche Dateien per SHA-256 (Vorfilter Dateigröße), ähnliche Bilder per
+  pHash aus dem Vorschaubild, Seite „Doppelte“ mit Behalten-Vorschlag, Aufräumen in den Papierkorb mit Übertragen der
+  Angaben und Rückgängig (gleiche FileId), Eingang-Hinweis, Galerie-Filter „Doppelte“.
+- **0.3.2 Alben** (ADR-0054): Fotos in Ordner und Alben verknüpfen statt kopieren (Ketten-Kennzeichen, Schalter „mit
+  Verknüpfungen“/„nur echte Dateien“), Seite „Alben“, intelligente Alben (gespeicherter Filter), Album-Filter,
+  „Album exportieren…“.
+
+### Zusammenbau
+- Navigation: Galerie, Ordner, Alben, Personen, Orte, Doppelte, Sortieren (Rauchtest-Prüfung der Leiste und README
+  entsprechend zusammengeführt); beide Rauchtest-Schritte vor „Versteckte Bibliothek“.
+- ModelSnapshot aus dem vollständigen Modell neu erzeugt (`AddDuplicateDetection` + `AddAlbums`), `dotnet ef migrations
+  has-pending-model-changes`: keine Änderungen. Der Aufräum-Abzug der Doppelten nimmt Tabellen mit ON DELETE CASCADE
+  auf `Files.Id` automatisch mit — Album-Zuordnungen kommen beim Rückgängig mit zurück.
+
 ## [0.3.2] — 2026-10-21
 
 ### Feature (ADR-0054) — Alben: Fotos in Ordner und Alben verknüpfen statt kopieren, eigene und intelligente Alben
