@@ -1,6 +1,7 @@
 # ADR-0045: Personen mit Vor-/Nachname, Rufname, eigener Beziehung, Geburtsdatum und „Das bin ich“
 
-- **Status:** Accepted
+- **Status:** Accepted; teilweise ersetzt durch [ADR-0048](0048-bibliotheks-trennung-und-verknuepfen.md) — Beziehungen,
+  Anzeigenamen und „Das bin ich“ gelten je Bibliotheks-Gruppe statt global (0.2.51)
 - **Datum:** 2026-10-21
 - **Entscheider:** Herbert Schrotter, Claude
 - **Bezogen auf:** [ADR-0035](0035-gesichtserkennung-buffalo-l-directml.md) (Tabelle `Persons`),

@@ -211,8 +211,8 @@ public sealed partial class GalleryViewModel
 
         try
         {
-            var rows = await _source.GetPersonCountsAsync(_libraryId, CancellationToken.None);
-            _libraryHasFaces = await _source.HasFacesAsync(_libraryId, CancellationToken.None);
+            var rows = await _source.GetPersonCountsAsync(ScopeLibraryIds, CancellationToken.None); // Bereich (ADR-0048)
+            _libraryHasFaces = await _source.HasFacesAsync(ScopeLibraryIds, CancellationToken.None);
             var selected = PersonFilterEntries.Where(e => e.IsSelected).Select(e => e.PersonId).ToHashSet();
             PersonFilterEntries.Clear();
             foreach (var row in rows)
@@ -302,7 +302,7 @@ public sealed partial class GalleryViewModel
         var hadFilter = HasPersonFilter || HasRelationFilter;
         await LoadPersonsAsync();
         await ApplyPersonsToItemsAsync(_currentItems.Keys.ToList(), CancellationToken.None);
-        if ((hadFilter || HasPersonFilter || HasRelationFilter) && m.LibraryId == _libraryId)
+        if ((hadFilter || HasPersonFilter || HasRelationFilter) && InScope(m.LibraryId))
         {
             ScheduleReload();
         }
@@ -314,7 +314,7 @@ public sealed partial class GalleryViewModel
     /// </summary>
     private Task HandleFacesChangedAsync(FacesChangedMessage m)
     {
-        if (!HasLibrary || m.LibraryId != _libraryId)
+        if (!HasLibrary || !InScope(m.LibraryId))
         {
             return Task.CompletedTask;
         }

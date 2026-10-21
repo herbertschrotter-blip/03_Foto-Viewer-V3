@@ -32,8 +32,11 @@ public sealed partial class FolderTreeViewModel : ObservableObject
     private const string WholeLibraryText = "Gesamte Bibliothek";
     private const int ReloadDebounceMs = 300;
 
-    private sealed record FolderRow(int Id, int? ParentId, int? RootId, string Name, string Path);
+    private sealed record FolderRow(int Id, int? ParentId, int? RootId, string Name, string Path, int LibraryId = 0);
 
+    private readonly ILibraryScope _scope;
+    private LibraryScopeInfo _loadedScope = LibraryScopeInfo.None;
+    private Dictionary<int, int> _libraryOfFolder = new();
     private readonly ILibraryContextFactory _factory;
     private readonly ILibraryService _libraries;
     private readonly IFileOperationService _fileOps;
@@ -79,8 +82,10 @@ public sealed partial class FolderTreeViewModel : ObservableObject
         FolderActions folderActions,
         ILogger<FolderTreeViewModel> logger,
         Libraries.IInboxActions? inboxActions = null,
-        Gallery.CaptureDates.CaptureDateActions? captureDateActions = null)
+        Gallery.CaptureDates.CaptureDateActions? captureDateActions = null,
+        ILibraryScope? scope = null)
     {
+        _scope = scope ?? new LibraryScope(factory); // Bereich: Bibliothek bzw. „Alle verknüpften“ (ADR-0048)
         _inboxActions = inboxActions; // „Eingang hinzufügen…“ im Seitenkopf (ADR-0042, FolderTreeViewModel.AddInbox.cs)
         _captureDateActions = captureDateActions; // „Datum setzen…“ (ADR-0046, FolderTreeViewModel.CaptureDate.cs)
         _folderActions = folderActions;
@@ -105,7 +110,7 @@ public sealed partial class FolderTreeViewModel : ObservableObject
     [RelayCommand]
     private async Task CreateSubfolderAsync(FolderNode? parent)
     {
-        if (parent is null || parent.IsPlaceholder || !HasLibrary)
+        if (parent is null || !parent.IsFolder || !HasLibrary)
         {
             return;
         }
@@ -119,7 +124,9 @@ public sealed partial class FolderTreeViewModel : ObservableObject
         try
         {
             ErrorMessage = null;
-            var result = await _fileOps.CreateFolderAsync(_libraryId, parent.Path, name.Trim()).ConfigureAwait(true);
+            // Bibliothek des Elternordners (in „Alle verknüpften“ nicht zwingend die aktive, ADR-0048)
+            var libraryId = _libraryOfFolder.GetValueOrDefault(parent.Id, _libraryId);
+            var result = await _fileOps.CreateFolderAsync(libraryId, parent.Path, name.Trim()).ConfigureAwait(true);
             if (!result.Success)
             {
                 ErrorMessage = result.Error ?? "Ordner konnte nicht angelegt werden.";
@@ -196,7 +203,7 @@ public sealed partial class FolderTreeViewModel : ObservableObject
 
     partial void OnIncludeSubfoldersChanged(bool value)
     {
-        if (HasLibrary && _selectedNode is not null)
+        if (HasLibrary && _selectedNode is { IsLibraryHeader: false })
         {
             _messenger.Send(new FolderSelectedMessage(_libraryId, _selectedNode.Id, value));
         }
@@ -206,6 +213,15 @@ public sealed partial class FolderTreeViewModel : ObservableObject
     {
         if (node.IsPlaceholder || !HasLibrary)
         {
+            return;
+        }
+
+        if (node.IsLibraryHeader)
+        {
+            // Kopf einer Bibliothek in „Alle verknüpften“ (ADR-0048): wirkt wie „Gesamte Bibliothek“ (alle des Bereichs).
+            _selectedNode = node;
+            SelectionText = WholeLibraryText;
+            _messenger.Send(new FolderSelectedMessage(_libraryId, null, IncludeSubfolders));
             return;
         }
 
@@ -233,7 +249,7 @@ public sealed partial class FolderTreeViewModel : ObservableObject
 
     private void ScheduleReload(int libraryId)
     {
-        if (_loadedLibraryId is null || libraryId != _loadedLibraryId)
+        if (_loadedLibraryId is null || (libraryId != _loadedLibraryId && !_loadedScope.Contains(libraryId)))
         {
             return;
         }
@@ -281,35 +297,62 @@ public sealed partial class FolderTreeViewModel : ObservableObject
                 return;
             }
 
+            // Bereich (ADR-0048): eine Bibliothek oder alle verknüpften — dann je Bibliothek ein Kopfknoten.
+            var scope = await _scope.GetCurrentAsync().ConfigureAwait(true);
+            if (scope.LibraryId != active.Id)
+            {
+                scope = await _scope.GetForLibraryAsync(active.Id).ConfigureAwait(true);
+            }
+
+            var libraries = new List<LibraryInfo> { active };
+            foreach (var otherId in scope.LibraryIds.Where(id => id != active.Id))
+            {
+                if (await _libraries.GetAsync(otherId).ConfigureAwait(true) is { } other)
+                {
+                    libraries.Add(other);
+                }
+            }
+
+            libraries = libraries.OrderBy(l => l.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+            var libraryIds = libraries.Select(l => l.Id).ToArray();
+
             _libraryId = active.Id;
-            LibraryName = active.Name;
+            LibraryName = scope.IsAllLinked ? $"Alle verknüpften ({scope.GroupName})" : active.Name;
             HasLibrary = true;
-            var offline = active.Roots.Where(r => !r.IsAvailable).Select(r => r.Path).ToList();
+            var offline = libraries.SelectMany(l => l.Roots).Where(r => !r.IsAvailable).Select(r => r.Path).ToList();
             HintText = offline.Count == 0
                 ? null
                 : offline.Count == 1
                     ? $"Wurzel offline: {offline[0]} ist nicht erreichbar."
                     : $"{offline.Count} Wurzeln nicht erreichbar: {string.Join(", ", offline)}";
-            _rootsById = active.Roots.ToDictionary(r => r.Id);
+            _rootsById = libraries.SelectMany(l => l.Roots).ToDictionary(r => r.Id);
 
             List<FolderRow> rows;
             Dictionary<int, int> counts;
             await using (var ctx = _factory.Create())
             {
                 rows = await ctx.Folders.AsNoTracking()
-                    .Where(f => f.LibraryId == active.Id)
-                    .Select(f => new FolderRow(f.Id, f.ParentId, f.RootId, f.Name, f.Path))
+                    .Where(f => libraryIds.Contains(f.LibraryId))
+                    .Select(f => new FolderRow(f.Id, f.ParentId, f.RootId, f.Name, f.Path, f.LibraryId))
                     .ToListAsync()
                     .ConfigureAwait(true);
                 counts = await ctx.Files.AsNoTracking()
-                    .Where(f => f.LibraryId == active.Id)
+                    .Where(f => libraryIds.Contains(f.LibraryId))
                     .GroupBy(f => f.FolderId)
                     .Select(g => new { FolderId = g.Key, Count = g.Count() })
                     .ToDictionaryAsync(x => x.FolderId, x => x.Count)
                     .ConfigureAwait(true);
             }
 
+            _libraryOfFolder = rows.ToDictionary(r => r.Id, r => r.LibraryId);
             BuildIndex(rows, counts);
+            if (scope.IsAllLinked)
+            {
+                AddLibraryHeaders(libraries);
+            }
+
+            _loadedScope = scope;
+            AddInboxCommand.NotifyCanExecuteChanged();
 
             // Zustand über Pfade merken: aufgeklappte Knoten und Auswahl überleben den Neuaufbau
             var expandedPaths = CollectExpandedPaths();
@@ -329,6 +372,13 @@ public sealed partial class FolderTreeViewModel : ObservableObject
             else if (Roots.Count == 1)
             {
                 Roots[0].IsExpanded = true;
+            }
+            else if (scope.IsAllLinked)
+            {
+                foreach (var header in Roots)
+                {
+                    header.IsExpanded = true; // Bibliotheken aufgeklappt: ihre Wurzeln sind sofort sichtbar
+                }
             }
 
             if (selectedPath is not null)
@@ -480,6 +530,28 @@ public sealed partial class FolderTreeViewModel : ObservableObject
         }
     }
 
+    /// <summary>Synthetische Id des Kopfknotens einer Bibliothek (nie eine Folders-Id).</summary>
+    private static int HeaderId(int libraryId) => int.MinValue + libraryId;
+
+    /// <summary>
+    /// Ansicht „Alle verknüpften“ (ADR-0048): oberste Knoten sind die Bibliotheken, darunter ihre Wurzeln wie gewohnt
+    /// (Archiv zuerst, dann Eingänge). Der Kopfknoten trägt die Summe der Dateien der Bibliothek.
+    /// </summary>
+    private void AddLibraryHeaders(IReadOnlyList<LibraryInfo> libraries)
+    {
+        var headers = new List<FolderRow>(libraries.Count);
+        foreach (var library in libraries)
+        {
+            var id = HeaderId(library.Id);
+            var roots = _rootRows.Where(r => r.LibraryId == library.Id).ToList();
+            _childrenByParent[id] = roots;
+            _totalCounts[id] = roots.Sum(r => _totalCounts.GetValueOrDefault(r.Id));
+            headers.Add(new FolderRow(id, null, null, library.Name, "\u0001Bibliothek:" + library.Id, library.Id));
+        }
+
+        _rootRows = headers;
+    }
+
     private int ComputeTotal(int folderId)
     {
         var total = _directCounts.GetValueOrDefault(folderId);
@@ -517,16 +589,19 @@ public sealed partial class FolderTreeViewModel : ObservableObject
             ? root.RoleText
             : null;
 
-    private FolderNode CreateNode(FolderRow row) => new(
-        this,
-        row.Id,
-        row.Name,
-        row.Path,
-        _directCounts.GetValueOrDefault(row.Id),
-        _totalCounts.GetValueOrDefault(row.Id),
-        _childrenByParent.ContainsKey(row.Id),
-        RoleLabelOf(row),
-        row.RootId is { } rootId && _rootsById.TryGetValue(rootId, out var root) && root.IsInbox);
+    private FolderNode CreateNode(FolderRow row) => row.Id < 0 && row.Path.StartsWith('\u0001')
+        ? new FolderNode(this, row.Id, row.Name, row.Path, 0, _totalCounts.GetValueOrDefault(row.Id),
+            _childrenByParent.TryGetValue(row.Id, out var roots) && roots.Count > 0, "Bibliothek", isInInbox: false, isLibraryHeader: true)
+        : new FolderNode(
+            this,
+            row.Id,
+            row.Name,
+            row.Path,
+            _directCounts.GetValueOrDefault(row.Id),
+            _totalCounts.GetValueOrDefault(row.Id),
+            _childrenByParent.ContainsKey(row.Id),
+            RoleLabelOf(row),
+            row.RootId is { } rootId && _rootsById.TryGetValue(rootId, out var root) && root.IsInbox);
 
     private void ResetSelection()
     {

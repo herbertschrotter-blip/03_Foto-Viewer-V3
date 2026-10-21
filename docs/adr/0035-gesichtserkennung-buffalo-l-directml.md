@@ -1,6 +1,6 @@
 # ADR-0035: Gesichtserkennung mit InsightFace buffalo_l, Modell per Benutzer-Download, DirectML
 
-- **Status:** Accepted (Teil 1 umgesetzt in 0.2.34; Personen-Seite und Lernen folgen in Welle 2)
+- **Status:** Accepted (Teil 1 umgesetzt in 0.2.34; Personen-Seite und Lernen folgen in Welle 2); teilweise ersetzt durch [ADR-0048](0048-bibliotheks-trennung-und-verknuepfen.md) — Personen sind nicht mehr global, sondern gehören einer Bibliotheks-Gruppe; Lernen und Vorschläge nur im Bibliotheks-Bereich (0.2.51)
 - **Datum:** 2026-10-21
 - **Entscheider:** Herbert Schrotter (Modell, Lernen wie digiKam, Grafikkarte), Claude (Umsetzung, Detailentscheidungen ohne Rückfrage, siehe unten)
 - **Bezogen auf:** ADR-0015 (Persons/Faces bewusst nicht im V0.1-Schema — hiermit umgesetzt), ADR-0004 (EF Core + Raw-SQL),

@@ -20,20 +20,25 @@ public sealed partial class GalleryPageSource
 {
     /// <summary>Beziehungen, die mindestens eine Person trägt, mit Zahl der Dateien dieser Bibliothek, nach Name.</summary>
     public Task<IReadOnlyList<GalleryRelationCount>> GetRelationCountsAsync(int libraryId, CancellationToken ct)
+        => GetRelationCountsAsync([libraryId], ct);
+
+    /// <summary>Wie oben für einen Bereich (ADR-0048): nur Beziehungen der Gruppe, gezählt über alle Bibliotheken des Bereichs.</summary>
+    public Task<IReadOnlyList<GalleryRelationCount>> GetRelationCountsAsync(IReadOnlyList<int> libraryIds, CancellationToken ct)
         => RunAsync<IReadOnlyList<GalleryRelationCount>>(conn =>
         {
             using var cmd = conn.CreateCommand();
-            cmd.CommandText = """
+            cmd.CommandText = $"""
                 SELECT r.Id, r.Name,
                        (SELECT COUNT(DISTINCT fa.FileId)
                           FROM Faces fa JOIN Files f ON f.Id = fa.FileId
                          WHERE fa.PersonId IN (SELECT p.Id FROM Persons p WHERE p.RelationId = r.Id)
-                           AND fa.State = 2 AND f.LibraryId = $libId) AS FileCount
+                           AND fa.State = 2 AND {ScopeCondition(libraryIds, "f.LibraryId")}) AS FileCount
                 FROM PersonRelations r
-                WHERE EXISTS (SELECT 1 FROM Persons p WHERE p.RelationId = r.Id)
+                WHERE r.GroupId = {GroupOfScopeSql(libraryIds)}
+                  AND EXISTS (SELECT 1 FROM Persons p WHERE p.RelationId = r.Id)
                 ORDER BY r.Name COLLATE NOCASE, r.Id;
                 """;
-            cmd.Parameters.AddWithValue("$libId", libraryId);
+            cmd.Parameters.AddWithValue("$libId", libraryIds.Count > 0 ? libraryIds[0] : -1);
             var result = new List<GalleryRelationCount>();
             using var reader = cmd.ExecuteReader();
             while (reader.Read())

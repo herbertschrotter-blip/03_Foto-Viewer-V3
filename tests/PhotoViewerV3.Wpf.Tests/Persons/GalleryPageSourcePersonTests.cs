@@ -192,7 +192,8 @@ public sealed class GalleryPageSourcePersonTests : IAsyncLifetime
     {
         var counts = await _source.GetPersonCountsAsync(_libraryId, CancellationToken.None);
         counts.Select(c => (c.Name, c.FileCount, c.IsHidden)).Should().Equal(("Anna Muster", 3, false), ("Bert", 1, false), ("Carla", 0, true));
-        (await _source.GetPersonCountsAsync(_libraryId + 99, CancellationToken.None)).Should().OnlyContain(c => c.FileCount == 0);
+        // Seit 0.2.51 (ADR-0048): Personen gehören der Gruppe ihrer Bibliothek — eine andere Bibliothek sieht sie gar nicht.
+        (await _source.GetPersonCountsAsync(_libraryId + 99, CancellationToken.None)).Should().BeEmpty();
         (await _source.HasFacesAsync(_libraryId, CancellationToken.None)).Should().BeTrue();
         (await _source.HasFacesAsync(_libraryId + 99, CancellationToken.None)).Should().BeFalse();
     }

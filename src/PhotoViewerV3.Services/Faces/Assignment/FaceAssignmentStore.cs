@@ -4,6 +4,7 @@ using System.Text;
 using Microsoft.Data.Sqlite;
 using PhotoViewerV3.Domain.Enums;
 using PhotoViewerV3.Services.Faces.Recognition;
+using PhotoViewerV3.Services.Library;
 
 namespace PhotoViewerV3.Services.Faces.Assignment;
 
@@ -26,7 +27,8 @@ internal readonly record struct SuggestionWrite(long FaceId, int? PersonId, floa
 
 /// <summary>
 /// SQL des Zuordnungsdienstes (ADR-0037) auf rohen Verbindungen. Lesen ohne Transaktion (WAL: nie gesperrt), Schreiben
-/// immer in der Transaktion des Aufrufers. Bibliothek = über Files.LibraryId; Personen sind global.
+/// immer in der Transaktion des Aufrufers. Bereich (ADR-0048) = Files.LibraryId IN (Bibliotheken des Bereichs); Personen
+/// gehören einer Gruppe (Persons.GroupId) — gelesen, gelernt und vorgeschlagen wird nur innerhalb des Bereichs.
 /// </summary>
 internal static class FaceAssignmentStore
 {
@@ -40,35 +42,35 @@ internal static class FaceAssignmentStore
     /// sind vergleichbar (ADR-0035); bestätigte Gesichter mit alter Kennung, die ein neues Modell nicht wiederfand, bleiben
     /// stehen, lernen aber nicht mit.
     /// </summary>
-    public static string? ResolveModelVersion(SqliteConnection connection, int libraryId)
+    public static string? ResolveModelVersion(SqliteConnection connection, LibraryScopeInfo scope)
     {
-        using var cmd = Command(connection, null, """
+        using var cmd = Command(connection, null, $"""
             SELECT x.ModelVersion FROM Faces x JOIN Files f ON f.Id = x.FileId
-            WHERE f.LibraryId = $lib
+            WHERE f.LibraryId IN ({scope.SqlLibraryIdList})
             GROUP BY x.ModelVersion ORDER BY COUNT(*) DESC, x.ModelVersion LIMIT 1;
-            """, ("$lib", libraryId));
+            """);
         return cmd.ExecuteScalar() as string;
     }
 
     /// <summary>Bestätigte Gesichter (Zustand 2) der Bibliothek mit der Kennung — die Lernbeispiele.</summary>
-    public static List<FaceSample> ReadConfirmedSamples(SqliteConnection connection, int libraryId, string modelVersion)
+    public static List<FaceSample> ReadConfirmedSamples(SqliteConnection connection, LibraryScopeInfo scope, string modelVersion)
     {
         using var cmd = Command(connection, null, $"""
             SELECT {FaceColumns} FROM Faces x JOIN Files f ON f.Id = x.FileId
-            WHERE f.LibraryId = $lib AND x.State = 2 AND x.PersonId IS NOT NULL AND x.ModelVersion = $ver
+            WHERE f.LibraryId IN ({scope.SqlLibraryIdList}) AND x.State = 2 AND x.PersonId IS NOT NULL AND x.ModelVersion = $ver
             ORDER BY x.Id;
-            """, ("$lib", libraryId), ("$ver", modelVersion));
+            """, ("$ver", modelVersion));
         return ReadFaces(cmd).Select(f => f.Sample).ToList();
     }
 
     /// <summary>Ablehnungen für Gesichter der Bibliothek.</summary>
-    public static List<FaceRejection> ReadRejections(SqliteConnection connection, int libraryId)
+    public static List<FaceRejection> ReadRejections(SqliteConnection connection, LibraryScopeInfo scope)
     {
-        using var cmd = Command(connection, null, """
+        using var cmd = Command(connection, null, $"""
             SELECT r.FaceId, r.PersonId FROM FaceRejections r
             JOIN Faces x ON x.Id = r.FaceId JOIN Files f ON f.Id = x.FileId
-            WHERE f.LibraryId = $lib;
-            """, ("$lib", libraryId));
+            WHERE f.LibraryId IN ({scope.SqlLibraryIdList});
+            """);
         var list = new List<FaceRejection>();
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
@@ -103,27 +105,27 @@ internal static class FaceAssignmentStore
     }
 
     /// <summary>Nächster Stapel offener Gesichter (Zustand 0/1) der Bibliothek mit der Kennung, Id aufsteigend nach <paramref name="afterId"/>.</summary>
-    public static List<StoredFace> ReadOpenBatch(SqliteConnection connection, int libraryId, string modelVersion, long afterId, int limit)
+    public static List<StoredFace> ReadOpenBatch(SqliteConnection connection, LibraryScopeInfo scope, string modelVersion, long afterId, int limit)
     {
         using var cmd = Command(connection, null, $"""
             SELECT {FaceColumns} FROM Faces x JOIN Files f ON f.Id = x.FileId
-            WHERE f.LibraryId = $lib AND x.State IN (0, 1) AND x.ModelVersion = $ver AND x.Id > $after
+            WHERE f.LibraryId IN ({scope.SqlLibraryIdList}) AND x.State IN (0, 1) AND x.ModelVersion = $ver AND x.Id > $after
             ORDER BY x.Id LIMIT $limit;
-            """, ("$lib", libraryId), ("$ver", modelVersion), ("$after", afterId), ("$limit", limit));
+            """, ("$ver", modelVersion), ("$after", afterId), ("$limit", limit));
         return ReadFaces(cmd);
     }
 
     /// <summary>Offene Gesichter (Zustand 0/1) der Dateien mit der Kennung — nur Dateien der Bibliothek des Modells.</summary>
-    public static List<StoredFace> ReadOpenForFiles(SqliteConnection connection, int libraryId, IEnumerable<int> fileIds, string modelVersion)
+    public static List<StoredFace> ReadOpenForFiles(SqliteConnection connection, LibraryScopeInfo scope, IEnumerable<int> fileIds, string modelVersion)
     {
         var list = new List<StoredFace>();
         foreach (var chunk in fileIds.Distinct().Chunk(ChunkSize))
         {
             using var cmd = Command(connection, null, $"""
                 SELECT {FaceColumns} FROM Faces x JOIN Files f ON f.Id = x.FileId
-                WHERE x.FileId IN ({IdList(chunk)}) AND f.LibraryId = $lib AND x.State IN (0, 1) AND x.ModelVersion = $ver
+                WHERE x.FileId IN ({IdList(chunk)}) AND f.LibraryId IN ({scope.SqlLibraryIdList}) AND x.State IN (0, 1) AND x.ModelVersion = $ver
                 ORDER BY x.Id;
-                """, ("$lib", libraryId), ("$ver", modelVersion));
+                """, ("$ver", modelVersion));
             list.AddRange(ReadFaces(cmd));
         }
 
@@ -131,21 +133,20 @@ internal static class FaceAssignmentStore
     }
 
     /// <summary>Unbekannte Gesichter (Zustand 0, ohne Vorschlag) für die Gruppierung — neueste zuerst.</summary>
-    public static List<StoredFace> ReadUnknownForClustering(SqliteConnection connection, int libraryId, string modelVersion, float minQuality)
+    public static List<StoredFace> ReadUnknownForClustering(SqliteConnection connection, LibraryScopeInfo scope, string modelVersion, float minQuality)
     {
         using var cmd = Command(connection, null, $"""
             SELECT {FaceColumns} FROM Faces x JOIN Files f ON f.Id = x.FileId
-            WHERE f.LibraryId = $lib AND x.State = 0 AND x.ModelVersion = $ver AND x.Quality >= $q
+            WHERE f.LibraryId IN ({scope.SqlLibraryIdList}) AND x.State = 0 AND x.ModelVersion = $ver AND x.Quality >= $q
             ORDER BY x.Id DESC;
-            """, ("$lib", libraryId), ("$ver", modelVersion), ("$q", minQuality));
+            """, ("$ver", modelVersion), ("$q", minQuality));
         return ReadFaces(cmd);
     }
 
     /// <summary>Anzahl unbekannter Gesichter (Zustand 0) der Bibliothek.</summary>
-    public static int CountUnknown(SqliteConnection connection, int libraryId)
+    public static int CountUnknown(SqliteConnection connection, LibraryScopeInfo scope)
         => (int)Scalar(connection, null,
-            "SELECT COUNT(*) FROM Faces x JOIN Files f ON f.Id = x.FileId WHERE f.LibraryId = $lib AND x.State = 0;",
-            ("$lib", libraryId));
+            $"SELECT COUNT(*) FROM Faces x JOIN Files f ON f.Id = x.FileId WHERE f.LibraryId IN ({scope.SqlLibraryIdList}) AND x.State = 0;");
 
     /// <summary>Gesichter nach Id (beliebige Bibliothek), in Id-Reihenfolge.</summary>
     public static List<StoredFace> ReadFaces(SqliteConnection connection, SqliteTransaction? tx, IEnumerable<long> faceIds)
@@ -170,7 +171,9 @@ internal static class FaceAssignmentStore
             UPDATE Faces SET State = $state, SuggestedPersonId = $sp, SuggestionScore = $score
             WHERE Id = $id AND State IN (0, 1)
               AND ($sp IS NULL OR NOT EXISTS (SELECT 1 FROM FaceRejections r WHERE r.FaceId = $id AND r.PersonId = $sp))
-              AND ($sp IS NULL OR EXISTS (SELECT 1 FROM Persons p WHERE p.Id = $sp))
+              AND ($sp IS NULL OR EXISTS (SELECT 1 FROM Persons p WHERE p.Id = $sp
+                                          AND p.GroupId = (SELECT l.GroupId FROM Faces fx JOIN Files fl ON fl.Id = fx.FileId
+                                                           JOIN Libraries l ON l.Id = fl.LibraryId WHERE fx.Id = $id)))
               AND (State <> $state OR SuggestedPersonId IS NOT $sp OR SuggestionScore IS NOT $score);
             """);
         var pState = cmd.Parameters.Add("$state", SqliteType.Integer);
@@ -192,26 +195,29 @@ internal static class FaceAssignmentStore
 
     // ---- Personen ----------------------------------------------------------------------------------------------
 
-    /// <summary>Personen mit Zählern der Bibliothek; <paramref name="personId"/> = nur diese eine.</summary>
-    public static List<PersonOverview> ReadPersons(SqliteConnection connection, int? libraryId, int? personId = null)
+    /// <summary>
+    /// Personen der Gruppe des Bereichs mit Zählern über die Bibliotheken des Bereichs (ADR-0048);
+    /// <paramref name="personId"/> = nur diese eine (null, wenn sie zu einer anderen Gruppe gehört).
+    /// </summary>
+    public static List<PersonOverview> ReadPersons(SqliteConnection connection, LibraryScopeInfo scope, int? personId = null)
     {
         using var cmd = Command(connection, null, $"""
             SELECT p.Id, p.Name, p.IsHidden,
                 (SELECT COUNT(*) FROM Faces x JOIN Files f ON f.Id = x.FileId
-                    WHERE x.PersonId = p.Id AND x.State = 2 AND f.LibraryId = $lib),
+                    WHERE x.PersonId = p.Id AND x.State = 2 AND f.LibraryId IN ({scope.SqlLibraryIdList})),
                 (SELECT COUNT(DISTINCT x.FileId) FROM Faces x JOIN Files f ON f.Id = x.FileId
-                    WHERE x.PersonId = p.Id AND x.State = 2 AND f.LibraryId = $lib),
+                    WHERE x.PersonId = p.Id AND x.State = 2 AND f.LibraryId IN ({scope.SqlLibraryIdList})),
                 (SELECT x.Id FROM Faces x JOIN Files f ON f.Id = x.FileId
-                    WHERE x.Id = p.CoverFaceId AND x.PersonId = p.Id AND x.State = 2 AND f.LibraryId = $lib),
+                    WHERE x.Id = p.CoverFaceId AND x.PersonId = p.Id AND x.State = 2 AND f.LibraryId IN ({scope.SqlLibraryIdList})),
                 (SELECT x.Id FROM Faces x JOIN Files f ON f.Id = x.FileId
-                    WHERE x.PersonId = p.Id AND x.State = 2 AND f.LibraryId = $lib ORDER BY x.Quality DESC, x.Id LIMIT 1),
+                    WHERE x.PersonId = p.Id AND x.State = 2 AND f.LibraryId IN ({scope.SqlLibraryIdList}) ORDER BY x.Quality DESC, x.Id LIMIT 1),
                 (SELECT COUNT(*) FROM Faces x JOIN Files f ON f.Id = x.FileId
-                    WHERE x.SuggestedPersonId = p.Id AND x.State = 1 AND f.LibraryId = $lib),
+                    WHERE x.SuggestedPersonId = p.Id AND x.State = 1 AND f.LibraryId IN ({scope.SqlLibraryIdList})),
                 {PersonDetailsStore.DetailColumns}
             FROM Persons p LEFT JOIN PersonRelations r ON r.Id = p.RelationId
-            WHERE $person IS NULL OR p.Id = $person
+            WHERE p.GroupId = $group AND ($person IS NULL OR p.Id = $person)
             ORDER BY p.Name COLLATE NOCASE, p.Id;
-            """, ("$lib", (object?)libraryId ?? -1), ("$person", (object?)personId ?? DBNull.Value));
+            """, ("$group", scope.GroupId), ("$person", (object?)personId ?? DBNull.Value));
         var list = new List<PersonOverview>();
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
@@ -228,22 +234,22 @@ internal static class FaceAssignmentStore
         return list;
     }
 
-    public static List<PersonFaceInfo> ReadPersonFaces(SqliteConnection connection, int libraryId, int personId, bool suggested)
+    public static List<PersonFaceInfo> ReadPersonFaces(SqliteConnection connection, LibraryScopeInfo scope, int personId, bool suggested)
     {
         var sql = suggested
-            ? """
+            ? $"""
               SELECT x.Id, x.FileId, x.BoxX, x.BoxY, x.BoxW, x.BoxH, x.State, x.Quality, x.SuggestionScore
               FROM Faces x JOIN Files f ON f.Id = x.FileId
-              WHERE f.LibraryId = $lib AND x.State = 1 AND x.SuggestedPersonId = $p
+              WHERE f.LibraryId IN ({scope.SqlLibraryIdList}) AND x.State = 1 AND x.SuggestedPersonId = $p
               ORDER BY x.SuggestionScore DESC, x.Id;
               """
-            : """
+            : $"""
               SELECT x.Id, x.FileId, x.BoxX, x.BoxY, x.BoxW, x.BoxH, x.State, x.Quality, x.SuggestionScore
               FROM Faces x JOIN Files f ON f.Id = x.FileId
-              WHERE f.LibraryId = $lib AND x.State = 2 AND x.PersonId = $p
+              WHERE f.LibraryId IN ({scope.SqlLibraryIdList}) AND x.State = 2 AND x.PersonId = $p
               ORDER BY x.FileId DESC, x.Id;
               """;
-        using var cmd = Command(connection, null, sql, ("$lib", libraryId), ("$p", personId));
+        using var cmd = Command(connection, null, sql, ("$p", personId));
         var list = new List<PersonFaceInfo>();
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
@@ -260,9 +266,10 @@ internal static class FaceAssignmentStore
         return list;
     }
 
-    public static Dictionary<int, string> ReadPersonNames(SqliteConnection connection)
+    /// <summary>Namen der Personen einer Gruppe (ADR-0048).</summary>
+    public static Dictionary<int, string> ReadPersonNames(SqliteConnection connection, int groupId)
     {
-        using var cmd = Command(connection, null, "SELECT Id, Name FROM Persons;");
+        using var cmd = Command(connection, null, "SELECT Id, Name FROM Persons WHERE GroupId = $g;", ("$g", groupId));
         var map = new Dictionary<int, string>();
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
@@ -273,22 +280,30 @@ internal static class FaceAssignmentStore
         return map;
     }
 
-    public static int? FindPersonByName(SqliteConnection connection, SqliteTransaction? tx, string name, int? exceptId = null)
+    /// <summary>Person dieses Anzeigenamens in der Gruppe (ohne Groß-/Kleinschreibung) oder null (ADR-0048: je Gruppe eindeutig).</summary>
+    public static int? FindPersonByName(SqliteConnection connection, SqliteTransaction? tx, int groupId, string name, int? exceptId = null)
     {
         using var cmd = Command(connection, tx,
-            "SELECT Id FROM Persons WHERE Name = $n AND Id <> $except ORDER BY Id LIMIT 1;",
-            ("$n", name), ("$except", (object?)exceptId ?? -1));
+            "SELECT Id FROM Persons WHERE GroupId = $g AND Name = $n AND Id <> $except ORDER BY Id LIMIT 1;",
+            ("$g", groupId), ("$n", name), ("$except", (object?)exceptId ?? -1));
         return cmd.ExecuteScalar() is long id ? (int)id : null;
     }
 
     public static bool PersonExists(SqliteConnection connection, SqliteTransaction? tx, int personId)
         => Scalar(connection, tx, "SELECT COUNT(*) FROM Persons WHERE Id = $p;", ("$p", personId)) > 0;
 
-    /// <summary>Neue Person aus einem Einzelnamen: Vor-/Nachname am ersten Leerzeichen geteilt (ADR-0045).</summary>
-    public static int InsertPerson(SqliteConnection connection, SqliteTransaction tx, string name)
+    /// <summary>Gruppe der Person oder null, wenn es sie nicht gibt.</summary>
+    public static int? ReadPersonGroup(SqliteConnection connection, SqliteTransaction? tx, int personId)
+    {
+        using var cmd = Command(connection, tx, "SELECT GroupId FROM Persons WHERE Id = $p;", ("$p", personId));
+        return cmd.ExecuteScalar() is long g ? (int)g : null;
+    }
+
+    /// <summary>Neue Person aus einem Einzelnamen: Vor-/Nachname am ersten Leerzeichen geteilt (ADR-0045), in der Gruppe.</summary>
+    public static int InsertPerson(SqliteConnection connection, SqliteTransaction tx, int groupId, string name)
     {
         var (first, last) = Domain.Entities.PersonNames.Split(name);
-        return PersonDetailsStore.InsertPerson(connection, tx, new PersonDetailsInput(first, last), relationId: null);
+        return PersonDetailsStore.InsertPerson(connection, tx, groupId, new PersonDetailsInput(first, last), relationId: null);
     }
 
     // ---- Dateien und Gesichter für die Oberfläche ----------------------------------------------------------------

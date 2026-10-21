@@ -58,8 +58,9 @@ internal sealed partial class SmokeScenario
         var faces = faceRows.Select(r => r.Split(" | ")).Select(c => (FaceId: long.Parse(c[0]), FileId: int.Parse(c[1]))).ToList();
 
         // Personen und Zuordnungen vorschreiben (ohne P1-Dienst): Anna auf 2 Fotos bestätigt, Bert auf dem dritten vorgeschlagen.
-        var anna = await DbScalarAsync<int>("INSERT INTO Persons (Name, CreatedAtUtc, CoverFaceId, IsHidden) VALUES ('Smokeperson Anna', 1, NULL, 0); SELECT last_insert_rowid();").ConfigureAwait(true);
-        var bert = await DbScalarAsync<int>("INSERT INTO Persons (Name, CreatedAtUtc, CoverFaceId, IsHidden) VALUES ('Smokeperson Bert', 1, NULL, 0); SELECT last_insert_rowid();").ConfigureAwait(true);
+        // Seit 0.2.51 (ADR-0048) gehören Personen der Gruppe der Bibliothek.
+        var anna = await DbScalarAsync<int>("INSERT INTO Persons (Name, CreatedAtUtc, CoverFaceId, IsHidden, GroupId) VALUES ('Smokeperson Anna', 1, NULL, 0, (SELECT GroupId FROM Libraries WHERE Id = $lib)); SELECT last_insert_rowid();", ("$lib", _libraryId)).ConfigureAwait(true);
+        var bert = await DbScalarAsync<int>("INSERT INTO Persons (Name, CreatedAtUtc, CoverFaceId, IsHidden, GroupId) VALUES ('Smokeperson Bert', 1, NULL, 0, (SELECT GroupId FROM Libraries WHERE Id = $lib)); SELECT last_insert_rowid();", ("$lib", _libraryId)).ConfigureAwait(true);
         var updated = await DbScalarAsync<int>(
             "UPDATE Faces SET State = 2, PersonId = $p WHERE Id IN ($a, $b); SELECT changes();",
             ("$p", anna), ("$a", faces[0].FaceId), ("$b", faces[1].FaceId)).ConfigureAwait(true);

@@ -1,6 +1,6 @@
 # ADR-0021: Tags als eigene Tabellen mit Katalog-Zuweisung
 
-- **Status:** Accepted (Konsequenz „Neu aufbauen verliert Tag-Zuweisungen“ aufgehoben durch ADR-0023, 0.2.14)
+- **Status:** Accepted (Konsequenz „Neu aufbauen verliert Tag-Zuweisungen“ aufgehoben durch ADR-0023, 0.2.14); teilweise ersetzt durch [ADR-0048](0048-bibliotheks-trennung-und-verknuepfen.md) — Tags sind nicht mehr global, sondern gehören einer Bibliotheks-Gruppe (0.2.51)
 - **Datum:** 2026-10-19
 - **Entscheider:** Herbert Schrotter (Umsetzung Claude, Agent T)
 - **Bezogen auf:** ADR-0003, ADR-0004, ADR-0005, ADR-0010, ADR-0011, ADR-0017

@@ -109,7 +109,7 @@ public sealed partial class GalleryViewModel
     {
         try
         {
-            var rows = await _source.GetRelationCountsAsync(_libraryId, CancellationToken.None);
+            var rows = await _source.GetRelationCountsAsync(ScopeLibraryIds, CancellationToken.None); // Bereich (ADR-0048)
             var selected = SelectedRelationIds().ToHashSet();
             var hadFilter = selected.Count > 0;
             RelationFilterEntries.Clear();

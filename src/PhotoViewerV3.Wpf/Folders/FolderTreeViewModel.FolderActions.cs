@@ -65,7 +65,7 @@ public sealed partial class FolderTreeViewModel
     internal Task FavoriteFolderAsync(FolderNode node, bool isFavorite)
         => IsFolderActionRunning ? Task.CompletedTask : RunFolderActionAsync("Favorit", node, () => _folderActions.FavoriteAsync(node.Id, node.Name, isFavorite));
 
-    private bool CanRunFolderAction(FolderNode? node) => !IsFolderActionRunning && HasLibrary;
+    private bool CanRunFolderAction(FolderNode? node) => !IsFolderActionRunning && HasLibrary && node is not { IsLibraryHeader: true };
 
     private async Task RunFolderActionAsync(string what, FolderNode node, Func<Task<FolderActionResult?>> action)
     {

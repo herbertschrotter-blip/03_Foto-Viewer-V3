@@ -16,8 +16,9 @@ public sealed partial class FaceRecognitionService : IFaceIgnoreService
 
     public async Task<IgnoredFacesPage> GetIgnoredFacesAsync(int offset, int limit, CancellationToken ct = default)
     {
-        var libraryId = await GetActiveLibraryIdAsync(ct).ConfigureAwait(false);
-        if (libraryId is null)
+        // Bereich (ADR-0048): aktive Bibliothek bzw. „Alle verknüpften“.
+        var scope = await CurrentScopeAsync(ct).ConfigureAwait(false);
+        if (scope is null)
         {
             return IgnoredFacesPage.Empty;
         }
@@ -26,11 +27,11 @@ public sealed partial class FaceRecognitionService : IFaceIgnoreService
             () =>
             {
                 using var connection = _factory.OpenSqliteConnection();
-                using var count = FaceAssignmentStore.Command(connection, null, """
+                using var count = FaceAssignmentStore.Command(connection, null, $"""
                     SELECT COUNT(*), COALESCE(SUM(CASE WHEN x.SuggestionScore < 0 THEN 1 ELSE 0 END), 0)
                     FROM Faces x JOIN Files f ON f.Id = x.FileId
-                    WHERE f.LibraryId = $lib AND x.State = 3;
-                    """, ("$lib", libraryId.Value));
+                    WHERE f.LibraryId IN ({scope.SqlLibraryIdList}) AND x.State = 3;
+                    """);
                 int total, automatic;
                 using (var reader = count.ExecuteReader())
                 {
@@ -39,13 +40,13 @@ public sealed partial class FaceRecognitionService : IFaceIgnoreService
                     automatic = reader.GetInt32(1);
                 }
 
-                using var cmd = FaceAssignmentStore.Command(connection, null, """
+                using var cmd = FaceAssignmentStore.Command(connection, null, $"""
                     SELECT x.Id, x.FileId, x.BoxX, x.BoxY, x.BoxW, x.BoxH, x.Size, x.SuggestionScore
                     FROM Faces x JOIN Files f ON f.Id = x.FileId
-                    WHERE f.LibraryId = $lib AND x.State = 3
+                    WHERE f.LibraryId IN ({scope.SqlLibraryIdList}) AND x.State = 3
                     ORDER BY x.FileId DESC, x.Id
                     LIMIT $limit OFFSET $offset;
-                    """, ("$lib", libraryId.Value), ("$limit", Math.Max(0, limit)), ("$offset", Math.Max(0, offset)));
+                    """, ("$limit", Math.Max(0, limit)), ("$offset", Math.Max(0, offset)));
                 var faces = new List<IgnoredFaceInfo>();
                 using (var reader = cmd.ExecuteReader())
                 {

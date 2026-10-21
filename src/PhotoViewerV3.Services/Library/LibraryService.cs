@@ -113,7 +113,7 @@ public sealed class LibraryService : ILibraryService
                 Name = displayName,
                 RootPath = normalized,
                 CreatedAt = now,
-                LastOpenedAt = now,
+                LastOpenedAt = await NextOpenedAtAsync(ctx, 0, ct).ConfigureAwait(false), // neue Bibliothek sicher aktiv
             };
             ctx.Libraries.Add(entity);
             await ctx.SaveChangesAsync(ct).ConfigureAwait(false);
@@ -128,6 +128,22 @@ public sealed class LibraryService : ILibraryService
             };
             ctx.LibraryRoots.Add(root);
             await ctx.SaveChangesAsync(ct).ConfigureAwait(false);
+        }
+
+        // Eigene Gruppe (ADR-0048) — neue Bibliotheken sind nie verknüpft; die neue ist aktiv, also einzeln angezeigt.
+        // Scheitert das (gesperrter Katalog), holt der Bereichsdienst die Gruppe beim ersten Zugriff nach.
+        try
+        {
+            entity.GroupId = await WriteGroupsAsync((connection, tx) =>
+            {
+                var groupId = LibraryGroupStore.EnsureGroup(connection, tx, entity.Id);
+                LibraryGroupStore.WriteViewAllLinked(connection, tx, null);
+                return groupId;
+            }, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is Microsoft.Data.Sqlite.SqliteException or InvalidOperationException)
+        {
+            _logger.LogWarning(ex, "Gruppe der neuen Bibliothek {LibraryId} nicht angelegt — folgt beim ersten Zugriff", entity.Id);
         }
 
         _logger.LogInformation("Bibliothek angelegt: Id={LibraryId} Name={Name} Archiv-Wurzel={Root}", entity.Id, entity.Name, entity.RootPath);
@@ -145,6 +161,21 @@ public sealed class LibraryService : ILibraryService
             ?? throw new InvalidOperationException($"Bibliothek Id={libraryId} nicht gefunden.");
         entity.Name = newName.Trim();
         await ctx.SaveChangesAsync(ct).ConfigureAwait(false);
+
+        // Unverknüpfte Bibliothek: ihre Gruppe heißt wie sie (ADR-0048) — verknüpfte Gruppen behalten ihren Namen.
+        var name = entity.Name;
+        try
+        {
+            await WriteGroupsAsync((connection, tx) => LibraryGroupStore.Execute(connection, tx, """
+                UPDATE LibraryGroups SET Name = $n
+                WHERE Id = (SELECT GroupId FROM Libraries WHERE Id = $id)
+                  AND (SELECT COUNT(*) FROM Libraries WHERE GroupId = LibraryGroups.Id) = 1;
+                """, ("$n", name), ("$id", libraryId)), ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is Microsoft.Data.Sqlite.SqliteException or InvalidOperationException)
+        {
+            _logger.LogWarning(ex, "Gruppenname der Bibliothek {LibraryId} nicht nachgezogen", libraryId); // nur Anzeige
+        }
         _logger.LogInformation("Bibliothek umbenannt: Id={LibraryId} Name={Name}", libraryId, entity.Name);
     }
 
@@ -154,7 +185,15 @@ public sealed class LibraryService : ILibraryService
         {
             var entity = await ctx.Libraries.FindAsync(new object[] { libraryId }, ct).ConfigureAwait(false)
                 ?? throw new InvalidOperationException($"Bibliothek Id={libraryId} nicht gefunden.");
-            entity.LastOpenedAt = DateTime.UtcNow;
+            entity.LastOpenedAt = await NextOpenedAtAsync(ctx, libraryId, ct).ConfigureAwait(false);
+
+            // Eine einzelne Bibliothek öffnen beendet die Ansicht „Alle verknüpften“ (ADR-0048) — im selben SaveChanges.
+            var allLinked = await ctx.Settings.FirstOrDefaultAsync(s => s.Key == LibraryGroupStore.ViewAllLinkedKey, ct).ConfigureAwait(false);
+            if (allLinked is not null)
+            {
+                ctx.Settings.Remove(allLinked);
+            }
+
             await ctx.SaveChangesAsync(ct).ConfigureAwait(false);
         }
 
@@ -200,13 +239,28 @@ public sealed class LibraryService : ILibraryService
 
         await ClearAsync(libraryId, ct).ConfigureAwait(false);
 
+        int groupId;
         await using (var ctx = _factory.Create())
         {
+            groupId = await ctx.Libraries.AsNoTracking().Where(l => l.Id == libraryId).Select(l => l.GroupId).FirstOrDefaultAsync(ct).ConfigureAwait(false);
             await ctx.LibraryRoots.Where(r => r.LibraryId == libraryId).ExecuteDeleteAsync(ct).ConfigureAwait(false);
             await ctx.Libraries.Where(l => l.Id == libraryId).ExecuteDeleteAsync(ct).ConfigureAwait(false);
         }
 
-        _logger.LogInformation("Bibliothek entfernt: Id={LibraryId} Name={Name}", libraryId, name);
+        // Letzte Bibliothek ihrer Gruppe (ADR-0048): Gruppe samt Begriffen weg — sonst blieben sie unsichtbar liegen.
+        // In einer verknüpften Gruppe bleiben die gemeinsamen Begriffe bei den übrigen Bibliotheken.
+        // Scheitert das, räumt LibraryScope.GetGroupsAsync verwaiste Gruppen beim nächsten Lesen weg.
+        var groupRemoved = false;
+        try
+        {
+            groupRemoved = await WriteGroupsAsync((connection, tx) => LibraryGroupStore.DeleteGroupIfEmpty(connection, tx, groupId), ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is Microsoft.Data.Sqlite.SqliteException or InvalidOperationException)
+        {
+            _logger.LogWarning(ex, "Gruppe {GroupId} der entfernten Bibliothek nicht aufgeräumt — folgt beim nächsten Lesen", groupId);
+        }
+
+        _logger.LogInformation("Bibliothek entfernt: Id={LibraryId} Name={Name} (Gruppe {GroupId} entfernt: {GroupRemoved})", libraryId, name, groupId, groupRemoved);
 
         if (activeBefore != libraryId)
         {
@@ -492,6 +546,24 @@ public sealed class LibraryService : ILibraryService
             .ThenByDescending(l => l.CreatedAt)
             .ThenByDescending(l => l.Id);
 
+    /// <summary>
+    /// Zeitpunkt für „jetzt geöffnet“: LastOpenedAt wird in ganzen Sekunden gespeichert — zwei Wechsel in derselben
+    /// Sekunde ergäben einen Gleichstand, den die Id statt der Reihenfolge entschiede (0.2.51: beim schnellen Wechsel A → B
+    /// blieb B aktiv). Deshalb mindestens eine Sekunde nach dem jüngsten anderen LastOpenedAt.
+    /// </summary>
+    private static async Task<DateTime> NextOpenedAtAsync(LibraryContext ctx, int libraryId, CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        now = new DateTime(now.Ticks - (now.Ticks % TimeSpan.TicksPerSecond), DateTimeKind.Utc);
+        var latestOther = await ctx.Libraries.AsNoTracking()
+            .Where(l => l.Id != libraryId && l.LastOpenedAt != null)
+            .Select(l => l.LastOpenedAt)
+            .OrderByDescending(t => t)
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
+        return latestOther is { } other && other >= now ? other.AddSeconds(1) : now;
+    }
+
     private static Task<int?> GetActiveIdAsync(LibraryContext ctx, CancellationToken ct) =>
         ActiveFirst(ctx.Libraries.AsNoTracking()).Select(l => (int?)l.Id).FirstOrDefaultAsync(ct);
 
@@ -543,10 +615,24 @@ public sealed class LibraryService : ILibraryService
             folderCount,
             fileCount,
             archive?.IsAvailable ?? false,
-            list);
+            list)
+        {
+            GroupId = e.GroupId,
+        };
     }
 
     // ---- Raw-SQLite ------------------------------------------------------------------------
+
+    /// <summary>Kurze Schreibtransaktion für die Gruppen (ADR-0048), mit Wiederholung bei gesperrter DB (ADR-0030).</summary>
+    private Task<T> WriteGroupsAsync<T>(Func<Microsoft.Data.Sqlite.SqliteConnection, Microsoft.Data.Sqlite.SqliteTransaction, T> write, CancellationToken ct)
+        => Task.Run(async () =>
+        {
+            using var connection = _factory.OpenSqliteConnection();
+            using var tx = await _factory.BusyRetry.BeginTransactionAsync(connection, ct).ConfigureAwait(false);
+            var result = write(connection, tx);
+            tx.Commit();
+            return result;
+        }, ct);
 
     private LibraryCatalogCleanup.Result ClearCatalogRows(int libraryId)
     {

@@ -255,6 +255,15 @@ FilesFts           -- FTS5 virtual table (Files.Name, Extension)
   Settings: `motifs.enabled` (Standard an), `motifs.useGpu`, `motifs.threshold` (Standard 0,01). „Neu aufbauen“ parkt
   FileEmbeddings/FileMotifs wie die Gesichter (`UserDataCarryOver.Motifs.cs`); der Incremental-Scan verwirft Vektor und
   Treffer an Ort und Stelle geänderter Dateien.
+- Bibliotheks-Gruppen — umgesetzt in 0.2.51 (Migration `AddLibraryScoping`, ADR-0048): `LibraryGroups (Id, Name NOCASE,
+  CreatedAtUtc)`, `Libraries.GroupId` (`IX_Libraries_Group`), dazu `GroupId` an `Tags`, `Categories`, `Persons` und
+  `PersonRelations` — die Angaben „global“ oben gelten seitdem **je Gruppe**: `UX_Tags_Group_Name`,
+  `UX_Categories_Group_Name`, `IX_PersonRelations_Group_Name` (eindeutig, NOCASE), `IX_Persons_Group_IsMe` (ersetzt
+  `IX_Persons_IsMe`), `IX_Persons_Group_Name`; die globalen `UX_Tags_Name`, `UX_Categories_Name`, `IX_PersonRelations_Name`
+  sind weg. `GroupId` ohne Fremdschlüssel (`ADD COLUMN … NOT NULL DEFAULT 0`, kein Tabellen-Neuaufbau); 0 = „ohne
+  Bibliothek“, übernimmt die nächste Bibliothek. Jede Bibliothek hat ihre Gruppe (Standard: nur sie selbst); verknüpfte
+  Bibliotheken teilen eine. Bestand: je benutzender Bibliothek eine Kopie der Begriffe (Zuordnungen umgehängt), ungenutzte
+  in jeder Bibliothek. Ansicht „Alle verknüpften“ gemerkt in `Settings["Library.ViewAllLinkedGroup"]`.
 
 ### Pflicht-Indizes V0.1
 ```sql

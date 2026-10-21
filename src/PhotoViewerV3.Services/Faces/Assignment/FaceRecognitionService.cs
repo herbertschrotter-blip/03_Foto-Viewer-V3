@@ -30,6 +30,7 @@ public sealed partial class FaceRecognitionService : IFaceRecognitionService, ID
     private readonly ILogger<FaceRecognitionService> _logger;
     private readonly IMessenger _messenger;
     private readonly FaceRecognitionOptions _options;
+    private readonly ILibraryScope _scope;
 
     /// <summary>Stille Warte-Logik für Hintergrund-Schreibvorgänge (keine „Änderung wartet“-Meldung, wie der Index).</summary>
     private readonly SqliteBusyRetry _silentRetry;
@@ -63,10 +64,12 @@ public sealed partial class FaceRecognitionService : IFaceRecognitionService, ID
         IFaceClusterer clusterer,
         ILogger<FaceRecognitionService> logger,
         IMessenger? messenger = null,
-        FaceRecognitionOptions? options = null)
+        FaceRecognitionOptions? options = null,
+        ILibraryScope? scope = null)
     {
         _factory = factory;
         _libraries = libraries;
+        _scope = scope ?? new LibraryScope(factory);
         _recognizer = recognizer;
         _clusterer = clusterer;
         _logger = logger;
@@ -81,7 +84,7 @@ public sealed partial class FaceRecognitionService : IFaceRecognitionService, ID
         {
             var model = Volatile.Read(ref _model);
             return new FaceRecognitionState(
-                model?.LibraryId,
+                model?.Scope.LibraryId,
                 model?.Model.PersonIds.Count ?? 0,
                 model?.Model.ExampleCount ?? 0,
                 Volatile.Read(ref _generation),
@@ -101,11 +104,24 @@ public sealed partial class FaceRecognitionService : IFaceRecognitionService, ID
         _messenger.Register<FaceRecognitionService, FacesChangedMessage>(this, static (r, m) => r.OnFacesChanged(m));
         _messenger.Register<FaceRecognitionService, ActiveLibraryChangedMessage>(this, static (r, m) =>
         {
-            // Kommt auch nach jedem Scan derselben Bibliothek — dann bleibt das Modell.
-            if (Volatile.Read(ref r._model)?.LibraryId != m.LibraryId)
+            // Kommt auch nach jedem Scan derselben Bibliothek — dann bleibt das Modell. Wechsel zur Ansicht „Alle verknüpften“
+            // (gleiche aktive Bibliothek, anderer Bereich, ADR-0048) erkennt der nächste Durchgang am Bereichs-Schlüssel.
+            if (Volatile.Read(ref r._model)?.Scope.LibraryId != m.LibraryId)
             {
                 r.InvalidateGroups();
                 r.RequestRetrain();
+            }
+            else
+            {
+                r._wake.Writer.TryWrite(true);
+            }
+        });
+        // Verknüpfen/Lösen (ADR-0048): Personen-Ids und Gruppen haben sich geändert — alles neu.
+        _messenger.Register<FaceRecognitionService, LibraryGroupsChangedMessage>(this, static (r, m) =>
+        {
+            if (m.TermsChanged)
+            {
+                r.InvalidateAll(); // Umbenennen der Gruppe ändert keine Ids — dann bleibt das Modell
             }
         });
         _messenger.Register<FaceRecognitionService, FilesChangedMessage>(this, static (r, m) =>
@@ -176,7 +192,7 @@ public sealed partial class FaceRecognitionService : IFaceRecognitionService, ID
             }
         }
 
-        if (Volatile.Read(ref _groups)?.LibraryId == message.LibraryId)
+        if (Volatile.Read(ref _groups)?.Scope.Contains(message.LibraryId) == true)
         {
             InvalidateGroups(); // neue Gesichter → Gruppen beim nächsten Abruf neu berechnen
         }
@@ -246,8 +262,8 @@ public sealed partial class FaceRecognitionService : IFaceRecognitionService, ID
             _pendingFiles.Clear();
         }
 
-        var libraryId = await GetActiveLibraryIdAsync(stop).ConfigureAwait(false);
-        if (libraryId is null)
+        var scope = await CurrentScopeAsync(stop).ConfigureAwait(false);
+        if (scope is null)
         {
             Volatile.Write(ref _model, null);
             return;
@@ -255,9 +271,9 @@ public sealed partial class FaceRecognitionService : IFaceRecognitionService, ID
 
         var model = Volatile.Read(ref _model);
         var changed = 0;
-        if (retrain || model is null || model.LibraryId != libraryId)
+        if (retrain || model is null || model.Scope.Key != scope.Key)
         {
-            model = await TrainAsync(libraryId.Value, stop).ConfigureAwait(false);
+            model = await TrainAsync(scope, stop).ConfigureAwait(false);
             changed += await SuggestAllAsync(model, stop).ConfigureAwait(false);
             MessageAfterTraining(model, changed);
         }
@@ -266,24 +282,47 @@ public sealed partial class FaceRecognitionService : IFaceRecognitionService, ID
             changed += await SuggestFilesAsync(model, files, stop).ConfigureAwait(false);
             if (changed > 0)
             {
-                _messenger.Send(new PersonsChangedMessage(model.LibraryId));
+                _messenger.Send(new PersonsChangedMessage(model.Scope.LibraryId));
             }
         }
     }
+
+    /// <summary>Aktueller Bibliotheks-Bereich (ADR-0048) oder null ohne Bibliothek.</summary>
+    private async Task<LibraryScopeInfo?> CurrentScopeAsync(CancellationToken ct)
+    {
+        var scope = await _scope.GetCurrentAsync(ct).ConfigureAwait(false);
+        return scope.HasLibrary ? scope : null;
+    }
+
+    /// <summary>Gruppe des aktuellen Bereichs (0 ohne Bibliothek) — zum Lesen.</summary>
+    private async Task<int> CurrentGroupAsync(CancellationToken ct)
+        => (await _scope.GetCurrentAsync(ct).ConfigureAwait(false)).GroupId;
+
+    /// <summary>Aktive Bibliothek (0 ohne) — Schreibwege lösen ihre Gruppe erst IN der Transaktion auf (<see cref="GroupInTransaction"/>).</summary>
+    private async Task<int> CurrentLibraryIdAsync(CancellationToken ct)
+        => (await _scope.GetCurrentAsync(ct).ConfigureAwait(false)).LibraryId;
+
+    /// <summary>
+    /// Gruppe der Bibliothek, gelesen in der Schreibtransaktion: ein gleichzeitiges Verknüpfen (eigene Transaktion) kann die
+    /// zuvor gelesene Gruppe aufgelöst haben — dann landete die neue Person in einer Gruppe ohne Bibliothek (ADR-0048).
+    /// </summary>
+    private static int GroupInTransaction(SqliteConnection connection, SqliteTransaction tx, int libraryId)
+        => libraryId == 0 ? 0 : LibraryGroupStore.ReadGroupOf(connection, tx, libraryId) ?? 0;
 
     private void MessageAfterTraining(ModelState model, int changed)
     {
         _logger.LogInformation(
             "Gesichter-Zuordnung: gelernt aus {Examples} bestätigten Gesichtern ({Persons} Personen), {Changed} Vorschläge geändert",
             model.Model.ExampleCount, model.Model.PersonIds.Count, changed);
-        _messenger.Send(new PersonsChangedMessage(model.LibraryId));
+        _messenger.Send(new PersonsChangedMessage(model.Scope.LibraryId));
     }
 
     // ==== Training und Vorschläge =====================================================================================
 
-    private sealed record ModelState(int LibraryId, string? ModelVersion, IFaceModel Model, int Generation);
+    /// <summary>Gelerntes Modell eines Bereichs (ADR-0048): Trainingsdaten und Kandidaten nur aus dessen Bibliotheken.</summary>
+    private sealed record ModelState(LibraryScopeInfo Scope, string? ModelVersion, IFaceModel Model, int Generation);
 
-    private async Task<ModelState> TrainAsync(int libraryId, CancellationToken ct)
+    private async Task<ModelState> TrainAsync(LibraryScopeInfo scope, CancellationToken ct)
     {
         await _trainLock.WaitAsync(ct).ConfigureAwait(false);
         try
@@ -292,11 +331,11 @@ public sealed partial class FaceRecognitionService : IFaceRecognitionService, ID
                 () =>
                 {
                     using var connection = _factory.OpenSqliteConnection();
-                    var version = FaceAssignmentStore.ResolveModelVersion(connection, libraryId);
-                    var confirmed = version is null ? [] : FaceAssignmentStore.ReadConfirmedSamples(connection, libraryId, version);
-                    var rejections = FaceAssignmentStore.ReadRejections(connection, libraryId);
+                    var version = FaceAssignmentStore.ResolveModelVersion(connection, scope);
+                    var confirmed = version is null ? [] : FaceAssignmentStore.ReadConfirmedSamples(connection, scope, version);
+                    var rejections = FaceAssignmentStore.ReadRejections(connection, scope);
                     var model = _recognizer.Train(confirmed, rejections, _options.Recognizer, ct);
-                    var state = new ModelState(libraryId, version, model, Interlocked.Increment(ref _generation));
+                    var state = new ModelState(scope, version, model, Interlocked.Increment(ref _generation));
                     Volatile.Write(ref _model, state);
                     return state;
                 },
@@ -311,14 +350,14 @@ public sealed partial class FaceRecognitionService : IFaceRecognitionService, ID
     /// <summary>Modell der aktiven Bibliothek; trainiert sofort, wenn noch keins da ist (Benutzeraktion wartet darauf).</summary>
     private async Task<ModelState?> EnsureModelAsync(CancellationToken ct)
     {
-        var libraryId = await GetActiveLibraryIdAsync(ct).ConfigureAwait(false);
-        if (libraryId is null)
+        var scope = await CurrentScopeAsync(ct).ConfigureAwait(false);
+        if (scope is null)
         {
             return null;
         }
 
         var model = Volatile.Read(ref _model);
-        return model is not null && model.LibraryId == libraryId ? model : await TrainAsync(libraryId.Value, ct).ConfigureAwait(false);
+        return model is not null && model.Scope.Key == scope.Key ? model : await TrainAsync(scope, ct).ConfigureAwait(false);
     }
 
     /// <summary>Vorschläge für alle offenen Gesichter, stapelweise; bricht ab, sobald erneut gelernt werden soll.</summary>
@@ -345,7 +384,7 @@ public sealed partial class FaceRecognitionService : IFaceRecognitionService, ID
                 () =>
                 {
                     using var connection = _factory.OpenSqliteConnection();
-                    return FaceAssignmentStore.ReadOpenBatch(connection, model.LibraryId, model.ModelVersion, after, _options.SuggestBatchSize);
+                    return FaceAssignmentStore.ReadOpenBatch(connection, model.Scope, model.ModelVersion, after, _options.SuggestBatchSize);
                 },
                 ct).ConfigureAwait(false);
             if (batch.Count == 0)
@@ -369,8 +408,8 @@ public sealed partial class FaceRecognitionService : IFaceRecognitionService, ID
             () =>
             {
                 using var connection = _factory.OpenSqliteConnection();
-                // nur Dateien der Bibliothek des Modells (eine verspätete Meldung der vorigen Bibliothek fällt weg)
-                return FaceAssignmentStore.ReadOpenForFiles(connection, model.LibraryId, fileIds, model.ModelVersion);
+                // nur Dateien des Bereichs des Modells (eine verspätete Meldung einer anderen Bibliothek fällt weg)
+                return FaceAssignmentStore.ReadOpenForFiles(connection, model.Scope, fileIds, model.ModelVersion);
             },
             ct).ConfigureAwait(false);
         return faces.Count == 0 ? 0 : await SuggestAndWriteAsync(model, faces, ct).ConfigureAwait(false);
@@ -431,7 +470,7 @@ public sealed partial class FaceRecognitionService : IFaceRecognitionService, ID
     // ==== Lesen =======================================================================================================
 
     public async Task<int?> GetActiveLibraryIdAsync(CancellationToken ct = default)
-        => (await _libraries.GetActiveAsync(ct).ConfigureAwait(false))?.Id;
+        => (await CurrentScopeAsync(ct).ConfigureAwait(false))?.LibraryId;
 
     public Task<IReadOnlyDictionary<int, IReadOnlyList<FacePersonInfo>>> GetFacesForFilesAsync(IReadOnlyCollection<int> fileIds, CancellationToken ct)
     {
@@ -455,38 +494,39 @@ public sealed partial class FaceRecognitionService : IFaceRecognitionService, ID
 
     public async Task<IReadOnlyList<PersonOverview>> GetPersonOverviewsAsync(CancellationToken ct = default)
     {
-        var libraryId = await GetActiveLibraryIdAsync(ct).ConfigureAwait(false);
+        // Personen der Gruppe, Zähler über den Bereich (ADR-0048) — nie Personen einer anderen Bibliothek.
+        var scope = await _scope.GetCurrentAsync(ct).ConfigureAwait(false);
         return await Task.Run<IReadOnlyList<PersonOverview>>(
             () =>
             {
                 using var connection = _factory.OpenSqliteConnection();
-                return FaceAssignmentStore.ReadPersons(connection, libraryId);
+                return FaceAssignmentStore.ReadPersons(connection, scope);
             },
             ct).ConfigureAwait(false);
     }
 
     public async Task<PersonFaces?> GetPersonFacesAsync(int personId, CancellationToken ct = default)
     {
-        var libraryId = await GetActiveLibraryIdAsync(ct).ConfigureAwait(false);
+        var scope = await _scope.GetCurrentAsync(ct).ConfigureAwait(false);
         return await Task.Run(
             () =>
             {
                 using var connection = _factory.OpenSqliteConnection();
-                var person = FaceAssignmentStore.ReadPersons(connection, libraryId, personId).FirstOrDefault();
+                var person = FaceAssignmentStore.ReadPersons(connection, scope, personId).FirstOrDefault();
                 if (person is null)
                 {
                     return null;
                 }
 
-                if (libraryId is null)
+                if (!scope.HasLibrary)
                 {
                     return new PersonFaces(person.Person, [], []);
                 }
 
                 return new PersonFaces(
                     person.Person,
-                    FaceAssignmentStore.ReadPersonFaces(connection, libraryId.Value, personId, suggested: false),
-                    FaceAssignmentStore.ReadPersonFaces(connection, libraryId.Value, personId, suggested: true));
+                    FaceAssignmentStore.ReadPersonFaces(connection, scope, personId, suggested: false),
+                    FaceAssignmentStore.ReadPersonFaces(connection, scope, personId, suggested: true));
             },
             ct).ConfigureAwait(false);
     }
@@ -506,11 +546,12 @@ public sealed partial class FaceRecognitionService : IFaceRecognitionService, ID
     public async Task<int?> FindPersonByNameAsync(string name, CancellationToken ct = default)
     {
         var trimmed = NormalizeName(name);
+        var groupId = await CurrentGroupAsync(ct).ConfigureAwait(false);
         return await Task.Run(
             () =>
             {
                 using var connection = _factory.OpenSqliteConnection();
-                return FaceAssignmentStore.FindPersonByName(connection, null, trimmed);
+                return FaceAssignmentStore.FindPersonByName(connection, null, groupId, trimmed);
             },
             ct).ConfigureAwait(false);
     }
@@ -534,7 +575,7 @@ public sealed partial class FaceRecognitionService : IFaceRecognitionService, ID
                 using (var connection = _factory.OpenSqliteConnection())
                 {
                     faces = FaceAssignmentStore.ReadFaces(connection, null, faceIds);
-                    names = FaceAssignmentStore.ReadPersonNames(connection);
+                    names = FaceAssignmentStore.ReadPersonNames(connection, model.Scope.GroupId);
                 }
 
                 var results = new List<FaceOutlierResult>(faces.Count);
@@ -580,14 +621,16 @@ public sealed partial class FaceRecognitionService : IFaceRecognitionService, ID
     public async Task<int> CreatePersonAsync(string name, CancellationToken ct = default)
     {
         var trimmed = NormalizeName(name);
+        var libraryId = await CurrentLibraryIdAsync(ct).ConfigureAwait(false);
         var id = await WriteAsync(silent: false, (connection, tx) =>
         {
-            if (FaceAssignmentStore.FindPersonByName(connection, tx, trimmed) is { } existing)
+            var groupId = GroupInTransaction(connection, tx, libraryId);
+            if (FaceAssignmentStore.FindPersonByName(connection, tx, groupId, trimmed) is { } existing)
             {
                 throw new PersonNameTakenException(trimmed, existing);
             }
 
-            return FaceAssignmentStore.InsertPerson(connection, tx, trimmed);
+            return FaceAssignmentStore.InsertPerson(connection, tx, groupId, trimmed);
         }, ct).ConfigureAwait(false);
         _logger.LogInformation("Person angelegt (Id {PersonId})", id);
         await NotifyAsync(retrain: false, ct).ConfigureAwait(false);
@@ -599,8 +642,8 @@ public sealed partial class FaceRecognitionService : IFaceRecognitionService, ID
         var trimmed = NormalizeName(name);
         await WriteAsync(silent: false, (connection, tx) =>
         {
-            RequirePerson(connection, tx, personId);
-            if (FaceAssignmentStore.FindPersonByName(connection, tx, trimmed, personId) is { } existing)
+            var groupId = RequirePersonGroup(connection, tx, personId);
+            if (FaceAssignmentStore.FindPersonByName(connection, tx, groupId, trimmed, personId) is { } existing)
             {
                 throw new PersonNameTakenException(trimmed, existing);
             }
@@ -623,8 +666,11 @@ public sealed partial class FaceRecognitionService : IFaceRecognitionService, ID
 
         await WriteAsync(silent: false, (connection, tx) =>
         {
-            RequirePerson(connection, tx, sourceId);
-            RequirePerson(connection, tx, targetId);
+            if (RequirePersonGroup(connection, tx, sourceId) != RequirePersonGroup(connection, tx, targetId))
+            {
+                throw new InvalidOperationException("Personen verschiedener (nicht verknüpfter) Bibliotheken lassen sich nicht zusammenführen.");
+            }
+
             var p = new (string, object)[] { ("$s", sourceId), ("$t", targetId) };
             FaceAssignmentStore.Execute(connection, tx, "UPDATE Faces SET PersonId = $t WHERE PersonId = $s;", p);
             FaceAssignmentStore.Execute(connection, tx, "UPDATE Faces SET SuggestedPersonId = $t WHERE SuggestedPersonId = $s;", p);
@@ -715,11 +761,23 @@ public sealed partial class FaceRecognitionService : IFaceRecognitionService, ID
             var n = 0;
             foreach (var id in faceIds.Distinct())
             {
-                n += FaceAssignmentStore.Execute(connection, tx, """
-                    UPDATE Faces SET State = 2, PersonId = $p, SuggestedPersonId = NULL, SuggestionScore = NULL WHERE Id = $id;
+                // Nur Gesichter aus Bibliotheken der Gruppe der Person (ADR-0048) — nie eine Person aus A an ein Gesicht in B.
+                var updated = FaceAssignmentStore.Execute(connection, tx, """
+                    UPDATE Faces SET State = 2, PersonId = $p, SuggestedPersonId = NULL, SuggestionScore = NULL
+                    WHERE Id = $id
+                      AND EXISTS (SELECT 1 FROM Files f JOIN Libraries l ON l.Id = f.LibraryId JOIN Persons pp ON pp.GroupId = l.GroupId
+                                  WHERE f.Id = Faces.FileId AND pp.Id = $p);
                     """, ("$p", personId), ("$id", id));
-                FaceAssignmentStore.Execute(connection, tx,
-                    "DELETE FROM FaceRejections WHERE FaceId = $id AND PersonId = $p;", ("$id", id), ("$p", personId));
+                n += updated;
+                if (updated > 0)
+                {
+                    FaceAssignmentStore.Execute(connection, tx,
+                        "DELETE FROM FaceRejections WHERE FaceId = $id AND PersonId = $p;", ("$id", id), ("$p", personId));
+                }
+                else
+                {
+                    _logger.LogWarning("Gesicht {FaceId} nicht als Person {PersonId} bestätigt: nicht in der Bibliotheks-Gruppe der Person oder nicht mehr vorhanden", id, personId);
+                }
             }
 
             // Ein Titelbild, das gerade einer ANDEREN Person zugeordnet wurde, ist dort keins mehr.
@@ -858,25 +916,25 @@ public sealed partial class FaceRecognitionService : IFaceRecognitionService, ID
 
     private sealed record CachedGroup(long Id, IReadOnlyList<FaceGroupMemberInfo> Members, float Cohesion, float[] Centroid);
 
-    private sealed record GroupsCache(int LibraryId, IReadOnlyList<CachedGroup> Groups, int UnknownFaces, int Sections, bool Stale);
+    private sealed record GroupsCache(LibraryScopeInfo Scope, IReadOnlyList<CachedGroup> Groups, int UnknownFaces, int Sections, bool Stale);
 
     public async Task<FaceGroupsResult> GetGroupsAsync(bool refresh = false, CancellationToken ct = default)
     {
-        var libraryId = await GetActiveLibraryIdAsync(ct).ConfigureAwait(false);
-        if (libraryId is null)
+        var scope = await CurrentScopeAsync(ct).ConfigureAwait(false);
+        if (scope is null)
         {
             return FaceGroupsResult.Empty;
         }
 
         var model = await EnsureModelAsync(ct).ConfigureAwait(false);
         var cache = Volatile.Read(ref _groups);
-        if (refresh || cache is null || cache.LibraryId != libraryId || cache.Stale)
+        if (refresh || cache is null || cache.Scope.Key != scope.Key || cache.Stale)
         {
             await _groupsLock.WaitAsync(ct).ConfigureAwait(false);
             try
             {
                 cache = Volatile.Read(ref _groups);
-                if (refresh || cache is null || cache.LibraryId != libraryId || cache.Stale)
+                if (refresh || cache is null || cache.Scope.Key != scope.Key || cache.Stale)
                 {
                     // Während des Rechnens (Sekunden bei vielen Gesichtern) können Benutzeraktionen Gesichter herausnehmen
                     // oder den Stand ungültig machen — beides merken und auf das neue Ergebnis anwenden.
@@ -890,7 +948,7 @@ public sealed partial class FaceRecognitionService : IFaceRecognitionService, ID
 
                     try
                     {
-                        cache = await Task.Run(() => ComputeGroups(libraryId.Value, model?.ModelVersion, ct), ct).ConfigureAwait(false);
+                        cache = await Task.Run(() => ComputeGroups(scope, model?.ModelVersion, ct), ct).ConfigureAwait(false);
                     }
                     finally
                     {
@@ -920,17 +978,17 @@ public sealed partial class FaceRecognitionService : IFaceRecognitionService, ID
         return await Task.Run(() => ToResult(cache, model), ct).ConfigureAwait(false);
     }
 
-    private GroupsCache ComputeGroups(int libraryId, string? modelVersion, CancellationToken ct)
+    private GroupsCache ComputeGroups(LibraryScopeInfo scope, string? modelVersion, CancellationToken ct)
     {
         using var connection = _factory.OpenSqliteConnection();
-        modelVersion ??= FaceAssignmentStore.ResolveModelVersion(connection, libraryId);
-        var unknownCount = FaceAssignmentStore.CountUnknown(connection, libraryId);
+        modelVersion ??= FaceAssignmentStore.ResolveModelVersion(connection, scope);
+        var unknownCount = FaceAssignmentStore.CountUnknown(connection, scope);
         if (modelVersion is null)
         {
-            return new GroupsCache(libraryId, [], unknownCount, 0, false);
+            return new GroupsCache(scope, [], unknownCount, 0, false);
         }
 
-        var faces = FaceAssignmentStore.ReadUnknownForClustering(connection, libraryId, modelVersion, _options.Cluster.MinQuality);
+        var faces = FaceAssignmentStore.ReadUnknownForClustering(connection, scope, modelVersion, _options.Cluster.MinQuality);
         var fileOf = faces.ToDictionary(f => f.FaceId, f => f.FileId);
         var groups = new List<CachedGroup>();
         var section = Math.Max(_options.Cluster.MinGroupSize, _options.MaxClusterSection);
@@ -953,7 +1011,7 @@ public sealed partial class FaceRecognitionService : IFaceRecognitionService, ID
 
         groups.Sort((a, b) => b.Members.Count != a.Members.Count ? b.Members.Count.CompareTo(a.Members.Count) : a.Id.CompareTo(b.Id));
         _logger.LogInformation("Gesichter gruppiert: {Faces} unbekannte Gesichter → {Groups} Gruppen ({Sections} Abschnitt(e))", faces.Count, groups.Count, sections);
-        return new GroupsCache(libraryId, groups, unknownCount, sections, false);
+        return new GroupsCache(scope, groups, unknownCount, sections, false);
     }
 
     private FaceGroupsResult ToResult(GroupsCache cache, ModelState? model)
@@ -963,7 +1021,7 @@ public sealed partial class FaceRecognitionService : IFaceRecognitionService, ID
         if (hasPersons)
         {
             using var connection = _factory.OpenSqliteConnection();
-            names = FaceAssignmentStore.ReadPersonNames(connection);
+            names = FaceAssignmentStore.ReadPersonNames(connection, model!.Scope.GroupId);
         }
 
         var groups = cache.Groups.Select(g =>
@@ -1047,7 +1105,7 @@ public sealed partial class FaceRecognitionService : IFaceRecognitionService, ID
 
     private async Task NotifyAsync(bool retrain, CancellationToken ct)
     {
-        var libraryId = await GetActiveLibraryIdAsync(ct).ConfigureAwait(false);
+        var libraryId = (await _scope.GetCurrentAsync(ct).ConfigureAwait(false)) is { HasLibrary: true } s ? s.LibraryId : (int?)null;
         if (retrain)
         {
             RequestRetrain();
@@ -1094,6 +1152,11 @@ public sealed partial class FaceRecognitionService : IFaceRecognitionService, ID
             throw new InvalidOperationException("Die Person gibt es nicht mehr.");
         }
     }
+
+    /// <summary>Gruppe der Person (ADR-0048); wirft, wenn es sie nicht mehr gibt.</summary>
+    private static int RequirePersonGroup(SqliteConnection connection, SqliteTransaction tx, int personId)
+        => FaceAssignmentStore.ReadPersonGroup(connection, tx, personId)
+           ?? throw new InvalidOperationException("Die Person gibt es nicht mehr.");
 
     private static void ClearCovers(SqliteConnection connection, SqliteTransaction tx, IReadOnlyCollection<long> faceIds)
         => FaceAssignmentStore.Execute(connection, tx,

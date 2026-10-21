@@ -83,7 +83,8 @@ public sealed class PersonDetailsMigrationTests
                 Scalar(connection, "SELECT SuggestedPersonId FROM Faces WHERE Id = 501").Should().Be(3);
                 Scalar(connection, "SELECT COUNT(*) FROM FaceRejections").Should().Be(1, "Ablehnungen bleiben");
                 Scalar(connection, "PRAGMA foreign_key_check;").Should().Be(0);
-                Scalar(connection, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name IN ('IX_Persons_Relation', 'IX_Persons_IsMe', 'IX_PersonRelations_Name')")
+                // Seit 0.2.51 (ADR-0048, AddLibraryScoping) gelten „Das bin ich“ und Beziehungsnamen je Bibliotheks-Gruppe.
+                Scalar(connection, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name IN ('IX_Persons_Relation', 'IX_Persons_Group_IsMe', 'IX_PersonRelations_Group_Name')")
                     .Should().Be(3);
 
                 // Fremdschlüssel der Beziehung: Löschen setzt NULL

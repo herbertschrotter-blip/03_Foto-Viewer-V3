@@ -20,6 +20,7 @@ using PhotoViewerV3.Services.Scanning;
 using PhotoViewerV3.Services.Thumbnails;
 using PhotoViewerV3.Services.Archive;
 using PhotoViewerV3.Services.Watch;
+using PhotoViewerV3.Libraries.Linking;
 using PhotoViewerV3.Lightbox;
 using PhotoViewerV3.Motifs;
 using PhotoViewerV3.Persons;
@@ -172,6 +173,7 @@ public partial class App : Application, ICatalogHostSwitcher
         services.AddPersonRelationsSettings(); // „Personen & Beziehungen“ in den Einstellungen (Wpf/Settings/PersonRelations, ADR-0045)
         services.AddPlacesMap(); // Seite „Orte“: Weltkarte mit Foto-Gruppen, Verorten (Wpf/Places, ADR-0051)
         services.AddMotifsUi(); // Einstellungen › Motive (Wpf/Motifs, ADR-0052)
+        services.AddLibraryLinkingUi(); // „Bibliotheken verknüpfen“ in Einstellungen › Bibliotheken & Eingänge (Wpf/Library/Linking, ADR-0048)
 
         services.AddSingleton<MainWindow>();
     }

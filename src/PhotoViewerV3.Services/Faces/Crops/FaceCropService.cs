@@ -190,6 +190,7 @@ public sealed class FaceCropService : IFaceCropService, IDisposable
 
     private void ProcessBatch(List<(int LibraryId, long FaceId)> batch, CancellationToken ct)
     {
+        batch = ResolveOwnLibraries(batch);
         var missing = new List<(int LibraryId, long FaceId)>();
         foreach (var (libraryId, faceId) in batch)
         {
@@ -274,6 +275,41 @@ public sealed class FaceCropService : IFaceCropService, IDisposable
         {
             _logger.LogWarning(ex, "Empfänger von CropReady warf eine Ausnahme");
         }
+    }
+
+    /// <summary>
+    /// Jeder Ausschnitt liegt im Cache SEINER Bibliothek (ADR-0048): in der Ansicht „Alle verknüpften“ fordert die
+    /// Personen-Seite Gesichter mehrerer Bibliotheken mit der aktiven an — hier wird die Bibliothek der Datei eingesetzt
+    /// (Gesichter, die es nicht mehr gibt, behalten die angefragte).
+    /// </summary>
+    private List<(int LibraryId, long FaceId)> ResolveOwnLibraries(List<(int LibraryId, long FaceId)> batch)
+    {
+        if (batch.Count == 0)
+        {
+            return batch;
+        }
+
+        var own = new Dictionary<long, int>();
+        try
+        {
+            using var connection = _factory.OpenSqliteConnection();
+            using var cmd = FaceAssignmentStore.Command(connection, null, $"""
+                SELECT x.Id, f.LibraryId FROM Faces x JOIN Files f ON f.Id = x.FileId
+                WHERE x.Id IN ({FaceAssignmentStore.IdList(batch.Select(b => b.FaceId))});
+                """);
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                own[reader.GetInt64(0)] = reader.GetInt32(1);
+            }
+        }
+        catch (Exception ex) when (ex is Microsoft.Data.Sqlite.SqliteException or InvalidOperationException)
+        {
+            _logger.LogDebug(ex, "Bibliotheken der Gesichter nicht lesbar — Ausschnitte bleiben bei der angefragten Bibliothek");
+            return batch;
+        }
+
+        return batch.Select(b => (own.TryGetValue(b.FaceId, out var lib) ? lib : b.LibraryId, b.FaceId)).Distinct().ToList();
     }
 
     /// <summary>Gesichter einer Datei neu erkannt: Box kann sich geändert haben → Ausschnitte verwerfen; gelöschte später wegräumen.</summary>

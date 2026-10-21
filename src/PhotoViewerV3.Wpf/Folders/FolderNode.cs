@@ -29,9 +29,10 @@ public sealed partial class FolderNode : ObservableObject
         Path = string.Empty;
     }
 
-    public FolderNode(FolderTreeViewModel owner, int id, string name, string path, int fileCount, int totalFileCount, bool hasChildren, string? roleLabel = null, bool isInInbox = false)
+    public FolderNode(FolderTreeViewModel owner, int id, string name, string path, int fileCount, int totalFileCount, bool hasChildren, string? roleLabel = null, bool isInInbox = false, bool isLibraryHeader = false)
     {
         IsInInbox = isInInbox;
+        IsLibraryHeader = isLibraryHeader;
         _owner = owner;
         Id = id;
         Name = name;
@@ -66,6 +67,15 @@ public sealed partial class FolderNode : ObservableObject
 
     public bool IsLibraryRoot => RoleLabel is not null;
 
+    /// <summary>
+    /// Kopfknoten einer Bibliothek in der Ansicht „Alle verknüpften“ (ADR-0048): kein Ordner, sondern Klammer um die Wurzeln
+    /// einer Bibliothek — Auswahl wirkt wie „Gesamte Bibliothek“, keine Ordner-Aktionen.
+    /// </summary>
+    public bool IsLibraryHeader { get; }
+
+    /// <summary>Ordner-Aktionen (Kontextmenü) nur für echte Ordner.</summary>
+    public bool IsFolder => !IsPlaceholder && !IsLibraryHeader;
+
     public bool IsPlaceholder => _owner is null;
 
     /// <summary>Ordner liegt unter einer Eingangs-Wurzel (inkl. der Wurzel selbst) — „In die Bibliothek übernehmen…“ möglich (ADR-0034).</summary>
@@ -74,12 +84,12 @@ public sealed partial class FolderNode : ObservableObject
     /// <summary>Kontextmenü „Bewertung für alle Dateien“: Parameter „1“–„5“, „0“ = Bewertung entfernen.</summary>
     [RelayCommand]
     private Task RateAllAsync(string? stars)
-        => _owner is null ? Task.CompletedTask : _owner.RateFolderAsync(this, byte.TryParse(stars, out var s) && s is >= 1 and <= 5 ? s : null);
+        => _owner is null || IsLibraryHeader ? Task.CompletedTask : _owner.RateFolderAsync(this, byte.TryParse(stars, out var s) && s is >= 1 and <= 5 ? s : null);
 
     /// <summary>Kontextmenü „Favorit für alle“: Parameter „true“ / „false“.</summary>
     [RelayCommand]
     private Task FavoriteAllAsync(string? value)
-        => _owner is null ? Task.CompletedTask : _owner.FavoriteFolderAsync(this, string.Equals(value, "true", System.StringComparison.OrdinalIgnoreCase));
+        => _owner is null || IsLibraryHeader ? Task.CompletedTask : _owner.FavoriteFolderAsync(this, string.Equals(value, "true", System.StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Umbenennen nur für normale Ordner (Wurzeln sind Bibliothekseinstellung, Platzhalter nichts).</summary>
     public bool CanRename => !IsPlaceholder && !IsLibraryRoot;

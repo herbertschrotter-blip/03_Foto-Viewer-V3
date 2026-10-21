@@ -63,8 +63,14 @@ public sealed partial class LibraryViewModel : ObservableObject
         INavigationService navigation,
         ILogger<LibraryViewModel> logger,
         IMessenger? messenger = null,
-        Folders.FolderActions? folderActions = null)
+        Folders.FolderActions? folderActions = null,
+        ILibraryLinkService? linking = null,
+        ILibraryScope? libraryScope = null,
+        Linking.ILibraryLinkDialogService? linkDialogs = null)
     {
+        _linking = linking; // „Verknüpfen mit…“ / „Verknüpfung lösen“ (ADR-0048, LibraryViewModel.Linking.cs)
+        _libraryScope = libraryScope;
+        _linkDialogs = linkDialogs;
         _folderActions = folderActions;
         _libraries = libraries;
         _scanner = scanner;
@@ -98,7 +104,8 @@ public sealed partial class LibraryViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsScanPanelVisible))]
     [NotifyCanExecuteChangedFor(
         nameof(ScanCommand), nameof(RebuildCommand), nameof(RemoveCommand), nameof(CreateLibraryCommand), nameof(SetActiveCommand), nameof(RenameCommand), nameof(CancelScanCommand),
-        nameof(AddInboxRootCommand), nameof(MakeArchiveRootCommand), nameof(RenameRootCommand), nameof(RemoveRootCommand), nameof(AdoptInboxCommand))]
+        nameof(AddInboxRootCommand), nameof(MakeArchiveRootCommand), nameof(RenameRootCommand), nameof(RemoveRootCommand), nameof(AdoptInboxCommand),
+        nameof(LinkCommand), nameof(UnlinkCommand), nameof(RenameGroupCommand))]
     private bool _isScanning;
 
     [ObservableProperty]
@@ -174,10 +181,13 @@ public sealed partial class LibraryViewModel : ObservableObject
                 .Select(l => (int?)l.Id)
                 .FirstOrDefault();
 
+            var groups = await LoadGroupsAsync().ConfigureAwait(true); // Verknüpfungen (ADR-0048)
             Libraries.Clear();
             foreach (var info in all)
             {
-                Libraries.Add(new LibraryListItem(info, info.Id == activeId));
+                var item = new LibraryListItem(info, info.Id == activeId);
+                ApplyGroup(item, all, groups);
+                Libraries.Add(item);
             }
 
             _logger.LogInformation("Bibliotheken geladen: {Count} (aktiv: {ActiveId})", all.Count, activeId);

@@ -134,8 +134,10 @@ public sealed partial class GalleryViewModel : ObservableObject
         ILogger<GalleryViewModel> logger,
         PhotoViewerV3.Gallery.CaptureDates.CaptureDateActions? captureDateActions = null,
         PhotoViewerV3.Gallery.Places.PlaceActions? placeActions = null,
-        PhotoViewerV3.Services.Motifs.IMotifTermService? motifTerms = null)
+        PhotoViewerV3.Services.Motifs.IMotifTermService? motifTerms = null,
+        PhotoViewerV3.Services.Library.ILibraryScope? libraryScope = null)
     {
+        _libraryScope = libraryScope ?? new PhotoViewerV3.Services.Library.LibraryScope(contextFactory); // ADR-0048, GalleryViewModel.Scope.cs
         InitMotifs(motifTerms); // Bildinhalt-Suche (ADR-0052, GalleryViewModel.Motifs.cs)
         _contextFactory = contextFactory;
         _source = source;
@@ -287,7 +289,7 @@ public sealed partial class GalleryViewModel : ObservableObject
     public bool HasSelection => SelectedCount > 0;
     public bool CanActOnSelection => SelectedCount > 0 && !IsOperationRunning;
     public bool CanExecuteUndo => CanUndo && !IsOperationRunning;
-    public bool CanExtractSelection => SelectedArchiveCount > 0 && !IsOperationRunning;
+    public bool CanExtractSelection => SelectedArchiveCount > 0 && !IsOperationRunning && !IsAllLinkedView;
     public string SelectionText => SelectedCount == 1 ? "1 ausgewählt" : $"{SelectedCount:N0} ausgewählt";
 
     public bool ShowNoLibrary => !HasLibrary;
@@ -442,6 +444,7 @@ public sealed partial class GalleryViewModel : ObservableObject
             {
                 _libraryId = 0;
                 _libraryRootPath = null;
+                ClearScope();
                 HasLibrary = false;
                 LibraryNameDisplay = string.Empty;
                 StatusText = "Keine Bibliothek vorhanden.";
@@ -451,7 +454,8 @@ public sealed partial class GalleryViewModel : ObservableObject
 
             _libraryId = lib.Id;
             _libraryRootPath = lib.RootPath;
-            LibraryNameDisplay = $"{lib.Name}  ·  {lib.RootPath}";
+            await LoadScopeAsync(lib.Id); // Bereich: Bibliothek bzw. „Alle verknüpften“ (ADR-0048, GalleryViewModel.Scope.cs)
+            LibraryNameDisplay = ScopeDisplayName($"{lib.Name}  ·  {lib.RootPath}");
             HasLibrary = true;
 
             // Offline-Check kann bei UNC-Pfaden blockieren → Thread-Pool.
@@ -508,19 +512,19 @@ public sealed partial class GalleryViewModel : ObservableObject
     /// <summary>Wurzeln geändert (ADR-0020): Archiv-Wurzel bzw. Anzeigepfad kann wechseln, Status-Filter liefert andere Treffer → Library neu laden.</summary>
     private Task HandleLibraryRootsChangedAsync(LibraryRootsChangedMessage m)
     {
-        if (!HasLibrary || m.LibraryId != _libraryId)
+        if (!HasLibrary || !InScope(m.LibraryId))
         {
             return Task.CompletedTask;
         }
 
         _logger.LogInformation("LibraryRootsChangedMessage: LibraryId={LibraryId}", m.LibraryId);
-        return ReloadLibraryAsync(m.LibraryId);
+        return ReloadLibraryAsync(_libraryId); // in „Alle verknüpften“ bleibt die aktive Bibliothek (ADR-0048)
     }
 
     /// <summary>Ordner angelegt/umbenannt: Pfade der Kacheln und Unterordner-Kacheln nachziehen (gebündelt).</summary>
     private Task HandleFoldersChangedAsync(FoldersChangedMessage m)
     {
-        if (HasLibrary && m.LibraryId == _libraryId)
+        if (HasLibrary && InScope(m.LibraryId))
         {
             ScheduleReload();
         }
@@ -528,10 +532,13 @@ public sealed partial class GalleryViewModel : ObservableObject
         return Task.CompletedTask;
     }
 
-    private Task HandleActiveLibraryChangedAsync(ActiveLibraryChangedMessage m)
+    private async Task HandleActiveLibraryChangedAsync(ActiveLibraryChangedMessage m)
     {
         _logger.LogInformation("ActiveLibraryChangedMessage: LibraryId={LibraryId}", m.LibraryId);
-        return ReloadLibraryAsync(m.LibraryId);
+        await ReloadLibraryAsync(m.LibraryId);
+        // Tags und Kategorien gehören der Gruppe der Bibliothek (ADR-0048) — nach jedem Wechsel neu lesen.
+        await LoadTagsAsync();
+        await LoadCategoriesAsync();
     }
 
     private Task HandleScanCompletedAsync(ScanCompletedMessage m)
@@ -545,7 +552,7 @@ public sealed partial class GalleryViewModel : ObservableObject
             return ReloadLibraryAsync(m.LibraryId);
         }
 
-        if (m.LibraryId != _libraryId)
+        if (!InScope(m.LibraryId))
         {
             return Task.CompletedTask;
         }
@@ -560,7 +567,7 @@ public sealed partial class GalleryViewModel : ObservableObject
 
     private Task HandleFolderSelectedAsync(FolderSelectedMessage m)
     {
-        if (!HasLibrary || m.LibraryId != _libraryId)
+        if (!HasLibrary || !InScope(m.LibraryId))
         {
             return Task.CompletedTask;
         }
@@ -576,7 +583,7 @@ public sealed partial class GalleryViewModel : ObservableObject
 
     private async Task HandleFilesChangedAsync(FilesChangedMessage m)
     {
-        if (!HasLibrary || m.LibraryId != _libraryId)
+        if (!HasLibrary || !InScope(m.LibraryId))
         {
             return;
         }
@@ -878,7 +885,10 @@ public sealed partial class GalleryViewModel : ObservableObject
     private GalleryQuery BuildQuery()
     {
         var term = string.IsNullOrWhiteSpace(SearchTerm) ? null : SearchTerm.Trim();
-        return WithMotifs(new GalleryQuery(_libraryId, FilterState, term, FolderId, IncludeSubfolders, SelectedSort.Sort, SelectedTagIds(), TagFilterMode, SelectedCategoryFilters(), SelectedSort.Category, SelectedPersonFilter())); // Motive (ADR-0052)
+        return WithMotifs(new GalleryQuery(_libraryId, FilterState, term, FolderId, IncludeSubfolders, SelectedSort.Sort, SelectedTagIds(), TagFilterMode, SelectedCategoryFilters(), SelectedSort.Category, SelectedPersonFilter())
+        {
+            LibraryIds = ScopeLibraryIdsForQuery, // ADR-0048: null = nur die aktive Bibliothek
+        }); // Motive (ADR-0052)
     }
 
     /// <summary>
@@ -1036,7 +1046,8 @@ public sealed partial class GalleryViewModel : ObservableObject
         var requests = new List<ThumbnailRequest>(items.Count);
         foreach (var it in items)
         {
-            requests.Add(new ThumbnailRequest(_libraryId, it.Id, it.SourcePath, it.MediaType, it.SourceModifiedAtUtc));
+            // Cache je Bibliothek der Datei (ADR-0048: in „Alle verknüpften“ nicht immer die aktive)
+            requests.Add(new ThumbnailRequest(it.LibraryId != 0 ? it.LibraryId : _libraryId, it.Id, it.SourcePath, it.MediaType, it.SourceModifiedAtUtc));
         }
 
         try
@@ -1053,7 +1064,7 @@ public sealed partial class GalleryViewModel : ObservableObject
     /// <summary>Läuft auf einem Worker-Thread des ThumbnailService — nur den unveränderlichen Id-Schnappschuss lesen.</summary>
     private void OnThumbnailReady(ThumbnailReadyEventArgs args)
     {
-        if (args.LibraryId != _libraryId || !_currentIdsSnapshot.Contains(args.FileId))
+        if (!InScope(args.LibraryId) || !_currentIdsSnapshot.Contains(args.FileId))
         {
             return;
         }
@@ -1434,11 +1445,11 @@ public sealed partial class GalleryViewModel : ObservableObject
 
     // ---- Datei-Operationen (IFileOperationService) ---------------------------------------------
 
-    [RelayCommand(CanExecute = nameof(CanActOnSelection))]
+    [RelayCommand(CanExecute = nameof(CanActOnLibrarySelection))]
     private async Task MoveSelectionAsync()
     {
         var ids = SelectedIdsSnapshot();
-        if (ids.Count == 0)
+        if (ids.Count == 0 || await RejectInAllLinkedViewAsync("Verschieben"))
         {
             return;
         }
@@ -1460,7 +1471,7 @@ public sealed partial class GalleryViewModel : ObservableObject
     // ---- „Ins Archiv…“ (ADR-0020) ---------------------------------------------------------------
 
     /// <summary>Aktionsleiste / Strg+M: Auswahl in den Archiv-Ordner verschieben (Zieldialog im IArchiveMoveService).</summary>
-    [RelayCommand(CanExecute = nameof(CanActOnSelection))]
+    [RelayCommand(CanExecute = nameof(CanActOnLibrarySelection))]
     private Task ArchiveSelectionAsync() => ArchiveIdsAsync(SelectedIdsSnapshot());
 
     /// <summary>Kontextmenü der Kachel: ist die Kachel Teil der Auswahl, wird die ganze Auswahl archiviert, sonst nur sie.</summary>
@@ -1476,13 +1487,18 @@ public sealed partial class GalleryViewModel : ObservableObject
         return ArchiveIdsAsync(ids);
     }
 
-    private Task ArchiveIdsAsync(IReadOnlyList<int> ids)
+    private async Task ArchiveIdsAsync(IReadOnlyList<int> ids)
     {
-        if (ids.Count == 0)
+        if (ids.Count == 0 || await RejectInAllLinkedViewAsync("In die Bibliothek"))
         {
-            return Task.CompletedTask;
+            return;
         }
 
+        await ArchiveIdsCoreAsync(ids);
+    }
+
+    private Task ArchiveIdsCoreAsync(IReadOnlyList<int> ids)
+    {
         // Die aktuelle Ansicht bleibt (z. B. Filter „Nicht archiviert“): der Reload zeigt die restlichen Dateien.
         return RunOperationAsync("In die Bibliothek", async () =>
         {
@@ -1655,7 +1671,7 @@ public sealed partial class GalleryViewModel : ObservableObject
     /// <param name="owner">Besitzer des Dialogs; null = Galerie-Fenster. Aus der Lightbox kommt deren Fenster, damit der Dialog davor liegt.</param>
     private async Task ExtractArchivesAsync(IReadOnlyList<ArchiveExtractTarget> targets, Window? owner = null)
     {
-        if (targets.Count == 0 || !HasLibrary || IsOperationRunning)
+        if (targets.Count == 0 || !HasLibrary || IsOperationRunning || await RejectInAllLinkedViewAsync("Entpacken"))
         {
             return;
         }

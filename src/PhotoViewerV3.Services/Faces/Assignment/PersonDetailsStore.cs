@@ -6,6 +6,8 @@ namespace PhotoViewerV3.Services.Faces.Assignment;
 /// <summary>
 /// SQL der Personen-Details und Beziehungen (0.2.47, ADR-0045) auf rohen Verbindungen — Schreiben immer in der
 /// Transaktion des Aufrufers. <c>Persons.Name</c> wird bei jedem Schreiben aus Vor-/Nachname/Rufname nachgezogen.
+/// Seit 0.2.51 (ADR-0048) gehören Personen und Beziehungen einer Bibliotheks-Gruppe: Lesen, Suchen und „Das bin ich“
+/// gelten je Gruppe.
 /// </summary>
 internal static class PersonDetailsStore
 {
@@ -29,14 +31,15 @@ internal static class PersonDetailsStore
             !reader.IsDBNull(offset + 8) && reader.GetBoolean(offset + 8));
     }
 
-    public static List<PersonDetails> ReadAll(SqliteConnection connection, int? personId = null)
+    /// <summary>Details der Personen einer Gruppe; <paramref name="personId"/> = nur diese (leer, wenn in anderer Gruppe).</summary>
+    public static List<PersonDetails> ReadAll(SqliteConnection connection, int groupId, int? personId = null)
     {
         using var cmd = FaceAssignmentStore.Command(connection, null, $"""
             SELECT p.Id, {DetailColumns}
             FROM Persons p LEFT JOIN PersonRelations r ON r.Id = p.RelationId
-            WHERE $person IS NULL OR p.Id = $person
+            WHERE p.GroupId = $group AND ($person IS NULL OR p.Id = $person)
             ORDER BY p.Name COLLATE NOCASE, p.Id;
-            """, ("$person", (object?)personId ?? DBNull.Value));
+            """, ("$group", groupId), ("$person", (object?)personId ?? DBNull.Value));
         var list = new List<PersonDetails>();
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
@@ -47,19 +50,19 @@ internal static class PersonDetailsStore
         return list;
     }
 
-    /// <summary>Legt eine Person an (Eingabe schon normalisiert und geprüft).</summary>
-    public static int InsertPerson(SqliteConnection connection, SqliteTransaction tx, PersonDetailsInput input, int? relationId)
+    /// <summary>Legt eine Person in der Gruppe an (Eingabe schon normalisiert und geprüft).</summary>
+    public static int InsertPerson(SqliteConnection connection, SqliteTransaction tx, int groupId, PersonDetailsInput input, int? relationId)
     {
         if (input.IsMe)
         {
-            ClearIsMe(connection, tx);
+            ClearIsMe(connection, tx, groupId);
         }
 
         FaceAssignmentStore.Execute(connection, tx, """
             INSERT INTO Persons (Name, CreatedAtUtc, CoverFaceId, IsHidden, FirstName, LastName, Nickname, RelationId,
-                                 BirthYear, BirthMonth, BirthDay, IsMe)
-            VALUES ($n, $now, NULL, 0, $first, $last, $nick, $rel, $y, $m, $d, $me);
-            """, Parameters(input, relationId, ("$now", DateTimeOffset.UtcNow.ToUnixTimeSeconds())));
+                                 BirthYear, BirthMonth, BirthDay, IsMe, GroupId)
+            VALUES ($n, $now, NULL, 0, $first, $last, $nick, $rel, $y, $m, $d, $me, $group);
+            """, [.. Parameters(input, relationId, ("$now", DateTimeOffset.UtcNow.ToUnixTimeSeconds())), ("$group", groupId)]);
         return (int)FaceAssignmentStore.Scalar(connection, tx, "SELECT last_insert_rowid();");
     }
 
@@ -67,7 +70,7 @@ internal static class PersonDetailsStore
     {
         if (input.IsMe)
         {
-            ClearIsMe(connection, tx);
+            ClearIsMe(connection, tx, FaceAssignmentStore.ReadPersonGroup(connection, tx, personId) ?? 0);
         }
 
         return FaceAssignmentStore.Execute(connection, tx, """
@@ -77,41 +80,49 @@ internal static class PersonDetailsStore
             """, Parameters(input, relationId, ("$p", personId)));
     }
 
-    /// <summary>Beziehung zum Namen (ohne Groß-/Kleinschreibung) oder neu angelegt; null für leeren Namen.</summary>
-    public static int? ResolveRelation(SqliteConnection connection, SqliteTransaction tx, string? name)
+    /// <summary>Beziehung zum Namen in der Gruppe (ohne Groß-/Kleinschreibung) oder neu angelegt; null für leeren Namen.</summary>
+    public static int? ResolveRelation(SqliteConnection connection, SqliteTransaction tx, int groupId, string? name)
     {
         if (PersonNames.CleanOrNull(name) is not { } cleaned)
         {
             return null;
         }
 
-        if (FindRelation(connection, tx, cleaned) is { } existing)
+        if (FindRelation(connection, tx, groupId, cleaned) is { } existing)
         {
             return existing;
         }
 
-        FaceAssignmentStore.Execute(connection, tx, "INSERT INTO PersonRelations (Name) VALUES ($n);", ("$n", cleaned));
+        FaceAssignmentStore.Execute(connection, tx, "INSERT INTO PersonRelations (Name, GroupId) VALUES ($n, $g);", ("$n", cleaned), ("$g", groupId));
         return (int)FaceAssignmentStore.Scalar(connection, tx, "SELECT last_insert_rowid();");
     }
 
-    public static int? FindRelation(SqliteConnection connection, SqliteTransaction? tx, string name, int? exceptId = null)
+    public static int? FindRelation(SqliteConnection connection, SqliteTransaction? tx, int groupId, string name, int? exceptId = null)
     {
         using var cmd = FaceAssignmentStore.Command(connection, tx,
-            "SELECT Id FROM PersonRelations WHERE Name = $n AND Id <> $except LIMIT 1;",
-            ("$n", name), ("$except", (object?)exceptId ?? -1));
+            "SELECT Id FROM PersonRelations WHERE GroupId = $g AND Name = $n AND Id <> $except LIMIT 1;",
+            ("$g", groupId), ("$n", name), ("$except", (object?)exceptId ?? -1));
         return cmd.ExecuteScalar() is long id ? (int)id : null;
     }
 
     public static bool RelationExists(SqliteConnection connection, SqliteTransaction tx, int relationId)
         => FaceAssignmentStore.Scalar(connection, tx, "SELECT COUNT(*) FROM PersonRelations WHERE Id = $r;", ("$r", relationId)) > 0;
 
-    public static List<PersonRelationInfo> ReadRelations(SqliteConnection connection)
+    /// <summary>Gruppe der Beziehung oder null.</summary>
+    public static int? ReadRelationGroup(SqliteConnection connection, SqliteTransaction? tx, int relationId)
+    {
+        using var cmd = FaceAssignmentStore.Command(connection, tx, "SELECT GroupId FROM PersonRelations WHERE Id = $r;", ("$r", relationId));
+        return cmd.ExecuteScalar() is long g ? (int)g : null;
+    }
+
+    public static List<PersonRelationInfo> ReadRelations(SqliteConnection connection, int groupId)
     {
         using var cmd = FaceAssignmentStore.Command(connection, null, """
             SELECT r.Id, r.Name, (SELECT COUNT(*) FROM Persons p WHERE p.RelationId = r.Id)
             FROM PersonRelations r
+            WHERE r.GroupId = $g
             ORDER BY r.Name COLLATE NOCASE, r.Id;
-            """);
+            """, ("$g", groupId));
         var list = new List<PersonRelationInfo>();
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
@@ -122,8 +133,8 @@ internal static class PersonDetailsStore
         return list;
     }
 
-    private static void ClearIsMe(SqliteConnection connection, SqliteTransaction tx)
-        => FaceAssignmentStore.Execute(connection, tx, "UPDATE Persons SET IsMe = 0 WHERE IsMe = 1;");
+    private static void ClearIsMe(SqliteConnection connection, SqliteTransaction tx, int groupId)
+        => FaceAssignmentStore.Execute(connection, tx, "UPDATE Persons SET IsMe = 0 WHERE IsMe = 1 AND GroupId = $g;", ("$g", groupId));
 
     private static (string, object)[] Parameters(PersonDetailsInput input, int? relationId, (string, object) extra)
         =>

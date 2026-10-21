@@ -21,6 +21,7 @@ public sealed partial class GalleryItem : ObservableObject
     public GalleryItem(GalleryFileDto dto)
     {
         Id = dto.Id;
+        LibraryId = dto.LibraryId; // ADR-0048: Vorschaubild-Cache der eigenen Bibliothek
         FolderId = dto.FolderId;
         Name = dto.Name;
         Extension = dto.Extension;
@@ -43,6 +44,10 @@ public sealed partial class GalleryItem : ObservableObject
     }
 
     public int Id { get; }
+
+    /// <summary>Bibliothek der Datei (0 = unbekannt; in „Alle verknüpften“ je Datei verschieden, ADR-0048).</summary>
+    public int LibraryId { get; }
+
     public int FolderId { get; }
     public string Name { get; }
     public string Extension { get; }

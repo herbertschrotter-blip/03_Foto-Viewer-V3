@@ -38,6 +38,9 @@ public sealed record LibraryInfo(
     bool IsRootAvailable,
     IReadOnlyList<LibraryRootInfo> Roots)
 {
+    /// <summary>Verknüpfungsgruppe (ADR-0048; 0 = noch keine, der Bereichsdienst legt sie an).</summary>
+    public int GroupId { get; init; }
+
     public LibraryRootInfo? ArchiveRoot => Roots.FirstOrDefault(r => r.IsArchive);
 
     public IReadOnlyList<LibraryRootInfo> InboxRoots => Roots.Where(r => r.IsInbox).ToList();

@@ -63,6 +63,9 @@ public sealed record GalleryFileDto(
     /// <summary>Höhe des Originals nach EXIF-Drehung (<c>Files.Height</c>); null/0 = unbekannt.</summary>
     public int? Height { get; init; }
 
+    /// <summary>Bibliothek der Datei (ADR-0048; 0 = unbekannt → die aktive). In „Alle verknüpften“ je Datei verschieden.</summary>
+    public int LibraryId { get; init; }
+
     public static string FormatSize(long size) => size switch
     {
         < 1024 => $"{size} B",

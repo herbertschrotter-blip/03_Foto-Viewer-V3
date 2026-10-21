@@ -43,7 +43,7 @@ public sealed partial class GalleryViewModel
 
     private async Task HandleCaptureDatesChangedAsync(CaptureDatesChangedMessage m)
     {
-        if (!HasLibrary || m.LibraryId != _libraryId)
+        if (!HasLibrary || !InScope(m.LibraryId))
         {
             return;
         }

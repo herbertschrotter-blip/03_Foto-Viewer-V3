@@ -1,5 +1,6 @@
 using System.Windows.Controls;
 using System.Windows.Input;
+using CommunityToolkit.Mvvm.Messaging;
 
 namespace PhotoViewerV3.Settings.TagManagement;
 
@@ -14,6 +15,9 @@ public partial class TagManagementPage : UserControl
         InitializeComponent();
         DataContext = viewModel;
         Loaded += (_, _) => _ = viewModel.LoadCommand.ExecuteAsync(null);
+        // Tags gehören der Bibliotheks-Gruppe (ADR-0048): nach einem Wechsel der Bibliothek die Liste neu lesen.
+        CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger.Default.Register<TagManagementPage, PhotoViewerV3.Services.Messaging.ActiveLibraryChangedMessage>(
+            this, static (r, m) => PhotoViewerV3.Shell.UiThread.Post(() => { if (r.IsLoaded) { _ = r._viewModel.LoadCommand.ExecuteAsync(null); } }));
     }
 
     private void OnNewTagKeyDown(object sender, KeyEventArgs e)

@@ -39,6 +39,15 @@ public sealed partial record GalleryQuery(
     GalleryCategorySort? CategorySort = null,
     GalleryPersonFilter? PersonFilter = null)
 {
+    /// <summary>
+    /// Bibliotheken des Bereichs (ADR-0048, <c>GalleryPageSource.Scope.cs</c>): null bzw. eine = nur <see cref="LibraryId"/>;
+    /// mehrere = Ansicht „Alle verknüpften“.
+    /// </summary>
+    public IReadOnlyList<int>? LibraryIds { get; init; }
+
+    /// <summary>Wirksame Bereichs-Bibliotheken (nie leer).</summary>
+    public IReadOnlyList<int> ScopeLibraryIds => LibraryIds is { Count: > 1 } ids ? ids : [LibraryId];
+
     /// <summary>True, wenn ein Personen-Filter wirkt (0.2.38, <c>GalleryPageSource.Persons.cs</c>).</summary>
     public bool HasPersonFilter => PersonFilter is { IsActive: true };
 
@@ -81,7 +90,8 @@ public sealed partial class GalleryPageSource : IDisposable
 {
     private const string FileColumns =
         "f.Id, f.FolderId, f.Name, f.Extension, f.Size, f.ModifiedAtUtc, f.MediaType, f.IsFavorite, f.Rating, f.Missing, fo.Path, lr.Role, " + CaptureDateColumns
-        + ", f.Width AS MediaWidth, f.Height AS MediaHeight"; // Collage (ADR-0044): gelesen über den Spaltennamen
+        + ", f.Width AS MediaWidth, f.Height AS MediaHeight" // Collage (ADR-0044): gelesen über den Spaltennamen
+        + ", f.LibraryId AS FileLibraryId"; // Bibliothek je Datei (ADR-0048: Vorschaubild-Cache in „Alle verknüpften“)
 
     /// <summary>Rolle der Wurzel je Datei (Badge „Eingang“, ADR-0020); LEFT JOIN, weil Altzeilen ohne RootId denkbar sind.</summary>
     private const string RootJoin = "LEFT JOIN LibraryRoots lr ON lr.Id = fo.RootId";
@@ -222,12 +232,18 @@ public sealed partial class GalleryPageSource : IDisposable
     public Task<IReadOnlyList<GallerySubfolderDto>> GetSubfoldersAsync(int libraryId, int folderId, CancellationToken ct)
         => RunAsync<IReadOnlyList<GallerySubfolderDto>>(conn =>
         {
-            string? parentPath;
+            // Unterordner gehören immer der Bibliothek des Ordners (in „Alle verknüpften“ nicht zwingend der aktiven, ADR-0048).
+            string? parentPath = null;
             using (var pathCmd = conn.CreateCommand())
             {
-                pathCmd.CommandText = "SELECT Path FROM Folders WHERE Id = $id;";
+                pathCmd.CommandText = "SELECT Path, LibraryId FROM Folders WHERE Id = $id;";
                 pathCmd.Parameters.AddWithValue("$id", folderId);
-                parentPath = pathCmd.ExecuteScalar() as string;
+                using var pathReader = pathCmd.ExecuteReader();
+                if (pathReader.Read())
+                {
+                    parentPath = pathReader.GetString(0);
+                    libraryId = pathReader.GetInt32(1);
+                }
             }
 
             if (parentPath is null)
@@ -425,10 +441,10 @@ public sealed partial class GalleryPageSource : IDisposable
 
         var trimmed = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         var prefix = EscapeLike(trimmed + Path.DirectorySeparatorChar) + "%";
-        const string clause = """
+        var clause = $"""
             AND f.FolderId IN (
                 SELECT sf.Id FROM Folders sf
-                WHERE sf.LibraryId = $libId
+                WHERE {ScopeCondition(query, "sf.LibraryId")}
                   AND (sf.Path = $folderPath OR sf.Path LIKE $folderPrefix ESCAPE '\'))
             """;
         return new FolderClause(clause, folderId, path, prefix);
@@ -445,7 +461,7 @@ public sealed partial class GalleryPageSource : IDisposable
             FROM {BuildFilesSource(query)}
             JOIN Folders fo ON fo.Id = f.FolderId
             {RootJoin}
-            WHERE f.LibraryId = $libId
+            WHERE {ScopeCondition(query, "f.LibraryId")}
               {BuildFilterClause(query.Filter)}
               {BuildTagClause(query)}
               {BuildCategoryClause(query)}
@@ -462,7 +478,7 @@ public sealed partial class GalleryPageSource : IDisposable
         return $"""
             SELECT COUNT(*)
             FROM {BuildFilesSource(query)}
-            WHERE f.LibraryId = $libId
+            WHERE {ScopeCondition(query, "f.LibraryId")}
               {BuildFilterClause(query.Filter)}
               {BuildTagClause(query)}
               {BuildCategoryClause(query)}
@@ -648,6 +664,7 @@ public sealed partial class GalleryPageSource : IDisposable
     {
         Width = ReadOptionalInt(reader, "MediaWidth"),
         Height = ReadOptionalInt(reader, "MediaHeight"),
+        LibraryId = ReadOptionalInt(reader, "FileLibraryId") ?? 0,
     };
 
     /// <summary>Optionale Spalte über ihren Namen (unabhängig von der Position in <see cref="FileColumns"/>).</summary>

@@ -71,6 +71,40 @@ public sealed class LibraryListItem
         ? $"zuletzt geöffnet {opened.ToLocalTime():g}"
         : $"angelegt {CreatedAt.ToLocalTime():g}";
 
+    // ---- Verknüpfung (ADR-0048) — vom ViewModel vor dem Anzeigen gesetzt (Liste wird bei jedem Laden neu gebaut) ----
+
+    /// <summary>Verknüpfungsgruppe (0 = unbekannt).</summary>
+    public int GroupId { get; private set; }
+
+    /// <summary>Anzeigename der Gruppe („Alle verknüpften (Name)“).</summary>
+    public string GroupName { get; private set; } = string.Empty;
+
+    /// <summary>Namen der anderen Bibliotheken derselben Gruppe.</summary>
+    public IReadOnlyList<string> LinkedLibraryNames { get; private set; } = [];
+
+    public bool IsLinked => LinkedLibraryNames.Count > 0;
+
+    /// <summary>Verknüpfen ist in diesem Katalog erlaubt (nicht in einer versteckten Bibliothek).</summary>
+    public bool ShowLinking { get; private set; }
+
+    /// <summary>„Verknüpfen mit…“ anbieten: erlaubt und es gibt eine Bibliothek außerhalb der eigenen Gruppe.</summary>
+    public bool CanLink { get; private set; }
+
+    public string LinkText => IsLinked
+        ? $"Verknüpft mit {string.Join(", ", LinkedLibraryNames.Select(n => $"„{n}“"))} — Gruppe „{GroupName}“: Tags, Kategorien, Personen und Beziehungen gemeinsam"
+        : "Nicht verknüpft — Tags, Kategorien, Personen und Beziehungen gelten nur in dieser Bibliothek";
+
+    internal void ApplyGroup(LibraryGroupInfo? group, IReadOnlyDictionary<int, string> namesById, bool allowsLinking, bool hasLibraryOutsideGroup)
+    {
+        GroupId = group?.Id ?? 0;
+        GroupName = group?.Name ?? Name;
+        LinkedLibraryNames = group is null
+            ? []
+            : group.LibraryIds.Where(id => id != Id).Select(id => namesById.GetValueOrDefault(id, $"#{id}")).ToList();
+        ShowLinking = allowsLinking;
+        CanLink = allowsLinking && hasLibraryOutsideGroup;
+    }
+
     public string ScanButtonText => IsEmpty ? "Scannen" : "Aktualisieren";
 
     public string ScanButtonToolTip => IsEmpty

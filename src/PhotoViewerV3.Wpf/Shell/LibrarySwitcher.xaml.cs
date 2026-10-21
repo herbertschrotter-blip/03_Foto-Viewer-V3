@@ -58,6 +58,25 @@ public partial class LibrarySwitcher : UserControl
         }
 
         AddHiddenLibraryItems(menu, vm.Hidden); // nur mit „_hidden“ (ADR-0049)
+        // Verknüpfte Bibliotheken gemeinsam ansehen (ADR-0048) — nur für Gruppen mit mindestens zwei Bibliotheken
+        if (vm.LinkedGroups.Count > 0)
+        {
+            menu.Items.Add(new Separator());
+            menu.Items.Add(new MenuItem { Header = "Gemeinsam ansehen", IsEnabled = false });
+            foreach (var group in vm.LinkedGroups)
+            {
+                menu.Items.Add(new MenuItem
+                {
+                    Header = group.Header,
+                    InputGestureText = group.DetailText,
+                    IsChecked = group.IsActive,
+                    Icon = new SymbolIcon { Symbol = SymbolRegular.Link24 },
+                    Command = vm.ShowAllLinkedCommand,
+                    CommandParameter = group,
+                });
+            }
+        }
+
         menu.Items.Add(new Separator());
         menu.Items.Add(new MenuItem
         {

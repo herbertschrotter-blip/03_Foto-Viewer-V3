@@ -102,19 +102,27 @@ public sealed partial class GalleryPageSource
     /// Je Person eine Index-Suche über <c>IX_Faces_Person_State_File</c> plus Primärschlüssel-Zugriff auf Files.
     /// </summary>
     public Task<IReadOnlyList<GalleryPersonCount>> GetPersonCountsAsync(int libraryId, CancellationToken ct)
+        => GetPersonCountsAsync([libraryId], ct);
+
+    /// <summary>
+    /// Wie oben für einen Bereich (ADR-0048): nur Personen der Gruppe der Bibliotheken, gezählt über alle Bibliotheken
+    /// des Bereichs — Personen einer anderen Bibliothek erscheinen nie (auch nicht mit 0).
+    /// </summary>
+    public Task<IReadOnlyList<GalleryPersonCount>> GetPersonCountsAsync(IReadOnlyList<int> libraryIds, CancellationToken ct)
         => RunAsync<IReadOnlyList<GalleryPersonCount>>(conn =>
         {
             using var cmd = conn.CreateCommand();
-            cmd.CommandText = """
+            cmd.CommandText = $"""
                 SELECT p.Id, p.Name, p.IsHidden,
                        (SELECT COUNT(DISTINCT fa.FileId)
                           FROM Faces fa JOIN Files f ON f.Id = fa.FileId
-                         WHERE fa.PersonId = p.Id AND fa.State = 2 AND f.LibraryId = $libId) AS FileCount,
+                         WHERE fa.PersonId = p.Id AND fa.State = 2 AND {ScopeCondition(libraryIds, "f.LibraryId")}) AS FileCount,
                        p.FirstName, p.LastName, p.Nickname, r.Name
                 FROM Persons p LEFT JOIN PersonRelations r ON r.Id = p.RelationId
+                WHERE p.GroupId = {GroupOfScopeSql(libraryIds)}
                 ORDER BY p.Name COLLATE NOCASE, p.Id;
                 """;
-            cmd.Parameters.AddWithValue("$libId", libraryId);
+            cmd.Parameters.AddWithValue("$libId", libraryIds.Count > 0 ? libraryIds[0] : -1);
             var result = new List<GalleryPersonCount>();
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
@@ -131,11 +139,15 @@ public sealed partial class GalleryPageSource
 
     /// <summary>True, wenn in der Bibliothek schon Gesichter erkannt wurden (Personen-Filter einblenden).</summary>
     public Task<bool> HasFacesAsync(int libraryId, CancellationToken ct)
+        => HasFacesAsync([libraryId], ct);
+
+    /// <summary>Wie oben für einen Bereich (ADR-0048).</summary>
+    public Task<bool> HasFacesAsync(IReadOnlyList<int> libraryIds, CancellationToken ct)
         => RunAsync(conn =>
         {
             using var cmd = conn.CreateCommand();
-            cmd.CommandText = "SELECT EXISTS (SELECT 1 FROM Faces fa JOIN Files f ON f.Id = fa.FileId WHERE f.LibraryId = $libId);";
-            cmd.Parameters.AddWithValue("$libId", libraryId);
+            cmd.CommandText = $"SELECT EXISTS (SELECT 1 FROM Faces fa JOIN Files f ON f.Id = fa.FileId WHERE {ScopeCondition(libraryIds, "f.LibraryId")});";
+            cmd.Parameters.AddWithValue("$libId", libraryIds.Count > 0 ? libraryIds[0] : -1);
             return Convert.ToInt64(cmd.ExecuteScalar()) == 1;
         }, ct);
 

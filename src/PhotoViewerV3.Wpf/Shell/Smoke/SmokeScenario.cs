@@ -163,6 +163,7 @@ internal sealed partial class SmokeScenario
         _recognition = services.GetService<PhotoViewerV3.Services.Faces.Assignment.IFaceRecognitionService>();
         _personsDialogs = services.GetService<SmokePersonsDialogs>();
         InitSettingsTabs(services); // Einstellungs-Reiter, Info, Bibliotheks-Umschalter (ADR-0042)
+        InitLibraryScoping(services); // Schritt „Bibliotheks-Trennung“ (ADR-0048)
         _captureDialog = services.GetService<SmokeCaptureDateDialog>(); // Schritt „Aufnahmedatum“ (ADR-0046)
         InitHiddenLibrary(services); // Schritt „Versteckte Bibliothek“ (ADR-0049)
         InitPlaces(services); // Schritt „Orte“ (ADR-0050)
@@ -237,6 +238,7 @@ internal sealed partial class SmokeScenario
         await StepAsync("Personen-Details und Beziehungen: benennen mit Vor-/Nachname/Beziehung, Vorschlag beim zweiten Mal, Filter „Beziehung“, Umbenennen in den Einstellungen wirkt überall, „Das bin ich“ eindeutig", PersonDetailsAsync).ConfigureAwait(true); // ADR-0045
         await StepAsync("Collage-Ansicht: umschalten, Reihen randvoll ±1 px, Seitenverhältnisse, Doppelklick öffnet richtige Datei, zurück zu Kacheln", CollageAsync).ConfigureAwait(true); // ADR-0044
         await StepAsync("Aufnahmedatum: EXIF-Foto 1975 nachgetragen, Sortierung Aufnahme ≠ Änderung, Datum setzen ca. 1982 + Rückgängig", CaptureDateAsync).ConfigureAwait(true); // ADR-0046
+        await StepAsync("Bibliotheks-Trennung: zweite Bibliothek, Tag/Person aus A in B unsichtbar, verknüpfen → sichtbar + „Alle verknüpften“ mit Summe, lösen → getrennt, Begriffe in beiden", LibraryScopingAsync).ConfigureAwait(true); // ADR-0048
         await StepAsync("Motive: Index mit Fake-Encoder → Vektoren/Treffer, Statusleiste, Pause/Fortsetzen, Filter, „Motiv: …“-Suche, Spalte, Lightbox, eigener Begriff ohne neue Analyse", MotifsAsync).ConfigureAwait(true); // ADR-0052
         await StepAsync("Orte: GPS lesen und setzen — Foto mit GPS → Ort erkannt, Ort setzen → EXIF in der Datei, Filter „Ort“, Rückgängig → Bytes identisch", PlacesAsync).ConfigureAwait(true); // ADR-0050
         await StepAsync("Orte-Karte: Seite ohne Kacheln, 3 Fotos per „Hier verorten“ + 2 per Ablegen verortet, Gruppe zerfällt beim Hineinzoomen, „In der Galerie zeigen“", PlacesMapAsync).ConfigureAwait(true); // ADR-0051

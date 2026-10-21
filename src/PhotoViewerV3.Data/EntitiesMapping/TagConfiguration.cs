@@ -17,8 +17,10 @@ internal sealed class TagConfiguration : IEntityTypeConfiguration<Tag>
         b.Property(x => x.SortOrder).IsRequired();
         b.Property(x => x.CreatedAtUtc).HasConversion(ValueConverters.DateTimeToUnixSeconds);
 
-        b.HasIndex(x => x.Name)
+        // Seit 0.2.51 (ADR-0048) je Bibliotheks-Gruppe eindeutig; GroupId ohne Fremdschlüssel (siehe LibraryConfiguration).
+        b.Property(x => x.GroupId).IsRequired();
+        b.HasIndex(x => new { x.GroupId, x.Name })
             .IsUnique()
-            .HasDatabaseName("UX_Tags_Name");
+            .HasDatabaseName("UX_Tags_Group_Name");
     }
 }

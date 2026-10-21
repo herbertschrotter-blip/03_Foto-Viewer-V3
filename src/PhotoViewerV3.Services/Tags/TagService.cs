@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using PhotoViewerV3.Domain.Entities;
 using PhotoViewerV3.Services.Catalog;
 using PhotoViewerV3.Services.Database;
+using PhotoViewerV3.Services.Library;
 using PhotoViewerV3.Services.Messaging;
 
 namespace PhotoViewerV3.Services.Tags;
@@ -26,20 +27,26 @@ public sealed class TagService : ITagService, IDisposable
     private readonly ILogger<TagService> _logger;
     private readonly IMessenger _messenger;
     private readonly SemaphoreSlim _writeLock = new(1, 1);
+    private readonly ILibraryScope _scope;
 
-    public TagService(ILibraryContextFactory factory, ILogger<TagService> logger, IMessenger? messenger = null)
+    /// <param name="scope">Bibliotheks-Bereich (ADR-0048); ohne Angabe der Standard-Bereich über dieselbe DB.</param>
+    public TagService(ILibraryContextFactory factory, ILogger<TagService> logger, IMessenger? messenger = null, ILibraryScope? scope = null)
     {
         _factory = factory;
         _logger = logger;
         _messenger = messenger ?? WeakReferenceMessenger.Default;
+        _scope = scope ?? new LibraryScope(factory);
     }
 
     // ---- Stammdaten ----------------------------------------------------------------------------
 
+    /// <summary>Tags der Gruppe des aktuellen Bereichs (ADR-0048) — nie die einer anderen Bibliothek.</summary>
     public async Task<IReadOnlyList<TagInfo>> GetAllAsync(CancellationToken ct = default)
     {
+        var groupId = (await _scope.GetCurrentAsync(ct).ConfigureAwait(false)).GroupId;
         await using var ctx = _factory.Create();
         return await ctx.Tags.AsNoTracking()
+            .Where(t => t.GroupId == groupId)
             .OrderBy(t => t.SortOrder).ThenBy(t => t.Name)
             .Select(t => new TagInfo(t.Id, t.Name, t.Color, t.SortOrder))
             .ToListAsync(ct)
@@ -52,19 +59,27 @@ public sealed class TagService : ITagService, IDisposable
         await _writeLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
+            var scope = await _scope.GetCurrentAsync(ct).ConfigureAwait(false);
+            var groupId = scope.GroupId;
             await using var ctx = _factory.Create();
-            await EnsureUniqueAsync(ctx, normalized, excludeId: null, ct).ConfigureAwait(false);
-            var count = await ctx.Tags.CountAsync(ct).ConfigureAwait(false);
-            var maxOrder = count == 0 ? -1 : await ctx.Tags.MaxAsync(t => t.SortOrder, ct).ConfigureAwait(false);
+            await EnsureUniqueAsync(ctx, groupId, normalized, excludeId: null, ct).ConfigureAwait(false);
+            var count = await ctx.Tags.CountAsync(t => t.GroupId == groupId, ct).ConfigureAwait(false);
+            var maxOrder = count == 0 ? -1 : await ctx.Tags.Where(t => t.GroupId == groupId).MaxAsync(t => t.SortOrder, ct).ConfigureAwait(false);
             var tag = new Tag
             {
                 Name = normalized,
                 Color = color is null ? TagPalette.ForIndex(count) : TagPalette.Normalize(color),
                 SortOrder = maxOrder + 1,
                 CreatedAtUtc = DateTime.UtcNow,
+                GroupId = groupId,
             };
             ctx.Tags.Add(tag);
             await SaveAsync(ctx, normalized, ct).ConfigureAwait(false);
+            if (!await LibraryGroupStore.RehomeIfGroupGoneAsync(_factory, "Tags", tag.Id, scope.LibraryId, ct).ConfigureAwait(false))
+            {
+                await ctx.Tags.Where(t => t.Id == tag.Id).ExecuteDeleteAsync(ct).ConfigureAwait(false);
+                throw new InvalidOperationException($"Ein Tag „{normalized}“ existiert bereits.");
+            }
             _logger.LogInformation("Tag angelegt: {Name} (Id {Id}, {Color})", tag.Name, tag.Id, tag.Color);
             Publish(new TagsChangedMessage(TagsChangeKind.Created, tag.Id));
             return new TagInfo(tag.Id, tag.Name, tag.Color, tag.SortOrder);
@@ -88,7 +103,7 @@ public sealed class TagService : ITagService, IDisposable
                 return;
             }
 
-            await EnsureUniqueAsync(ctx, normalized, excludeId: tagId, ct).ConfigureAwait(false);
+            await EnsureUniqueAsync(ctx, tag.GroupId, normalized, excludeId: tagId, ct).ConfigureAwait(false);
             tag.Name = normalized;
             await SaveAsync(ctx, normalized, ct).ConfigureAwait(false);
             _logger.LogInformation("Tag umbenannt: Id {Id} → {Name}", tagId, normalized);
@@ -129,8 +144,9 @@ public sealed class TagService : ITagService, IDisposable
         await _writeLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
+            var groupId = (await _scope.GetCurrentAsync(ct).ConfigureAwait(false)).GroupId;
             await using var ctx = _factory.Create();
-            var tags = await ctx.Tags.OrderBy(t => t.SortOrder).ThenBy(t => t.Name).ToListAsync(ct).ConfigureAwait(false);
+            var tags = await ctx.Tags.Where(t => t.GroupId == groupId).OrderBy(t => t.SortOrder).ThenBy(t => t.Name).ToListAsync(ct).ConfigureAwait(false);
             var byId = tags.ToDictionary(t => t.Id);
             var order = 0;
             var placed = new HashSet<int>();
@@ -198,10 +214,16 @@ public sealed class TagService : ITagService, IDisposable
         return removed;
     }
 
+    /// <summary>Zähler nur über die Dateien des aktuellen Bereichs (eine Bibliothek bzw. „Alle verknüpften“, ADR-0048).</summary>
     public async Task<IReadOnlyDictionary<int, int>> GetFileCountsAsync(CancellationToken ct = default)
     {
+        var libraryIds = (await _scope.GetCurrentAsync(ct).ConfigureAwait(false)).LibraryIds.ToArray();
         await using var ctx = _factory.Create();
-        var rows = await ctx.FileTags.AsNoTracking()
+        var rows = await (
+                from ft in ctx.FileTags.AsNoTracking()
+                join f in ctx.Files.AsNoTracking() on ft.FileId equals f.Id
+                where libraryIds.Contains(f.LibraryId)
+                select ft)
             .GroupBy(ft => ft.TagId)
             .Select(g => new { TagId = g.Key, Count = g.Count() })
             .ToListAsync(ct)
@@ -320,7 +342,8 @@ public sealed class TagService : ITagService, IDisposable
                         cmd.Parameters.AddWithValue("$t", tagId);
                         var inList = BindIds(cmd, chunk, "$f");
                         cmd.CommandText = assign
-                            ? $"INSERT OR IGNORE INTO FileTags(FileId, TagId) SELECT f.Id, $t FROM Files f WHERE f.Id IN ({inList}) AND EXISTS (SELECT 1 FROM Tags t WHERE t.Id = $t);"
+                            // Nur Tags der Gruppe der Datei-Bibliothek (ADR-0048) — ein Tag aus Bibliothek A landet nie an einer Datei aus B.
+                            ? $"INSERT OR IGNORE INTO FileTags(FileId, TagId) SELECT f.Id, $t FROM Files f WHERE f.Id IN ({inList}) AND EXISTS (SELECT 1 FROM Tags t JOIN Libraries l ON l.GroupId = t.GroupId WHERE t.Id = $t AND l.Id = f.LibraryId);"
                             : $"DELETE FROM FileTags WHERE TagId = $t AND FileId IN ({inList});";
                         count += cmd.ExecuteNonQuery();
                     }
@@ -362,10 +385,10 @@ public sealed class TagService : ITagService, IDisposable
         => await ctx.Tags.FirstOrDefaultAsync(t => t.Id == tagId, ct).ConfigureAwait(false)
            ?? throw new InvalidOperationException($"Tag {tagId} existiert nicht (mehr).");
 
-    private static async Task EnsureUniqueAsync(Data.LibraryContext ctx, string name, int? excludeId, CancellationToken ct)
+    private static async Task EnsureUniqueAsync(Data.LibraryContext ctx, int groupId, string name, int? excludeId, CancellationToken ct)
     {
-        // Spalte hat COLLATE NOCASE → der Vergleich läuft in SQLite ohne Groß-/Kleinschreibung.
-        var exists = await ctx.Tags.AnyAsync(t => t.Name == name && (excludeId == null || t.Id != excludeId), ct).ConfigureAwait(false);
+        // Spalte hat COLLATE NOCASE → der Vergleich läuft in SQLite ohne Groß-/Kleinschreibung; eindeutig je Gruppe (ADR-0048).
+        var exists = await ctx.Tags.AnyAsync(t => t.GroupId == groupId && t.Name == name && (excludeId == null || t.Id != excludeId), ct).ConfigureAwait(false);
         if (exists)
         {
             throw new InvalidOperationException($"Ein Tag „{name}“ existiert bereits.");

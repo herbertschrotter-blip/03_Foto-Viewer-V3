@@ -47,6 +47,7 @@ public static class ServiceCollectionExtensions
 
         // Bibliotheken (Services/Library)
         services.AddLibrary();
+        services.AddLibraryScoping(); // Bibliotheks-Trennung: Bereich, Gruppen, Verknüpfen (ADR-0048)
 
         // Scanning (Data/RawSql + Services/Scanning)
         services.TryAddSingleton<BulkScanWriter>();

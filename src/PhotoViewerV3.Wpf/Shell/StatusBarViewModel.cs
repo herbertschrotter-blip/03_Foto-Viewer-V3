@@ -43,6 +43,7 @@ public sealed partial class StatusBarViewModel : ObservableObject, IDisposable
 
     private readonly IThumbnailService _thumbnails;
     private readonly ILibraryService _libraries;
+    private readonly ILibraryScope? _libraryScope;
     private readonly IFileOperationService _fileOperations;
     private readonly ILogger<StatusBarViewModel> _logger;
     private readonly IMessenger _messenger;
@@ -77,8 +78,10 @@ public sealed partial class StatusBarViewModel : ObservableObject, IDisposable
         ILogger<StatusBarViewModel> logger,
         IMessenger? messenger = null,
         PhotoViewerV3.Services.Faces.Indexing.IFaceIndexService? faceIndex = null,
-        PhotoViewerV3.Services.Motifs.IMotifIndexService? motifIndex = null)
+        PhotoViewerV3.Services.Motifs.IMotifIndexService? motifIndex = null,
+        ILibraryScope? libraryScope = null)
     {
+        _libraryScope = libraryScope; // Anzeige „Alle verknüpften (Name)“ (ADR-0048)
         _messenger = messenger ?? WeakReferenceMessenger.Default;
         _thumbnails = thumbnails;
         _libraries = libraries;
@@ -128,7 +131,8 @@ public sealed partial class StatusBarViewModel : ObservableObject, IDisposable
         try
         {
             var active = await _libraries.GetActiveAsync().ConfigureAwait(true);
-            ActiveLibraryName = active?.Name;
+            var scope = _libraryScope is null ? null : await _libraryScope.GetCurrentAsync().ConfigureAwait(true);
+            ActiveLibraryName = scope is { IsAllLinked: true } ? $"Alle verknüpften ({scope.GroupName})" : active?.Name;
             HintText = active is { IsRootAvailable: false }
                 ? $"Bibliothek offline: {active.RootPath} ist nicht erreichbar"
                 : null;

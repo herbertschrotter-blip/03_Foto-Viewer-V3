@@ -1,7 +1,8 @@
 namespace PhotoViewerV3.Domain.Entities;
 
 /// <summary>
-/// Person für die Gesichtserkennung (ADR-0035, Tabelle "Persons"). Global wie Tags (nicht je Library).
+/// Person für die Gesichtserkennung (ADR-0035, Tabelle "Persons"). Gehört seit 0.2.51 wie Tags einer
+/// Bibliotheks-Gruppe (<see cref="GroupId"/>, ADR-0048); Anzeigename und „Das bin ich“ gelten je Gruppe.
 /// <see cref="CoverFaceId"/> verweist ohne Fremdschlüssel auf ein Gesicht (Zyklus Persons ↔ Faces vermieden) — Leser
 /// müssen ein inzwischen gelöschtes Gesicht tolerieren. <see cref="IsHidden"/> blendet die Person in Listen aus.
 /// Seit 0.2.47 (ADR-0045, Migration AddPersonDetails): Vor-/Nachname, Rufname, Beziehung, Geburtsdatum (auch ungefähr)
@@ -35,6 +36,9 @@ public sealed class Person
 
     public int? BirthDay { get; set; }
 
-    /// <summary>Der Benutzer selbst — höchstens eine Person (eindeutiger Teilindex).</summary>
+    /// <summary>Der Benutzer selbst — höchstens eine Person je Gruppe (eindeutiger Teilindex).</summary>
     public bool IsMe { get; set; }
+
+    /// <summary>Bibliotheks-Gruppe (ADR-0048).</summary>
+    public int GroupId { get; set; }
 }

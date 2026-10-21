@@ -238,6 +238,47 @@ Alle nennenswerten Änderungen an Lumora (bis 0.2.48 „PhotoViewer V3“). Form
   VeraCrypt, Auslagerungsdatei/Ruhezustand, Befehlszeile in der Prozessliste.
 - VeraCrypt-Befehlszeile nicht am echten VeraCrypt geprüft (auf Herberts PC nicht installiert) — nur mit Fakes.
 
+## [0.2.51] — 2026-10-21
+
+### Feature (ADR-0048) — Bibliotheken strikt getrennt, Verknüpfen als Einstellung, Ansicht „Alle verknüpften“
+- **Eine Bibliothek sieht nichts aus einer anderen** (Herberts Vorgabe): Tags, Kategorien (mit Werten), Personen und
+  Beziehungen gehören jetzt einer **Bibliotheks-Gruppe** statt global zu sein. Galerie (Zähler, Seiten, Suche nach
+  Datei-/Tag-/Kategorie-/Personennamen, alle Filter, Kategorie-Sortierung), Tag-/Kategorie-/Personen-/Beziehungs-Flyouts,
+  Einstellungs-Reiter (Tags, Kategorien, Personen & Beziehungen), Personen-Seite (Liste, Details, Gruppen-Vorschläge,
+  ignorierte Gesichter), Lightbox-Personen, Gesichts-Lernen und Vorschläge (Trainingsdaten und Kandidaten nur aus dem
+  Bereich), Ausreißer-Prüfung und Statusleiste lesen alle über den neuen **Bereichsdienst `ILibraryScope`**. Gleich
+  benannte Tags/Personen in zwei Bibliotheken sind verschiedene. Schreibwege prüfen in der Datenbank, dass Tag, Kategorie
+  bzw. Person zur Gruppe der Datei gehören — ein Begriff aus A landet nie an einer Datei aus B.
+- **Migration `AddLibraryScoping`** (ohne Tabellen-Neuaufbau, `Down` wirft — Rückweg ist die Sicherung vor der
+  Migration): `LibraryGroups`, `GroupId` an Libraries/Tags/Categories/Persons/PersonRelations, Eindeutigkeit je Gruppe
+  (`UX_Tags_Group_Name`, `UX_Categories_Group_Name`, `IX_PersonRelations_Group_Name`, `IX_Persons_Group_IsMe`,
+  `IX_Persons_Group_Name`, `IX_Libraries_Group`). Bestand verlustfrei: jede Bibliothek bekommt eine eigene Gruppe und die
+  Begriffe, die sie benutzt (bei mehreren Bibliotheken eine Kopie je weiterer Bibliothek, Zuordnungen, Gesichter,
+  Vorschläge, Ablehnungen und Titelbilder umgehängt); **nicht benutzte Begriffe bekommt jede Bibliothek**. Mit einer
+  Bibliothek ändert sich nichts Sichtbares.
+- **„Bibliotheken verknüpfen“** als eigene Einstellung (Einstellungen › Bibliotheken & Eingänge, Kasten je Bibliothek):
+  **Verknüpfen mit…** (Dialog mit Partner-Auswahl, Zusammenfassung „wird eins / kommt hinzu“ und Liste gleichnamiger
+  Personen — Häkchen = zusammenführen, Standard; getrennt gehaltene bekommen den Bibliotheksnamen als Rufnamen-Zusatz),
+  **Verknüpfung lösen** (Bestätigung mit Zusammenfassung; die Bibliothek bekommt Kopien ALLER gemeinsamen Begriffe und
+  Personen, ihre Zuordnungen zeigen auf die Kopien) und **Gruppe umbenennen…**. Alles in einer Transaktion unter der
+  Scan-Sperre aller betroffenen Bibliotheken (`ILibraryLinkService`).
+- **Ansicht „Alle verknüpften (Name)“** im Bibliotheks-Umschalter für Gruppen mit ≥ 2 Bibliotheken: Galerie, Suche,
+  Filter, Personen und Ordnerbaum (je Bibliothek ein Kopfknoten) zeigen alle Bibliotheken der Gruppe, Zähler = Summe;
+  Vorschaubilder und Gesichts-Ausschnitte liegen im Cache der eigenen Bibliothek jeder Datei. Gesperrt in dieser Ansicht:
+  Verschieben…, „In die Bibliothek“ und Entpacken aus der Galerie, „Eingang hinzufügen…“ auf der Ordner-Seite (Ziel nicht
+  eindeutig). Eine einzelne Bibliothek wählen beendet die Ansicht.
+- **Versteckte Bibliotheken (Vorbereitung für Agent U):** `ICatalogContext.IsHidden` — in einem versteckten Katalog
+  wirft das Verknüpfen (`LibraryLinkNotAllowedException`), die Einstellung ist ausgeblendet, „Alle verknüpften“ nie
+  angeboten.
+- **Bibliothek entfernen:** war sie die letzte ihrer Gruppe, gehen Gruppe und ihre Begriffe mit; Begriffe, die angelegt
+  wurden, als es noch keine Bibliothek gab, übernimmt die erste Bibliothek.
+- **Fix:** zwei Bibliothekswechsel in derselben Sekunde ließen die höhere Id statt der zuletzt gewählten aktiv
+  (`LastOpenedAt` in ganzen Sekunden) — „jetzt geöffnet“ liegt jetzt mindestens eine Sekunde nach dem jüngsten anderen.
+- **Tests:** `LibraryScopingTests` (Isolation inkl. Lernen/Vorschläge/Gruppen, Verknüpfen/Lösen verlustfrei, „Alle
+  verknüpften“, versteckter Katalog, Übernahme ohne Bibliothek, Entfernen), `LibraryScopingMigrationTests`
+  (Mehrbibliotheks-Bestand), `GalleryLibraryScopeTests` (Galerie-SQL, Umschalter, Einstellungen); Rauchtest-Schritt
+  „Bibliotheks-Trennung“ vor „Ordnerüberwachung“.
+
 ## [0.2.50] — 2026-10-21
 
 ### Fix — Personen-Kacheln ohne Binding-Fehler, Design-Time-Datenbank nie mehr der echte Katalog

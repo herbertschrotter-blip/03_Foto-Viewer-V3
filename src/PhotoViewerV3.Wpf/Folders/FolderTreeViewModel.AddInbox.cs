@@ -23,7 +23,8 @@ public sealed partial class FolderTreeViewModel
     public bool CanShowAddInbox => _inboxActions is not null;
 
     // Ein laufender Scan sperrt den Knopf nicht (kein Änderungsereignis dafür) — der Ablauf meldet ihn per Dialog
-    private bool CanAddInbox() => _inboxActions is not null && !IsAddingInbox;
+    // In „Alle verknüpften“ (ADR-0048) gesperrt: das Ziel wäre nicht eindeutig — Eingänge je Bibliothek in den Einstellungen.
+    private bool CanAddInbox() => _inboxActions is not null && !IsAddingInbox && !_loadedScope.IsAllLinked;
 
     [RelayCommand(CanExecute = nameof(CanAddInbox))]
     private async Task AddInboxAsync()

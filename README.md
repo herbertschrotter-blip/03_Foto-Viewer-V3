@@ -116,6 +116,7 @@ außerhalb von OneDrive), `-NoZip` lässt das ZIP weg, `-FrameworkDependent` bau
 ### Navigation (seit 0.2.44, ADR-0042)
 Die linke Leiste zeigt ganz oben das App-Symbol mit dem Schriftzug „lumora“, darunter den **Bibliotheks-Umschalter** (Name der aktiven Bibliothek; Klick → andere Bibliothek
 wählen oder **Bibliotheken verwalten…**), darunter **Galerie, Ordner, Personen, Orte, Sortieren** und unten
+wählen, verknüpfte Bibliotheken als **Alle verknüpften (Name)** gemeinsam ansehen oder **Bibliotheken verwalten…**), darunter **Galerie, Ordner, Personen, Sortieren** und unten
 **Einstellungen**. Bibliothek, Tags und Kategorien richtet man selten ein — sie sind Reiter der Einstellungen:
 **Bibliotheken & Eingänge · Tags · Kategorien · Gesichter · Archive · Darstellung · Speicher & Wartung · Info**.
 Tags und Kategorien **vergeben** geht wie bisher in der Galerie (Rechtsklick, Strg+T, Strg+K, Lightbox); „Tags
@@ -140,6 +141,27 @@ in Einstellungen › Bibliotheken & Eingänge.
   (Anzeigename), Entfernen (nur Eingänge, nur aus dem Katalog). Scannen/Aktualisieren läuft über alle Ordner. Ein
   Kasten „So funktioniert's“ erklärt den Ablauf; die Datenbank enthält nur Verweise und Bewertungen, keine Bilder.
 - Unter der Liste: **Ordnerüberwachung** (Schalter, Ruhezeit; siehe „Ordnerüberwachung“).
+
+### Bibliotheken getrennt oder verknüpft (seit 0.2.51, ADR-0048)
+Jede Bibliothek ist für sich: eine geöffnete Bibliothek zeigt **nichts** aus einer anderen — keine Fotos, keine Tags,
+Kategorien, Personen oder Beziehungen, keine Treffer in der Suche, keine Personen-Vorschläge. Zwei Bibliotheken dürfen
+gleich benannte Tags oder Personen haben; es sind verschiedene.
+- **Verknüpfen**: Einstellungen › Bibliotheken & Eingänge, im Kasten unter einer Bibliothek **Verknüpfen mit…** → die
+  andere Bibliothek wählen. Der Dialog zeigt, was zusammengeführt wird (gleichnamige Tags, Kategorien samt Werten und
+  Beziehungen werden eins, die übrigen kommen hinzu) und listet gleichnamige Personen: Häkchen = zusammenführen
+  (Standard), ohne Häkchen bleiben sie getrennt und bekommen den Bibliotheksnamen als Rufnamen-Zusatz. Verknüpfte
+  Bibliotheken teilen danach Tags, Kategorien, Personen und Beziehungen; die Gruppe heißt wie die Bibliothek, von der aus
+  verknüpft wurde (**Umbenennen**-Symbol daneben).
+- **Alle verknüpften** ansehen: im Bibliotheks-Umschalter oben links erscheint für verknüpfte Bibliotheken
+  „Alle verknüpften (Name)“. Galerie, Suche, Filter, Personen und Ordnerbaum (je Bibliothek ein Knoten) zeigen dann alle
+  zusammen, die Zähler sind die Summe. Verschieben…, „In die Bibliothek“ und Entpacken aus der Galerie sowie „Eingang
+  hinzufügen…“ auf der Ordner-Seite sind in dieser Ansicht gesperrt (das Ziel wäre nicht eindeutig) — dafür eine einzelne
+  Bibliothek wählen. Favoriten, Bewertung, Tags, Kategorien, Personen, Datum und Papierkorb gehen weiter; „In die
+  Bibliothek übernehmen…“ im Ordnerbaum wirkt in der Bibliothek des Ordners.
+- **Verknüpfung lösen**: die Bibliothek wird wieder einzeln geführt und bekommt eine **Kopie** aller gemeinsamen Begriffe
+  und Personen — nichts geht verloren; Tags, Kategorien und Gesichter ihrer Fotos zeigen auf die Kopien.
+- Beim Update auf 0.2.51 bekommt jede Bibliothek die Begriffe, die sie benutzt; nicht benutzte Tags, Kategorien,
+  Personen und Beziehungen findet man in jeder Bibliothek wieder (überzählige dort löschen).
 
 ### Eingang und Bibliotheksordner
 Eine Bibliothek hat genau einen **Bibliotheksordner** (der beim Anlegen gewählte Ordner — dein sortiertes Fotoarchiv;

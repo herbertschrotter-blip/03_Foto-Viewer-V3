@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
@@ -19,6 +20,17 @@ public sealed record LibrarySwitchItem(int Id, string Name, int FileCount, bool 
 }
 
 /// <summary>
+/// Eintrag „Alle verknüpften (Gruppenname)“ im Umschalter (ADR-0048): erscheint für jede Gruppe mit mindestens zwei
+/// Bibliotheken; zeigt alle Bibliotheken der Gruppe gemeinsam.
+/// </summary>
+public sealed record LibraryGroupSwitchItem(int GroupId, string GroupName, int LibraryCount, int FileCount, bool IsActive)
+{
+    public string Header => $"Alle verknüpften ({GroupName})";
+
+    public string DetailText => $"{LibraryCount} Bibliotheken · " + (FileCount == 1 ? "1 Datei" : $"{FileCount:N0} Dateien");
+}
+
+/// <summary>
 /// Bibliotheks-Umschalter oben in der linken Leiste (ADR-0042): zeigt die aktive Bibliothek, wechselt per Menü zu einer
 /// anderen (ILibraryService.SetActiveAsync → ActiveLibraryChangedMessage, Galerie/Ordner laden neu) und springt mit
 /// „Bibliotheken verwalten…“ in Einstellungen › Bibliotheken &amp; Eingänge. Ohne Bibliothek führt der Knopf direkt dorthin.
@@ -32,6 +44,7 @@ public sealed partial class LibrarySwitcherViewModel : ObservableObject
     private readonly IDialogService _dialogs;
     private readonly ILogger<LibrarySwitcherViewModel> _logger;
     private readonly Libraries.IInboxActions? _libraryManagement;
+    private readonly ILibraryScope? _scope;
     private Task? _running;
     private bool _refreshAgain;
     private string? _lastTag;
@@ -45,7 +58,8 @@ public sealed partial class LibrarySwitcherViewModel : ObservableObject
         ILogger<LibrarySwitcherViewModel> logger,
         IMessenger? messenger = null,
         Libraries.IInboxActions? libraryManagement = null,
-        HiddenLibraries.HiddenLibrariesViewModel? hidden = null)
+        HiddenLibraries.HiddenLibrariesViewModel? hidden = null,
+        ILibraryScope? scope = null)
     {
         Hidden = hidden; // versteckte Bibliotheken, nur mit „_hidden“ (ADR-0049)
         _libraries = libraries;
@@ -53,15 +67,24 @@ public sealed partial class LibrarySwitcherViewModel : ObservableObject
         _dialogs = dialogs;
         _logger = logger;
         _libraryManagement = libraryManagement;
+        _scope = scope; // ohne Bereichsdienst (Tests) keine Einträge „Alle verknüpften“ (ADR-0048)
 
         var bus = messenger ?? WeakReferenceMessenger.Default;
         bus.Register<LibrarySwitcherViewModel, ActiveLibraryChangedMessage>(this, static (r, m) => UiThread.Post(() => { _ = r.RefreshAsync(); }));
         bus.Register<LibrarySwitcherViewModel, ScanCompletedMessage>(this, static (r, m) => UiThread.Post(() => { _ = r.RefreshAsync(); }));
+        bus.Register<LibrarySwitcherViewModel, LibraryGroupsChangedMessage>(this, static (r, m) => UiThread.Post(() => { _ = r.RefreshAsync(); }));
         _navigation.Navigated += OnNavigated;
     }
 
     /// <summary>Alle Bibliotheken, die aktive markiert (Reihenfolge wie in den Einstellungen).</summary>
     public ObservableCollection<LibrarySwitchItem> Libraries { get; } = new();
+
+    /// <summary>Gruppen mit ≥ 2 Bibliotheken — Einträge „Alle verknüpften (Name)“ (ADR-0048).</summary>
+    public ObservableCollection<LibraryGroupSwitchItem> LinkedGroups { get; } = new();
+
+    /// <summary>true in der Ansicht „Alle verknüpften“.</summary>
+    [ObservableProperty]
+    private bool _isAllLinked;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CaptionText))]
@@ -107,14 +130,25 @@ public sealed partial class LibrarySwitcherViewModel : ObservableObject
                 _refreshAgain = false;
                 var all = await _libraries.GetAllAsync().ConfigureAwait(true);
                 var active = await _libraries.GetActiveAsync().ConfigureAwait(true);
+                var scope = _scope is null ? LibraryScopeInfo.None : await _scope.GetCurrentAsync().ConfigureAwait(true);
+                var groups = _scope is null ? (IReadOnlyList<LibraryGroupInfo>)[] : await _scope.GetGroupsAsync().ConfigureAwait(true);
+                var allLinked = scope.IsAllLinked && scope.LibraryId == active?.Id;
                 Libraries.Clear();
                 foreach (var library in all)
                 {
-                    Libraries.Add(new LibrarySwitchItem(library.Id, library.Name, library.FileCount, library.Id == active?.Id));
+                    Libraries.Add(new LibrarySwitchItem(library.Id, library.Name, library.FileCount, library.Id == active?.Id && !allLinked));
                 }
 
+                LinkedGroups.Clear();
+                foreach (var group in groups.Where(g => g.IsLinked))
+                {
+                    var files = all.Where(l => group.LibraryIds.Contains(l.Id)).Sum(l => l.FileCount);
+                    LinkedGroups.Add(new LibraryGroupSwitchItem(group.Id, group.Name, group.LibraryIds.Count, files, allLinked && group.Id == scope.GroupId));
+                }
+
+                IsAllLinked = allLinked;
                 HasLibrary = active is not null;
-                ActiveName = active?.Name ?? "Keine Bibliothek";
+                ActiveName = allLinked ? $"Alle verknüpften ({scope.GroupName})" : active?.Name ?? "Keine Bibliothek";
             }
             while (_refreshAgain);
         }
@@ -159,6 +193,34 @@ public sealed partial class LibrarySwitcherViewModel : ObservableObject
         {
             _logger.LogError(ex, "Bibliotheks-Umschalter: Wechsel zu {Id} fehlgeschlagen", item.Id);
             await _dialogs.ShowErrorAsync("Bibliothek wechseln", $"„{item.Name}“ konnte nicht aktiviert werden: {ex.Message}").ConfigureAwait(true);
+        }
+    }
+
+    /// <summary>„Alle verknüpften (Name)“: alle Bibliotheken der Gruppe gemeinsam zeigen (ADR-0048). Nicht während eines Scans.</summary>
+    [RelayCommand]
+    private async Task ShowAllLinkedAsync(LibraryGroupSwitchItem? item)
+    {
+        if (item is null || item.IsActive || _scope is null)
+        {
+            return;
+        }
+
+        if (_libraryManagement is { IsScanning: true })
+        {
+            await _dialogs.ShowErrorAsync("Bibliothek wechseln", "Gerade läuft ein Scan. Bitte warten, bis er fertig ist.").ConfigureAwait(true);
+            return;
+        }
+
+        try
+        {
+            _logger.LogInformation("Bibliotheks-Umschalter: Ansicht „Alle verknüpften“ der Gruppe {GroupId}", item.GroupId);
+            await _scope.ShowAllLinkedAsync(item.GroupId).ConfigureAwait(true);
+            await RefreshAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Bibliotheks-Umschalter: „Alle verknüpften“ für Gruppe {GroupId} fehlgeschlagen", item.GroupId);
+            await _dialogs.ShowErrorAsync("Bibliothek wechseln", $"„{item.Header}“ konnte nicht geöffnet werden: {ex.Message}").ConfigureAwait(true);
         }
     }
 

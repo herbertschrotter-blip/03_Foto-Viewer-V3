@@ -15,13 +15,16 @@ namespace PhotoViewerV3.Gallery.Data;
 /// </summary>
 public sealed partial class GalleryPageSource
 {
+    // Ablage (ADR-0020): die Ordner-Liste ist nicht mehr auf $libId beschränkt (ADR-0048) — der Bereich steht schon an
+    // f.LibraryId, und in „Alle verknüpften“ liegen die Ordner in mehreren Bibliotheken. Folders ist klein.
+
     /// <summary>Ablage „Noch im Eingang“: Ordner, deren Wurzel die Rolle Eingang (0) hat.</summary>
     private const string InboxClause =
-        "AND f.FolderId IN (SELECT d.Id FROM Folders d JOIN LibraryRoots r ON r.Id = d.RootId WHERE d.LibraryId = $libId AND r.Role = 0)";
+        "AND f.FolderId IN (SELECT d.Id FROM Folders d JOIN LibraryRoots r ON r.Id = d.RootId WHERE r.Role = 0)";
 
     /// <summary>Ablage „In der Bibliothek“: Ordner unter der Archiv-/Bibliotheks-Wurzel (Rolle 1).</summary>
     private const string ArchiveClause =
-        "AND f.FolderId IN (SELECT d.Id FROM Folders d JOIN LibraryRoots r ON r.Id = d.RootId WHERE d.LibraryId = $libId AND r.Role = 1)";
+        "AND f.FolderId IN (SELECT d.Id FROM Folders d JOIN LibraryRoots r ON r.Id = d.RootId WHERE r.Role = 1)";
 
     /// <summary>Alle wirkenden Datei-Bedingungen, je eine Zeile „AND …“ (leer ohne Datei-Filter).</summary>
     internal static string BuildFilterClause(GalleryFilterState filter)
@@ -80,7 +83,10 @@ public sealed partial class GalleryPageSource
     /// </summary>
     public Task<int> GetUnfilteredCountAsync(GalleryQuery query, CancellationToken ct)
     {
-        var baseQuery = new GalleryQuery(query.LibraryId, GalleryFilterState.None, null, query.FolderId, query.IncludeSubfolders);
+        var baseQuery = new GalleryQuery(query.LibraryId, GalleryFilterState.None, null, query.FolderId, query.IncludeSubfolders)
+        {
+            LibraryIds = query.LibraryIds, // Bereich bleibt (ADR-0048)
+        };
         return GetTotalCountAsync(baseQuery, ct);
     }
 }

@@ -296,7 +296,7 @@ public sealed partial class GalleryPageSource
             FROM (SELECT scv.ValueId AS ValueId, COUNT(*) AS Cnt
                   FROM {source}
                   WHERE scv.CategoryId = $sortCat
-                    AND f.LibraryId = $libId
+                    AND {ScopeCondition(query, "f.LibraryId")}
                     {BuildFilterClause(query.Filter)}
                     {BuildTagClause(query)}
                     {BuildCategoryClause(query)}
@@ -319,18 +319,18 @@ public sealed partial class GalleryPageSource
         var direction = reverse ? "ASC" : "DESC";
         var inner = drive switch
         {
-            SegmentDrive.SmallValue => """
+            SegmentDrive.SmallValue => $"""
                 FileCategoryValues c CROSS JOIN Files f ON f.Id = c.FileId
-                WHERE c.CategoryId = $sortCat AND c.ValueId = $segValue AND f.LibraryId = $libId
+                WHERE c.CategoryId = $sortCat AND c.ValueId = $segValue AND {ScopeCondition(query, "f.LibraryId")}
                 """,
             SegmentDrive.Value => $"""
                 {BuildFilesSource(query)}
-                WHERE f.LibraryId = $libId
+                WHERE {ScopeCondition(query, "f.LibraryId")}
                   AND f.Id IN (SELECT c.FileId FROM FileCategoryValues c WHERE c.CategoryId = $sortCat AND c.ValueId = $segValue)
                 """,
             _ => $"""
                 {BuildFilesSource(query)}
-                WHERE f.LibraryId = $libId
+                WHERE {ScopeCondition(query, "f.LibraryId")}
                   AND f.Id NOT IN (SELECT c.FileId FROM FileCategoryValues c WHERE c.CategoryId = $sortCat)
                 """,
         };

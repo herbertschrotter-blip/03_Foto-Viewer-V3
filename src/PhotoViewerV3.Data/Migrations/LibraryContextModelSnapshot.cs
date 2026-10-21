@@ -47,6 +47,9 @@ namespace PhotoViewerV3.Data.Migrations
                     b.Property<long>("CreatedAtUtc")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("GroupId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("TEXT")
@@ -57,9 +60,9 @@ namespace PhotoViewerV3.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Name")
+                    b.HasIndex("GroupId", "Name")
                         .IsUnique()
-                        .HasDatabaseName("UX_Categories_Name");
+                        .HasDatabaseName("UX_Categories_Group_Name");
 
                     b.ToTable("Categories", (string)null);
                 });
@@ -436,6 +439,9 @@ namespace PhotoViewerV3.Data.Migrations
                     b.Property<long>("CreatedAt")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("GroupId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<long?>("LastOpenedAt")
                         .HasColumnType("INTEGER");
 
@@ -449,7 +455,29 @@ namespace PhotoViewerV3.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("GroupId")
+                        .HasDatabaseName("IX_Libraries_Group");
+
                     b.ToTable("Libraries", (string)null);
+                });
+
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.LibraryGroup", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("LibraryGroups", (string)null);
                 });
 
             modelBuilder.Entity("PhotoViewerV3.Domain.Entities.LibraryRoot", b =>
@@ -697,6 +725,9 @@ namespace PhotoViewerV3.Data.Migrations
                         .HasDefaultValue("")
                         .UseCollation("NOCASE");
 
+                    b.Property<int>("GroupId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("IsHidden")
                         .HasColumnType("INTEGER");
 
@@ -726,13 +757,16 @@ namespace PhotoViewerV3.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("IsMe")
-                        .IsUnique()
-                        .HasDatabaseName("IX_Persons_IsMe")
-                        .HasFilter("\"IsMe\" = 1");
-
                     b.HasIndex("RelationId")
                         .HasDatabaseName("IX_Persons_Relation");
+
+                    b.HasIndex("GroupId", "IsMe")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Persons_Group_IsMe")
+                        .HasFilter("\"IsMe\" = 1");
+
+                    b.HasIndex("GroupId", "Name")
+                        .HasDatabaseName("IX_Persons_Group_Name");
 
                     b.ToTable("Persons", (string)null);
                 });
@@ -743,6 +777,9 @@ namespace PhotoViewerV3.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("GroupId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("TEXT")
@@ -750,9 +787,9 @@ namespace PhotoViewerV3.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Name")
+                    b.HasIndex("GroupId", "Name")
                         .IsUnique()
-                        .HasDatabaseName("IX_PersonRelations_Name");
+                        .HasDatabaseName("IX_PersonRelations_Group_Name");
 
                     b.ToTable("PersonRelations", (string)null);
                 });
@@ -783,6 +820,9 @@ namespace PhotoViewerV3.Data.Migrations
                     b.Property<long>("CreatedAtUtc")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("GroupId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("TEXT")
@@ -793,9 +833,9 @@ namespace PhotoViewerV3.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Name")
+                    b.HasIndex("GroupId", "Name")
                         .IsUnique()
-                        .HasDatabaseName("UX_Tags_Name");
+                        .HasDatabaseName("UX_Tags_Group_Name");
 
                     b.ToTable("Tags", (string)null);
                 });

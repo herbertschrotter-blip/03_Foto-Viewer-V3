@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using CommunityToolkit.Mvvm.Messaging;
 
 namespace PhotoViewerV3.Settings.CategoryManagement;
 
@@ -15,6 +16,9 @@ public partial class CategoryManagementPage : UserControl
         InitializeComponent();
         DataContext = viewModel;
         Loaded += (_, _) => _ = viewModel.LoadCommand.ExecuteAsync(null);
+        // Kategorien gehören der Bibliotheks-Gruppe (ADR-0048): nach einem Wechsel der Bibliothek die Liste neu lesen.
+        CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger.Default.Register<CategoryManagementPage, PhotoViewerV3.Services.Messaging.ActiveLibraryChangedMessage>(
+            this, static (r, m) => PhotoViewerV3.Shell.UiThread.Post(() => { if (r.IsLoaded) { _ = r._viewModel.LoadCommand.ExecuteAsync(null); } }));
     }
 
     /// <summary>Enter in „Neue Kategorie“ oder „Werte“ legt an.</summary>

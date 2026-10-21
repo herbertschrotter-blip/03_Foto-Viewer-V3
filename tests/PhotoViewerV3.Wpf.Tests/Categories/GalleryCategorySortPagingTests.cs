@@ -32,7 +32,9 @@ public sealed class GalleryCategorySortPagingTests : IAsyncLifetime
 
         using (var connection = _factory.OpenSqliteConnection())
         {
-            Exec(connection, "INSERT INTO Libraries (Id, Name, RootPath, CreatedAt, LastOpenedAt) VALUES (1, 'A', 'C:\\A', 1, 1), (2, 'B', 'C:\\B', 1, 1);");
+            // Bibliothek 1 aktiv: seit 0.2.51 (ADR-0048) gehören Kategorien der Gruppe der aktiven Bibliothek — Dateien der
+            // (nicht verknüpften) Bibliothek 2 bekommen keine Werte und bleiben reines Rauschen.
+            Exec(connection, "INSERT INTO Libraries (Id, Name, RootPath, CreatedAt, LastOpenedAt) VALUES (1, 'A', 'C:\\A', 1, 2), (2, 'B', 'C:\\B', 1, 1);");
             Exec(connection, "INSERT INTO Folders (Id, LibraryId, Path, ParentId, Name, ScannedAt) VALUES (1, 1, 'C:\\A', NULL, 'A', 1), (2, 2, 'C:\\B', NULL, 'B', 1);");
             for (var i = 1; i <= LibraryFiles + 20; i++)
             {

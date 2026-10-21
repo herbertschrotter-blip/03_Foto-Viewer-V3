@@ -10,36 +10,44 @@ namespace PhotoViewerV3.Services.Faces.Assignment;
 /// </summary>
 public sealed partial class FaceRecognitionService : IPersonDetailsService
 {
-    public Task<PersonDetails?> GetPersonDetailsAsync(int personId, CancellationToken ct = default)
-        => Task.Run(
+    public async Task<PersonDetails?> GetPersonDetailsAsync(int personId, CancellationToken ct = default)
+    {
+        var groupId = await CurrentGroupAsync(ct).ConfigureAwait(false);
+        return await Task.Run(
             () =>
             {
                 using var connection = _factory.OpenSqliteConnection();
-                return PersonDetailsStore.ReadAll(connection, personId).FirstOrDefault();
+                return PersonDetailsStore.ReadAll(connection, groupId, personId).FirstOrDefault();
             },
-            ct);
+            ct).ConfigureAwait(false);
+    }
 
-    public Task<IReadOnlyList<PersonDetails>> GetAllPersonDetailsAsync(CancellationToken ct = default)
-        => Task.Run<IReadOnlyList<PersonDetails>>(
+    public async Task<IReadOnlyList<PersonDetails>> GetAllPersonDetailsAsync(CancellationToken ct = default)
+    {
+        var groupId = await CurrentGroupAsync(ct).ConfigureAwait(false);
+        return await Task.Run<IReadOnlyList<PersonDetails>>(
             () =>
             {
                 using var connection = _factory.OpenSqliteConnection();
-                return PersonDetailsStore.ReadAll(connection);
+                return PersonDetailsStore.ReadAll(connection, groupId);
             },
-            ct);
+            ct).ConfigureAwait(false);
+    }
 
     public async Task<int> CreatePersonAsync(PersonDetailsInput input, CancellationToken ct = default)
     {
         var normalized = Validate(input);
+        var libraryId = await CurrentLibraryIdAsync(ct).ConfigureAwait(false);
         var id = await WriteAsync(silent: false, (connection, tx) =>
         {
-            if (FaceAssignmentStore.FindPersonByName(connection, tx, normalized.DisplayName) is { } existing)
+            var groupId = GroupInTransaction(connection, tx, libraryId); // in der Transaktion: Verknüpfen kann sie aufgelöst haben
+            if (FaceAssignmentStore.FindPersonByName(connection, tx, groupId, normalized.DisplayName) is { } existing)
             {
                 throw new PersonNameTakenException(normalized.DisplayName, existing);
             }
 
-            var relationId = PersonDetailsStore.ResolveRelation(connection, tx, normalized.Relation);
-            return PersonDetailsStore.InsertPerson(connection, tx, normalized, relationId);
+            var relationId = PersonDetailsStore.ResolveRelation(connection, tx, groupId, normalized.Relation);
+            return PersonDetailsStore.InsertPerson(connection, tx, groupId, normalized, relationId);
         }, ct).ConfigureAwait(false);
         _logger.LogInformation("Person angelegt (Id {PersonId}, mit Details)", id);
         await NotifyAsync(retrain: false, ct).ConfigureAwait(false);
@@ -51,27 +59,31 @@ public sealed partial class FaceRecognitionService : IPersonDetailsService
         var normalized = Validate(input);
         await WriteAsync(silent: false, (connection, tx) =>
         {
-            RequirePerson(connection, tx, personId);
-            if (FaceAssignmentStore.FindPersonByName(connection, tx, normalized.DisplayName, personId) is { } existing)
+            var groupId = RequirePersonGroup(connection, tx, personId);
+            if (FaceAssignmentStore.FindPersonByName(connection, tx, groupId, normalized.DisplayName, personId) is { } existing)
             {
                 throw new PersonNameTakenException(normalized.DisplayName, existing);
             }
 
-            var relationId = PersonDetailsStore.ResolveRelation(connection, tx, normalized.Relation);
+            var relationId = PersonDetailsStore.ResolveRelation(connection, tx, groupId, normalized.Relation);
             return PersonDetailsStore.UpdatePerson(connection, tx, personId, normalized, relationId);
         }, ct).ConfigureAwait(false);
         _logger.LogInformation("Details der Person {PersonId} gespeichert", personId);
         await NotifyAsync(retrain: false, ct).ConfigureAwait(false);
     }
 
-    public Task<IReadOnlyList<PersonRelationInfo>> GetRelationsAsync(CancellationToken ct = default)
-        => Task.Run<IReadOnlyList<PersonRelationInfo>>(
+    /// <summary>Beziehungen der Gruppe des aktuellen Bereichs (ADR-0048).</summary>
+    public async Task<IReadOnlyList<PersonRelationInfo>> GetRelationsAsync(CancellationToken ct = default)
+    {
+        var groupId = await CurrentGroupAsync(ct).ConfigureAwait(false);
+        return await Task.Run<IReadOnlyList<PersonRelationInfo>>(
             () =>
             {
                 using var connection = _factory.OpenSqliteConnection();
-                return PersonDetailsStore.ReadRelations(connection);
+                return PersonDetailsStore.ReadRelations(connection, groupId);
             },
-            ct);
+            ct).ConfigureAwait(false);
+    }
 
     public async Task RenameRelationAsync(int relationId, string name, CancellationToken ct = default)
     {
@@ -79,7 +91,8 @@ public sealed partial class FaceRecognitionService : IPersonDetailsService
         await WriteAsync(silent: false, (connection, tx) =>
         {
             RequireRelation(connection, tx, relationId);
-            if (PersonDetailsStore.FindRelation(connection, tx, cleaned, relationId) is { } existing)
+            var groupId = PersonDetailsStore.ReadRelationGroup(connection, tx, relationId) ?? 0;
+            if (PersonDetailsStore.FindRelation(connection, tx, groupId, cleaned, relationId) is { } existing)
             {
                 throw new RelationNameTakenException(cleaned, existing);
             }
@@ -101,6 +114,11 @@ public sealed partial class FaceRecognitionService : IPersonDetailsService
         {
             RequireRelation(connection, tx, sourceId);
             RequireRelation(connection, tx, targetId);
+            if (PersonDetailsStore.ReadRelationGroup(connection, tx, sourceId) != PersonDetailsStore.ReadRelationGroup(connection, tx, targetId))
+            {
+                throw new InvalidOperationException("Beziehungen verschiedener (nicht verknüpfter) Bibliotheken lassen sich nicht zusammenführen.");
+            }
+
             var count = FaceAssignmentStore.Execute(connection, tx,
                 "UPDATE Persons SET RelationId = $t WHERE RelationId = $s;", ("$s", sourceId), ("$t", targetId));
             FaceAssignmentStore.Execute(connection, tx, "DELETE FROM PersonRelations WHERE Id = $s;", ("$s", sourceId));

@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using PhotoViewerV3.Domain.Entities;
 using PhotoViewerV3.Services.Catalog;
 using PhotoViewerV3.Services.Database;
+using PhotoViewerV3.Services.Library;
 using PhotoViewerV3.Services.Messaging;
 
 namespace PhotoViewerV3.Services.Categories;
@@ -23,28 +24,38 @@ public sealed class CategoryService : ICategoryService, IDisposable
     private readonly ILogger<CategoryService> _logger;
     private readonly IMessenger _messenger;
     private readonly SemaphoreSlim _writeLock = new(1, 1);
+    private readonly ILibraryScope _scope;
 
-    public CategoryService(ILibraryContextFactory factory, ILogger<CategoryService> logger, IMessenger? messenger = null)
+    /// <param name="scope">Bibliotheks-Bereich (ADR-0048); ohne Angabe der Standard-Bereich über dieselbe DB.</param>
+    public CategoryService(ILibraryContextFactory factory, ILogger<CategoryService> logger, IMessenger? messenger = null, ILibraryScope? scope = null)
     {
         _factory = factory;
         _logger = logger;
         _messenger = messenger ?? WeakReferenceMessenger.Default;
+        _scope = scope ?? new LibraryScope(factory);
     }
+
+    private async Task<int> CurrentGroupAsync(CancellationToken ct)
+        => (await _scope.GetCurrentAsync(ct).ConfigureAwait(false)).GroupId;
 
     // ---- Lesen ---------------------------------------------------------------------------------
 
+    /// <summary>Kategorien (mit Werten) der Gruppe des aktuellen Bereichs (ADR-0048).</summary>
     public async Task<IReadOnlyList<CategoryInfo>> GetAllAsync(CancellationToken ct = default)
     {
+        var groupId = await CurrentGroupAsync(ct).ConfigureAwait(false);
         await using var ctx = _factory.Create();
-        return await LoadAllAsync(ctx, ct).ConfigureAwait(false);
+        return await LoadAllAsync(ctx, groupId, ct).ConfigureAwait(false);
     }
 
-    private static async Task<IReadOnlyList<CategoryInfo>> LoadAllAsync(Data.LibraryContext ctx, CancellationToken ct)
+    private static async Task<IReadOnlyList<CategoryInfo>> LoadAllAsync(Data.LibraryContext ctx, int groupId, CancellationToken ct)
     {
         var categories = await ctx.Categories.AsNoTracking()
+            .Where(c => c.GroupId == groupId)
             .OrderBy(c => c.SortOrder).ThenBy(c => c.Name)
             .ToListAsync(ct).ConfigureAwait(false);
         var values = await ctx.CategoryValues.AsNoTracking()
+            .Where(v => ctx.Categories.Any(c => c.Id == v.CategoryId && c.GroupId == groupId))
             .OrderBy(v => v.SortOrder).ThenBy(v => v.Name)
             .ToListAsync(ct).ConfigureAwait(false);
         var byCategory = values.GroupBy(v => v.CategoryId).ToDictionary(g => g.Key, g => g.ToList());
@@ -59,10 +70,16 @@ public sealed class CategoryService : ICategoryService, IDisposable
             .ToList();
     }
 
+    /// <summary>Zähler nur über die Dateien des aktuellen Bereichs (ADR-0048).</summary>
     public async Task<IReadOnlyDictionary<int, int>> GetFileCountsAsync(CancellationToken ct = default)
     {
+        var libraryIds = (await _scope.GetCurrentAsync(ct).ConfigureAwait(false)).LibraryIds.ToArray();
         await using var ctx = _factory.Create();
-        var rows = await ctx.FileCategoryValues.AsNoTracking()
+        var rows = await (
+                from x in ctx.FileCategoryValues.AsNoTracking()
+                join f in ctx.Files.AsNoTracking() on x.FileId equals f.Id
+                where libraryIds.Contains(f.LibraryId)
+                select x)
             .GroupBy(x => x.ValueId)
             .Select(g => new { ValueId = g.Key, Count = g.Count() })
             .ToListAsync(ct).ConfigureAwait(false);
@@ -104,14 +121,16 @@ public sealed class CategoryService : ICategoryService, IDisposable
         await _writeLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
+            var scope = await _scope.GetCurrentAsync(ct).ConfigureAwait(false);
+            var groupId = scope.GroupId;
             await using var ctx = _factory.Create();
-            if (await ctx.Categories.AnyAsync(c => c.Name == normalized, ct).ConfigureAwait(false))
+            if (await ctx.Categories.AnyAsync(c => c.GroupId == groupId && c.Name == normalized, ct).ConfigureAwait(false))
             {
                 throw new InvalidOperationException($"Eine Kategorie „{normalized}“ existiert bereits.");
             }
 
-            var maxOrder = await ctx.Categories.Select(c => (int?)c.SortOrder).MaxAsync(ct).ConfigureAwait(false) ?? -1;
-            var category = new Category { Name = normalized, SortOrder = maxOrder + 1, CreatedAtUtc = DateTime.UtcNow };
+            var maxOrder = await ctx.Categories.Where(c => c.GroupId == groupId).Select(c => (int?)c.SortOrder).MaxAsync(ct).ConfigureAwait(false) ?? -1;
+            var category = new Category { Name = normalized, SortOrder = maxOrder + 1, CreatedAtUtc = DateTime.UtcNow, GroupId = groupId };
             ctx.Categories.Add(category);
             await SaveAsync(ctx, $"Eine Kategorie „{normalized}“ existiert bereits.", ct).ConfigureAwait(false);
 
@@ -122,7 +141,14 @@ public sealed class CategoryService : ICategoryService, IDisposable
             }
 
             await ctx.SaveChangesAsync(ct).ConfigureAwait(false);
-            created = (await LoadAllAsync(ctx, ct).ConfigureAwait(false)).First(c => c.Id == category.Id);
+            if (!await LibraryGroupStore.RehomeIfGroupGoneAsync(_factory, "Categories", category.Id, scope.LibraryId, ct).ConfigureAwait(false))
+            {
+                await ctx.Categories.Where(c => c.Id == category.Id).ExecuteDeleteAsync(ct).ConfigureAwait(false);
+                throw new InvalidOperationException($"Eine Kategorie „{normalized}“ existiert bereits.");
+            }
+
+            groupId = await ctx.Categories.Where(c => c.Id == category.Id).Select(c => c.GroupId).FirstAsync(ct).ConfigureAwait(false);
+            created = (await LoadAllAsync(ctx, groupId, ct).ConfigureAwait(false)).First(c => c.Id == category.Id);
             _logger.LogInformation("Kategorie angelegt: {Name} (Id {Id}) mit {Values} Werten", normalized, category.Id, valueNames.Count);
         }
         finally
@@ -147,7 +173,7 @@ public sealed class CategoryService : ICategoryService, IDisposable
                 return;
             }
 
-            if (await ctx.Categories.AnyAsync(c => c.Name == normalized && c.Id != categoryId, ct).ConfigureAwait(false))
+            if (await ctx.Categories.AnyAsync(c => c.GroupId == category.GroupId && c.Name == normalized && c.Id != categoryId, ct).ConfigureAwait(false))
             {
                 throw new InvalidOperationException($"Eine Kategorie „{normalized}“ existiert bereits.");
             }
@@ -169,8 +195,9 @@ public sealed class CategoryService : ICategoryService, IDisposable
         await _writeLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
+            var groupId = await CurrentGroupAsync(ct).ConfigureAwait(false);
             await using var ctx = _factory.Create();
-            var categories = await ctx.Categories.OrderBy(c => c.SortOrder).ThenBy(c => c.Name).ToListAsync(ct).ConfigureAwait(false);
+            var categories = await ctx.Categories.Where(c => c.GroupId == groupId).OrderBy(c => c.SortOrder).ThenBy(c => c.Name).ToListAsync(ct).ConfigureAwait(false);
             ApplyOrder(categories, c => c.Id, (c, o) => c.SortOrder = o, categoryIdsInOrder);
             await ctx.SaveChangesAsync(ct).ConfigureAwait(false);
         }
@@ -358,7 +385,9 @@ public sealed class CategoryService : ICategoryService, IDisposable
                         // Nur echte Änderungen zählen: gleicher Wert bleibt unberührt (WHERE im UPSERT).
                         cmd.Parameters.AddWithValue("$v", value);
                         cmd.CommandText =
+                            // Nur Kategorien der Gruppe der Datei-Bibliothek (ADR-0048).
                             $"INSERT INTO FileCategoryValues(FileId, CategoryId, ValueId) SELECT f.Id, $c, $v FROM Files f WHERE f.Id IN ({inList}) " +
+                            "AND EXISTS (SELECT 1 FROM Categories k JOIN Libraries l ON l.GroupId = k.GroupId WHERE k.Id = $c AND l.Id = f.LibraryId) " +
                             "ON CONFLICT(FileId, CategoryId) DO UPDATE SET ValueId = excluded.ValueId WHERE ValueId <> excluded.ValueId;";
                     }
                     else
