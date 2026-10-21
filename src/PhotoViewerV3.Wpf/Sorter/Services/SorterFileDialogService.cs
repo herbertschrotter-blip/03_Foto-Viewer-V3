@@ -49,6 +49,7 @@ public sealed class SorterFileDialogService : ISorterFileDialogService
 
     private static bool Show(FileDialog dialog)
     {
+        dialog.AddToRecent = false; // keine Einträge unter „Zuletzt verwendet“ (ADR-0049)
         var owner = Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive)
                     ?? Application.Current?.MainWindow;
         return (owner is null ? dialog.ShowDialog() : dialog.ShowDialog(owner)) == true;

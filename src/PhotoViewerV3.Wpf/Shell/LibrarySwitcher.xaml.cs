@@ -27,6 +27,11 @@ public partial class LibrarySwitcher : UserControl
         }
 
         await vm.RefreshAsync();
+        if (vm.Hidden is { IsNormalSession: true } hidden)
+        {
+            await hidden.RefreshIfStaleAsync(); // versteckte Bibliotheken neu suchen (ADR-0049)
+        }
+
         if (!vm.HasChoices)
         {
             vm.ManageCommand.Execute(null);
@@ -52,6 +57,7 @@ public partial class LibrarySwitcher : UserControl
             });
         }
 
+        AddHiddenLibraryItems(menu, vm.Hidden); // nur mit „_hidden“ (ADR-0049)
         menu.Items.Add(new Separator());
         menu.Items.Add(new MenuItem
         {

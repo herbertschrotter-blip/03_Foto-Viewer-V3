@@ -201,7 +201,7 @@ public sealed partial class ArchiveTargetViewModel : ObservableObject
                 foreach (var dir in Directory.EnumerateDirectories(parentPath))
                 {
                     var name = Path.GetFileName(dir);
-                    if (string.IsNullOrEmpty(name) || byName.ContainsKey(name))
+                    if (string.IsNullOrEmpty(name) || byName.ContainsKey(name) || PhotoViewerV3.Services.Infrastructure.CatalogFolders.IsCatalogFolder(dir))
                     {
                         continue;
                     }

@@ -26,7 +26,8 @@ public partial class SettingsPage : UserControl
         LibraryPage library,
         TagManagementPage tags,
         CategoryManagementPage categories,
-        InfoViewModel info)
+        InfoViewModel info,
+        Shell.HiddenLibraries.HiddenLibrariesViewModel? hiddenLibraries = null)
     {
         _sections = sections;
         InitializeComponent();
@@ -37,6 +38,7 @@ public partial class SettingsPage : UserControl
         CategoriesTab.Content = categories;
         InfoView.DataContext = info;
         library.SetFooter(new SettingsWatchSection { DataContext = viewModel });
+        Shell.HiddenLibraries.HiddenLibrariesUi.AddSettingsTab(Tabs, hiddenLibraries); // nur mit „_hidden“ (ADR-0049)
 
         SelectTab(sections.SelectedSection);
         Tabs.SelectionChanged += OnTabsSelectionChanged;

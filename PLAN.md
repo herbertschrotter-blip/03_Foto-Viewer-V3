@@ -249,6 +249,16 @@ PRAGMA busy_timeout=5000;
 PRAGMA temp_store=MEMORY;
 ```
 
+### Kataloge und Katalog-Sitzungen (seit 0.2.52, ADR-0049)
+- **Normaler Katalog**: `library.db` + `thumbs\` im Datenordner (ADR-0026), Protokolle unter `%LocalAppData%\PhotoViewerV3\logs`.
+- **Versteckte Bibliothek**: je Bibliothek ein eigener Katalog in `<Bibliotheksordner>\.lumora\` im verschlüsselten
+  Container (`library.db`, `thumbs\`, `logs\`, `cache\`, `temp\`, `hidden-library.json` mit Name, Kennwort-Prüfwert,
+  Zusperr-/Aushänge-Einstellung). Gleiches Schema, gleiche Migrationen; nur mit Startschalter `_hidden` sichtbar.
+- **Katalog-Sitzung** = ein DI-Container mit `IAppDataPaths` + `ICatalogContext` (`IsHidden`, Pfade, `CacheRoot`,
+  `TempRoot`) und eigenem Serilog-Logger. Wechsel normal ↔ versteckt zur Laufzeit: Fenster schließen, Host entsorgen
+  (Dienste, Verbindungen, Caches), Messenger zurücksetzen, neuen Host starten (Migration), neues Hauptfenster. Dateien
+  außerhalb der DB legen Module nur unter `ICatalogStoragePaths.CacheRoot/TempRoot` ab. `.lumora` wird nie gescannt.
+
 ---
 
 ## 5. 15 finale ADRs
@@ -674,6 +684,7 @@ Fehler: <Message>
 | **Concurrent SQLite-Writes** | WAL + Single-Writer-Pattern via Channel oder `SemaphoreSlim` |
 | **FFmpeg hängt bei kaputten Videos** | `CancellationTokenSource.CancelAfter(3s/8s)` + Process.Kill |
 | **Katalog-Umzug verliert Daten** | Kopie per Backup-API, `integrity_check` + Zeilenzahlen, Umschalten erst danach; Scans/Batches/Überwachung/Thumbnails ruhig, Factory gesperrt (auch für ältere Kontexte), Schreibsperre der alten DB gehalten; Neustart statt Laufzeit-Umschaltung (ADR-0026) |
+| **Versteckte Bibliothek hinterlässt Spuren** | Eigener Katalog + Logger je Sitzung im Container, Container-Wechsel statt Umschalten einzelner Dienste, Shell-Aufrufe (Explorer, Standard-App) gesperrt, `AddToRecent = false`, Spurenprüfung in Unit- und Rauchtest (ADR-0049); Grenzen: Dateidialog-MRU, VeraCrypt-Verlauf, Auslagerungsdatei |
 | **Background-Worker blockiert UI** | WorkBudgetService mit StorageProfile-Limits + UI-Activity-Delay |
 
 ---

@@ -94,7 +94,16 @@ public sealed class FolderActions
             return new FolderActionResult($"„{folderPath}“ liegt in keinem Eingang — übernehmen lässt sich nur ein Ordner aus einem Eingang.", true);
         }
 
-        var snapshot = await _adoption.ReadSourceAsync(context.SourceFolder).ConfigureAwait(true);
+        PhotoViewerV3.Services.Operations.AdoptionSourceSnapshot snapshot;
+        try
+        {
+            snapshot = await _adoption.ReadSourceAsync(context.SourceFolder).ConfigureAwait(true);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new FolderActionResult(ex.Message, true); // z. B. versteckte Bibliothek im Quellordner (ADR-0049)
+        }
+
         if (snapshot.Root.TotalFileCount == 0)
         {
             return new FolderActionResult($"„{Path.GetFileName(context.SourceFolder)}“ enthält keine Dateien — nichts zu übernehmen.", true);

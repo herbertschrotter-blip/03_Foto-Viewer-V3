@@ -3,6 +3,56 @@
 Alle nennenswerten Änderungen an Lumora (bis 0.2.48 „PhotoViewer V3“). Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.52] — 2026-10-21
+
+### Feature (ADR-0049) — Versteckte Bibliotheken im verschlüsselten Container
+- **Nur mit Startschalter `_hidden`** (`--hidden`, `/hidden`): ohne ihn zeigt Lumora keinerlei Spur. Mit ihm sucht
+  Lumora auf allen eingehängten lokalen Laufwerken (Wurzel + eine Ebene; nicht Netz, CD/DVD, Wechselmedien) nach
+  `.lumora`-Ordnern und bietet die gefundenen versteckten Bibliotheken im **Bibliotheks-Umschalter** und im neuen
+  Reiter **Einstellungen › Versteckte Bibliotheken** an. Gemerkt wird nichts.
+- **Anlegen**: „Versteckte Bibliothek anlegen…“ → Laufwerk des eingehängten Containers + optional ein Ordner direkt
+  darauf, Name, Lumora-Kennwort zweimal; Hinweise „Container nicht in OneDrive“ und „`_hidden` nicht in eine sichtbare
+  Verknüpfung“. Lumora legt `<Ordner>\.lumora\` an (versteckt, System, nicht indiziert) mit eigenem Katalog
+  (`library.db`), Vorschaubildern/Gesichtsausschnitten, Protokollen (`logs\lumora-*.log`), `cache\`, `temp\` und der
+  Kenndatei `hidden-library.json`, wechselt hinein und scannt. Lumora verschlüsselt selbst nichts.
+- **Öffnen** mit Lumora-Kennwort (Prüfwert PBKDF2-HMAC-SHA-256, 600 000 Iterationen, nie das Kennwort).
+  **Kennwort vergessen**: im eingehängten Container `.lumora\reset-password.txt` anlegen → „Kennwort zurücksetzen“.
+  Ist der Container unter einem anderen Laufwerksbuchstaben eingehängt als beim Anlegen, nennt Lumora den alten.
+- **Katalogwechsel zur Laufzeit ohne Neustart**: jede Katalog-Sitzung hat ihren eigenen DI-Container
+  (`ICatalogHostSwitcher` in `App`): Lightbox/Dialoge schließen, Host entsorgen (Hintergrunddienste, DB-Verbindungen,
+  Caches), Messenger zurücksetzen, neuen Host mit Migration starten, Oberfläche neu aufbauen — in beide Richtungen.
+  Neu: `ICatalogContext`/`ICatalogStoragePaths` (`IsHidden`, Katalog-/Thumbnail-/Log-/Cache-/Temp-Pfade) für alle
+  Module; Agent T blendet „Verknüpfen“ bei `IsHidden` aus.
+- **Zusperren**: von Hand (Umschalter, Reiter), automatisch nach Untätigkeit (Standard 10 min Maus/Tastatur in Lumora,
+  einstellbar; wartet auf laufende Scans/Datei-Vorgänge) und beim Beenden. **Container aushängen** (Standard an):
+  VeraCrypt per Befehlszeile (`/dismount X /quit /silent`, sonst `/unmount`), BitLocker-VHDX per `Dismount-DiskImage`,
+  sonst Hinweis. **Container öffnen…** startet VeraCrypt, das sein Kennwort selbst abfragt.
+- **Spurenfreiheit**: Protokolle je Sitzung (versteckt nur im Container, Nachzügler verworfen, Absturzberichte danach
+  ohne Details), Einstellungen der versteckten Bibliothek in ihrer Kenndatei, Dateidialoge ohne „Zuletzt verwendet“
+  (`AddToRecent = false`, auch Sortierer/Ordnerauswahl), in der versteckten Sitzung gesperrt: „Im Explorer zeigen“,
+  „Ordner öffnen“, „Mit Standard-App öffnen“; Katalog-Umzug gesperrt; Gesichtsmodelle aus dem normalen Modellordner.
+- `.lumora` wird nie gescannt, geflattet, als Ziel angeboten oder per „Ordner übernehmen“ verschoben.
+
+### Tests
+- `tests/PhotoViewerV3.Tests`: +35 — `HiddenLibraries/HiddenLibraryStoreTests` (Prüfwert, Kenndatei, Attribute,
+  Zurücksetzen nur mit Bestätigungsdatei, Einstellungen, Pfade in `.lumora`), `HiddenLibraryLocatorTests` (Suche Wurzel
+  + eine Ebene, Ordnerregeln, Startschalter, Untätigkeit mit Fake-Uhr), `ContainerToolsTests` (VeraCrypt/VHDX mit Fakes,
+  nie das Systemlaufwerk, kein Kennwort/Explorer beim Einhängen), `HiddenCatalogTests` (Sitzung in der Services-Schicht,
+  Scan ohne `.lumora`, normaler Datenordner leer).
+- `tests/PhotoViewerV3.Wpf.Tests`: +20 — `HiddenLibraries/CatalogSessionManagerTests` (Anlegen, falsches Kennwort,
+  Zusperren nach Untätigkeit, Aushängen, Beenden, Laufwerksbuchstabe, ohne Schalter nichts), `CatalogLogRouterTests`,
+  `HiddenLibrariesUiTests` (Reiter/Umschalter nur mit Schalter, Dialoge), `HiddenSessionTraceTests` (echte
+  App-Zusammenstellung: 0 Spuren im AppData-Testordner).
+- Rauchtest: neuer Schritt „Versteckte Bibliothek“ vor der Ordnerüberwachung (`PHOTOVIEWERV3_SMOKE_HIDDEN`, im Rauchtest
+  Standard an): anlegen im Temp-Ordner, 3 Fotos + Vorschaubilder + Protokoll im Container, Zusperren nach Untätigkeit mit
+  Fake-Aushängen, falsches Kennwort, wieder öffnen, normale Bibliothek unverändert, Spurenprüfung im AppData (0 Treffer);
+  die Ordnerüberwachung läuft danach mit den Diensten der neu aufgebauten Sitzung.
+
+### Offen
+- Windows-eigene Spuren außerhalb von Lumora: Dateidialog-MRU („Container öffnen… → Durchsuchen“), Verlauf in
+  VeraCrypt, Auslagerungsdatei/Ruhezustand, Befehlszeile in der Prozessliste.
+- VeraCrypt-Befehlszeile nicht am echten VeraCrypt geprüft (auf Herberts PC nicht installiert) — nur mit Fakes.
+
 ## [0.2.50] — 2026-10-21
 
 ### Fix — Personen-Kacheln ohne Binding-Fehler, Design-Time-Datenbank nie mehr der echte Katalog

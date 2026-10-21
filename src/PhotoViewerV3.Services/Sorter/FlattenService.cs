@@ -15,6 +15,7 @@ public sealed class FlattenService : IFlattenService
     private static readonly HashSet<string> s_ignoredDirectories = new(StringComparer.OrdinalIgnoreCase)
     {
         ".thumbs", ".cache", ".temp", ".converted",
+        Infrastructure.CatalogFolders.HiddenCatalogFolderName, // Katalog einer versteckten Bibliothek (ADR-0049)
     };
 
     private readonly SorterCatalog _catalog;

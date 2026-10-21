@@ -50,6 +50,13 @@ public static class FolderAdoptionSourceReader
                 {
                     if (entry is DirectoryInfo dir)
                     {
+                        if (Infrastructure.CatalogFolders.IsCatalogFolder(dir.FullName))
+                        {
+                            // Katalog einer versteckten Bibliothek (ADR-0049): nie verschieben, nie in den Papierkorb
+                            throw new InvalidOperationException(
+                                "Dieser Ordner enthält eine versteckte Bibliothek (.lumora) und kann nicht übernommen werden.");
+                        }
+
                         if (s_ignoredDirectories.Contains(dir.Name))
                         {
                             ignored.Add(dir.FullName);

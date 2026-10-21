@@ -40,9 +40,20 @@ public static class NavigationTags
         Library, Tags, Categories, SettingsFaces, SettingsArchives, SettingsAppearance, SettingsStorage, SettingsInfo,
     ];
 
+    /// <summary>
+    /// Einstellungen › Versteckte Bibliotheken (ADR-0049) — nur mit Startschalter <c>_hidden</c> vorhanden, deshalb nicht in
+    /// <see cref="SettingsSections"/>.
+    /// </summary>
+    public const string SettingsHiddenLibraries = "settings-hidden";
+
     /// <summary>true, wenn <paramref name="tag"/> ein Reiter der Einstellungen ist (keine eigene Seite).</summary>
     public static bool IsSettingsSection(string? tag)
     {
+        if (string.Equals(tag, SettingsHiddenLibraries, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
         foreach (var section in SettingsSections)
         {
             if (string.Equals(section, tag, StringComparison.Ordinal))

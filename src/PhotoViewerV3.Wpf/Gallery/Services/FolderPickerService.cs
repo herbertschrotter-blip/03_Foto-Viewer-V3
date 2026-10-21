@@ -14,6 +14,7 @@ public sealed class FolderPickerService : IFolderPickerService
         {
             Title = title,
             Multiselect = false,
+            AddToRecent = false, // keine Einträge unter „Zuletzt verwendet“ (ADR-0049)
         };
 
         if (!string.IsNullOrWhiteSpace(initialDirectory) && Directory.Exists(initialDirectory))

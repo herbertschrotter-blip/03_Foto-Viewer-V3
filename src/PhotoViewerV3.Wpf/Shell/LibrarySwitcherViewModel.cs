@@ -44,8 +44,10 @@ public sealed partial class LibrarySwitcherViewModel : ObservableObject
         IDialogService dialogs,
         ILogger<LibrarySwitcherViewModel> logger,
         IMessenger? messenger = null,
-        Libraries.IInboxActions? libraryManagement = null)
+        Libraries.IInboxActions? libraryManagement = null,
+        HiddenLibraries.HiddenLibrariesViewModel? hidden = null)
     {
+        Hidden = hidden; // versteckte Bibliotheken, nur mit „_hidden“ (ADR-0049)
         _libraries = libraries;
         _navigation = navigation;
         _dialogs = dialogs;
@@ -70,10 +72,15 @@ public sealed partial class LibrarySwitcherViewModel : ObservableObject
     private string _activeName = "Keine Bibliothek";
 
     /// <summary>Zweite Zeile unter dem Namen.</summary>
-    public string CaptionText => HasLibrary ? "Bibliothek wechseln" : "Bibliothek einrichten";
+    public string CaptionText => Hidden is { IsHiddenSessionActive: true }
+        ? "Versteckte Bibliothek"
+        : HasLibrary ? "Bibliothek wechseln" : "Bibliothek einrichten";
+
+    /// <summary>Versteckte Bibliotheken (ADR-0049); null bzw. ohne Startschalter ohne Wirkung.</summary>
+    public HiddenLibraries.HiddenLibrariesViewModel? Hidden { get; }
 
     /// <summary>Für das Menü: true, wenn es eine Bibliothek zum Umschalten gibt (sonst führt der Klick zu „verwalten“).</summary>
-    public bool HasChoices => Libraries.Any();
+    public bool HasChoices => Libraries.Any() || Hidden is { IsHiddenModeEnabled: true };
 
     /// <summary>
     /// Liest Bibliotheken und aktive Bibliothek neu. Läuft schon ein Lesen, wird es danach wiederholt und dessen Task

@@ -58,7 +58,7 @@ public sealed class DialogService : IDialogService
 
     public string? PickFolder(string title)
     {
-        var dialog = new OpenFolderDialog { Title = title, Multiselect = false };
+        var dialog = new OpenFolderDialog { Title = title, Multiselect = false, AddToRecent = false }; // ADR-0049: nichts unter „Zuletzt verwendet“
         var owner = GetOwner();
         var ok = owner is null ? dialog.ShowDialog() : dialog.ShowDialog(owner);
         return ok == true ? dialog.FolderName : null;

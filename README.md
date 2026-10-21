@@ -595,6 +595,44 @@ bleiben verschoben und sind rückgängig machbar). Rechts: Hinweise
 unvollständige oder fehlgeschlagene Dateivorgänge mit Details im Tooltip; Bibliothek offline) und die
 Hintergrund-Aktivität („Bereit“, wenn nichts läuft).
 
+### Versteckte Bibliotheken
+Bibliotheken, deren Fotos in einem **verschlüsselten Container** liegen (VeraCrypt-Datei oder BitLocker-VHDX, den Sie
+selbst einhängen) und von denen Lumora im Alltag **nichts zeigt** (ADR-0049).
+- **Nur mit Startschalter:** `Lumora.exe _hidden` (auch `--hidden` oder `/hidden`). Ohne Schalter gibt es keinen Eintrag,
+  keinen Reiter, keine Suche. Den Schalter **nicht in eine sichtbare Verknüpfung** legen. Gut geht eine Verknüpfung
+  *im Container selbst* (nur sichtbar, wenn er eingehängt ist) oder die Eingabeaufforderung `cmd` (ohne gespeicherten
+  Verlauf); nicht über Win+R (Windows merkt sich die Eingabe) und nicht in PowerShell (Befehlsverlauf).
+- **Container nie in OneDrive** oder einem anderen Cloud-Ordner ablegen. Lumora verschlüsselt selbst nichts: der
+  Container schützt Originale, Katalog, Vorschaubilder, Gesichter und Protokolle.
+- **Anlegen:** Bibliotheks-Umschalter (oben links) bzw. **Einstellungen › Versteckte Bibliotheken → Versteckte Bibliothek
+  anlegen…** → Laufwerk des eingehängten Containers wählen, optional einen Ordnernamen direkt darauf (z. B. `X:\Fotos`;
+  tiefer geht nicht, sonst fände Lumora ihn nicht wieder), Name, Lumora-Kennwort zweimal (mindestens 6 Zeichen). Lumora
+  legt im Ordner den versteckten Katalogordner `.lumora` an, wechselt in die neue Bibliothek und scannt sie. Der Ort
+  wird nicht gemerkt.
+- **Öffnen:** Mit `_hidden` sucht Lumora auf allen eingehängten lokalen Laufwerken (Wurzel und eine Ebene darunter;
+  Netzlaufwerke, CD/DVD und Wechselmedien nicht) nach versteckten Bibliotheken und zeigt sie im Umschalter. Klick →
+  Lumora-Kennwort → Lumora schließt die normale Bibliothek vollständig und öffnet die versteckte mit eigenem Katalog.
+  Sie wird nie zusammen mit einer anderen Bibliothek angezeigt.
+- **Zusperren:** Umschalter → **Zusperren (zurück zur normalen Bibliothek)**, **Einstellungen › Versteckte Bibliotheken →
+  Jetzt zusperren**, automatisch nach einstellbarer Untätigkeit (Standard 10 Minuten ohne Maus/Tastatur in Lumora; ein
+  laufender Scan oder Datei-Vorgang wird erst fertig) und beim Beenden. Danach ist der versteckte Katalog vollständig
+  geschlossen (Fenster, Lightbox, Verbindungen, Bilder im Speicher).
+- **Container aushängen** (Standard an, in den Einstellungen der geöffneten versteckten Bibliothek abschaltbar): beim
+  Zusperren und Beenden hängt Lumora ein VeraCrypt-Volume über die VeraCrypt-Befehlszeile bzw. eine eingehängte VHDX
+  über `Dismount-DiskImage` aus; sind noch Dateien offen oder ist es kein erkennbarer Container, erscheint ein Hinweis.
+  **Container öffnen…** startet VeraCrypt mit Containerdatei und Laufwerksbuchstabe — das Container-Kennwort fragt
+  VeraCrypt in seinem eigenen Fenster, Lumora sieht es nie. VeraCrypt wird nicht mitgeliefert.
+- **Kennwort vergessen:** Container einhängen und im Ordner `.lumora` der Bibliothek eine Datei `reset-password.txt`
+  anlegen (Inhalt egal; `.lumora` ist versteckt — im Explorer „Ausgeblendete Elemente“ einblenden). Beim nächsten
+  „Öffnen“ bietet Lumora **Kennwort zurücksetzen** an und löscht die Datei danach.
+- **Was Lumora außerhalb nicht hinterlässt:** keine Namen/Pfade in den normalen Einstellungen, im normalen Protokoll
+  oder unter `%LocalAppData%\PhotoViewerV3`; Protokolle der versteckten Sitzung nur in `.lumora\logs`; keine Einträge
+  unter „Zuletzt verwendet“; in der versteckten Sitzung sind **Im Explorer zeigen**, **Ordner öffnen** und **Mit
+  Standard-App öffnen** gesperrt (Windows würde sich die Pfade merken); der Katalog kann nicht umziehen.
+- **Grenzen:** Windows merkt sich im Dateidialog („Container öffnen… → Durchsuchen“) ggf. den zuletzt besuchten Ordner,
+  VeraCrypt kann eine eigene Verlaufsliste führen, Auslagerungsdatei und Ruhezustand können Speicherinhalte enthalten,
+  in der Prozessliste steht `_hidden`. Ein VeraCrypt-Volume, das „als Wechselmedium“ eingehängt ist, wird nicht gefunden.
+
 ## Datenablage
 
 Alles liegt unter `%LocalAppData%\PhotoViewerV3` (Fotos und Videos bleiben an Ort und Stelle; der Ordnername bleibt
@@ -622,6 +660,7 @@ werden dabei zurückgesetzt und unfertige Dateivorgänge gemeldet.
 | `PHOTOVIEWERV3_SMOKE_SHOTS` | Ordner für PNG-Screenshots der Hauptansichten (optional) |
 | `PHOTOVIEWERV3_SMOKE_EXIT` | `1` → App nach dem Rauchtest beenden; ExitCode 0 = alle Schritte OK, 2 = mindestens ein Schritt FAIL |
 | `PHOTOVIEWERV3_SMOKE_CLEANUP` | `1` → die Testbibliothek am Ende wieder aus dem Katalog entfernen |
+| `PHOTOVIEWERV3_SMOKE_HIDDEN` | Nur im Rauchtest: simuliert den Startschalter `_hidden` für den Schritt „Versteckte Bibliothek“ (Standard an; `0` = aus). Container = Temp-Ordner neben der Testbibliothek, Aushängen nur simuliert |
 | `PHOTOVIEWERV3_FACE_MODELS` | Ordner mit `det_10g.onnx` und `w600k_r50.onnx` statt `models\buffalo_l\` (Entwicklung, Tests; dann kein Download). Tests mit echten Modellen laufen nur mit dieser Variable |
 | `PV3_FACE_SAMPLE_DIR` | Nur für die lokale Messung (`FaceRecognitionMeasurementTests`): Ordner mit Fotos, aus dem eine Stichprobe gelesen wird; Ausgabe nur zusammengefasste Zahlen |
 
@@ -669,6 +708,10 @@ in der Bibliothek die leeren Ordner `2026\Smoke-Archiv` und `2026\Smoke-Umbenann
 Der Schritt „Ordner übernehmen“ legt den Geschwisterordner `<Bibliothek>-Uebernahme-Eingang` als Eingang an, übernimmt
 ihn nach `2026\Smoke-Uebernahme` (der Quellordner geht dabei in den Windows-Papierkorb), macht das mit Rückgängig wieder
 rückgängig und entfernt Eingang und Ordner am Ende — deshalb immer gegen eine Kopie laufen lassen.
+Der Schritt „Versteckte Bibliothek“ (vor der Ordnerüberwachung) simuliert `_hidden`, kopiert drei Fotos in den
+Geschwisterordner `<Bibliothek>-Container\Tresor…`, legt dort eine versteckte Bibliothek an, sperrt zu, öffnet wieder
+und prüft, dass im AppData-Testordner weder Name noch Pfad noch Dateinamen vorkommen; der Ordner wird danach gelöscht.
+Danach ist die Oberfläche neu aufgebaut — die Ordnerüberwachung läuft mit den Diensten der neuen normalen Sitzung.
 
 Spike- und Benchmark-Harness: `dotnet run --project tests/PhotoViewerV3.PerfTests -c Release -- <spike>` (siehe
 [docs/spikes/](docs/spikes/)).

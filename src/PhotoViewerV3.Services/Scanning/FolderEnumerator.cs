@@ -114,7 +114,11 @@ public sealed class FolderEnumerator
             {
                 foreach (var sub in Directory.EnumerateDirectories(folder, "*", Options))
                 {
-                    queue.Enqueue(sub);
+                    // Katalog einer versteckten Bibliothek (.lumora, ADR-0049) liegt in der Bibliothek — nie mitscannen
+                    if (!Infrastructure.CatalogFolders.IsCatalogFolder(sub))
+                    {
+                        queue.Enqueue(sub);
+                    }
                 }
             }
             catch (UnauthorizedAccessException ex)

@@ -32,6 +32,7 @@ public static class ServiceCollectionExtensions
     {
         // Infrastructure — TryAdd damit eine bereits registrierte Instanz nicht überschrieben wird
         services.TryAddSingleton<IAppDataPaths, AppDataPaths>();
+        services.AddCatalogContext(); // aktiver Katalog (normal/versteckt), Cache-/Temp-Ordner (ADR-0049)
 
         // Database
         services.TryAddSingleton<SqlitePragmaInterceptor>();

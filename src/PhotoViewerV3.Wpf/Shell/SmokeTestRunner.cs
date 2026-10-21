@@ -34,6 +34,8 @@ public static class SmokeTestRunner
     public const string ExitVariable = "PHOTOVIEWERV3_SMOKE_EXIT";
     public const string ResultFileName = "smoke-result.txt";
 
+    private static int s_started;
+
     public static bool IsRequested => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(RootVariable));
 
     /// <summary>
@@ -74,6 +76,12 @@ public static class SmokeTestRunner
     {
         var root = Environment.GetEnvironmentVariable(RootVariable);
         if (string.IsNullOrWhiteSpace(root))
+        {
+            return;
+        }
+
+        // Ein Lauf je Prozess: nach einem Katalogwechsel (versteckte Bibliothek, ADR-0049) lädt ein neues Hauptfenster
+        if (System.Threading.Interlocked.Exchange(ref s_started, 1) != 0)
         {
             return;
         }

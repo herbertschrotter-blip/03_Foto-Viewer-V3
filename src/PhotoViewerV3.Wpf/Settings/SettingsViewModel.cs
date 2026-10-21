@@ -692,6 +692,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     {
         try
         {
+            PhotoViewerV3.Shell.HiddenLibraries.HiddenSessionPrivacy.ThrowIfShellBlocked(); // versteckte Sitzung: keine Shell-Spuren (ADR-0049)
             Directory.CreateDirectory(path);
             Process.Start(new ProcessStartInfo("explorer.exe", $"\"{path}\"") { UseShellExecute = true });
         }

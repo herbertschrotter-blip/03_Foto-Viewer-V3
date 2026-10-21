@@ -1008,6 +1008,7 @@ public sealed partial class LightboxViewModel : ObservableObject, IDisposable
 
         try
         {
+            PhotoViewerV3.Shell.HiddenLibraries.HiddenSessionPrivacy.ThrowIfShellBlocked(); // versteckte Sitzung: keine Shell-Spuren (ADR-0049)
             Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = true });
         }
         catch (Exception ex)
@@ -1027,6 +1028,7 @@ public sealed partial class LightboxViewModel : ObservableObject, IDisposable
 
         try
         {
+            PhotoViewerV3.Shell.HiddenLibraries.HiddenSessionPrivacy.ThrowIfShellBlocked(); // versteckte Sitzung: keine Shell-Spuren (ADR-0049)
             Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
         }
         catch (Exception ex)

@@ -164,6 +164,7 @@ internal sealed partial class SmokeScenario
         _personsDialogs = services.GetService<SmokePersonsDialogs>();
         InitSettingsTabs(services); // Einstellungs-Reiter, Info, Bibliotheks-Umschalter (ADR-0042)
         _captureDialog = services.GetService<SmokeCaptureDateDialog>(); // Schritt „Aufnahmedatum“ (ADR-0046)
+        InitHiddenLibrary(services); // Schritt „Versteckte Bibliothek“ (ADR-0049)
         _messenger.Register<SmokeScenario, ScanCompletedMessage>(this, static (r, m) => r._lastScan = m.Result);
     }
 
@@ -192,8 +193,9 @@ internal sealed partial class SmokeScenario
         }
         finally
         {
-            await _watch.SetQuietPeriodAsync(watchQuietBefore).ConfigureAwait(true);
-            await _watch.SetEnabledAsync(watchEnabledBefore).ConfigureAwait(true);
+            // nach dem Schritt „Versteckte Bibliothek“ gehört die Überwachung zur neu aufgebauten Sitzung (ADR-0049)
+            await CurrentWatch.SetQuietPeriodAsync(watchQuietBefore).ConfigureAwait(true);
+            await CurrentWatch.SetEnabledAsync(watchEnabledBefore).ConfigureAwait(true);
         }
     }
 
@@ -232,11 +234,16 @@ internal sealed partial class SmokeScenario
         await StepAsync("Personen-Details und Beziehungen: benennen mit Vor-/Nachname/Beziehung, Vorschlag beim zweiten Mal, Filter „Beziehung“, Umbenennen in den Einstellungen wirkt überall, „Das bin ich“ eindeutig", PersonDetailsAsync).ConfigureAwait(true); // ADR-0045
         await StepAsync("Collage-Ansicht: umschalten, Reihen randvoll ±1 px, Seitenverhältnisse, Doppelklick öffnet richtige Datei, zurück zu Kacheln", CollageAsync).ConfigureAwait(true); // ADR-0044
         await StepAsync("Aufnahmedatum: EXIF-Foto 1975 nachgetragen, Sortierung Aufnahme ≠ Änderung, Datum setzen ca. 1982 + Rückgängig", CaptureDateAsync).ConfigureAwait(true); // ADR-0046
-        await StepAsync("Ordnerüberwachung: Datei kopieren → automatischer Diff-Scan → Galerie", WatchAsync).ConfigureAwait(true);
-        if (_cleanup)
+        await StepAsync("Versteckte Bibliothek: anlegen (_hidden simuliert), Fotos im eigenen Katalog im Container, Zusperren nach Untätigkeit + Aushängen (Fake), falsches Kennwort, wieder öffnen, normale Bibliothek unverändert, keine Spuren im AppData", HiddenLibraryAsync).ConfigureAwait(true); // ADR-0049
+        // Nach dem Katalogwechsel ist die normale Sitzung neu aufgebaut — die restlichen Schritte laufen mit deren Diensten
+        await RunAfterHiddenLibraryAsync(async s =>
         {
-            await StepAsync("Cleanup", CleanupAsync).ConfigureAwait(true);
-        }
+            await s.StepAsync("Ordnerüberwachung: Datei kopieren → automatischer Diff-Scan → Galerie", s.WatchAsync).ConfigureAwait(true);
+            if (s._cleanup)
+            {
+                await s.StepAsync("Cleanup", s.CleanupAsync).ConfigureAwait(true);
+            }
+        }).ConfigureAwait(true);
     }
 
     /// <summary>
