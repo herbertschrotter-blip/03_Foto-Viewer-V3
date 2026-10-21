@@ -382,6 +382,32 @@ Gesetzte Kategorie-Werte stehen außerdem in der Titelleiste (z. B. „Projekt: 
 | Strg+T | Tags der Datei bearbeiten (die Titelleiste zeigt die Tags) |
 | Strg+K | Kategorie-Werte der Datei zuweisen (dieselbe Auswahl wie in der Galerie) |
 | Entf | In den Papierkorb (mit Bestätigung) |
+| S | Diashow ab hier (siehe „Diashow“) |
+
+### Diashow (seit 0.4.9, ADR-0059)
+Vollbild-Diashow ohne Musik auf dem Bildschirm des Hauptfensters, schwarz: Fotos blenden ineinander über und zoomen
+langsam (Ken Burns) auf die erkannten Gesichter, ohne Gesichter auf die Bildmitte — nie mit schwarzen Rändern. Unten links
+stehen Datum („Samstag, 12. Juli 2025“; bei ungefährem Datum nur „Juli 1982“ bzw. „1982“) und Ort. Videos laufen mit Ton,
+höchstens 30 Sekunden (einstellbar), danach geht es weiter; fehlende oder kaputte Dateien werden übersprungen. Nach dem
+letzten Bild beginnt sie von vorn.
+
+- **Starten:** Galerie-Leiste **Diashow** — ab zwei ausgewählten Dateien nur die Auswahl, sonst die ganze aktuelle Ansicht
+  (Filter, Suche, Ordner, Sortierung; bei einer ausgewählten Datei ab dieser). Rechtsklick auf eine Kachel → **Diashow ab
+  hier**. Seite **Alben**: Rechtsklick auf ein Album → **Diashow**. **Lightbox**: Knopf ▶ oder Taste **S** („Diashow ab
+  hier“, die Lightbox bleibt offen).
+- **Bedienleiste** unten mittig (blendet sich mit dem Mauszeiger nach 2 s ohne Bewegung aus, Bewegung holt sie zurück):
+  Zurück, Pause/Weiter, Weiter, Position „12 / 64“, Anzeigedauer 3 s / 5 s / 8 s, **Zoom** an/aus, **Datum & Ort** an/aus,
+  Beenden. Der gelbe Balken am unteren Rand zeigt die verbleibende Zeit des Fotos.
+- **Einstellungen › Darstellung › Diashow:** Anzeigedauer, Reihenfolge (wie die Ansicht oder zufällig, das Startbild zuerst),
+  langsamer Zoom, Videos abspielen und Höchstdauer, Datum und Ort einblenden. Änderungen in der Leiste werden ebenfalls
+  gemerkt.
+
+| Taste | Wirkung |
+|---|---|
+| ← / → | Vorheriges / nächstes Foto oder Video |
+| Leertaste | Pause / Weiter |
+| Pos1 / Ende | Erstes / letztes |
+| Esc | Diashow beenden |
 
 ### Archive
 Archive (`.zip .rar .7z .tar .gz .tgz .bz2 .xz`) nimmt der Scan wie Fotos in den Katalog auf; sie bekommen kein

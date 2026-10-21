@@ -192,6 +192,20 @@
                 <Border gc:ToolbarFlowPanel.Fill="True" MinWidth="0" Height="1" />
 
                 <StackPanel Orientation="Horizontal">
+                    <!-- Diashow (ADR-0059): Auswahl, sonst die ganze aktuelle Ansicht -->
+                    <ui:Button Appearance="Transparent"
+                               Padding="8,4"
+                               ToolTip="Diashow — die ausgewählten Dateien, sonst die ganze Ansicht"
+                               AutomationProperties.AutomationId="GallerySlideshowButton"
+                               AutomationProperties.Name="Diashow"
+                               Command="{Binding StartSlideshowCommand}"
+                               Visibility="{Binding HasSlideshow, Converter={StaticResource BoolToVis}}"
+                               Margin="0,0,2,0">
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="Play24" FontSize="14" />
+                            <TextBlock x:Name="SlideshowLabel" Text="Diashow" Margin="6,0,0,0" VerticalAlignment="Center" FontSize="13" />
+                        </StackPanel>
+                    </ui:Button>
                     <!-- Alle auswählen (wie Strg+A): alle Dateien der aktuellen Seite -->
                     <ui:Button Appearance="Transparent"
                                Padding="8,4"

@@ -1,0 +1,61 @@
+<UserControl x:Class="Lumora.Slideshow.SettingsSlideshowSection"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:local="clr-namespace:Lumora.Slideshow"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance local:SlideshowSettingsViewModel, IsDesignTimeCreatable=False}"
+             d:DesignWidth="900">
+    <!-- Einstellungen › Darstellung › Diashow (ADR-0059, Mockup 09 „Einstellungen › Storys“, Karte „Diashow“).
+         DataContext = SlideshowSettingsViewModel (von der SettingsPage gesetzt). Später unter „Storys“. -->
+    <UserControl.Resources>
+        <ResourceDictionary Source="../Settings/Sections/SettingsStyles.xaml" />
+    </UserControl.Resources>
+
+    <Border Style="{StaticResource SectionCard}" AutomationProperties.AutomationId="SettingsSlideshow">
+        <StackPanel>
+            <ui:TextBlock Style="{StaticResource SectionTitle}" Text="Diashow" />
+
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Style="{StaticResource Label}" Text="Anzeigedauer je Foto" Width="170" />
+                <ComboBox Width="200" ItemsSource="{Binding DurationOptions}" DisplayMemberPath="Label"
+                          SelectedItem="{Binding SelectedDuration, Mode=TwoWay}"
+                          AutomationProperties.AutomationId="SettingsSlideshowDuration"
+                          AutomationProperties.Name="Anzeigedauer je Foto" />
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                <TextBlock Style="{StaticResource Label}" Text="Reihenfolge" Width="170" />
+                <ComboBox Width="200" ItemsSource="{Binding OrderOptions}" DisplayMemberPath="Label"
+                          SelectedItem="{Binding SelectedOrder, Mode=TwoWay}"
+                          AutomationProperties.AutomationId="SettingsSlideshowOrder"
+                          AutomationProperties.Name="Reihenfolge der Diashow" />
+            </StackPanel>
+
+            <ui:ToggleSwitch Margin="0,14,0,0" Content="Langsamer Zoom (Ken Burns)" IsChecked="{Binding KenBurns, Mode=TwoWay}"
+                             AutomationProperties.Name="Langsamer Zoom" />
+            <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0" Text="Zielt auf erkannte Gesichter, sonst auf die Bildmitte — ohne schwarze Ränder." />
+
+            <ui:ToggleSwitch Margin="0,12,0,0" Content="Videos abspielen" IsChecked="{Binding PlayVideos, Mode=TwoWay}"
+                             AutomationProperties.Name="Videos abspielen" />
+            <StackPanel Orientation="Horizontal" Margin="0,6,0,0" IsEnabled="{Binding PlayVideos}">
+                <TextBlock Style="{StaticResource Label}" Text="Mit Ton, höchstens" Width="170" />
+                <ComboBox Width="200" ItemsSource="{Binding MaxVideoOptions}" DisplayMemberPath="Label"
+                          SelectedItem="{Binding SelectedMaxVideo, Mode=TwoWay}"
+                          AutomationProperties.AutomationId="SettingsSlideshowMaxVideo"
+                          AutomationProperties.Name="Höchstdauer je Video" />
+            </StackPanel>
+            <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0" Text="Aus: Videos werden in der Diashow übersprungen." />
+
+            <ui:ToggleSwitch Margin="0,12,0,0" Content="Datum und Ort einblenden" IsChecked="{Binding ShowCaption, Mode=TwoWay}"
+                             AutomationProperties.Name="Datum und Ort einblenden" />
+
+            <TextBlock Style="{StaticResource Hint}" Margin="0,12,0,0"
+                       Text="Starten: in der Galerie „Diashow“ (Auswahl, sonst die ganze Ansicht), auf der Seite „Alben“ per Rechtsklick oder in der Lightbox mit S („Diashow ab hier“). Keine Musik. Tasten: ← → blättern, Leertaste Pause, Pos1/Ende, Esc beendet." />
+            <TextBlock Style="{StaticResource Hint}" Margin="0,6,0,0" Text="{Binding SavedText}"
+                       Visibility="{Binding SavedText, Converter={StaticResource NullToVis}}" />
+        </StackPanel>
+    </Border>
+</UserControl>

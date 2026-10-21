@@ -340,6 +340,7 @@ public partial class GalleryView : UserControl
         var target = ReferenceEquals(menu, Resources["TagContextMenu"]) ? _menuTarget : null;
         if (target is not null)
         {
+            AddSlideshowAction(menu, target); // Diashow (ADR-0059, GalleryView.Slideshow.cs)
             AddFileActions(menu, target);
             AddAlbumActions(menu, target); // Alben und Verknüpfungen (ADR-0054)
             menu.Items.Add(new Separator());

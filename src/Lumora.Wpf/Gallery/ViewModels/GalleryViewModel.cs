@@ -138,8 +138,10 @@ public sealed partial class GalleryViewModel : ObservableObject
         Lumora.Services.Library.ILibraryScope? libraryScope = null,
         Lumora.Albums.AlbumActions? albumActions = null,
         ISharedGalleryFilter? sharedFilter = null,
-        Lumora.Shell.INavigationService? navigation = null)
+        Lumora.Shell.INavigationService? navigation = null,
+        Lumora.Slideshow.ISlideshowService? slideshow = null)
     {
+        _slideshow = slideshow; // Diashow (ADR-0059, GalleryViewModel.Slideshow.cs)
         InitAlbums(albumActions); // Alben und Ordner-Verknüpfungen (ADR-0054, GalleryViewModel.Albums.cs)
         _libraryScope = libraryScope ?? new Lumora.Services.Library.LibraryScope(contextFactory); // ADR-0048, GalleryViewModel.Scope.cs
         InitMotifs(motifTerms); // Bildinhalt-Suche (ADR-0052, GalleryViewModel.Motifs.cs)

@@ -130,6 +130,14 @@
 
                 <!-- Aktionen rechts -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <!-- Diashow ab hier (ADR-0059) -->
+                    <Button Style="{StaticResource LightboxOverlayButton}"
+                            Command="{Binding StartSlideshowCommand}"
+                            ToolTip="Diashow ab hier (S)"
+                            AutomationProperties.Name="Diashow ab hier"
+                            Visibility="{Binding HasSlideshow, Converter={StaticResource BoolToVis}}">
+                        <ui:SymbolIcon Symbol="Play24" FontSize="18" />
+                    </Button>
                     <Button Style="{StaticResource LightboxOverlayButton}"
                             Command="{Binding ToggleFavoriteCommand}"
                             ToolTip="Favorit (Strg+D)">

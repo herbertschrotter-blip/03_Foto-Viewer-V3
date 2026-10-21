@@ -1,0 +1,86 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+        Diashow (ADR-0059, Mockup 09 „Diashow“): immer schwarz, unabhängig vom Hell/Dunkel-Theme (wie die Lightbox, deren
+        Grundfarben und Schaltflächen-Stil mitgemergt werden). Wird vom Fenster und vom Overlay gemergt — das Video-Overlay
+        lebt in LibVLCSharps eigenem Vordergrundfenster und erreicht die Fenster-Ressourcen nicht.
+    -->
+    <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="../Lightbox/LightboxResources.xaml" />
+    </ResourceDictionary.MergedDictionaries>
+
+    <SolidColorBrush x:Key="SlideshowBarBrush" Color="#B81E1E1E" />
+    <SolidColorBrush x:Key="SlideshowBarBorderBrush" Color="#24FFFFFF" />
+    <SolidColorBrush x:Key="SlideshowDividerBrush" Color="#33FFFFFF" />
+    <SolidColorBrush x:Key="SlideshowToggleOnBrush" Color="#59818CF8" />
+    <SolidColorBrush x:Key="SlideshowProgressBrush" Color="#FBBF24" />
+    <SolidColorBrush x:Key="SlideshowCaptionBrush" Color="#FFFFFFFF" />
+
+    <!-- Umschalter in der Leiste (Zoom, Datum & Ort, Anzeigedauer): flach, „an“ mit Akzent-Hintergrund -->
+    <Style x:Key="SlideshowToggle" TargetType="ToggleButton">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Foreground" Value="{DynamicResource LightboxTextBrush}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="8,6" />
+        <Setter Property="Margin" Value="1,0" />
+        <Setter Property="MinWidth" Value="32" />
+        <Setter Property="MinHeight" Value="32" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToggleButton">
+                    <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="4" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" RecognizesAccessKey="False" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource LightboxHoverBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SlideshowToggleOnBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Anzeigedauer als Segment (3 s / 5 s / 8 s): RadioButtons ohne GroupName gruppieren sich je Panel -->
+    <Style x:Key="SlideshowSegment" TargetType="RadioButton">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Foreground" Value="{DynamicResource LightboxTextBrush}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Padding" Value="7,4" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RadioButton">
+                    <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="4" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" RecognizesAccessKey="False" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource LightboxHoverBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SlideshowToggleOnBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="SlideshowDivider" TargetType="Border">
+        <Setter Property="Width" Value="1" />
+        <Setter Property="Height" Value="20" />
+        <Setter Property="Margin" Value="6,0" />
+        <Setter Property="Background" Value="{DynamicResource SlideshowDividerBrush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+</ResourceDictionary>

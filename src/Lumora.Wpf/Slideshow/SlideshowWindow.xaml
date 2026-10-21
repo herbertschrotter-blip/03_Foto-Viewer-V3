@@ -1,0 +1,52 @@
+<dialogs:AppFluentWindow x:Class="Lumora.Slideshow.SlideshowWindow"
+                 xmlns:dialogs="clr-namespace:Lumora.Shell.Dialogs"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                 xmlns:vlc="clr-namespace:LibVLCSharp.WPF;assembly=LibVLCSharp.WPF"
+                 xmlns:local="clr-namespace:Lumora.Slideshow"
+                 mc:Ignorable="d"
+                 d:DataContext="{d:DesignInstance Type=local:SlideshowViewModel, IsDesignTimeCreatable=False}"
+                 Title="Lumora – Diashow"
+                 Width="1280"
+                 Height="720"
+                 Background="Black"
+                 WindowStyle="None"
+                 ResizeMode="NoResize"
+                 ShowInTaskbar="False"
+                 WindowBackdropType="None"
+                 ExtendsContentIntoTitleBar="True"
+                 WindowCornerPreference="DoNotRound"
+                 WindowStartupLocation="Manual">
+
+    <!--
+        Diashow (ADR-0059, Mockup 09): rahmenloses Vollbild auf dem Bildschirm des Hauptfensters, schwarz. Zwei Bild-Ebenen
+        für die Überblendung (Code-Behind: Opazität + langsamer Zoom), VideoView für Videos mit eigenem Overlay (Airspace).
+    -->
+    <dialogs:AppFluentWindow.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="SlideshowResources.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </dialogs:AppFluentWindow.Resources>
+
+    <Grid x:Name="Root" Background="Black">
+        <Grid x:Name="Stage" ClipToBounds="True" Background="Black">
+            <Image x:Name="LayerA" Stretch="Uniform" Opacity="0" HorizontalAlignment="Center" VerticalAlignment="Center"
+                   RenderOptions.BitmapScalingMode="HighQuality" RenderTransformOrigin="0,0" />
+            <Image x:Name="LayerB" Stretch="Uniform" Opacity="0" HorizontalAlignment="Center" VerticalAlignment="Center"
+                   RenderOptions.BitmapScalingMode="HighQuality" RenderTransformOrigin="0,0" />
+        </Grid>
+
+        <!-- VideoView = HwndHost: das Overlay über dem Video MUSS sein Content sein -->
+        <vlc:VideoView x:Name="VideoView" Background="Black"
+                       Visibility="{Binding IsVideo, Converter={StaticResource BoolToVis}}">
+            <local:SlideshowOverlay x:Name="VideoOverlay" />
+        </vlc:VideoView>
+
+        <local:SlideshowOverlay x:Name="ImageOverlay"
+                                Visibility="{Binding IsVideo, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}" />
+    </Grid>
+</dialogs:AppFluentWindow>

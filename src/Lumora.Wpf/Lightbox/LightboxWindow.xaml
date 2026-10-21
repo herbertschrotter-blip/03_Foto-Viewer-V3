@@ -200,7 +200,7 @@
                                    LineHeight="18"
                                    TextWrapping="Wrap"
                                    Foreground="{DynamicResource LightboxTextSecondaryBrush}"
-                                   Text="← → Blättern · Pos1/Ende Anfang/Ende · Bild↑/↓ ±10&#x0a;+ − Zoom · 1 = 100 % · 0 = Einpassen · Doppelklick Fit ↔ 100 %&#x0a;Leertaste Play/Pause · M Stumm&#x0a;Strg+D Favorit · Strg+1…5 Bewertung · Strg+0 löscht&#x0a;Strg+T Tags · Strg+K Kategorien&#x0a;F Gesichter · I Info · F11 Vollbild · Entf Papierkorb · Esc Schließen" />
+                                   Text="← → Blättern · Pos1/Ende Anfang/Ende · Bild↑/↓ ±10&#x0a;+ − Zoom · 1 = 100 % · 0 = Einpassen · Doppelklick Fit ↔ 100 %&#x0a;Leertaste Play/Pause · M Stumm&#x0a;Strg+D Favorit · Strg+1…5 Bewertung · Strg+0 löscht&#x0a;Strg+T Tags · Strg+K Kategorien&#x0a;F Gesichter · I Info · S Diashow ab hier · F11 Vollbild · Entf Papierkorb · Esc Schließen" />
                     </StackPanel>
                 </ScrollViewer>
             </Border>

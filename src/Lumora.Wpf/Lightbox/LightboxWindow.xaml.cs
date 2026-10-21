@@ -179,6 +179,9 @@ public partial class LightboxWindow : AppFluentWindow
             case Key.I:
                 _viewModel.ToggleInfoCommand.Execute(null);
                 break;
+            case Key.S when !ctrl:
+                _viewModel.StartSlideshowCommand.Execute(null); // „Diashow ab hier“ (ADR-0059)
+                break;
             case Key.Delete:
                 _ = _viewModel.DeleteCurrentCommand.ExecuteAsync(null);
                 break;

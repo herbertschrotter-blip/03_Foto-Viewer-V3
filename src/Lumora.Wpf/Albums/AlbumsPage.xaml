@@ -53,6 +53,11 @@
                         <MenuItem Header="Öffnen" Icon="{ui:SymbolIcon Open24}"
                                   Command="{Binding PlacementTarget.Tag.OpenAlbumCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                   CommandParameter="{Binding}" />
+                        <!-- Diashow (ADR-0059) -->
+                        <MenuItem Header="Diashow" Icon="{ui:SymbolIcon Play24}"
+                                  Visibility="{Binding PlacementTarget.Tag.HasSlideshow, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVis}}"
+                                  Command="{Binding PlacementTarget.Tag.StartSlideshowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding}" />
                         <MenuItem Header="Umbenennen…" Icon="{ui:SymbolIcon Rename24}"
                                   Command="{Binding PlacementTarget.Tag.RenameAlbumCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                   CommandParameter="{Binding}" />

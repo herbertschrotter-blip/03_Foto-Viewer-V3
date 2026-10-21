@@ -45,7 +45,7 @@ public partial class GalleryToolbar
         {
             if (needed > available + 0.5)
             {
-                _actionLabelsWidth = LabelWidth(SelectAllLabel) + LabelWidth(UndoLabel);
+                _actionLabelsWidth = LabelWidth(SelectAllLabel) + LabelWidth(UndoLabel) + LabelWidth(SlideshowLabel); // Diashow: ADR-0059
                 SetActionLabels(Visibility.Collapsed);
             }
         }
@@ -61,5 +61,6 @@ public partial class GalleryToolbar
     {
         SelectAllLabel.Visibility = visibility;
         UndoLabel.Visibility = visibility;
+        SlideshowLabel.Visibility = visibility; // Diashow: ADR-0059
     }
 }

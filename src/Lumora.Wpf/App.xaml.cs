@@ -186,6 +186,7 @@ public partial class App : Application, ICatalogHostSwitcher
         services.AddLibraryLinkingUi(); // „Bibliotheken verknüpfen“ in Einstellungen › Bibliotheken & Eingänge (Wpf/Library/Linking, ADR-0048)
         services.AddDuplicatesUi(); // Seite „Doppelte“ (Wpf/Duplicates, ADR-0053)
         services.AddAlbumsUi(); // Seite „Alben“, Album-Filter, Ordner-Verknüpfungen, intelligente Alben (Wpf/Albums, ADR-0054)
+        Lumora.Slideshow.SlideshowServiceCollectionExtensions.AddSlideshow(services); // Diashow für Galerie, Album, Lightbox und später Storys (Wpf/Slideshow, ADR-0059)
 
         services.AddSingleton<MainWindow>();
     }

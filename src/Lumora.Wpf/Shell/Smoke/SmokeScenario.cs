@@ -171,6 +171,7 @@ internal sealed partial class SmokeScenario
         InitDuplicates(services); // Schritt „Doppelte“ (ADR-0053, SmokeScenario.Duplicates.cs)
         InitAlbumsSmoke(services); // Schritt „Alben“ (ADR-0054, SmokeScenario.Albums.cs)
         InitStoriesSmoke(services); // Schritt „Storys“ (ADR-0058, SmokeScenario.Stories.cs)
+        InitSlideshowSmoke(services); // Schritt „Diashow“ (ADR-0059, SmokeScenario.Slideshow.cs)
         _messenger.Register<SmokeScenario, ScanCompletedMessage>(this, static (r, m) => r._lastScan = m.Result);
     }
 
@@ -248,6 +249,7 @@ internal sealed partial class SmokeScenario
         await StepAsync("Doppelte: Kopie und verkleinerte Kopie erzeugt, Prüfsumme gleich, pHash nah, Galerie-Filter, Seite exakt/ähnlich (hell/dunkel), Übrige in den Papierkorb mit Übertragung, Rückgängig mit derselben FileId", DuplicatesAsync).ConfigureAwait(true); // ADR-0053
         await StepAsync("Alben: Album anlegen, 3 Fotos verknüpfen, Galerie gefiltert, Foto in anderen Ordner verknüpfen → Ordneransicht mit Ketten-Kennzeichen und Zähler, Original verschieben → Verknüpfung bleibt + Rückgängig, intelligentes Album speichern/öffnen, Export in Temp", AlbumsAsync).ConfigureAwait(true); // ADR-0054
         await StepAsync("Storys: Erkennung (Mindestgröße 5), nur Dateien der Gruppe, Übersicht und Story-Ansicht, Story aus Auswahl mit Titelbild, anheften, als Album speichern, Neuberechnung behält den Zustand", StoriesAsync).ConfigureAwait(true); // ADR-0058
+        await StepAsync("Diashow: aus der Galerie (ganze Ansicht), zwei weiter, Video läuft und wird übersprungen, Esc → Galerie, „Diashow ab hier“ aus der Lightbox", SlideshowAsync).ConfigureAwait(true); // ADR-0059
         await StepAsync("Versteckte Bibliothek: anlegen (_hidden simuliert), Fotos im eigenen Katalog im Container, Zusperren nach Untätigkeit + Aushängen (Fake), falsches Kennwort, wieder öffnen, normale Bibliothek unverändert, keine Spuren im AppData", HiddenLibraryAsync).ConfigureAwait(true); // ADR-0049
         // Nach dem Katalogwechsel ist die normale Sitzung neu aufgebaut — die restlichen Schritte laufen mit deren Diensten
         await RunAfterHiddenLibraryAsync(async s =>

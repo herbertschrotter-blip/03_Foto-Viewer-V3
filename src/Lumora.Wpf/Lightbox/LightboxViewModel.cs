@@ -83,8 +83,10 @@ public sealed partial class LightboxViewModel : ObservableObject, IDisposable
         Lumora.Shell.IDialogService? dialogs = null,
         Gallery.ListView.IGalleryViewSettingsStore? viewSettings = null,
         Lumora.Services.Places.IGeoCatalogReader? geoReader = null,
-        Lumora.Services.Motifs.IMotifTermService? motifs = null)
+        Lumora.Services.Motifs.IMotifTermService? motifs = null,
+        Lumora.Slideshow.ISlideshowService? slideshow = null)
     {
+        _slideshow = slideshow; // „Diashow ab hier“ (ADR-0059, LightboxViewModel.Slideshow.cs)
         _vlc = vlc;
         _contextFactory = contextFactory;
         _logger = logger;

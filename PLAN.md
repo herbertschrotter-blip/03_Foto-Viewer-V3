@@ -134,6 +134,7 @@ src/
     Places/                           # Seite „Orte“ (ADR-0051): MapControl (eigene Kachelkarte), MapViewport, Tiles (OSM, Platten-Cache), „Ohne Ort“, MapPickerWindow
     Settings/                         # Einstellungen, ThemeService, FaceData („Gesichtsdaten löschen…“), PersonRelations („Personen & Beziehungen“, ADR-0045)
     Shell/                            # Navigation, DialogService, StatusBar, Converters, Smoke/ (Rauchtest)
+    Slideshow/                        # Diashow (ADR-0059): ISlideshowService, SlideshowWindow/-ViewModel/-Overlay, KenBurnsPlanner, Item-Loader, Einstellungen slideshow.*
     Sorter/                           # Sortieren-Seite (File Sorter, Flatten & Move)
     Thumbnails/                       # WicImageThumbnailRenderer (WIC lebt im Wpf-Projekt, Interface in Services)
 tests/

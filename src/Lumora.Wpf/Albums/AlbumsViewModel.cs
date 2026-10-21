@@ -65,8 +65,10 @@ public sealed partial class AlbumsViewModel : ObservableObject, IDisposable
         ILibraryService libraries,
         AlbumCoverProvider covers,
         ILogger<AlbumsViewModel> logger,
-        ICatalogStoragePaths? catalog = null)
+        ICatalogStoragePaths? catalog = null,
+        Lumora.Slideshow.ISlideshowService? slideshow = null)
     {
+        _slideshow = slideshow; // „Diashow“ eines Albums (ADR-0059)
         _actions = actions;
         _gallery = gallery;
         _navigation = navigation;
@@ -189,6 +191,35 @@ public sealed partial class AlbumsViewModel : ObservableObject, IDisposable
 
         _navigation.NavigateTo(NavigationTags.Gallery);
         await _gallery.OpenAlbumAsync(tile.Id);
+    }
+
+    // ---- Diashow (ADR-0059) ----
+
+    private readonly Lumora.Slideshow.ISlideshowService? _slideshow;
+
+    /// <summary>True, wenn die Diashow verfügbar ist (Menüeintrag).</summary>
+    public bool HasSlideshow => _slideshow is not null;
+
+    /// <summary>„Diashow“: die Dateien des Albums im Bereich, neueste Aufnahme zuerst; Titel = Albumname.</summary>
+    [RelayCommand]
+    public async Task StartSlideshowAsync(AlbumTileViewModel? tile)
+    {
+        if (tile is null || _slideshow is null)
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            var ids = await _actions.Albums.GetFileIdsAsync(tile.Id);
+            if (ids.Count == 0)
+            {
+                StatusText = $"„{tile.Name}“ enthält keine Fotos für eine Diashow.";
+                return;
+            }
+
+            _slideshow.Start(ids, 0, tile.Name);
+        });
     }
 
     [RelayCommand]

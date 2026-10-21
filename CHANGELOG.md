@@ -3,6 +3,38 @@
 Alle nennenswerten Änderungen an Lumora (bis 0.2.48 „PhotoViewer V3“). Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.4.9] — 2026-10-22
+
+### Feature (ADR-0059) — Diashow für Galerie, Alben und Lightbox (Welle 6, ohne Musik)
+- **Diashow** als eigenes, rahmenloses Vollbild-Fenster auf dem Bildschirm des Hauptfensters (Mockup 09): Überblendung
+  zwischen zwei Bild-Ebenen, **langsamer Zoom (Ken Burns)** auf den Mittelpunkt aller erkannten Gesichter, sonst auf die
+  Bildmitte — abwechselnd hinein/heraus, immer im Bild (keine schwarzen Ränder). Unten links **Datum und Ort**
+  („Samstag, 12. Juli 2025“, ungefähre Daten nur „Juli 1982“ / „1982“; „Grado, Italien“), unten mittig die **Bedienleiste**
+  (Zurück, Pause/Weiter, Weiter, „12 / 64“, 3/5/8 s, Zoom, Datum & Ort, Beenden), die sich mit dem Mauszeiger nach 2 s ohne
+  Bewegung ausblendet; Fortschrittsbalken unten. Tasten ←/→, Leertaste, Pos1/Ende, Esc; F/F11 ohne Wirkung. Nach dem
+  letzten Bild geht es vorn weiter. Bildschirmschoner ist während der Diashow aus.
+- **Videos** über den LibVLC-Player der Lightbox mit Ton, höchstens 30 s (einstellbar), danach weiter; fehlende,
+  kaputte und nicht abspielbare Dateien und Archive werden in Blätterrichtung übersprungen.
+- **Einstiege:** Galerie-Leiste **Diashow** (ab zwei ausgewählten die Auswahl, sonst die ganze aktuelle Ansicht — Ids
+  seitenweise, nie alle auf einmal), Kachel-Kontextmenü **Diashow ab hier**, Seite **Alben** (Rechtsklick → Diashow, Titel =
+  Albumname), Lightbox-Knopf ▶ und Taste **S** („Diashow ab hier“).
+- **Einstellungen › Darstellung › Diashow** (`slideshow.*`): Anzeigedauer, Reihenfolge (wie die Ansicht / zufällig, Startbild
+  zuerst), langsamer Zoom, Videos abspielen + Höchstdauer, Datum und Ort. Die Leiste merkt Dauer, Zoom und Datum & Ort,
+  ohne inzwischen geänderte Einstellungen zu überschreiben. Die Story-Seite verschiebt den Abschnitt später nach „Storys“.
+- **Schnittstelle für Storys:** `ISlideshowService.Start(fileIds, startIndex, title)` bzw. mit `ISlideshowSequence`;
+  Datei-Infos (Pfad, Aufnahmedatum mit Präzision/Abstand, Ort, Gesichtsrahmen) lädt `SlideshowItemLoader` blockweise.
+- **Speicher:** dekodiert wird auf Bildschirm × Skalierung × 1,12, das nächste Bild vorgeladen, höchstens drei Bilder im
+  Speicher. Messung (Wpf-Test, 200 echt dekodierte 3000 × 2000-JPEGs): ≈ 20 ms je Bild, verwaltet 15,6 → 15,6 MB, privat
+  +8 MB.
+- Rauchtest: neuer Schritt „Diashow“ vor „Versteckte Bibliothek“ (Galerie → zwei weiter → Video läuft, wird übersprungen →
+  Esc → Galerie; „Diashow ab hier“ aus der Lightbox). 53 neue Wpf-Tests (`tests/Lumora.Wpf.Tests/Slideshow`).
+
+### Offen
+- Zum und vom Video gibt es keine Überblendung (HwndHost/Airspace); ein nicht abspielbares Video zeigt kurz Schwarz, bevor
+  es übersprungen wird.
+- Wackel-Test (CHANGELOG 0.4.4 „Offen“) erfasst: `Lumora.Tests.Faces.Assignment.FaceCropServiceTests.Fordert_an_rendert_je_Datei_einmal_und_meldet_fertige_Ausschnitte`
+  schlug in einem Lauf fehl (943/945, ohne Änderung an Services), einzeln und im nächsten Lauf grün.
+
 ## [0.4.8] — 2026-10-22
 
 ### Feature (ADR-0058) — Storys: automatische Erkennung im Katalog (Welle 6, ohne Oberfläche)
