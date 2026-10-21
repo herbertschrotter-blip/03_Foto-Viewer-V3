@@ -1,4 +1,4 @@
-# PhotoViewer V3 — Implementation-Plan (C# Port)
+# Lumora (vormals PhotoViewer V3) — Implementation-Plan (C# Port)
 
 > **Stand:** 2026-10-19 (Release 0.2.0)
 > **Quelle:** Konsolidiert aus 3 ChatGPT-Review-Runden mit GPT-5 (siehe `chatgpt-review/`)
@@ -43,7 +43,7 @@ Native Windows-Desktop-Anwendung zum Ansehen, Sortieren und Verschieben von Foto
 | **Storage** | gemischt — wandert zwischen lokaler SSD, externer HDD, NAS |
 | **Formate** | Formatregister `IMediaFormatRegistry` ([ADR-0016](docs/adr/0016-formatregister.md)): gängige Foto-Formate (JPG, PNG, GIF, BMP, TIFF, WebP, HEIC/HEIF, AVIF, Kamera-RAW) und Video-Container (MP4, MOV, MKV, AVI, WMV, MTS, …); WIC + Windows-Codec-Pakete, FFmpeg als Fallback — ursprünglich nur JPG / PNG / MP4 |
 | **Plan-Apply-Modus** | nur Move im MVP, Copy später |
-| **Distribution** | Portable Ordner via `dotnet publish` — seit 0.2.26 `build/publish.ps1`: self-contained `win-x64`, Ordner + ZIP unter `artifacts/`, kein Single-File, kein Trimming; FFmpeg nicht im Paket (PATH/winget), Daten unter `%LocalAppData%\PhotoViewerV3` |
+| **Distribution** | Portable Ordner via `dotnet publish` — seit 0.2.26 `build/publish.ps1`: self-contained `win-x64`, Ordner + ZIP unter `artifacts/`, kein Single-File, kein Trimming; FFmpeg nicht im Paket (PATH/winget), Daten unter `%LocalAppData%\Lumora` |
 | **V0.1-Aufwand** | 8–10 Wochen, robust release-fähig |
 
 ### Hauptfeatures
@@ -90,22 +90,23 @@ Native Windows-Desktop-Anwendung zum Ansehen, Sortieren und Verschieben von Foto
 
 ## 3. Solution-Layout
 
-**Multi-Project ab Tag 1** (nicht Single-Project). Reales Layout seit 0.2.0 — Module statt technischer Ordner
+**Multi-Project ab Tag 1** (nicht Single-Project). Projekte, Ordner und Namespaces heißen seit 0.4.3 `Lumora.*`, vorher
+`PhotoViewerV3.*` ([ADR-0056](docs/adr/0056-umbenennung-photoviewerv3-zu-lumora.md)). Reales Layout seit 0.2.0 — Module statt technischer Ordner
 (`Views/`, `ViewModels/`), jedes Modul mit eigener DI-Registrierung `AddXyz()` ([ADR-0017](docs/adr/0017-modul-entkopplung-messenger.md)):
 
 ```
-PhotoViewerV3.slnx                       # Solution (.slnx), Directory.Packages.props = Central Package Management
+Lumora.slnx                       # Solution (.slnx), Directory.Packages.props = Central Package Management
 build/                                   # publish.ps1 (portable Version → artifacts/), run-smoke.ps1 (Rauchtest gegen eine EXE)
 src/
-  PhotoViewerV3.Domain/                  # net10.0 — keine externen Deps
+  Lumora.Domain/                  # net10.0 — keine externen Deps
     Entities/                         # Library, MediaFile, Folder, Thumbnail, OperationBatch, FileOperation, Setting
     Enums/                            # MediaType, ThumbnailStatus/Kind, BatchStatus, FileOperationStatus, OperationType
-  PhotoViewerV3.Data/                    # → Domain
+  Lumora.Data/                    # → Domain
     LibraryContext.cs                 # DbContext (+ DesignTimeLibraryContextFactory)
     EntitiesMapping/                  # EF Core Configurations, ValueConverters
     RawSql/                           # BulkScanWriter, FtsIndexer, FtsQueryBuilder
     Migrations/                       # EF Core (InitialV01)
-  PhotoViewerV3.Services/                # → Domain + Data, WPF-frei; AddPhotoViewerServices()
+  Lumora.Services/                # → Domain + Data, WPF-frei; AddLumoraServices()
     Catalog/                          # CatalogUpdateService (Favorit/Bewertung)
     Database/                         # LibraryContextFactory (+ IDatabaseAccessGate), DatabaseInitializer, SqlitePragmaInterceptor
     Duplicates/                       # Doppelte (ADR-0053): ContentHasher (SHA-256), PerceptualHash (pHash), SimilarGrouping (Bucket-Index + Stern-Gruppen), KeeperRule, DuplicateIndexService (Hintergrund), DuplicateService (Abfragen), DuplicateCleanupService (Papierkorb + Rückgängig, CatalogRowSnapshot, MetadataTransfer)
@@ -120,12 +121,12 @@ src/
     Scanning/                         # ScanService, FolderEnumerator, IncrementalScanRunner, RootAvailabilityProbe, MassMissingGuard (ADR-0019)
     Sorter/                           # FileSorterService, FlattenService, SorterPatternEngine, SorterProfileStore
     Thumbnails/                       # ThumbnailService, FfmpegVideoThumbnailer, Renderer-Interfaces
-  PhotoViewerV3.Wpf/                     # net10.0-windows → alle; App.xaml.cs = Host + DI, MainWindow = NavigationView
+  Lumora.Wpf/                     # net10.0-windows → alle; App.xaml.cs = Host + DI, MainWindow = NavigationView
     Faces/                            # WicFaceImageLoader (IFaceImageLoader), Einstellungs-Abschnitt Gesichtserkennung
     Duplicates/                       # Seite „Doppelte“ (ADR-0053): DuplicatesViewModel, Gruppen-/Datei-Karten, Vorschaubilder
     Folders/                          # Ordnerbaum-Seite
     Gallery/                          # Galerie: Data (GalleryPageSource, .Persons = Personen-Filter/-Suche/-Spalte), ViewModels, Views, Controls, Converters, Services, People (Personen-Filter-Dropdown)
-    Library/                          # Bibliotheks-Seite (Namespace PhotoViewerV3.Libraries)
+    Library/                          # Bibliotheks-Seite (Namespace Lumora.Libraries)
     Lightbox/                         # LightboxWindow/-ViewModel/-Service, ZoomPanControl (+ Overlay), LibVlcHost, Imaging, Faces (Gesichtsrahmen, Taste F)
     Persons/                          # Seite „Personen“ (ADR-0037): PersonsViewModel, TileListBox, PersonPickerDialog, PersonDetailsDialog (ADR-0045), WicFaceCropRenderer
     Places/                           # Seite „Orte“ (ADR-0051): MapControl (eigene Kachelkarte), MapViewport, Tiles (OSM, Platten-Cache), „Ohne Ort“, MapPickerWindow
@@ -134,13 +135,13 @@ src/
     Sorter/                           # Sortieren-Seite (File Sorter, Flatten & Move)
     Thumbnails/                       # WicImageThumbnailRenderer (WIC lebt im Wpf-Projekt, Interface in Services)
 tests/
-  PhotoViewerV3.Tests/                   # xUnit: Services + Data
-  PhotoViewerV3.Wpf.Tests/               # xUnit: WPF-gebundener Code (WIC, GalleryQuery, Converter)
-  PhotoViewerV3.PerfTests/               # Benchmark/Console-Harness der Spikes
+  Lumora.Tests/                   # xUnit: Services + Data
+  Lumora.Wpf.Tests/               # xUnit: WPF-gebundener Code (WIC, GalleryQuery, Converter)
+  Lumora.PerfTests/               # Benchmark/Console-Harness der Spikes
 ```
 
 Noch nicht angelegt (Plan bleibt): `Services/Storage/` (StorageProfileService, ADR-0008), `Services/Settings/`,
-`Domain/ValueObjects/`, `Domain/Abstractions/`, `Data/Repositories/`, `PhotoViewerV3.Tools/` — Settings laufen heute
+`Domain/ValueObjects/`, `Domain/Abstractions/`, `Data/Repositories/`, `Lumora.Tools/` — Settings laufen heute
 über die `Settings`-Tabelle direkt im jeweiligen Service, Interfaces liegen in `Services`.
 
 **Referenz-Regeln:**
@@ -312,7 +313,7 @@ PRAGMA temp_store=MEMORY;
 ```
 
 ### Kataloge und Katalog-Sitzungen (seit 0.2.52, ADR-0049)
-- **Normaler Katalog**: `library.db` + `thumbs\` im Datenordner (ADR-0026), Protokolle unter `%LocalAppData%\PhotoViewerV3\logs`.
+- **Normaler Katalog**: `library.db` + `thumbs\` im Datenordner (ADR-0026), Protokolle unter `%LocalAppData%\Lumora\logs`.
 - **Versteckte Bibliothek**: je Bibliothek ein eigener Katalog in `<Bibliotheksordner>\.lumora\` im verschlüsselten
   Container (`library.db`, `thumbs\`, `logs\`, `cache\`, `temp\`, `hidden-library.json` mit Name, Kennwort-Prüfwert,
   Zusperr-/Aushänge-Einstellung). Gleiches Schema, gleiche Migrationen; nur mit Startschalter `_hidden` sichtbar.
@@ -329,13 +330,13 @@ PRAGMA temp_store=MEMORY;
 |---|---|---|
 | **ADR-001** | Runtime + UI-Stack | .NET 10 LTS, WPF, WPF-UI als isolierter UI-Layer, CommunityToolkit.Mvvm |
 | **ADR-002** | Solution-Architektur | Multi-Project ab Tag 1 (Domain/Data/Services/Wpf) |
-| **ADR-003** | Catalog-Modell | Eine aktive Library, zentrale DB `%LocalAppData%\PhotoViewerV3\library.db`, LibraryId-FKs vorbereitet |
+| **ADR-003** | Catalog-Modell | Eine aktive Library, zentrale DB `%LocalAppData%\Lumora\library.db`, LibraryId-FKs vorbereitet |
 | **ADR-004** | Datenzugriff | EF Core für CRUD, Raw `Microsoft.Data.Sqlite` für Bulk/FTS5/Performance-Pfade, WAL + Single-Writer |
 | **ADR-005** | Migration-Disziplin | DB-Reset bis erste produktive Nutzung, ab V0.2 strict Migrations, WAL-Checkpoint + versioniertes Backup |
 | **ADR-006** | Bild- & Video-Pipeline | WIC für JPG/PNG, FFmpeg für MP4-Standbilder, LibVLCSharp für MP4-Lightbox (V0.1 Cutline: bei rotem Spike "Extern öffnen") |
 | **ADR-007** | Thumbnail-Scheduling | Multi-Channel Queue (Critical/Viewport/CurrentFolder/Background) + Dedupe + Versioning + Status + `.tmp` Writes |
 | **ADR-008** | Storage-Profile | StorageProfileService (LocalSsd/LocalHddOrUsb/NetworkShare/Unknown), Offline-State separat von Profil |
-| **ADR-009** | Cache-Strategie | Thumbs lokal `%LocalAppData%\PhotoViewerV3\thumbs\{libraryId}\` auch bei NAS |
+| **ADR-009** | Cache-Strategie | Thumbs lokal `%LocalAppData%\Lumora\thumbs\{libraryId}\` auch bei NAS |
 | **ADR-010** | UI-Datenmodell | Paged/virtualisiertes Grid via Query-DTOs, keine 500k ObservableCollection, SelectionStore nach FileId |
 | **ADR-011** | Suche/Filter V0.1 | FTS5 minimal Pflicht (Files.Name+Extension), Filter Alle/Bilder/Videos/Favoriten Pflicht, Favorit ja, Rating später |
 | **ADR-012** | Operation-Logging | OperationBatches/FileOperations ab V0.1 für Delete-to-Recycle, Move/Rename V0.2+ |
@@ -434,9 +435,9 @@ Status (Stand 0.2.0): ✅ umgesetzt · 🟡 teilweise · ⬜ offen
 4. DI/HostBuilder in WPF App integrieren
 5. Serilog Logging einrichten (Rolling File)
 6. `AppDataPaths`-Service:
-   - DB: `%LocalAppData%\PhotoViewerV3\library.db`
-   - Thumbs: `%LocalAppData%\PhotoViewerV3\thumbs\`
-   - Logs: `%LocalAppData%\PhotoViewerV3\logs\`
+   - DB: `%LocalAppData%\Lumora\library.db`
+   - Thumbs: `%LocalAppData%\Lumora\thumbs\`
+   - Logs: `%LocalAppData%\Lumora\logs\`
 7. Leeres MainWindow mit WPF-UI NavigationView
 8. Smoke-Run
 
@@ -641,7 +642,7 @@ Das kann passieren, wenn ein Laufwerk nicht vollständig verfügbar ist.
 ## 13. Thumbnail-Pipeline
 
 ### Speicherort
-`%LocalAppData%\PhotoViewerV3\thumbs\{libraryId}\{fileId}_{size}_{kind}.jpg` — bzw. `{Datenordner}\thumbs\…`, wenn der
+`%LocalAppData%\Lumora\thumbs\{libraryId}\{fileId}_{size}_{kind}.jpg` — bzw. `{Datenordner}\thumbs\…`, wenn der
 Katalog in den Einstellungen umgezogen ist: der Cache liegt immer neben `library.db` und zieht mit (ADR-0026).
 
 - **Naming**: `42_400_still.jpg` für File-ID 42, statisches Thumb mit kurzer Kante 400 px (`Thumbnails.Size` = 400)

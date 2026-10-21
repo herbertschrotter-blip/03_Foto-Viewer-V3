@@ -1,0 +1,147 @@
+<UserControl x:Class="Lumora.Gallery.ListView.GalleryListView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:gc="clr-namespace:Lumora.Gallery.Controls"
+             xmlns:tags="clr-namespace:Lumora.Gallery.Tags"
+             xmlns:vm="clr-namespace:Lumora.Gallery.ViewModels"
+             xmlns:local="clr-namespace:Lumora.Gallery.ListView"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:GalleryViewModel, IsDesignTimeCreatable=False}"
+             x:Name="Root"
+             Focusable="False">
+    <!--
+        Listenansicht (0.2.6): DataGrid über dieselbe Page wie das Kachel-Grid (CurrentPage) mit eigener
+        ListCollectionView (Sortieren innerhalb der Page darf das Grid nicht umsortieren). Spalten entstehen im
+        Code-Behind aus GalleryListColumns + den gespeicherten Einstellungen (sichtbar, Reihenfolge); Kopfzeilenklick
+        sortiert über GallerySort (Name/Geändert/Größe) bzw. je Kategorie-Spalte in der DB (ADR-0027) oder clientseitig innerhalb der Page (übrige Spalten).
+    -->
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        <local:UtcToLocalTextConverter x:Key="UtcToLocal" />
+        <local:MediaTypeTextConverter x:Key="MediaTypeText" />
+
+        <DataTemplate x:Key="NameCell" DataType="{x:Type vm:GalleryItem}">
+            <StackPanel Orientation="Horizontal" ToolTip="{Binding SourcePath}">
+                <Border Width="40" Height="28" Margin="0,1,8,1" CornerRadius="3" ClipToBounds="True"
+                        Background="{DynamicResource ControlFillColorDefaultBrush}">
+                    <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="LowQuality" />
+                </Border>
+                <ui:SymbolIcon Symbol="Play24" FontSize="12" Margin="0,0,4,0" VerticalAlignment="Center"
+                               Visibility="{Binding IsVideo, Converter={StaticResource BoolToVis}}" />
+                <!-- Verknüpft in diesem Ordner (ADR-0054) -->
+                <ui:SymbolIcon Symbol="Link16" FontSize="12" Margin="0,0,4,0" VerticalAlignment="Center"
+                               Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                               Visibility="{Binding IsLinked, Converter={StaticResource BoolToVis}}" />
+                <TextBlock Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+        </DataTemplate>
+
+        <DataTemplate x:Key="RatingCell" DataType="{x:Type vm:GalleryItem}">
+            <gc:RatingStars Value="{Binding Rating}"
+                            StarSize="13"
+                            VerticalAlignment="Center"
+                            FilledBrush="#FFD166"
+                            EmptyBrush="{DynamicResource TextFillColorTertiaryBrush}"
+                            Command="{Binding DataContext.SetItemRatingCommand, RelativeSource={RelativeSource AncestorType={x:Type local:GalleryListView}}}"
+                            CommandParameter="{Binding}" />
+        </DataTemplate>
+
+        <DataTemplate x:Key="FavoriteCell" DataType="{x:Type vm:GalleryItem}">
+            <Button Background="Transparent" BorderThickness="0" Padding="4,0" Focusable="False" Cursor="Hand"
+                    ToolTip="Favorit umschalten"
+                    Command="{Binding DataContext.ToggleFavoriteCommand, RelativeSource={RelativeSource AncestorType={x:Type local:GalleryListView}}}"
+                    CommandParameter="{Binding}">
+                <ui:SymbolIcon Symbol="Heart24" FontSize="15" Filled="{Binding IsFavorite}">
+                    <ui:SymbolIcon.Style>
+                        <Style TargetType="ui:SymbolIcon">
+                            <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
+                            <Style.Triggers>
+                                <Trigger Property="Filled" Value="True">
+                                    <Setter Property="Foreground" Value="#FF6B6B" />
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ui:SymbolIcon.Style>
+                </ui:SymbolIcon>
+            </Button>
+        </DataTemplate>
+
+        <DataTemplate x:Key="TagsCell" DataType="{x:Type vm:GalleryItem}">
+            <tags:TagChipsControl Tags="{Binding Tags}" Compact="False" VerticalAlignment="Center" />
+        </DataTemplate>
+
+        <DataTemplate x:Key="PersonsCell" DataType="{x:Type vm:GalleryItem}">
+            <!-- Personen (0.2.38): bestätigte Namen normal, Vorschläge kursiv und grau mit „?“ -->
+            <TextBlock VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding Persons.ToolTip}">
+                <Run Text="{Binding Persons.ConfirmedText, Mode=OneWay}" /><Run Text="{Binding Persons.Separator, Mode=OneWay}" /><Run Text="{Binding Persons.SuggestionsText, Mode=OneWay}"
+                     FontStyle="Italic"
+                     Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+            </TextBlock>
+        </DataTemplate>
+
+        <DataTemplate x:Key="StatusCell" DataType="{x:Type vm:GalleryItem}">
+            <!-- Status (ADR-0020): fehlt / Eingang / Archiv; „fehlt“ in Warnfarbe -->
+            <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding Missing}" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+        </DataTemplate>
+
+        <Style x:Key="RowStyle" TargetType="DataGridRow">
+            <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
+            <Setter Property="MinHeight" Value="32" />
+            <EventSetter Event="MouseDoubleClick" Handler="OnRowDoubleClick" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Missing}" Value="True">
+                    <Setter Property="Opacity" Value="0.6" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
+    <local:GalleryDataGrid x:Name="Grid"
+                           AutomationProperties.AutomationId="GalleryListGrid"
+                           AutoGenerateColumns="False"
+                           IsReadOnly="True"
+                           CanUserAddRows="False"
+                           CanUserDeleteRows="False"
+                           CanUserReorderColumns="True"
+                           CanUserResizeColumns="True"
+                           CanUserResizeRows="False"
+                           CanUserSortColumns="True"
+                           SelectionMode="Extended"
+                           SelectionUnit="FullRow"
+                           HeadersVisibility="Column"
+                           GridLinesVisibility="None"
+                           RowHeaderWidth="0"
+                           Background="Transparent"
+                           BorderThickness="0"
+                           EnableRowVirtualization="True"
+                           EnableColumnVirtualization="False"
+                           VirtualizingPanel.IsVirtualizing="True"
+                           VirtualizingPanel.VirtualizationMode="Recycling"
+                           ScrollViewer.CanContentScroll="True"
+                           ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                           ScrollViewer.VerticalScrollBarVisibility="Auto"
+                           RowStyle="{StaticResource RowStyle}"
+                           Sorting="OnSorting"
+                           ColumnReordered="OnColumnReordered"
+                           PreviewKeyDown="OnPreviewKeyDown">
+        <local:GalleryDataGrid.InputBindings>
+            <KeyBinding Key="Delete" Command="{Binding RecycleSelectionCommand}" />
+            <KeyBinding Key="Escape" Command="{Binding ClearSelectionCommand}" />
+            <KeyBinding Modifiers="Ctrl" Key="A" Command="{Binding SelectAllCommand}" />
+        </local:GalleryDataGrid.InputBindings>
+    </local:GalleryDataGrid>
+</UserControl>

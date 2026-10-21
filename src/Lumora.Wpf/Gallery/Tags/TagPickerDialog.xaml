@@ -1,0 +1,92 @@
+<dialogs:AppFluentWindow xmlns:dialogs="clr-namespace:Lumora.Shell.Dialogs"
+        x:Class="Lumora.Gallery.Tags.TagPickerDialog"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 xmlns:local="clr-namespace:Lumora.Gallery.Tags"
+                 Title="Tags zuweisen"
+                 Width="440"
+                 SizeToContent="Height"
+                 ResizeMode="NoResize"
+                 ShowInTaskbar="False"
+                 WindowStartupLocation="CenterOwner"
+                 WindowBackdropType="Mica"
+                 ExtendsContentIntoTitleBar="True"
+                 KeyDown="OnKeyDown">
+
+    <!-- Tag-Auswahl für die Auswahl (Strg+T): je Tag ein Häkchen — dreistufig, wenn nur ein Teil der Dateien das Tag
+         hat; „Neues Tag“ legt sofort an und hakt es ab. Aufbau wie AppDialogWindow (feste Breite, Höhe aus Inhalt). -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Grid.Row="0" Title="Tags zuweisen" ShowMaximize="False" ShowMinimize="False" />
+
+        <StackPanel Grid.Row="1" Margin="24,4,24,16">
+            <TextBlock x:Name="SubtitleText" FontSize="13" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,0,0,10" />
+
+            <TextBlock x:Name="EmptyText"
+                       Text="Noch keine Tags vorhanden — unten ein neues Tag anlegen."
+                       FontSize="12"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       Visibility="Collapsed" />
+
+            <ScrollViewer MaxHeight="320" VerticalScrollBarVisibility="Auto">
+                <ItemsControl x:Name="TagList">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type local:TagPickItem}">
+                            <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                                      IsThreeState="{Binding AllowsMixed}"
+                                      Margin="0,1"
+                                      AutomationProperties.Name="{Binding Name}">
+                                <StackPanel Orientation="Horizontal">
+                                    <Border Width="12" Height="12" CornerRadius="6" Background="{Binding Brush}" Margin="0,0,8,0" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding Hint}" Margin="8,0,0,0" FontSize="11" VerticalAlignment="Center"
+                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                                </StackPanel>
+                            </CheckBox>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <Grid x:Name="CreateRow" Margin="0,12,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <ui:TextBox x:Name="NewTagBox"
+                            Grid.Column="0"
+                            PlaceholderText="Neues Tag…"
+                            Icon="{ui:SymbolIcon Tag24}"
+                            KeyDown="OnNewTagKeyDown" />
+                <ui:Button x:Name="CreateButton"
+                           Grid.Column="1"
+                           Content="Anlegen"
+                           Margin="8,0,0,0"
+                           Click="OnCreateClick" />
+            </Grid>
+            <TextBlock x:Name="CreateError"
+                       Margin="0,6,0,0"
+                       FontSize="12"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+                       Visibility="Collapsed" />
+        </StackPanel>
+
+        <Border Grid.Row="2"
+                Padding="24,12"
+                Background="{DynamicResource LayerFillColorDefaultBrush}"
+                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                BorderThickness="0,1,0,0">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <ui:Button x:Name="OkButton" MinWidth="110" Margin="0,0,8,0" Appearance="Primary" Content="Übernehmen" Click="OnOkClick" />
+                <ui:Button x:Name="CancelButton" MinWidth="110" Content="Abbrechen" Click="OnCancelClick" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</dialogs:AppFluentWindow>

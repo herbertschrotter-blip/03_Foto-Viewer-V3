@@ -1,0 +1,90 @@
+<ResourceDictionary x:Class="Lumora.Shell.Branding.LumoraIconDictionary"
+                    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                    xmlns:po="http://schemas.microsoft.com/winfx/2006/xaml/presentation/options"
+                    xmlns:branding="clr-namespace:Lumora.Shell.Branding"
+                    mc:Ignorable="po">
+    <!-- App-Symbol von Lumora als Vektor (ADR-0047, Mockup 07 „tileSpark“/„tileSmall“), 128er-Raster wie im Mockup.
+         Quelle für Titelleiste, Navigation, Info und für Lumora.ico (LumoraIconRenderer, build/make-icon.ps1).
+         Farben aus LumoraIconParts (x:Static), damit jede Farbe nur einmal definiert ist. -->
+
+    <!-- Volles Symbol (ab 32 px): Indigo-Kachel, gefächerter Fotostapel (hinten −12°, vorn +8°), Funke rechts oben -->
+    <DrawingGroup x:Key="LumoraIconDrawing" po:Freeze="True">
+        <GeometryDrawing Brush="{x:Static branding:LumoraIconParts.TileBrush}">
+            <GeometryDrawing.Geometry>
+                <RectangleGeometry Rect="0,0,128,128" RadiusX="28" RadiusY="28" />
+            </GeometryDrawing.Geometry>
+        </GeometryDrawing>
+        <DrawingGroup>
+            <DrawingGroup.Transform>
+                <RotateTransform Angle="-12" CenterX="64" CenterY="70" />
+            </DrawingGroup.Transform>
+            <GeometryDrawing Brush="{x:Static branding:LumoraIconParts.BackFrameBrush}">
+                <GeometryDrawing.Geometry>
+                    <RectangleGeometry Rect="26,34,62,54" RadiusX="7" RadiusY="7" />
+                </GeometryDrawing.Geometry>
+            </GeometryDrawing>
+            <GeometryDrawing Brush="{x:Static branding:LumoraIconParts.PhotoVioletBrush}">
+                <GeometryDrawing.Geometry>
+                    <RectangleGeometry Rect="31,39,52,38" RadiusX="4" RadiusY="4" />
+                </GeometryDrawing.Geometry>
+            </GeometryDrawing>
+        </DrawingGroup>
+        <DrawingGroup>
+            <DrawingGroup.Transform>
+                <RotateTransform Angle="8" CenterX="64" CenterY="70" />
+            </DrawingGroup.Transform>
+            <GeometryDrawing Brush="{x:Static branding:LumoraIconParts.FrameBrush}">
+                <GeometryDrawing.Geometry>
+                    <RectangleGeometry Rect="38,36,64,58" RadiusX="7" RadiusY="7" />
+                </GeometryDrawing.Geometry>
+            </GeometryDrawing>
+            <GeometryDrawing Brush="{x:Static branding:LumoraIconParts.PhotoWarmBrush}">
+                <GeometryDrawing.Geometry>
+                    <RectangleGeometry Rect="43,41,54,40" RadiusX="4" RadiusY="4" />
+                </GeometryDrawing.Geometry>
+            </GeometryDrawing>
+            <GeometryDrawing Brush="{x:Static branding:LumoraIconParts.MountainBrush}"
+                             Geometry="M43,81 L58,64 L68,73 L77,66 L97,81 Z" />
+        </DrawingGroup>
+        <!-- Funke 30 × 30 bei (84, 14) -->
+        <DrawingGroup Transform="1.25,0,0,1.25,84,14">
+            <GeometryDrawing Brush="{x:Static branding:LumoraIconParts.SparkBrush}"
+                             Geometry="{x:Static branding:LumoraIconParts.SparkGeometry}" />
+        </DrawingGroup>
+    </DrawingGroup>
+
+    <!-- Vereinfachtes Symbol (unter 32 px): ein Foto (+6°), großer Funke 40 × 40 bei (80, 8) -->
+    <DrawingGroup x:Key="LumoraIconSmallDrawing" po:Freeze="True">
+        <GeometryDrawing Brush="{x:Static branding:LumoraIconParts.TileBrush}">
+            <GeometryDrawing.Geometry>
+                <RectangleGeometry Rect="0,0,128,128" RadiusX="28" RadiusY="28" />
+            </GeometryDrawing.Geometry>
+        </GeometryDrawing>
+        <DrawingGroup>
+            <DrawingGroup.Transform>
+                <RotateTransform Angle="6" CenterX="64" CenterY="70" />
+            </DrawingGroup.Transform>
+            <GeometryDrawing Brush="{x:Static branding:LumoraIconParts.FrameBrush}">
+                <GeometryDrawing.Geometry>
+                    <RectangleGeometry Rect="26,34,76,66" RadiusX="9" RadiusY="9" />
+                </GeometryDrawing.Geometry>
+            </GeometryDrawing>
+            <GeometryDrawing Brush="{x:Static branding:LumoraIconParts.PhotoWarmBrush}">
+                <GeometryDrawing.Geometry>
+                    <RectangleGeometry Rect="33,41,62,44" RadiusX="5" RadiusY="5" />
+                </GeometryDrawing.Geometry>
+            </GeometryDrawing>
+            <GeometryDrawing Brush="{x:Static branding:LumoraIconParts.MountainSolidBrush}"
+                             Geometry="M33,85 L52,64 L64,75 L75,67 L95,85 Z" />
+        </DrawingGroup>
+        <DrawingGroup Transform="1.6666667,0,0,1.6666667,80,8">
+            <GeometryDrawing Brush="{x:Static branding:LumoraIconParts.SparkBrush}"
+                             Geometry="{x:Static branding:LumoraIconParts.SparkGeometry}" />
+        </DrawingGroup>
+    </DrawingGroup>
+
+    <DrawingImage x:Key="LumoraIconImage" Drawing="{StaticResource LumoraIconDrawing}" po:Freeze="True" />
+    <DrawingImage x:Key="LumoraIconSmallImage" Drawing="{StaticResource LumoraIconSmallDrawing}" po:Freeze="True" />
+</ResourceDictionary>

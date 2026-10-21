@@ -1,0 +1,37 @@
+<UserControl x:Class="Lumora.Settings.Sections.SettingsWatchSection"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:settings="clr-namespace:Lumora.Settings"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance settings:SettingsViewModel}"
+             d:DesignWidth="900">
+    <!-- Ordnerüberwachung (Services/Watch) unter der Bibliotheksliste in Einstellungen › Bibliotheken & Eingänge (ADR-0042);
+         DataContext = SettingsViewModel (von der SettingsPage gesetzt, die Bibliotheksseite hat ein eigenes ViewModel). -->
+    <UserControl.Resources>
+        <ResourceDictionary Source="SettingsStyles.xaml" />
+    </UserControl.Resources>
+
+    <Border Style="{StaticResource SectionCard}" Margin="0,4,0,0">
+        <StackPanel>
+            <ui:TextBlock Style="{StaticResource SectionTitle}" Text="Ordnerüberwachung" />
+            <ui:ToggleSwitch Content="Bibliotheksordner überwachen"
+                             IsChecked="{Binding IsWatchEnabled, Mode=TwoWay}"
+                             AutomationProperties.Name="Bibliotheksordner überwachen" />
+            <StackPanel Orientation="Horizontal" Margin="0,8,0,0" IsEnabled="{Binding IsWatchEnabled}">
+                <TextBlock Style="{StaticResource Label}" Text="Ruhezeit" />
+                <ui:NumberBox Value="{Binding WatchQuietSeconds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                              Minimum="{Binding WatchQuietMinSeconds, Mode=OneTime}"
+                              Maximum="{Binding WatchQuietMaxSeconds, Mode=OneTime}"
+                              SmallChange="1" LargeChange="5" MaxDecimalPlaces="0"
+                              SpinButtonPlacementMode="Inline" Width="140"
+                              AutomationProperties.Name="Ruhezeit in Sekunden" />
+                <TextBlock Style="{StaticResource Label}" Text="Sekunden (1–60)" Margin="8,0,0,0" />
+            </StackPanel>
+            <TextBlock Style="{StaticResource Hint}" Margin="0,8,0,0"
+                       Text="Änderungen in den Bibliotheksordnern (neue, gelöschte, umbenannte Fotos und Videos) lösen nach der Ruhezeit ohne weitere Änderungen automatisch „Aktualisieren“ aus. Läuft bereits ein Scan, wird danach erneut geprüft. Meldet der Scan eine Bestätigung (viele fehlende Dateien) oder eine Bibliothek offline, bleibt die Automatik bis zum nächsten manuellen „Aktualisieren“ angehalten." />
+        </StackPanel>
+    </Border>
+</UserControl>

@@ -43,8 +43,8 @@ ffmpeg.exe
 ffplay.exe
 ffprobe.exe
 # … aber unser Spike-#5-Code-Verzeichnis bleibt tracked
-!tests/PhotoViewerV3.PerfTests/Spikes/Ffmpeg/
-!tests/PhotoViewerV3.PerfTests/Spikes/Ffmpeg/**
+!tests/Lumora.PerfTests/Spikes/Ffmpeg/
+!tests/Lumora.PerfTests/Spikes/Ffmpeg/**
 
 # Debug-Log
 debug.log

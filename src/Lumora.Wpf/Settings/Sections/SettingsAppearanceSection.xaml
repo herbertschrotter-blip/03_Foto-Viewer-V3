@@ -1,0 +1,36 @@
+<UserControl x:Class="Lumora.Settings.Sections.SettingsAppearanceSection"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:settings="clr-namespace:Lumora.Settings"
+             xmlns:local="clr-namespace:Lumora.Settings.Sections"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance settings:SettingsViewModel}"
+             d:DesignWidth="1000">
+    <!-- Einstellungen › Darstellung (ADR-0042); DataContext = SettingsViewModel -->
+    <UserControl.Resources>
+        <ResourceDictionary Source="SettingsStyles.xaml" />
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Style="{StaticResource SectionPanel}">
+            <TextBlock Style="{StaticResource Lead}" Text="Wie Lumora aussieht." />
+            <Border Style="{StaticResource SectionCard}">
+                <StackPanel>
+                    <ui:TextBlock Style="{StaticResource SectionTitle}" Text="Farbschema" />
+                    <StackPanel Orientation="Horizontal">
+                        <RadioButton Content="Hell" GroupName="Theme" IsChecked="{Binding IsThemeLight, Mode=TwoWay}" Margin="0,0,16,0" />
+                        <RadioButton Content="Dunkel" GroupName="Theme" IsChecked="{Binding IsThemeDark, Mode=TwoWay}" Margin="0,0,16,0" />
+                        <RadioButton Content="System" GroupName="Theme" IsChecked="{Binding IsThemeSystem, Mode=TwoWay}" />
+                    </StackPanel>
+                    <TextBlock Style="{StaticResource Hint}" Margin="0,8,0,0"
+                               Text="„System“ folgt dem Windows-Farbschema auch während Lumora läuft — der Kartenstil „Automatisch“ ebenso. Die Vorschaugröße stellst du in der Galerie ein." />
+                </StackPanel>
+            </Border>
+            <!-- Karte (ADR-0055): Kartenstil und API-Schlüssel; DataContext setzt die SettingsPage -->
+            <local:SettingsMapSection x:Name="MapSection" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

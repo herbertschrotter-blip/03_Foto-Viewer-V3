@@ -1,0 +1,315 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:gc="clr-namespace:Lumora.Gallery.Controls">
+    <!--
+        Stile der Galerie-Kopfzeile (0.2.43, Mockup 06 „Galerie-Kopfzeile“): Filter-Chips, Segmente, Flyouts,
+        Beschriftung der Filterzeilen. Nur Theme-Ressourcen (DynamicResource) — hell und dunkel ohne eigene Farben.
+        Eingebunden von GalleryToolbar und den Filter-Dropdowns (Tags, Personen, Kategorien, Bewertung, Ablage).
+    -->
+
+    <!-- Beschriftung links in der Filterkarte („DATEI“, „INHALT“) -->
+    <Style x:Key="GalleryFilterRowLabel" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- Rahmenloser Schließen-Knopf (Ordner-Chip, Suche leeren, Bedingungen der „Es gilt“-Zeile); bis 0.4.0 in GalleryToolbar -->
+    <Style x:Key="ChipButton" TargetType="Button">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="3" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bg" Background="{TemplateBinding Background}" CornerRadius="3" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bg" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Bg" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Kleine Beschriftung vor einer Gruppe der Sortierleiste („Sortieren“, „Ansicht“) -->
+    <Style x:Key="GalleryBarLabel" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Margin" Value="0,0,8,0" />
+    </Style>
+
+    <!--
+        Filter-Chip (runde Pille, 32 px hoch). gc:FilterChip.IsActive = Filter wirkt → Akzent-Rahmen, Akzent-Tönung und
+        Akzent-Schrift (wie .chip.on im Mockup). IsChecked bleibt frei (bei Auswahl-Chips: Popup offen).
+    -->
+    <Style x:Key="GalleryFilterChip" TargetType="ToggleButton">
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+        <Setter Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource ControlStrokeColorDefaultBrush}" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Padding" Value="9,0" />
+        <Setter Property="Height" Value="32" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToggleButton">
+                    <Grid>
+                        <Border x:Name="Base"
+                                CornerRadius="16"
+                                BorderThickness="1"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}" />
+                        <Border x:Name="Wash"
+                                CornerRadius="16"
+                                Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                Opacity="0.16"
+                                Visibility="Collapsed" />
+                        <ContentPresenter Margin="{TemplateBinding Padding}"
+                                          VerticalAlignment="Center"
+                                          HorizontalAlignment="Center"
+                                          RecognizesAccessKey="False" />
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Base" Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}" />
+                        </Trigger>
+                        <Trigger Property="gc:FilterChip.IsActive" Value="True">
+                            <Setter TargetName="Wash" Property="Visibility" Value="Visible" />
+                            <Setter TargetName="Base" Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                            <Setter Property="FontWeight" Value="SemiBold" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Base" Property="BorderBrush" Value="{DynamicResource FocusStrokeColorOuterBrush}" />
+                            <Setter TargetName="Base" Property="BorderThickness" Value="2" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.5" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- „Label:“ im Chip: gedämpft, normale Schrift (im aktiven Chip in Akzentfarbe, etwas blasser) -->
+    <Style x:Key="GalleryChipLabel" TargetType="TextBlock">
+        <Setter Property="Opacity" Value="0.75" />
+        <Setter Property="FontWeight" Value="Normal" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Margin" Value="0,0,4,0" />
+    </Style>
+
+    <!-- Segment (Fluent „Segmented“, wie .seg im Mockup): gewählt = helle Fläche, Akzentschrift, halbfett -->
+    <Style x:Key="GallerySegmentRadio" TargetType="RadioButton">
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Padding" Value="8,0" />
+        <Setter Property="MinHeight" Value="28" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RadioButton">
+                    <Border x:Name="Segment"
+                            CornerRadius="4"
+                            Background="Transparent"
+                            BorderBrush="Transparent"
+                            BorderThickness="1"
+                            Padding="{TemplateBinding Padding}"
+                            MinHeight="{TemplateBinding MinHeight}">
+                        <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Center" RecognizesAccessKey="False" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Segment" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Segment" Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}" />
+                            <Setter TargetName="Segment" Property="BorderBrush" Value="{DynamicResource ControlStrokeColorDefaultBrush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                            <Setter Property="FontWeight" Value="SemiBold" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Segment" Property="BorderBrush" Value="{DynamicResource FocusStrokeColorOuterBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.5" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Rahmen eines Segments (graue Mulde) -->
+    <Style x:Key="GallerySegmentHost" TargetType="Border">
+        <Setter Property="Padding" Value="2" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Background" Value="{DynamicResource ControlAltFillColorSecondaryBrush}" />
+    </Style>
+
+    <!--
+        Segment als ListBox (Ansicht „Kacheln | Liste“): Einträge kommen aus einer Liste, ein weiterer Eintrag (Welle 2:
+        „Collage“) braucht keine XAML-Änderung. Auswahl per Klick und Pfeiltasten.
+    -->
+    <Style x:Key="GallerySegmentListBoxItem" TargetType="ListBoxItem">
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Padding" Value="10,0" />
+        <Setter Property="MinHeight" Value="28" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListBoxItem">
+                    <Border x:Name="Segment"
+                            CornerRadius="4"
+                            Background="Transparent"
+                            BorderBrush="Transparent"
+                            BorderThickness="1"
+                            Padding="{TemplateBinding Padding}"
+                            MinHeight="{TemplateBinding MinHeight}">
+                        <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Segment" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Segment" Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}" />
+                            <Setter TargetName="Segment" Property="BorderBrush" Value="{DynamicResource ControlStrokeColorDefaultBrush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                            <Setter Property="FontWeight" Value="SemiBold" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Segment" Property="BorderBrush" Value="{DynamicResource FocusStrokeColorOuterBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="GallerySegmentListBox" TargetType="ListBox">
+        <Setter Property="ItemContainerStyle" Value="{StaticResource GallerySegmentListBoxItem}" />
+        <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+        <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Disabled" />
+        <Setter Property="SelectionMode" Value="Single" />
+        <Setter Property="ItemsPanel">
+            <Setter.Value>
+                <ItemsPanelTemplate>
+                    <StackPanel Orientation="Horizontal" />
+                </ItemsPanelTemplate>
+            </Setter.Value>
+        </Setter>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListBox">
+                    <Border Style="{StaticResource GallerySegmentHost}">
+                        <ItemsPresenter />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Auswahlliste im Flyout (Bewertung, Ablage): Zeile mit Auswahlpunkt, Hover-Fläche -->
+    <Style x:Key="GalleryFlyoutListItem" TargetType="ListBoxItem">
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+        <Setter Property="Padding" Value="6,5" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListBoxItem">
+                    <Border x:Name="Row" CornerRadius="4" Background="Transparent" Padding="{TemplateBinding Padding}" BorderThickness="1" BorderBrush="Transparent">
+                        <StackPanel Orientation="Horizontal">
+                            <Grid Width="16" Height="16" Margin="0,0,10,0" VerticalAlignment="Center">
+                                <Ellipse x:Name="Ring" Stroke="{DynamicResource TextFillColorSecondaryBrush}" StrokeThickness="1" />
+                                <Ellipse x:Name="Dot" Fill="{DynamicResource AccentFillColorDefaultBrush}" Visibility="Collapsed" />
+                                <Ellipse x:Name="Hole" Width="6" Height="6" Fill="{DynamicResource TextOnAccentFillColorPrimaryBrush}" Visibility="Collapsed" />
+                            </Grid>
+                            <ContentPresenter VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Row" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Dot" Property="Visibility" Value="Visible" />
+                            <Setter TargetName="Hole" Property="Visibility" Value="Visible" />
+                            <Setter TargetName="Ring" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Row" Property="BorderBrush" Value="{DynamicResource FocusStrokeColorOuterBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="GalleryFlyoutList" TargetType="ListBox">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="ItemContainerStyle" Value="{StaticResource GalleryFlyoutListItem}" />
+        <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListBox">
+                    <ItemsPresenter />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Rahmen der Auswahl-Flyouts (Popup-Inhalt) -->
+    <Style x:Key="GalleryFlyoutBorder" TargetType="Border">
+        <Setter Property="Margin" Value="0,4,0,0" />
+        <Setter Property="Padding" Value="12" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Background" Value="{DynamicResource SolidBackgroundFillColorSecondaryBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource ControlStrokeColorDefaultBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Effect">
+            <Setter.Value>
+                <DropShadowEffect BlurRadius="12" ShadowDepth="3" Opacity="0.3" />
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Überschrift im Flyout („WELCHE TAGS?“) -->
+    <Style x:Key="GalleryFlyoutHeading" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        <Setter Property="Margin" Value="0,0,0,6" />
+    </Style>
+
+    <!-- Erklärzeile unter einer Option im Flyout -->
+    <Style x:Key="GalleryFlyoutHint" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!-- Trennlinie im Flyout -->
+    <Style x:Key="GalleryFlyoutDivider" TargetType="Border">
+        <Setter Property="Height" Value="1" />
+        <Setter Property="Margin" Value="0,8" />
+        <Setter Property="Background" Value="{DynamicResource DividerStrokeColorDefaultBrush}" />
+    </Style>
+</ResourceDictionary>

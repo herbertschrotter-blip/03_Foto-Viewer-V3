@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Lumora.Data/Lumora.Data.csproj" />
+    <Project Path="src/Lumora.Domain/Lumora.Domain.csproj" />
+    <Project Path="src/Lumora.Services/Lumora.Services.csproj" />
+    <Project Path="src/Lumora.Wpf/Lumora.Wpf.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Lumora.Tests/Lumora.Tests.csproj" />
+    <Project Path="tests/Lumora.Wpf.Tests/Lumora.Wpf.Tests.csproj" />
+    <Project Path="tests/Lumora.PerfTests/Lumora.PerfTests.csproj" />
+  </Folder>
+</Solution>

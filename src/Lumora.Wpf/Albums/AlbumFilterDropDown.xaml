@@ -1,0 +1,105 @@
+<UserControl x:Class="Lumora.Albums.AlbumFilterDropDown"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:gc="clr-namespace:Lumora.Gallery.Controls"
+             xmlns:local="clr-namespace:Lumora.Albums"
+             x:Name="Root"
+             Focusable="False">
+    <!--
+        Chip „Album: …“ in der Zeile „Inhalt“ (ADR-0054, Muster Motiv-Filter): Flyout mit den Alben der Gruppe. Ein eigenes
+        Album wird zur Bedingung „Album …“ (noch einmal klicken hebt sie auf), ein intelligentes lädt seinen gespeicherten
+        Filter. DataContext = GalleryViewModel (AlbumFilterEntries, AlbumFilterValueText, HasAlbumFilter,
+        SelectAlbumFilterCommand, ClearAlbumFilterCommand, SaveAsSmartAlbumCommand).
+    -->
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="../Gallery/Controls/GalleryFilterStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <Grid>
+        <ToggleButton x:Name="Toggle"
+                      Style="{StaticResource GalleryFilterChip}"
+                      AutomationProperties.AutomationId="GalleryAlbumFilterButton"
+                      AutomationProperties.Name="{Binding AlbumFilterValueText, StringFormat='Album-Filter: {0}'}"
+                      ToolTip="Nur Fotos eines Albums zeigen bzw. ein intelligentes Album öffnen"
+                      gc:FilterChip.IsActive="{Binding HasAlbumFilter}"
+                      IsChecked="{Binding IsOpen, ElementName=FilterPopup, Mode=TwoWay}">
+            <StackPanel Orientation="Horizontal">
+                <ui:SymbolIcon Symbol="Album24" FontSize="13" Margin="0,0,6,0" />
+                <TextBlock Text="Album:" Style="{StaticResource GalleryChipLabel}" />
+                <TextBlock Text="{Binding AlbumFilterValueText}" MaxWidth="220" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                <ui:SymbolIcon Symbol="ChevronDown24" FontSize="10" Margin="6,0,0,0" />
+            </StackPanel>
+        </ToggleButton>
+
+        <Popup x:Name="FilterPopup"
+               PlacementTarget="{Binding ElementName=Toggle}"
+               Placement="Bottom"
+               StaysOpen="False"
+               AllowsTransparency="True"
+               PopupAnimation="Fade"
+               Closed="OnPopupClosed">
+            <Border Style="{StaticResource GalleryFlyoutBorder}" Width="300" MaxHeight="480">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Top">
+                        <TextBlock Text="WELCHES ALBUM?" Style="{StaticResource GalleryFlyoutHeading}" />
+                        <ui:TextBox x:Name="SearchBox"
+                                    Margin="0,0,0,6"
+                                    PlaceholderText="Album suchen"
+                                    Icon="{ui:SymbolIcon Search24}"
+                                    ClearButtonEnabled="True"
+                                    AutomationProperties.Name="Album suchen"
+                                    TextChanged="OnSearchTextChanged" />
+                    </StackPanel>
+
+                    <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+                        <TextBlock Text="Alben verknüpfen Fotos nur — nichts wird kopiert. Alben verwalten: Seite „Alben“."
+                                   Style="{StaticResource GalleryFlyoutHint}" TextWrapping="Wrap" Margin="0,0,0,8" />
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <ui:Button Content="Leeren" ToolTip="Album-Filter aufheben" Command="{Binding ClearAlbumFilterCommand}" Click="OnCloseClick" Margin="0,0,6,0" />
+                            <ui:Button Content="Fertig" Appearance="Primary" Click="OnCloseClick" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <ItemsControl x:Name="AlbumList" ItemsSource="{Binding AlbumFilterEntries}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type local:AlbumFilterEntry}">
+                                    <!-- Knopf statt Optionsfeld: die Galerie existiert zweimal (Galerie- und Ordner-Seite),
+                                         eine gemeinsame Optionsgruppe würde sich gegenseitig umschalten -->
+                                    <ui:Button Appearance="Transparent"
+                                               Margin="0,1"
+                                               Padding="6,4"
+                                               HorizontalAlignment="Stretch"
+                                               HorizontalContentAlignment="Left"
+                                               AutomationProperties.Name="{Binding Name}"
+                                               Command="{Binding DataContext.SelectAlbumFilterCommand, ElementName=Root}"
+                                               CommandParameter="{Binding}">
+                                        <StackPanel>
+                                            <StackPanel Orientation="Horizontal">
+                                                <ui:SymbolIcon Symbol="Checkmark16" FontSize="12" Width="16" Margin="0,0,4,0" VerticalAlignment="Center"
+                                                               Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                                               Visibility="{Binding IsSelected, Converter={StaticResource BoolToVis}}" />
+                                                <ui:SymbolIcon Symbol="Sparkle16" FontSize="12" Margin="0,0,4,0" VerticalAlignment="Center"
+                                                               Visibility="{Binding IsSmart, Converter={StaticResource BoolToVis}}" />
+                                                <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                                                <TextBlock Text="{Binding CountText}" Margin="6,0,0,0" FontSize="11" VerticalAlignment="Center"
+                                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                                            </StackPanel>
+                                            <TextBlock Text="{Binding KindText}" Style="{StaticResource GalleryFlyoutHint}"
+                                                       Visibility="{Binding IsSmart, Converter={StaticResource BoolToVis}}" />
+                                        </StackPanel>
+                                    </ui:Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </Popup>
+    </Grid>
+</UserControl>

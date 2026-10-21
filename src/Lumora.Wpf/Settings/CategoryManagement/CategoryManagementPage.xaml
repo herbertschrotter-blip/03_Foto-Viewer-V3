@@ -1,0 +1,177 @@
+<UserControl x:Class="Lumora.Settings.CategoryManagement.CategoryManagementPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:shell="clr-namespace:Lumora.Shell"
+             xmlns:local="clr-namespace:Lumora.Settings.CategoryManagement"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance local:CategoryManagementViewModel}"
+             d:DesignWidth="1000"
+             d:DesignHeight="700"
+             x:Name="Root">
+    <!-- Kategorien-Verwaltung (ADR-0027): oben „Neue Kategorie“ (mit optionalen Werten), darunter je Kategorie eine Karte
+         mit Werten (Zähler, Reihenfolge, Umbenennen, Löschen) und „Neuer Wert“. Aufbau wie die Seite „Tags“. -->
+    <UserControl.Resources>
+        <shell:BoolToVisibilityConverter x:Key="BoolToVis" />
+
+        <Style x:Key="SectionCard" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="16,12" />
+            <Setter Property="Margin" Value="0,0,0,12" />
+        </Style>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="24,12,24,16" MaxWidth="960" HorizontalAlignment="Left">
+            <!-- Reiter „Kategorien“ der Einstellungen (ADR-0042): Überschrift = Reiter -->
+            <TextBlock FontSize="12" Margin="0,0,0,12" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       Text="Eigene Kategorien mit festen Werten (z. B. „Projekt“: Nord, Süd). Jede Datei hat je Kategorie höchstens einen Wert. Zuweisen in der Galerie über das Kontextmenü; jede Kategorie ist ein Filter in der Kopfzeile und eine Spalte der Listenansicht." />
+
+            <ui:InfoBar Title="Fehler" Severity="Error" Message="{Binding ErrorMessage}"
+                        IsOpen="{Binding IsErrorOpen, Mode=TwoWay}" Margin="0,0,0,12" />
+            <ui:InfoBar Severity="Success" Message="{Binding InfoMessage}"
+                        IsOpen="{Binding IsInfoOpen, Mode=TwoWay}" Margin="0,0,0,12" />
+
+            <!-- Neue Kategorie -->
+            <Border Style="{StaticResource SectionCard}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="240" />
+                        <ColumnDefinition Width="280" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <ui:TextBox Grid.Column="0"
+                                AutomationProperties.AutomationId="NewCategoryName"
+                                AutomationProperties.Name="Name der neuen Kategorie"
+                                PlaceholderText="Neue Kategorie…"
+                                Icon="{ui:SymbolIcon Group24}"
+                                Text="{Binding NewCategoryName, UpdateSourceTrigger=PropertyChanged}"
+                                KeyDown="OnNewCategoryKeyDown" />
+                    <ui:TextBox Grid.Column="1" Margin="8,0,0,0"
+                                AutomationProperties.AutomationId="NewCategoryValues"
+                                AutomationProperties.Name="Werte der neuen Kategorie"
+                                PlaceholderText="Werte, durch Komma getrennt (optional)"
+                                Text="{Binding NewCategoryValues, UpdateSourceTrigger=PropertyChanged}"
+                                KeyDown="OnNewCategoryKeyDown" />
+                    <ui:Button Grid.Column="2" Margin="8,0,0,0" Appearance="Primary" Content="Anlegen"
+                               Icon="{ui:SymbolIcon Add24}"
+                               Command="{Binding CreateCommand}" />
+                    <TextBlock Grid.Column="3" Margin="16,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap"
+                               Text="{Binding SummaryText}"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                </Grid>
+            </Border>
+
+            <TextBlock Margin="8" Text="Noch keine Kategorien — oben einen Namen (und optional Werte) eingeben und „Anlegen“."
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       Visibility="{Binding HasNoCategories, Converter={StaticResource BoolToVis}}" />
+
+            <!-- Je Kategorie eine Karte -->
+            <ItemsControl ItemsSource="{Binding Categories}" AutomationProperties.AutomationId="CategoryManagementList">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="{x:Type local:CategoryRow}">
+                        <Border Style="{StaticResource SectionCard}">
+                            <StackPanel>
+                                <!-- Kopf: Name, Zähler, Reihenfolge, Umbenennen, Löschen -->
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <ui:SymbolIcon Grid.Column="0" Symbol="Group24" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                                    <TextBlock Grid.Column="1" VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
+                                        <Run Text="{Binding Name, Mode=OneWay}" FontWeight="SemiBold" FontSize="15" />
+                                        <Run Text="  " />
+                                        <Run Text="{Binding SummaryText, Mode=OneWay}" FontSize="11"
+                                             Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                                    </TextBlock>
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <ui:Button Appearance="Transparent" Padding="6" Icon="{ui:SymbolIcon ArrowUp24}"
+                                                   ToolTip="Kategorie nach oben" AutomationProperties.Name="Kategorie nach oben"
+                                                   IsEnabled="{Binding CanMoveUp}"
+                                                   Command="{Binding DataContext.MoveUpCommand, ElementName=Root}" CommandParameter="{Binding}" />
+                                        <ui:Button Appearance="Transparent" Padding="6" Icon="{ui:SymbolIcon ArrowDown24}"
+                                                   ToolTip="Kategorie nach unten" AutomationProperties.Name="Kategorie nach unten"
+                                                   IsEnabled="{Binding CanMoveDown}"
+                                                   Command="{Binding DataContext.MoveDownCommand, ElementName=Root}" CommandParameter="{Binding}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
+                                        <ui:Button Appearance="Transparent" Content="Umbenennen" Icon="{ui:SymbolIcon Rename24}"
+                                                   Command="{Binding DataContext.RenameCommand, ElementName=Root}" CommandParameter="{Binding}" />
+                                        <ui:Button Appearance="Transparent" Content="Löschen" Icon="{ui:SymbolIcon Delete24}" Margin="4,0,0,0"
+                                                   Command="{Binding DataContext.DeleteCommand, ElementName=Root}" CommandParameter="{Binding}" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <!-- Werte -->
+                                <TextBlock Margin="24,8,0,0" Text="Noch keine Werte — unten hinzufügen."
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                           Visibility="{Binding HasNoValues, Converter={StaticResource BoolToVis}}" />
+                                <ItemsControl Margin="24,6,0,0" ItemsSource="{Binding Values}" Focusable="False">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type local:CategoryValueRow}">
+                                            <Grid Margin="0,1">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" MinWidth="140" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
+                                                    <Run Text="•" Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                                                    <Run Text="{Binding Name, Mode=OneWay}" />
+                                                    <Run Text="  " />
+                                                    <Run Text="{Binding FileCountText, Mode=OneWay}" FontSize="11"
+                                                         Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                                                </TextBlock>
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <ui:Button Appearance="Transparent" Padding="4" Icon="{ui:SymbolIcon ArrowUp16}"
+                                                               ToolTip="Wert nach oben" AutomationProperties.Name="Wert nach oben"
+                                                               IsEnabled="{Binding CanMoveUp}"
+                                                               Command="{Binding DataContext.MoveValueUpCommand, ElementName=Root}" CommandParameter="{Binding}" />
+                                                    <ui:Button Appearance="Transparent" Padding="4" Icon="{ui:SymbolIcon ArrowDown16}"
+                                                               ToolTip="Wert nach unten" AutomationProperties.Name="Wert nach unten"
+                                                               IsEnabled="{Binding CanMoveDown}"
+                                                               Command="{Binding DataContext.MoveValueDownCommand, ElementName=Root}" CommandParameter="{Binding}" />
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
+                                                    <ui:Button Appearance="Transparent" Padding="6,4" Icon="{ui:SymbolIcon Rename16}"
+                                                               ToolTip="Wert umbenennen" AutomationProperties.Name="Wert umbenennen"
+                                                               Command="{Binding DataContext.RenameValueCommand, ElementName=Root}" CommandParameter="{Binding}" />
+                                                    <ui:Button Appearance="Transparent" Padding="6,4" Icon="{ui:SymbolIcon Delete16}"
+                                                               ToolTip="Wert löschen" AutomationProperties.Name="Wert löschen"
+                                                               Command="{Binding DataContext.DeleteValueCommand, ElementName=Root}" CommandParameter="{Binding}" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <!-- Neuer Wert -->
+                                <StackPanel Orientation="Horizontal" Margin="24,8,0,0">
+                                    <ui:TextBox Width="280"
+                                                AutomationProperties.Name="Neuer Wert"
+                                                PlaceholderText="Neuer Wert (mehrere durch Komma)…"
+                                                Text="{Binding NewValueName, UpdateSourceTrigger=PropertyChanged}"
+                                                Tag="{Binding}"
+                                                KeyDown="OnNewValueKeyDown" />
+                                    <ui:Button Margin="8,0,0,0" Content="Hinzufügen" Icon="{ui:SymbolIcon Add24}"
+                                               Command="{Binding DataContext.AddValueCommand, ElementName=Root}" CommandParameter="{Binding}" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -1,0 +1,132 @@
+<UserControl x:Class="Lumora.Gallery.Motifs.MotifFilterDropDown"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:conv="clr-namespace:Lumora.Gallery.Converters"
+             xmlns:gc="clr-namespace:Lumora.Gallery.Controls"
+             xmlns:local="clr-namespace:Lumora.Gallery.Motifs"
+             x:Name="Root"
+             Focusable="False">
+    <!--
+        Chip „Motive: …“ in der Zeile „Inhalt“ (ADR-0052, Muster Tag-Filter): Flyout mit Verknüpfung in Worten (eines der
+        gewählten / alle zusammen), Suche über die Begriffe, je Begriff ein Häkchen mit Anzahl Fotos, „Leeren“ und „Fertig“.
+        Häkchen wirken sofort. DataContext = GalleryViewModel (MotifFilterEntries, MotifFilterMode, MotifFilterValueText,
+        HasMotifFilter, ApplyMotifFilterCommand, ClearMotifFilterCommand).
+    -->
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="../Controls/GalleryFilterStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <conv:EnumEqualsConverter x:Key="EnumEquals" />
+            <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <Grid>
+        <ToggleButton x:Name="Toggle"
+                      Style="{StaticResource GalleryFilterChip}"
+                      AutomationProperties.AutomationId="GalleryMotifFilterButton"
+                      AutomationProperties.Name="{Binding MotifFilterValueText, StringFormat='Motiv-Filter: {0}'}"
+                      ToolTip="Fotos nach erkanntem Inhalt filtern (Motive)"
+                      gc:FilterChip.IsActive="{Binding HasMotifFilter}"
+                      IsChecked="{Binding IsOpen, ElementName=FilterPopup, Mode=TwoWay}">
+            <StackPanel Orientation="Horizontal">
+                <ui:SymbolIcon Symbol="ImageSearch24" FontSize="13" Margin="0,0,6,0" />
+                <TextBlock Text="Motive:" Style="{StaticResource GalleryChipLabel}" />
+                <TextBlock Text="{Binding MotifFilterValueText}" MaxWidth="240" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                <ui:SymbolIcon Symbol="ChevronDown24" FontSize="10" Margin="6,0,0,0" />
+            </StackPanel>
+        </ToggleButton>
+
+        <Popup x:Name="FilterPopup"
+               PlacementTarget="{Binding ElementName=Toggle}"
+               Placement="Bottom"
+               StaysOpen="False"
+               AllowsTransparency="True"
+               PopupAnimation="Fade"
+               Closed="OnPopupClosed">
+            <Border Style="{StaticResource GalleryFlyoutBorder}" Width="300" MaxHeight="480">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Top">
+                        <!-- Bildinhalt frei beschreiben (Text-Vektor gegen alle Bild-Vektoren), nur mit Modell -->
+                        <StackPanel Visibility="{Binding CanSearchContent, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Text="BILDINHALT BESCHREIBEN" Style="{StaticResource GalleryFlyoutHeading}" />
+                            <Grid Margin="0,0,0,2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <ui:TextBox PlaceholderText="z. B. Hund am Strand"
+                                            AutomationProperties.AutomationId="GalleryContentSearchBox"
+                                            AutomationProperties.Name="Bildinhalt beschreiben"
+                                            Text="{Binding ContentSearchText, UpdateSourceTrigger=PropertyChanged}">
+                                    <ui:TextBox.InputBindings>
+                                        <KeyBinding Key="Return" Command="{Binding SearchContentCommand}" />
+                                    </ui:TextBox.InputBindings>
+                                </ui:TextBox>
+                                <ui:Button Grid.Column="1" Margin="6,0,0,0" Content="Suchen"
+                                           Command="{Binding SearchContentCommand}"
+                                           AutomationProperties.Name="Bildinhalt suchen" />
+                            </Grid>
+                            <TextBlock Text="Zeigt die 200 ähnlichsten Fotos — auch ohne passenden Begriff." Style="{StaticResource GalleryFlyoutHint}" TextWrapping="Wrap" />
+                            <Border Style="{StaticResource GalleryFlyoutDivider}" />
+                        </StackPanel>
+                        <TextBlock Text="WELCHE MOTIVE?" Style="{StaticResource GalleryFlyoutHeading}" />
+                        <RadioButton GroupName="MotifMode" Margin="0,2"
+                                     AutomationProperties.Name="Eines der gewählten Motive"
+                                     IsChecked="{Binding MotifFilterMode, Converter={StaticResource EnumEquals}, ConverterParameter=Any}">
+                            <StackPanel>
+                                <TextBlock Text="Eines der gewählten" />
+                                <TextBlock Text="z. B. Strand oder Meer" Style="{StaticResource GalleryFlyoutHint}" />
+                            </StackPanel>
+                        </RadioButton>
+                        <RadioButton GroupName="MotifMode" Margin="0,2"
+                                     AutomationProperties.Name="Alle gewählten Motive zusammen"
+                                     IsChecked="{Binding MotifFilterMode, Converter={StaticResource EnumEquals}, ConverterParameter=All}">
+                            <StackPanel>
+                                <TextBlock Text="Alle gewählten zusammen" />
+                                <TextBlock Text="Hund und Strand auf demselben Foto" Style="{StaticResource GalleryFlyoutHint}" />
+                            </StackPanel>
+                        </RadioButton>
+                        <Border Style="{StaticResource GalleryFlyoutDivider}" />
+                        <ui:TextBox x:Name="SearchBox"
+                                    Margin="0,0,0,6"
+                                    PlaceholderText="Motiv suchen"
+                                    Icon="{ui:SymbolIcon Search24}"
+                                    ClearButtonEnabled="True"
+                                    AutomationProperties.Name="Motiv suchen"
+                                    TextChanged="OnSearchTextChanged" />
+                    </StackPanel>
+
+                    <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+                        <TextBlock Text="Erkannt auf diesem PC. Begriffe und Schwelle: Einstellungen › Motive."
+                                   Style="{StaticResource GalleryFlyoutHint}" TextWrapping="Wrap" Margin="0,0,0,8" />
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <ui:Button Content="Leeren" ToolTip="Motiv-Filter aufheben" Command="{Binding ClearMotifFilterCommand}" Click="OnCloseClick" Margin="0,0,6,0" />
+                            <ui:Button Content="Fertig" Appearance="Primary" Click="OnCloseClick" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <ScrollViewer x:Name="ListScroller" VerticalScrollBarVisibility="Auto">
+                        <ItemsControl x:Name="MotifList" ItemsSource="{Binding MotifFilterEntries}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type local:MotifFilterEntry}">
+                                    <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                              Margin="0,1"
+                                              AutomationProperties.Name="{Binding Name}"
+                                              Command="{Binding DataContext.ApplyMotifFilterCommand, ElementName=Root}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                                            <TextBlock Text="{Binding CountText}" Margin="6,0,0,0" FontSize="11" VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                                        </StackPanel>
+                                    </CheckBox>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </Popup>
+    </Grid>
+</UserControl>

@@ -1,0 +1,88 @@
+using System.ComponentModel;
+using System.Linq;
+using System.Windows.Controls;
+using Lumora.Libraries;
+using Lumora.Settings.CategoryManagement;
+using Lumora.Settings.Info;
+using Lumora.Settings.Sections;
+using Lumora.Settings.TagManagement;
+using Lumora.Shell;
+
+namespace Lumora.Settings;
+
+/// <summary>
+/// Seite „Einstellungen“ mit Reitern (ADR-0042). Bettet die bisherigen Seiten Bibliothek, Tags und Kategorien als Reiter
+/// ein (Singletons aus DI, sie laden sich beim Anzeigen ihres Reiters selbst neu), hängt die Ordnerüberwachung unter die
+/// Bibliotheksliste und hält den gewählten Reiter mit <see cref="SettingsSectionState"/> abgeglichen. Lädt Pfade,
+/// Cache-Größe und Status des <see cref="SettingsViewModel"/> bei jedem Anzeigen neu.
+/// </summary>
+public partial class SettingsPage : UserControl
+{
+    private readonly SettingsSectionState _sections;
+
+    public SettingsPage(
+        SettingsViewModel viewModel,
+        SettingsSectionState sections,
+        LibraryPage library,
+        TagManagementPage tags,
+        CategoryManagementPage categories,
+        InfoViewModel info,
+        Shell.HiddenLibraries.HiddenLibrariesViewModel? hiddenLibraries = null,
+        Motifs.MotifSettingsViewModel? motifs = null,
+        Places.Styles.MapStyleSettingsViewModel? mapStyles = null)
+    {
+        _sections = sections;
+        InitializeComponent();
+        DataContext = viewModel;
+        MotifsView.DataContext = motifs; // Reiter „Motive“ (ADR-0052); ohne Dienst leer
+        AppearanceView.MapSection.DataContext = mapStyles; // Darstellung › Karte (ADR-0055); ohne Dienst ausgeblendet
+        AppearanceView.MapSection.Visibility = mapStyles is null ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;
+
+        LibraryTab.Content = library;
+        TagsTab.Content = tags;
+        CategoriesTab.Content = categories;
+        InfoView.DataContext = info;
+        library.SetFooter(new SettingsWatchSection { DataContext = viewModel });
+        Shell.HiddenLibraries.HiddenLibrariesUi.AddSettingsTab(Tabs, hiddenLibraries); // nur mit „_hidden“ (ADR-0049)
+
+        SelectTab(sections.SelectedSection);
+        Tabs.SelectionChanged += OnTabsSelectionChanged;
+        sections.PropertyChanged += OnSectionsPropertyChanged;
+
+        Loaded += (_, _) => _ = viewModel.LoadCommand.ExecuteAsync(null);
+    }
+
+    /// <summary>Tag des angezeigten Reiters (Rauchtest, Tests).</summary>
+    internal string? SelectedTabTag => (Tabs.SelectedItem as TabItem)?.Tag as string;
+
+    private void OnTabsSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        // SelectionChanged steigt auch aus Listen und Auswahlfeldern in den Reitern auf — nur die Reiterleiste zählt
+        if (!ReferenceEquals(e.OriginalSource, Tabs))
+        {
+            return;
+        }
+
+        if (SelectedTabTag is { } tag && tag != _sections.SelectedSection)
+        {
+            _sections.SelectedSection = tag;
+        }
+    }
+
+    private void OnSectionsPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(SettingsSectionState.SelectedSection))
+        {
+            SelectTab(_sections.SelectedSection);
+        }
+    }
+
+    private void SelectTab(string section)
+    {
+        var tab = Tabs.Items.OfType<TabItem>().FirstOrDefault(t => Equals(t.Tag, section));
+        if (tab is not null && !tab.IsSelected)
+        {
+            tab.IsSelected = true;
+        }
+    }
+}

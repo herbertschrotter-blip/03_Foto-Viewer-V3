@@ -1,0 +1,498 @@
+<UserControl x:Class="Lumora.Persons.PersonsPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:shell="clr-namespace:Lumora.Shell"
+             xmlns:gallery="clr-namespace:Lumora.Gallery.Controls"
+             xmlns:controls="clr-namespace:Lumora.Persons.Controls"
+             xmlns:vm="clr-namespace:Lumora.Persons.ViewModels"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:PersonsViewModel}"
+             d:DesignWidth="1100"
+             d:DesignHeight="760">
+    <!-- Seite „Personen“ (ADR-0037): Übersicht (benannte Personen, unbenannte Gruppen), Detail einer Person, Gruppenansicht.
+         Alle Kachel-Listen: TileListBox (Blatt-Peers) + VirtualizingTilePanel (UI-virtualisiert), Ausschnitte nur für den
+         sichtbaren Bereich (VisibleRangeChanged), gebündelt mit Background-Priorität geliefert. -->
+    <UserControl.Resources>
+        <shell:BoolToVisibilityConverter x:Key="BoolToVis" />
+        <shell:NullToVisibilityConverter x:Key="NullToVis" />
+        <shell:BoolToVisibilityConverter x:Key="InverseBoolToVis" Invert="True" />
+
+        <!-- Container ohne Standard-Hervorhebung; Auswahl zeigt die Kachel selbst (IsSelected im ViewModel) -->
+        <Style x:Key="TileContainer" TargetType="ListBoxItem">
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Frame" Margin="5" CornerRadius="6" BorderThickness="2" BorderBrush="Transparent"
+                                Background="{DynamicResource ControlFillColorDefaultBrush}">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource ControlStrongStrokeColorDefaultBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource ControlStrongStrokeColorDefaultBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="OpenTileContainer" TargetType="ListBoxItem" BasedOn="{StaticResource TileContainer}">
+            <EventSetter Event="PreviewMouseLeftButtonUp" Handler="OnOpenTileClick" />
+            <EventSetter Event="KeyDown" Handler="OnOpenTileKeyDown" />
+        </Style>
+
+        <Style x:Key="FaceTileContainer" TargetType="ListBoxItem" BasedOn="{StaticResource TileContainer}">
+            <EventSetter Event="PreviewMouseLeftButtonDown" Handler="OnFaceTileMouseDown" />
+            <EventSetter Event="KeyDown" Handler="OnFaceTileKeyDown" />
+        </Style>
+
+        <ItemsPanelTemplate x:Key="PersonPanel">
+            <gallery:VirtualizingTilePanel ItemWidth="160" ItemHeight="196" />
+        </ItemsPanelTemplate>
+        <ItemsPanelTemplate x:Key="FacePanel">
+            <gallery:VirtualizingTilePanel ItemWidth="138" ItemHeight="176" />
+        </ItemsPanelTemplate>
+
+        <!-- Personen-Kachel: Titelbild, Name, „12 Fotos · 3 Vorschläge“ -->
+        <DataTemplate x:Key="PersonTile" DataType="{x:Type vm:PersonTileViewModel}">
+            <StackPanel Margin="8" Cursor="Hand">
+                <Grid Width="130" Height="130">
+                    <Border CornerRadius="65" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+                        <ui:SymbolIcon Symbol="Person24" FontSize="48" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                    </Border>
+                    <!-- Image + Clip statt ImageBrush (0.2.50): Ein Freezable-Pinsel meldet beim Recyceln des Containers
+                         (DataContext kurz DisconnectedItem) einen Binding-Fehler; ein FrameworkElement überspringt das still. -->
+                    <Image Width="130" Height="130" Source="{Binding Image}" Stretch="UniformToFill"
+                           Visibility="{Binding Image, Converter={StaticResource NullToVis}}">
+                        <Image.Clip>
+                            <EllipseGeometry Center="65,65" RadiusX="65" RadiusY="65" />
+                        </Image.Clip>
+                    </Image>
+                </Grid>
+                <TextBlock Margin="0,8,0,0" Text="{Binding Name}" FontWeight="SemiBold" TextAlignment="Center" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="{Binding Details}" FontSize="11" TextAlignment="Center" TextTrimming="CharacterEllipsis"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+            </StackPanel>
+        </DataTemplate>
+
+        <!-- Gruppen-Kachel: erstes Mitglied, Anzahl, „ähnelt …?“ -->
+        <DataTemplate x:Key="GroupTile" DataType="{x:Type vm:GroupTileViewModel}">
+            <StackPanel Margin="8" Cursor="Hand" Background="Transparent">
+                <!-- Rechtsklick: ganze Gruppe ignorieren (ADR-0040) -->
+                <StackPanel.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="Ganze Gruppe ignorieren…" Click="OnIgnoreGroupMenuClick"
+                                  AutomationProperties.Name="Ganze Gruppe ignorieren" />
+                    </ContextMenu>
+                </StackPanel.ContextMenu>
+                <Grid Width="130" Height="130">
+                    <Border CornerRadius="8" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+                        <ui:SymbolIcon Symbol="PeopleQueue24" FontSize="48" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                    </Border>
+                    <Image Width="130" Height="130" Source="{Binding Image}" Stretch="UniformToFill"
+                           Visibility="{Binding Image, Converter={StaticResource NullToVis}}">
+                        <Image.Clip>
+                            <RectangleGeometry Rect="0,0,130,130" RadiusX="8" RadiusY="8" />
+                        </Image.Clip>
+                    </Image>
+                </Grid>
+                <TextBlock Margin="0,8,0,0" Text="{Binding Title}" FontWeight="SemiBold" TextAlignment="Center" />
+                <TextBlock Text="{Binding Hint}" FontSize="11" TextAlignment="Center" TextTrimming="CharacterEllipsis"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+            </StackPanel>
+        </DataTemplate>
+
+        <!-- Gesichts-Kachel: Ausschnitt, Score, Auswahl-Häkchen, Ausreißer-Markierung, bei Vorschlägen ✓/✗ -->
+        <DataTemplate x:Key="FaceTile" DataType="{x:Type vm:FaceTileViewModel}">
+            <Border x:Name="Outer" CornerRadius="5" BorderThickness="3" BorderBrush="Transparent" Padding="4">
+                <StackPanel>
+                    <Grid Width="118" Height="118">
+                        <Border CornerRadius="4" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+                            <ui:SymbolIcon Symbol="Person24" FontSize="36" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                        </Border>
+                        <Image Source="{Binding Image}" Stretch="UniformToFill" />
+                        <Border x:Name="Check" Width="22" Height="22" CornerRadius="11" Margin="4" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                Background="{DynamicResource AccentFillColorDefaultBrush}" Visibility="Collapsed">
+                            <ui:SymbolIcon Symbol="Checkmark24" FontSize="13" Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <Border x:Name="Unchecked" Width="22" Height="22" CornerRadius="11" Margin="4" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                BorderThickness="2" BorderBrush="#E6FFFFFF" Background="#66000000" />
+                        <Border x:Name="OutlierBadge" Margin="4" Padding="5,1" CornerRadius="3" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                Background="{DynamicResource SystemFillColorCriticalBrush}" Visibility="Collapsed">
+                            <TextBlock Text="Ausreißer?" FontSize="10" FontWeight="SemiBold" Foreground="White" />
+                        </Border>
+                        <Border x:Name="TooSmallBadge" Margin="4" Padding="5,1" CornerRadius="3" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                Background="{DynamicResource SystemFillColorCautionBrush}" Visibility="Collapsed">
+                            <TextBlock Text="zu klein" FontSize="10" FontWeight="SemiBold" Foreground="White" />
+                        </Border>
+                    </Grid>
+                    <Grid Margin="0,4,0,0" Height="26">
+                        <TextBlock Text="{Binding ScoreText}" FontSize="11" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                                    Visibility="{Binding IsSuggestion, Converter={StaticResource BoolToVis}}">
+                            <ui:Button Padding="4,2" Margin="0,0,4,0" ToolTip="Bestätigen" AutomationProperties.Name="Bestätigen"
+                                       Icon="{ui:SymbolIcon Checkmark24}"
+                                       Command="{Binding DataContext.ConfirmSuggestionCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                       CommandParameter="{Binding}" />
+                            <ui:Button Padding="4,2" ToolTip="Ablehnen (nicht diese Person)" AutomationProperties.Name="Ablehnen"
+                                       Icon="{ui:SymbolIcon Dismiss24}"
+                                       Command="{Binding DataContext.RejectSuggestionCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                       CommandParameter="{Binding}" />
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+            </Border>
+            <DataTemplate.Triggers>
+                <!-- Reihenfolge: Ausreißer-Rot gewinnt über die Auswahlfarbe (später definierter Trigger) -->
+                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                    <Setter TargetName="Check" Property="Visibility" Value="Visible" />
+                    <Setter TargetName="Unchecked" Property="Visibility" Value="Collapsed" />
+                    <Setter TargetName="Outer" Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsOutlier}" Value="True">
+                    <Setter TargetName="Outer" Property="BorderBrush" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                    <Setter TargetName="OutlierBadge" Property="Visibility" Value="Visible" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsAutoIgnored}" Value="True">
+                    <Setter TargetName="TooSmallBadge" Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <!-- Abschnitt der nach Beziehung gruppierten Übersicht (0.2.47): Kacheln umbrechend, ohne eigene Bildlaufleiste
+             (die Seite scrollt als Ganzes), Kacheln bleiben Blatt-Peers (TileListBox) -->
+        <Style x:Key="GroupedListStyle" TargetType="controls:TileListBox">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="SelectionMode" Value="Single" />
+            <Setter Property="ItemsPanel">
+                <Setter.Value>
+                    <ItemsPanelTemplate>
+                        <WrapPanel ItemWidth="160" ItemHeight="196" />
+                    </ItemsPanelTemplate>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="controls:TileListBox">
+                        <ItemsPresenter />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ListStyle" TargetType="controls:TileListBox" BasedOn="{StaticResource {x:Type ListBox}}">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="4" />
+            <Setter Property="SelectionMode" Value="Single" />
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+            <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
+            <Setter Property="ScrollViewer.CanContentScroll" Value="True" />
+            <Setter Property="VirtualizingPanel.IsVirtualizing" Value="True" />
+            <Setter Property="VirtualizingPanel.VirtualizationMode" Value="Recycling" />
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Margin="24,12,24,8">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Kopfzeile: Titel, Stand des Index, Aktualisieren -->
+        <Grid Grid.Row="0" Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <ui:TextBlock Grid.Column="0" FontTypography="Title" Text="Personen" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Margin="16,0,0,0" VerticalAlignment="Center" FontSize="12"
+                       AutomationProperties.AutomationId="PersonsIndexStatus"
+                       Text="{Binding IndexStatusText}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+            <ui:Button Grid.Column="2" Content="Aktualisieren" Icon="{ui:SymbolIcon ArrowSync24}"
+                       Command="{Binding RefreshCommand}" ToolTip="Personen und Gruppen neu berechnen" />
+        </Grid>
+
+        <StackPanel Grid.Row="1">
+            <Border Margin="0,0,0,8" Padding="12,8" CornerRadius="6"
+                    Background="{DynamicResource SystemFillColorCautionBackgroundBrush}"
+                    AutomationProperties.Name="Gesichtserkennung aus"
+                    Visibility="{Binding IsRecognitionOff, Converter={StaticResource BoolToVis}}">
+                <DockPanel>
+                    <ui:Button DockPanel.Dock="Right" Content="Einstellungen öffnen" Command="{Binding OpenSettingsCommand}" />
+                    <TextBlock Text="{Binding RecognitionOffText}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,12,0" />
+                </DockPanel>
+            </Border>
+            <Border Margin="0,0,0,8" Padding="12,8" CornerRadius="6"
+                    Visibility="{Binding HasMessage, Converter={StaticResource BoolToVis}}">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBackgroundBrush}" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding MessageIsError}" Value="True">
+                                <Setter Property="Background" Value="{DynamicResource SystemFillColorCriticalBackgroundBrush}" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <DockPanel>
+                    <ui:Button DockPanel.Dock="Right" Appearance="Transparent" Icon="{ui:SymbolIcon Dismiss24}" Padding="4"
+                               AutomationProperties.Name="Meldung schließen" Command="{Binding CloseMessageCommand}" />
+                    <TextBlock Text="{Binding Message}" TextWrapping="Wrap" VerticalAlignment="Center"
+                               AutomationProperties.AutomationId="PersonsMessage" />
+                </DockPanel>
+            </Border>
+        </StackPanel>
+
+        <!-- ===== Übersicht ===== -->
+        <Grid Grid.Row="2" Visibility="{Binding IsOverview, Converter={StaticResource BoolToVis}}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <StackPanel Grid.Row="0" Margin="0,0,0,4">
+                <DockPanel>
+                    <CheckBox DockPanel.Dock="Right" Content="Ausgeblendete zeigen" IsChecked="{Binding ShowHidden}" />
+                    <ui:TextBlock FontTypography="Subtitle" Text="Benannte Personen" VerticalAlignment="Center" />
+                    <TextBlock Margin="12,0,0,0" Text="{Binding PersonsSummary}" FontSize="12" VerticalAlignment="Center"
+                               AutomationProperties.AutomationId="PersonsSummary"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                </DockPanel>
+                <!-- Suche, Sortierung, Gruppierung nach Beziehung (0.2.47, ADR-0045) -->
+                <WrapPanel Margin="0,6,0,0">
+                    <ui:TextBox Width="280" Margin="0,0,12,4"
+                                PlaceholderText="Person suchen (Name, Rufname, Beziehung)"
+                                Icon="{ui:SymbolIcon Search24}"
+                                ClearButtonEnabled="True"
+                                Text="{Binding PersonSearch, UpdateSourceTrigger=PropertyChanged}"
+                                AutomationProperties.Name="Person suchen" />
+                    <TextBlock Text="Sortieren" VerticalAlignment="Center" Margin="0,0,6,4" />
+                    <ComboBox MinWidth="150" Margin="0,0,12,4"
+                              ItemsSource="{x:Static vm:PersonsViewModel.SortOptions}" DisplayMemberPath="Label"
+                              SelectedItem="{Binding SelectedSort, Mode=TwoWay}"
+                              AutomationProperties.Name="Personen sortieren" />
+                    <CheckBox Content="Nach Beziehung gruppieren" VerticalAlignment="Center" Margin="0,0,0,4"
+                              IsChecked="{Binding GroupByRelation}"
+                              AutomationProperties.Name="Nach Beziehung gruppieren" />
+                </WrapPanel>
+            </StackPanel>
+            <controls:TileListBox Grid.Row="1" x:Name="PersonsList" Style="{StaticResource ListStyle}"
+                                  AutomationProperties.AutomationId="PersonsList" AutomationProperties.Name="Benannte Personen"
+                                  ItemsSource="{Binding Persons}" ItemTemplate="{StaticResource PersonTile}"
+                                  ItemContainerStyle="{StaticResource OpenTileContainer}" ItemsPanel="{StaticResource PersonPanel}"
+                                  Visibility="{Binding GroupByRelation, Converter={StaticResource InverseBoolToVis}}"
+                                  gallery:VirtualizingTilePanel.VisibleRangeChanged="OnVisibleRangeChanged" />
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                          Visibility="{Binding GroupByRelation, Converter={StaticResource BoolToVis}}"
+                          AutomationProperties.AutomationId="PersonsByRelation">
+                <ItemsControl ItemsSource="{Binding RelationGroups}" Margin="4">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:PersonRelationGroupViewModel}">
+                            <StackPanel Margin="0,0,0,8">
+                                <TextBlock Text="{Binding Header}" FontWeight="SemiBold" Margin="4,4,0,2" />
+                                <controls:TileListBox Style="{StaticResource GroupedListStyle}"
+                                                      AutomationProperties.Name="{Binding Title}"
+                                                      ItemsSource="{Binding Persons}" ItemTemplate="{StaticResource PersonTile}"
+                                                      ItemContainerStyle="{StaticResource OpenTileContainer}" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <DockPanel Grid.Row="2" Margin="0,12,0,4">
+                <ui:Button DockPanel.Dock="Right" Margin="8,0,0,0" Appearance="Transparent" Icon="{ui:SymbolIcon EyeOff24}"
+                           Content="{Binding IgnoredButtonText}" Command="{Binding ShowIgnoredCommand}"
+                           Visibility="{Binding CanShowIgnored, Converter={StaticResource BoolToVis}}"
+                           ToolTip="Ignorierte Gesichter ansehen und zurückholen (auch automatisch ignorierte, zu kleine)"
+                           AutomationProperties.AutomationId="ShowIgnoredFaces" />
+                <ui:ProgressRing DockPanel.Dock="Right" IsIndeterminate="True" Width="18" Height="18"
+                                 Visibility="{Binding IsGroupsLoading, Converter={StaticResource BoolToVis}}" />
+                <ui:TextBlock FontTypography="Subtitle" Text="Unbenannte Gruppen" VerticalAlignment="Center" />
+                <TextBlock Margin="12,0,0,0" Text="{Binding GroupsSummary}" FontSize="12" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+            </DockPanel>
+            <controls:TileListBox Grid.Row="3" x:Name="GroupsList" Style="{StaticResource ListStyle}"
+                                  AutomationProperties.AutomationId="GroupsList" AutomationProperties.Name="Unbenannte Gruppen"
+                                  ItemsSource="{Binding Groups}" ItemTemplate="{StaticResource GroupTile}"
+                                  ItemContainerStyle="{StaticResource OpenTileContainer}" ItemsPanel="{StaticResource PersonPanel}"
+                                  gallery:VirtualizingTilePanel.VisibleRangeChanged="OnVisibleRangeChanged" />
+        </Grid>
+
+        <!-- ===== Person ===== -->
+        <Grid Grid.Row="2" Visibility="{Binding IsPersonDetail, Converter={StaticResource BoolToVis}}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                <ui:Button DockPanel.Dock="Left" Icon="{ui:SymbolIcon ArrowLeft24}" Content="Zurück" Command="{Binding BackCommand}" Margin="0,0,12,0" />
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <ui:Button Content="Bearbeiten…" Icon="{ui:SymbolIcon Edit24}" Margin="4,0,0,0" Command="{Binding EditPersonCommand}"
+                               ToolTip="Vorname, Nachname, Rufname, Beziehung, Geburtsdatum, „Das bin ich“" />
+                    <ui:Button Content="Zusammenführen mit…" Icon="{ui:SymbolIcon PeopleSwap24}" Margin="4,0,0,0" Command="{Binding MergePersonCommand}" />
+                    <ui:Button Content="{Binding HiddenToggleText}" Icon="{ui:SymbolIcon EyeOff24}" Margin="4,0,0,0" Command="{Binding ToggleHiddenCommand}" />
+                    <ui:Button Content="Löschen…" Icon="{ui:SymbolIcon Delete24}" Margin="4,0,0,0" Appearance="Danger" Command="{Binding DeletePersonCommand}" />
+                </StackPanel>
+                <StackPanel VerticalAlignment="Center">
+                    <ui:TextBlock FontTypography="Subtitle" Text="{Binding PersonTitle}" AutomationProperties.AutomationId="PersonTitle" />
+                    <TextBlock Text="{Binding PersonInfoText}" FontSize="13" TextWrapping="Wrap"
+                               AutomationProperties.AutomationId="PersonInfo"
+                               Visibility="{Binding PersonInfoText, Converter={StaticResource NullToVis}}" />
+                    <TextBlock Text="{Binding PersonDetails}" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+            </DockPanel>
+            <TabControl Grid.Row="1" SelectedIndex="{Binding DetailTab}" Background="Transparent">
+                <TabItem Header="Vorschläge">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <StackPanel Grid.Row="0" Margin="0,8,0,4">
+                            <WrapPanel>
+                                <ui:Button Content="Auswahl bestätigen" Icon="{ui:SymbolIcon Checkmark24}" Appearance="Primary" Margin="0,0,4,4" Command="{Binding ConfirmSelectedSuggestionsCommand}" />
+                                <ui:Button Content="Auswahl ablehnen" Icon="{ui:SymbolIcon Dismiss24}" Margin="0,0,12,4" Command="{Binding RejectSelectedSuggestionsCommand}" />
+                                <ui:Button Content="Sichtbare bestätigen" Margin="0,0,4,4" Command="{Binding ConfirmVisibleSuggestionsCommand}"
+                                           ToolTip="Bestätigt nur die Vorschläge, die gerade auf dem Bildschirm stehen" />
+                                <ui:Button Content="Sichtbare ablehnen" Margin="0,0,12,4" Command="{Binding RejectVisibleSuggestionsCommand}"
+                                           ToolTip="Lehnt nur die Vorschläge ab, die gerade auf dem Bildschirm stehen" />
+                                <ui:Button Content="Alle Vorschläge bestätigen…" Icon="{ui:SymbolIcon CheckmarkCircle24}" Margin="0,0,4,4" Command="{Binding ConfirmAllSuggestionsCommand}"
+                                           ToolTip="Bestätigt die ganze Liste (mit Rückfrage und Ausreißer-Prüfung)" />
+                                <ui:Button Content="Alle Vorschläge ablehnen…" Icon="{ui:SymbolIcon DismissCircle24}" Margin="0,0,12,4" Command="{Binding RejectAllSuggestionsCommand}"
+                                           ToolTip="Lehnt die ganze Liste ab (mit Rückfrage)" />
+                                <ui:Button Content="Alle auswählen" Appearance="Transparent" Margin="0,0,4,4" Command="{Binding SelectAllSuggestionsCommand}" />
+                                <ui:Button Content="Auswahl aufheben" Appearance="Transparent" Margin="0,0,4,4" Command="{Binding ClearDetailSelectionCommand}" />
+                            </WrapPanel>
+                            <TextBlock Margin="4,2,0,0" FontSize="12" Text="{Binding SuggestionsRangeText}"
+                                       AutomationProperties.AutomationId="SuggestionsRange"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+                        <TextBlock Grid.Row="1" Margin="4,12" Text="Keine offenen Vorschläge für diese Person."
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   Visibility="{Binding HasSuggestions, Converter={StaticResource InverseBoolToVis}}" />
+                        <controls:TileListBox Grid.Row="1" x:Name="SuggestionsList" Style="{StaticResource ListStyle}"
+                                              AutomationProperties.AutomationId="SuggestionsList" AutomationProperties.Name="Vorschläge"
+                                              ItemsSource="{Binding Suggestions}" ItemTemplate="{StaticResource FaceTile}"
+                                              ItemContainerStyle="{StaticResource FaceTileContainer}" ItemsPanel="{StaticResource FacePanel}"
+                                              gallery:VirtualizingTilePanel.VisibleRangeChanged="OnVisibleRangeChanged" />
+                    </Grid>
+                </TabItem>
+                <TabItem Header="Bestätigt">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <WrapPanel Grid.Row="0" Margin="0,8,0,4">
+                            <ui:Button Content="Aus Person entfernen" Icon="{ui:SymbolIcon PersonDelete24}" Margin="0,0,4,4" Command="{Binding RemoveSelectedConfirmedCommand}"
+                                       ToolTip="Falsch zugeordnete Gesichter herausnehmen — danach wird neu gelernt" />
+                            <ui:Button Content="Als Titelbild" Icon="{ui:SymbolIcon ImageCircle24}" Margin="0,0,12,4" Command="{Binding SetCoverCommand}"
+                                       ToolTip="Genau ein Gesicht auswählen" />
+                            <ui:Button Content="Auswahl aufheben" Appearance="Transparent" Margin="0,0,4,4" Command="{Binding ClearDetailSelectionCommand}" />
+                        </WrapPanel>
+                        <controls:TileListBox Grid.Row="1" x:Name="ConfirmedList" Style="{StaticResource ListStyle}"
+                                              AutomationProperties.AutomationId="ConfirmedList" AutomationProperties.Name="Bestätigte Gesichter"
+                                              ItemsSource="{Binding Confirmed}" ItemTemplate="{StaticResource FaceTile}"
+                                              ItemContainerStyle="{StaticResource FaceTileContainer}" ItemsPanel="{StaticResource FacePanel}"
+                                              gallery:VirtualizingTilePanel.VisibleRangeChanged="OnVisibleRangeChanged" />
+                    </Grid>
+                </TabItem>
+            </TabControl>
+        </Grid>
+
+        <!-- ===== Gruppe ===== -->
+        <Grid Grid.Row="2" Visibility="{Binding IsGroupDetail, Converter={StaticResource BoolToVis}}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                <ui:Button DockPanel.Dock="Left" Icon="{ui:SymbolIcon ArrowLeft24}" Content="Zurück" Command="{Binding BackCommand}" Margin="0,0,12,0" />
+                <StackPanel VerticalAlignment="Center">
+                    <ui:TextBlock FontTypography="Subtitle" Text="{Binding GroupTitle}" AutomationProperties.AutomationId="GroupTitle" />
+                    <TextBlock Text="{Binding GroupHint}" FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+            </DockPanel>
+            <WrapPanel Grid.Row="1" Margin="0,0,0,4">
+                <ui:Button Content="Als neue Person benennen…" Icon="{ui:SymbolIcon PersonAdd24}" Appearance="Primary" Margin="0,0,4,4" Command="{Binding NameGroupCommand}" />
+                <ui:Button Content="Zu Person hinzufügen…" Icon="{ui:SymbolIcon People24}" Margin="0,0,4,4" Command="{Binding AddGroupToPersonCommand}" />
+                <ui:Button Content="Kein Gesicht / ignorieren" Icon="{ui:SymbolIcon EyeOff24}" Margin="0,0,4,4" Command="{Binding IgnoreGroupSelectionCommand}"
+                           ToolTip="Nur die ausgewählten Gesichter ignorieren" />
+                <ui:Button Content="Ganze Gruppe ignorieren…" Icon="{ui:SymbolIcon EyeOff24}" Margin="0,0,12,4" Command="{Binding IgnoreWholeGroupCommand}"
+                           ToolTip="Alle Gesichter der Gruppe ignorieren, auch die abgewählten Ausreißer (mit Rückfrage)" />
+                <ui:Button Content="Alle" Appearance="Transparent" Margin="0,0,4,4" Command="{Binding SelectAllGroupCommand}" />
+                <ui:Button Content="Keine" Appearance="Transparent" Margin="0,0,4,4" Command="{Binding SelectNoneGroupCommand}" />
+                <ui:Button Content="Ohne Ausreißer" Appearance="Transparent" Margin="0,0,12,4" Command="{Binding SelectWithoutOutliersCommand}" />
+                <TextBlock Text="{Binding GroupSelectionText}" VerticalAlignment="Center" Margin="0,0,0,4"
+                           AutomationProperties.AutomationId="GroupSelection" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+            </WrapPanel>
+            <controls:TileListBox Grid.Row="2" x:Name="GroupMembersList" Style="{StaticResource ListStyle}"
+                                  AutomationProperties.AutomationId="GroupMembersList" AutomationProperties.Name="Gesichter der Gruppe"
+                                  ItemsSource="{Binding GroupMembers}" ItemTemplate="{StaticResource FaceTile}"
+                                  ItemContainerStyle="{StaticResource FaceTileContainer}" ItemsPanel="{StaticResource FacePanel}"
+                                  gallery:VirtualizingTilePanel.VisibleRangeChanged="OnVisibleRangeChanged" />
+        </Grid>
+
+        <!-- ===== Ignorierte Gesichter (ADR-0040) ===== -->
+        <Grid Grid.Row="2" Visibility="{Binding IsIgnoredView, Converter={StaticResource BoolToVis}}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                <ui:Button DockPanel.Dock="Left" Icon="{ui:SymbolIcon ArrowLeft24}" Content="Zurück" Command="{Binding BackCommand}" Margin="0,0,12,0" />
+                <StackPanel VerticalAlignment="Center">
+                    <ui:TextBlock FontTypography="Subtitle" Text="Ignorierte Gesichter" AutomationProperties.AutomationId="IgnoredTitle" />
+                    <TextBlock Text="{Binding IgnoredSummary}" FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+            </DockPanel>
+            <StackPanel Grid.Row="1" Margin="0,0,0,4">
+                <WrapPanel>
+                    <ui:Button Content="Zurückholen" Icon="{ui:SymbolIcon ArrowUndo24}" Appearance="Primary" Margin="0,0,12,4" Command="{Binding RestoreIgnoredCommand}"
+                               ToolTip="Ausgewählte Gesichter wieder als unbenannte Gesichter führen — danach werden Vorschläge neu berechnet" />
+                    <ui:Button Content="Alle auswählen" Appearance="Transparent" Margin="0,0,4,4" Command="{Binding SelectAllIgnoredCommand}"
+                               ToolTip="Alle geladenen ignorierten Gesichter auswählen" />
+                    <ui:Button Content="Auswahl aufheben" Appearance="Transparent" Margin="0,0,4,4" Command="{Binding ClearIgnoredSelectionCommand}" />
+                </WrapPanel>
+                <TextBlock Margin="4,2,0,0" FontSize="12" Text="{Binding IgnoredRangeText}"
+                           AutomationProperties.AutomationId="IgnoredRange"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+            </StackPanel>
+            <TextBlock Grid.Row="2" Margin="4,12" Text="Keine ignorierten Gesichter."
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       Visibility="{Binding HasIgnored, Converter={StaticResource InverseBoolToVis}}" />
+            <controls:TileListBox Grid.Row="2" x:Name="IgnoredList" Style="{StaticResource ListStyle}"
+                                  AutomationProperties.AutomationId="IgnoredList" AutomationProperties.Name="Ignorierte Gesichter"
+                                  ItemsSource="{Binding Ignored}" ItemTemplate="{StaticResource FaceTile}"
+                                  ItemContainerStyle="{StaticResource FaceTileContainer}" ItemsPanel="{StaticResource FacePanel}"
+                                  gallery:VirtualizingTilePanel.VisibleRangeChanged="OnVisibleRangeChanged" />
+        </Grid>
+
+        <ui:ProgressRing Grid.Row="2" IsIndeterminate="True" HorizontalAlignment="Center" VerticalAlignment="Center"
+                         Visibility="{Binding IsLoading, Converter={StaticResource BoolToVis}}" />
+    </Grid>
+</UserControl>

@@ -5,10 +5,11 @@ großer Foto- und Video-Bibliotheken (50 000–500 000 Dateien). Nachfolger der 
 (`../03_Foto-Viewer-V2`), die bis zur Ablösung im Alltag weiterläuft. Stand: **0.2.0** (siehe [CHANGELOG.md](CHANGELOG.md)).
 
 Bis 0.2.48 hieß die App „PhotoViewer V3“. Seit 0.2.49 heißt sie sichtbar **Lumora**, die Programmdatei `Lumora.exe`
-(Schriftzug und App-Symbol: [Mockup 07](mockups/07-lumora-schriftzug.html)). Bewusst unverändert bleiben die Projekt-,
-Namespace- und Ordnernamen (`PhotoViewerV3.*`, `PhotoViewerV3.slnx`), der Datenordner `%LocalAppData%\PhotoViewerV3`
-samt `database-location.json`, die Umgebungsvariablen `PHOTOVIEWERV3_*` und die Protokolle `photoviewer-*.log` —
-vorhandene Kataloge laufen ohne Umzug weiter ([ADR-0047](docs/adr/0047-produktname-lumora.md)).
+(Schriftzug und App-Symbol: [Mockup 07](mockups/07-lumora-schriftzug.html), [ADR-0047](docs/adr/0047-produktname-lumora.md)).
+Seit 0.4.3 heißen auch Projekte, Namespaces und Ordner `Lumora.*` (`Lumora.slnx`), der Datenordner
+`%LocalAppData%\Lumora`, die Umgebungsvariablen `LUMORA_*` und die Protokolle `lumora-*.log`. Der alte Datenordner
+`%LocalAppData%\PhotoViewerV3` wird beim ersten Start einmal umbenannt; läuft dabei noch eine ältere Lumora, bleibt
+der alte Ordner bis zum nächsten Start in Gebrauch ([ADR-0056](docs/adr/0056-umbenennung-photoviewerv3-zu-lumora.md)).
 
 ## Features (0.2.0)
 
@@ -67,20 +68,20 @@ vorhandene Kataloge laufen ohne Umzug weiter ([ADR-0047](docs/adr/0047-produktna
 
 ```powershell
 cd "D:\Code\Lumora"
-dotnet build PhotoViewerV3.slnx -c Debug --nologo
-dotnet run --project src/PhotoViewerV3.Wpf -c Debug
+dotnet build Lumora.slnx -c Debug --nologo
+dotnet run --project src/Lumora.Wpf -c Debug
 ```
 
-Oder in Visual Studio: `PhotoViewerV3.slnx` öffnen, `PhotoViewerV3.Wpf` als Startprojekt, **F5**.
-Die Programmdatei liegt danach unter `src\PhotoViewerV3.Wpf\bin\Debug\net10.0-windows\Lumora.exe` (bis 0.2.48
-`PhotoViewerV3.exe` — der Build räumt die alte EXE aus dem Ausgabeordner, Verknüpfungen neu auf `Lumora.exe` setzen).
+Oder in Visual Studio: `Lumora.slnx` öffnen, `Lumora.Wpf` als Startprojekt, **F5**.
+Die Programmdatei liegt danach unter `src\Lumora.Wpf\bin\Debug\net10.0-windows\Lumora.exe` (bis 0.2.48
+`Lumora.exe` — der Build räumt die alte EXE aus dem Ausgabeordner, Verknüpfungen neu auf `Lumora.exe` setzen).
 Beim ersten Start legt die App die Datenbank an (EF-Core-Migration) und öffnet Einstellungen › Bibliotheken &
 Eingänge („Neue Bibliothek…“).
 
 Die App-Version (Einstellungen › Info, Dateiversion der EXE) kommt aus dem obersten Eintrag in
-[CHANGELOG.md](CHANGELOG.md); `PhotoViewerV3.Wpf.csproj` liest sie beim Build aus.
+[CHANGELOG.md](CHANGELOG.md); `Lumora.Wpf.csproj` liest sie beim Build aus.
 
-Das App-Symbol `src\PhotoViewerV3.Wpf\Shell\Branding\Lumora.ico` (16–256 px) ist eingecheckt und wird aus der
+Das App-Symbol `src\Lumora.Wpf\Shell\Branding\Lumora.ico` (16–256 px) ist eingecheckt und wird aus der
 Vektor-Quelle `LumoraIcon.xaml` erzeugt: nach einer Änderung am Symbol `pwsh -File build\make-icon.ps1` ausführen und
 die neue `.ico` mit einchecken (der Test `LumoraIconFileTests` meldet, wenn Datei und Vektor-Quelle auseinanderlaufen).
 
@@ -100,7 +101,7 @@ mehr: 734 Dateien, ~253 MB, ZIP ~112 MB).
 außerhalb von OneDrive), `-NoZip` lässt das ZIP weg, `-FrameworkDependent` baut ein kleineres Paket, das die
 „.NET 10 Desktop Runtime“ (x64) voraussetzt.
 
-- **Daten** liegen auch bei der portablen Version unter `%LocalAppData%\PhotoViewerV3` (bzw. im Ordner aus
+- **Daten** liegen auch bei der portablen Version unter `%LocalAppData%\Lumora` (bzw. im Ordner aus
   `database-location.json`), nicht im Paketordner — ein neues Paket übernimmt Katalog und Vorschaubilder. Die
   Formatregister sind fest im Code, es gibt keine Konfigurationsdateien neben der EXE.
 - **FFmpeg** ist nicht im Paket; es wird wie beim Debug-Build im `PATH` bzw. unter den winget-Links gesucht
@@ -501,7 +502,7 @@ Reiter oben (ADR-0042):
 
 #### Speicherort des Katalogs
 **Einstellungen › Speicher & Wartung → Speicherorte → Datenbank → Ändern…** zieht Katalog (`library.db`) und Vorschaubilder (`thumbs\`) in
-einen anderen Ordner (ADR-0026); **Standardort** holt sie nach `%LocalAppData%\PhotoViewerV3` zurück.
+einen anderen Ordner (ADR-0026); **Standardort** holt sie nach `%LocalAppData%\Lumora` zurück.
 - Der Ordner muss auf einem lokalen Laufwerk liegen (interne Platte, SSD, USB) — Netzlaufwerke und `\\Server\…` werden
   abgelehnt, ebenso Ordner in einer Bibliothekswurzel (die Vorschaubilder würden sonst als Fotos eingelesen). Er muss
   beschreibbar sein und genug Platz bieten (Katalog + Vorschaubilder + 10 % + 50 MB). OneDrive-Ordner gehen, aber mit
@@ -531,8 +532,8 @@ einen Fingerabdruck (512 Werte) im Katalog (ADR-0035) — vollständig auf diese
   (ADR-0040).
 - **Modell**: InsightFace *buffalo_l* (Erkennung SCRFD `det_10g.onnx`, Fingerabdruck ArcFace `w600k_r50.onnx`). Fehlt
   es, steht dort **„Modell herunterladen… (275 MB, InsightFace buffalo_l, nur nicht-kommerzielle Nutzung)“**: nach
-  Bestätigung lädt PhotoViewer das Paket von GitHub (InsightFace Release v0.7), prüft die SHA-256-Prüfsumme und entpackt
-  nur die zwei benötigten Dateien nach `%LocalAppData%\PhotoViewerV3\models\buffalo_l\` (Fortschritt, abbrechbar). Ohne
+  Bestätigung lädt Lumora das Paket von GitHub (InsightFace Release v0.7), prüft die SHA-256-Prüfsumme und entpackt
+  nur die zwei benötigten Dateien nach `%LocalAppData%\Lumora\models\buffalo_l\` (Fortschritt, abbrechbar). Ohne
   Klick wird nichts geladen. Die Modelle sind nur für die nicht-kommerzielle Nutzung freigegeben und liegen nie im Repo
   oder im portablen Paket.
 - **Statusleiste**: „Gesichter: 1.234 / 19.556 · 37 ms/Foto“ mit **Pause**/**Fortsetzen** und **Abbrechen** (bis zum
@@ -553,7 +554,7 @@ Je Foto (Videos: Vorschaubild) entsteht im Hintergrund ein Bild-Vektor im Katalo
 - **Modell**: Fehlt es, steht dort **„Motiv-Modell herunterladen… (≈ 690 MB, SigLIP 2 von Google, Apache-2.0)“**: nach
   Bestätigung (Dateien, Quelle, Größen, Lizenz) lädt Lumora SigLIP 2 base als ONNX von Hugging Face
   (onnx-community/siglip2-base-patch16-224-ONNX), prüft jede Datei per SHA-256 und legt sie unter
-  `%LocalAppData%\PhotoViewerV3\models\siglip2-base-patch16-224\` ab (Fortschritt, abbrechbar). Ohne Klick wird nichts
+  `%LocalAppData%\Lumora\models\siglip2-base-patch16-224\` ab (Fortschritt, abbrechbar). Ohne Klick wird nichts
   geladen, ohne Modell ist die Motiv-Erkennung aus. Das Modell liegt nie im Repo oder im portablen Paket.
 - **Galerie**: Chip **„Motive“** in der Zeile „Inhalt“ (sobald es Treffer gibt): Begriffe mit Anzahl, „eines der
   gewählten“ oder „alle zusammen“; oben im Flyout **Bildinhalt beschreiben** („Hund am Strand“ → die 200 ähnlichsten
@@ -565,7 +566,7 @@ Je Foto (Videos: Vorschaubild) entsteht im Hintergrund ein Bild-Vektor im Katalo
   rechnet nie gleichzeitig mit der Gesichtserkennung auf der Grafikkarte.
 
 ### Personen
-Gefundene Gesichter benennen; PhotoViewer lernt daraus und schlägt die Personen auf weiteren Fotos vor (ADR-0036/0037).
+Gefundene Gesichter benennen; Lumora lernt daraus und schlägt die Personen auf weiteren Fotos vor (ADR-0036/0037).
 Gelernt wird **nur aus dem, was du bestätigst** — eigene Vorschläge lernen nie mit.
 1. **Einschalten:** Einstellungen › Gesichter → „Gesichter im Hintergrund erkennen“ (einmalig das Modell
    herunterladen). Die Statusleiste zeigt den Fortschritt; die Seite **Personen** zeigt oben, wie viele Fotos schon
@@ -575,15 +576,15 @@ Gelernt wird **nur aus dem, was du bestätigst** — eigene Vorschläge lernen n
    markiert („Ausreißer?“) und abgewählt**. Klick wählt ein Gesicht ab oder an, Doppelklick öffnet das Foto.
    - **Als neue Person benennen…** — Vorname, Nachname, optional Rufname, Beziehung, Geburtsdatum und „Das bin ich“
      eingeben (siehe „Personen-Details“); nur die ausgewählten Gesichter werden bestätigt. Gibt es den Namen schon,
-     fragt PhotoViewer, ob die Gesichter zu dieser Person sollen.
+     fragt Lumora, ob die Gesichter zu dieser Person sollen.
    - **Zu Person hinzufügen…** — Person aus der Liste wählen (ähnelt die Gruppe einer bekannten Person, ist sie
      vorgewählt).
    - **Kein Gesicht / ignorieren** — die ausgewählten Gesichter (Fehlerkennungen); sie erscheinen nirgends mehr.
    - **Ganze Gruppe ignorieren…** — alle Gesichter der Gruppe, auch die abgewählten Ausreißer (Rückfrage mit Anzahl),
      z. B. für Fremde im Hintergrund; die Gruppe verschwindet. Dasselbe per **Rechtsklick auf eine Gruppenkachel**.
    Passt ein ausgewähltes Gesicht nicht gut zur Person (bzw. ähnelt es einer anderen bekannten Person), fragt
-   PhotoViewer nach: **Ohne diese bestätigen** / **Trotzdem alle bestätigen** / **Abbrechen**.
-3. **Vorschläge prüfen:** Nach dem Benennen lernt PhotoViewer im Hintergrund (wenige Sekunden) und schlägt die Person
+   Lumora nach: **Ohne diese bestätigen** / **Trotzdem alle bestätigen** / **Abbrechen**.
+3. **Vorschläge prüfen:** Nach dem Benennen lernt Lumora im Hintergrund (wenige Sekunden) und schlägt die Person
    auf weiteren Fotos vor. Person öffnen → Reiter **Vorschläge**: je Gesicht ✓ (bestätigen) oder ✗ (ablehnen), oder
    mehrere auswählen bzw. **Sichtbare bestätigen/ablehnen** (nur die gerade auf dem Bildschirm stehen) oder **Alle
    Vorschläge bestätigen…/ablehnen…** (die ganze Liste, mit Rückfrage samt Anzahl; beim Bestätigen danach die
@@ -646,7 +647,7 @@ Vorschläge der Erkennung werden getrennt gezeigt.
   gelb „Vorschlag: X?“, weiß „Unbekannt“; die Rahmen zoomen und schwenken mit. Klick auf einen Rahmen: **Ist X**
   (Vorschlag bestätigen), **Nicht X** (Vorschlag ablehnen), **Ist …** (Person wählen oder Namen eingeben — ein
   vorhandener Name wird zugeordnet, sonst entsteht eine neue Person), **Kein Gesicht** (Rahmen verschwindet). Vollbild
-  liegt jetzt nur noch auf **F11**. Die Rahmen bleiben beim Weiterblättern an, und PhotoViewer merkt sich die Taste F
+  liegt jetzt nur noch auf **F11**. Die Rahmen bleiben beim Weiterblättern an, und Lumora merkt sich die Taste F
   dauerhaft: wer sie eingeschaltet lässt, sieht die Rahmen beim nächsten Öffnen der Lightbox (auch nach Neustart) sofort.
   Ignorierte Gesichter zeigen keinen Rahmen.
 - **Einstellungen › Gesichter → Gesichtsdaten löschen…**: nach Bestätigung werden für die aktive Bibliothek
@@ -686,12 +687,12 @@ springt zum ersten Treffer).
   Satellitenkarten brauchen einen **eigenen API-Schlüssel** (siehe „Kartenstile: Schlüssel anfordern“ unten); ohne
   Schlüssel zeigt die Karte OpenStreetMap und den Hinweis „API-Schlüssel nötig – in den Einstellungen eintragen“
   („Automatisch“ ohne Schlüssel bleibt still bei OpenStreetMap). Die Namensnennung des Stils steht unten rechts.
-- **Kartenkacheln** werden je Stil getrennt unter `%LocalAppData%\PhotoViewerV3\cache\maptiles\<stil>`
+- **Kartenkacheln** werden je Stil getrennt unter `%LocalAppData%\Lumora\cache\maptiles\<stil>`
   zwischengespeichert (zusammen höchstens 500 MB, am längsten unbenutzte zuerst gelöscht; CARTO- und MapTiler-Kacheln
   höchstens 30 Tage); nur der sichtbare Ausschnitt wird geladen, höchstens zwei Kacheln gleichzeitig, nie vorab. Ohne
   Netz bleibt die Karte grau bzw. zeigt den Cache („Offline …“), ein abgelehnter Schlüssel meldet sich unten links; die
   Gruppen funktionieren weiter. Bei einer versteckten Bibliothek weist eine Leiste darauf hin, dass der Kartenserver den
-  betrachteten Ausschnitt sieht. Abschalten: `PHOTOVIEWERV3_MAP_TILES=off`.
+  betrachteten Ausschnitt sieht. Abschalten: `LUMORA_MAP_TILES=off`.
 
 #### Kartenstile: Schlüssel anfordern (0.4.1)
 - **CARTO** (Voyager, Positron, Dark Matter, „Automatisch“): unter **carto.com/basemaps** den kostenlosen Schlüssel
@@ -811,7 +812,7 @@ selbst einhängen) und von denen Lumora im Alltag **nichts zeigt** (ADR-0049).
   anlegen (Inhalt egal; `.lumora` ist versteckt — im Explorer „Ausgeblendete Elemente“ einblenden). Beim nächsten
   „Öffnen“ bietet Lumora **Kennwort zurücksetzen** an und löscht die Datei danach.
 - **Was Lumora außerhalb nicht hinterlässt:** keine Namen/Pfade in den normalen Einstellungen, im normalen Protokoll
-  oder unter `%LocalAppData%\PhotoViewerV3`; Protokolle der versteckten Sitzung nur in `.lumora\logs`; keine Einträge
+  oder unter `%LocalAppData%\Lumora`; Protokolle der versteckten Sitzung nur in `.lumora\logs`; keine Einträge
   unter „Zuletzt verwendet“; in der versteckten Sitzung sind **Im Explorer zeigen**, **Ordner öffnen** und **Mit
   Standard-App öffnen** gesperrt (Windows würde sich die Pfade merken); der Katalog kann nicht umziehen.
 - **Grenzen:** Windows merkt sich im Dateidialog („Container öffnen… → Durchsuchen“) ggf. den zuletzt besuchten Ordner,
@@ -820,7 +821,7 @@ selbst einhängen) und von denen Lumora im Alltag **nichts zeigt** (ADR-0049).
 
 ## Datenablage
 
-Alles liegt unter `%LocalAppData%\PhotoViewerV3` (Fotos und Videos bleiben an Ort und Stelle; der Ordnername bleibt
+Alles liegt unter `%LocalAppData%\Lumora` (Fotos und Videos bleiben an Ort und Stelle; der Ordnername bleibt
 trotz des Produktnamens Lumora, ADR-0047). Katalog und
 Vorschaubilder können in den Einstellungen in einen anderen Ordner umziehen; dann liegen `library.db` und `thumbs\`
 dort, Protokolle und `database-location.json` bleiben hier:
@@ -830,7 +831,7 @@ dort, Protokolle und `database-location.json` bleiben hier:
 | `database-location.json` | Nur nach einem Umzug: gewählter Ordner für Katalog und Vorschaubilder, alte Dateien zum Löschen beim nächsten Start |
 | `library.db` (+ `-wal`, `-shm`) | SQLite-Katalog: Bibliotheken, Ordner, Dateien, Thumbnails-Status, OperationBatches/FileOperations, Settings, FTS5-Index |
 | `thumbs\{libraryId}\{fileId}_320_still.jpg` | Vorschaubilder (320 px, FileId-basiert, atomar geschrieben) |
-| `logs\photoviewer-YYYYMMDD.log` | Serilog-Protokoll, täglich rollierend, 14 Tage |
+| `logs\lumora-YYYYMMDD.log` | Serilog-Protokoll, täglich rollierend, 14 Tage |
 | `cache\maptiles\<stil>\z\x\y.png` | Kartenkacheln der Seite „Orte“ je Stil (`osm`, `carto-voyager`, `carto-positron`, `carto-darkmatter`, `maptiler-satellite`), zusammen höchstens 500 MB, am längsten unbenutzte zuerst gelöscht; CARTO/MapTiler höchstens 30 Tage |
 | `models\buffalo_l\` | Nur nach dem Download in den Einstellungen: Modelle der Gesichtserkennung (`det_10g.onnx`, `w600k_r50.onnx`); bleibt beim Umzug des Katalogs hier |
 | `models\siglip2-base-patch16-224\` | Nur nach dem Download in den Einstellungen: Motiv-Modell SigLIP 2 (`onnx\vision_model.onnx`, `onnx\text_model_int8.onnx`, `tokenizer.json` + Konfiguration); bleibt beim Umzug des Katalogs hier |
@@ -842,44 +843,44 @@ werden dabei zurückgesetzt und unfertige Dateivorgänge gemeldet.
 
 | Variable | Wirkung |
 |---|---|
-| `PHOTOVIEWERV3_APPDATA` | Anderer AppData-Root (DB, Thumbnails, Logs, `database-location.json`) — z. B. für Tests mit frischer Datenbank, ohne den eigenen Katalog anzufassen |
-| `PHOTOVIEWERV3_SMOKE_ROOT` | Startet nach dem Laden des Hauptfensters den Rauchtest gegen diesen Bibliotheksordner. **Dateien darin werden verschoben und in den Papierkorb gelegt** — nur mit einer Kopie verwenden. |
-| `PHOTOVIEWERV3_SMOKE_SHOTS` | Ordner für PNG-Screenshots der Hauptansichten (optional) |
-| `PHOTOVIEWERV3_SMOKE_EXIT` | `1` → App nach dem Rauchtest beenden; ExitCode 0 = alle Schritte OK, 2 = mindestens ein Schritt FAIL |
-| `PHOTOVIEWERV3_SMOKE_CLEANUP` | `1` → die Testbibliothek am Ende wieder aus dem Katalog entfernen |
-| `PHOTOVIEWERV3_SMOKE_HIDDEN` | Nur im Rauchtest: simuliert den Startschalter `_hidden` für den Schritt „Versteckte Bibliothek“ (Standard an; `0` = aus). Container = Temp-Ordner neben der Testbibliothek, Aushängen nur simuliert |
-| `PHOTOVIEWERV3_FACE_MODELS` | Ordner mit `det_10g.onnx` und `w600k_r50.onnx` statt `models\buffalo_l\` (Entwicklung, Tests; dann kein Download). Tests mit echten Modellen laufen nur mit dieser Variable |
-| `PHOTOVIEWERV3_MAP_TILES` | `off` → keine Kartenkacheln laden (graue Karte, kein Netzzugriff); im Rauchtest immer aus |
-| `PV3_FACE_SAMPLE_DIR` | Nur für die lokale Messung (`FaceRecognitionMeasurementTests`): Ordner mit Fotos, aus dem eine Stichprobe gelesen wird; Ausgabe nur zusammengefasste Zahlen |
-| `PHOTOVIEWERV3_MOTIF_MODEL` | Ordner mit dem Motiv-Modell (SigLIP 2) statt `models\siglip2-base-patch16-224\` (Entwicklung, Tests; dann kein Download). Tests mit echtem Modell laufen nur mit dieser Variable |
-| `PV3_MOTIF_SAMPLE_DIR` | Nur für die lokale Messung (`MotifMeasurementTests`, Spike 14): Fotoordner für die Stichprobe (`PV3_MOTIF_SAMPLE` = Anzahl, Standard 200); Ausgabe nur zusammengefasste Zahlen |
+| `LUMORA_APPDATA` | Anderer AppData-Root (DB, Thumbnails, Logs, `database-location.json`) — z. B. für Tests mit frischer Datenbank, ohne den eigenen Katalog anzufassen |
+| `LUMORA_SMOKE_ROOT` | Startet nach dem Laden des Hauptfensters den Rauchtest gegen diesen Bibliotheksordner. **Dateien darin werden verschoben und in den Papierkorb gelegt** — nur mit einer Kopie verwenden. |
+| `LUMORA_SMOKE_SHOTS` | Ordner für PNG-Screenshots der Hauptansichten (optional) |
+| `LUMORA_SMOKE_EXIT` | `1` → App nach dem Rauchtest beenden; ExitCode 0 = alle Schritte OK, 2 = mindestens ein Schritt FAIL |
+| `LUMORA_SMOKE_CLEANUP` | `1` → die Testbibliothek am Ende wieder aus dem Katalog entfernen |
+| `LUMORA_SMOKE_HIDDEN` | Nur im Rauchtest: simuliert den Startschalter `_hidden` für den Schritt „Versteckte Bibliothek“ (Standard an; `0` = aus). Container = Temp-Ordner neben der Testbibliothek, Aushängen nur simuliert |
+| `LUMORA_FACE_MODELS` | Ordner mit `det_10g.onnx` und `w600k_r50.onnx` statt `models\buffalo_l\` (Entwicklung, Tests; dann kein Download). Tests mit echten Modellen laufen nur mit dieser Variable |
+| `LUMORA_MAP_TILES` | `off` → keine Kartenkacheln laden (graue Karte, kein Netzzugriff); im Rauchtest immer aus |
+| `LUMORA_FACE_SAMPLE_DIR` | Nur für die lokale Messung (`FaceRecognitionMeasurementTests`): Ordner mit Fotos, aus dem eine Stichprobe gelesen wird; Ausgabe nur zusammengefasste Zahlen |
+| `LUMORA_MOTIF_MODEL` | Ordner mit dem Motiv-Modell (SigLIP 2) statt `models\siglip2-base-patch16-224\` (Entwicklung, Tests; dann kein Download). Tests mit echtem Modell laufen nur mit dieser Variable |
+| `LUMORA_MOTIF_SAMPLE_DIR` | Nur für die lokale Messung (`MotifMeasurementTests`, Spike 14): Fotoordner für die Stichprobe (`LUMORA_MOTIF_SAMPLE` = Anzahl, Standard 200); Ausgabe nur zusammengefasste Zahlen |
 
 Das Ergebnis des Rauchtests steht in `<AppData>\smoke-result.txt` und im Log (Zeilen „Rauchtest …“).
 
 ## Tests
 
 ```powershell
-dotnet test tests/PhotoViewerV3.Tests --nologo        # Services + Data (xUnit, FluentAssertions; echte SQLite-Migration in Temp)
-dotnet test tests/PhotoViewerV3.Wpf.Tests --nologo    # WPF-gebundener Code (WIC-Renderer, GalleryQuery, Converter, Tags, Listenansicht)
+dotnet test tests/Lumora.Tests --nologo        # Services + Data (xUnit, FluentAssertions; echte SQLite-Migration in Temp)
+dotnet test tests/Lumora.Wpf.Tests --nologo    # WPF-gebundener Code (WIC-Renderer, GalleryQuery, Converter, Tags, Listenansicht)
 ```
 
 Integrations-Rauchtest (steuert die ganze App über ihre ViewModels, prüft Dateisystem und Datenbank, macht Screenshots):
 
 ```powershell
-$lib = "$env:TEMP\pv3-smoke-lib"; Copy-Item -Recurse <Testbibliothek> $lib
-$env:PHOTOVIEWERV3_APPDATA     = "$env:TEMP\pv3-smoke-appdata"
-$env:PHOTOVIEWERV3_SMOKE_ROOT  = $lib
-$env:PHOTOVIEWERV3_SMOKE_SHOTS = "$env:TEMP\pv3-smoke-shots"
-$env:PHOTOVIEWERV3_SMOKE_EXIT  = '1'
-dotnet run --project src/PhotoViewerV3.Wpf -c Debug
-Get-Content "$env:PHOTOVIEWERV3_APPDATA\smoke-result.txt"   # Erwartung: 16 OK, 0 FAIL
+$lib = "$env:TEMP\lumora-smoke-lib"; Copy-Item -Recurse <Testbibliothek> $lib
+$env:LUMORA_APPDATA     = "$env:TEMP\lumora-smoke-appdata"
+$env:LUMORA_SMOKE_ROOT  = $lib
+$env:LUMORA_SMOKE_SHOTS = "$env:TEMP\lumora-smoke-shots"
+$env:LUMORA_SMOKE_EXIT  = '1'
+dotnet run --project src/Lumora.Wpf -c Debug
+Get-Content "$env:LUMORA_APPDATA\smoke-result.txt"   # Erwartung: 16 OK, 0 FAIL
 ```
 
 Dasselbe als Skript gegen eine beliebige EXE (Debug-Build oder portables Paket; kopiert die Testbibliothek nach
-`%TEMP%\PhotoViewerV3-smoke-<Tag>\lib`, eigenes AppData daneben, ExitCode 0 = alle Schritte OK):
+`%TEMP%\Lumora-smoke-<Tag>\lib`, eigenes AppData daneben, ExitCode 0 = alle Schritte OK):
 
 ```powershell
-pwsh -File build\run-smoke.ps1 -Exe src\PhotoViewerV3.Wpf\bin\Debug\net10.0-windows\Lumora.exe -TestLib <Testbibliothek>
+pwsh -File build\run-smoke.ps1 -Exe src\Lumora.Wpf\bin\Debug\net10.0-windows\Lumora.exe -TestLib <Testbibliothek>
 ```
 
 Die Testbibliothek sollte Bilder (JPG/PNG), Videos (MP4/MOV), einen Ordner ohne direkte Dateien mit zwei
@@ -903,30 +904,30 @@ Geschwisterordner `<Bibliothek>-Container\Tresor…`, legt dort eine versteckte 
 und prüft, dass im AppData-Testordner weder Name noch Pfad noch Dateinamen vorkommen; der Ordner wird danach gelöscht.
 Danach ist die Oberfläche neu aufgebaut — die Ordnerüberwachung läuft mit den Diensten der neuen normalen Sitzung.
 
-Spike- und Benchmark-Harness: `dotnet run --project tests/PhotoViewerV3.PerfTests -c Release -- <spike>` (siehe
+Spike- und Benchmark-Harness: `dotnet run --project tests/Lumora.PerfTests -c Release -- <spike>` (siehe
 [docs/spikes/](docs/spikes/)).
 
 ## Projektstruktur
 
 ```
-PhotoViewerV3.slnx                 # Solution (.slnx)
+Lumora.slnx                 # Solution (.slnx)
 Directory.Packages.props           # Central Package Management inkl. transitiver Security-Pins
 build/                             # publish.ps1 (portable Version), run-smoke.ps1 (Rauchtest gegen eine beliebige EXE),
                                    # make-icon.ps1 (Lumora.ico aus LumoraIcon.xaml)
 src/
-  PhotoViewerV3.Domain/            # Entities, Enums — keine Abhängigkeiten
-  PhotoViewerV3.Data/              # LibraryContext (EF Core), EntitiesMapping, Migrations,
+  Lumora.Domain/            # Entities, Enums — keine Abhängigkeiten
+  Lumora.Data/              # LibraryContext (EF Core), EntitiesMapping, Migrations,
                                    # RawSql (BulkScanWriter, FtsIndexer, FtsQueryBuilder)
-  PhotoViewerV3.Services/          # WPF-frei: Catalog, Database, Infrastructure (AppDataPaths), Library, Media
+  Lumora.Services/          # WPF-frei: Catalog, Database, Infrastructure (AppDataPaths), Library, Media
                                    # (Formatregister), Messaging, Operations, Scanning, Sorter, Tags, Thumbnails, Archive;
-                                   # AddPhotoViewerServices() + AddXyz() je Modul
-  PhotoViewerV3.Wpf/               # App.xaml.cs (Host + DI), MainWindow (NavigationView);
+                                   # AddLumoraServices() + AddXyz() je Modul
+  Lumora.Wpf/               # App.xaml.cs (Host + DI), MainWindow (NavigationView);
                                    # Module Folders, Gallery, Library, Lightbox, Settings, Shell (+ Branding, Smoke), Sorter,
                                    # Thumbnails (WIC-Renderer)
 tests/
-  PhotoViewerV3.Tests/             # xUnit: Services + Data (256 Tests)
-  PhotoViewerV3.Wpf.Tests/         # xUnit: WPF-gebundener Code (97 Tests)
-  PhotoViewerV3.PerfTests/         # Konsolen-Harness der Spikes (SQLite-Bulk, WIC, FFmpeg, Storage, V0.1-Scan)
+  Lumora.Tests/             # xUnit: Services + Data (256 Tests)
+  Lumora.Wpf.Tests/         # xUnit: WPF-gebundener Code (97 Tests)
+  Lumora.PerfTests/         # Konsolen-Harness der Spikes (SQLite-Bulk, WIC, FFmpeg, Storage, V0.1-Scan)
 docs/adr/                          # Architekturentscheidungen ADR-0001 … ADR-0021
 docs/spikes/                       # Messungen der sechs Spikes und der Real-Welt-Scan-Validation
 mockups/                           # HTML-Design-Vorlagen (Fluent hell/dunkel, Lightbox)

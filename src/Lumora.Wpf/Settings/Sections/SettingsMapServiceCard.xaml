@@ -1,0 +1,122 @@
+<UserControl x:Class="Lumora.Settings.Sections.SettingsMapServiceCard"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:styles="clr-namespace:Lumora.Places.Styles"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance styles:MapServiceAccountViewModel, IsDesignTimeCreatable=False}"
+             d:DesignWidth="860">
+    <!-- Karte „Kartendienst“ (ADR-0055) für CARTO bzw. MapTiler; DataContext = MapServiceAccountViewModel. Vorgeschlagen auch
+         ohne Schlüssel: Beschreibung, Status, „API-Schlüssel anfordern…“ und Anleitung. Links öffnen nur auf Klick im
+         Standardbrowser — Lumora registriert nichts und sendet selbst keine Daten. -->
+    <UserControl.Resources>
+        <ResourceDictionary Source="SettingsStyles.xaml" />
+    </UserControl.Resources>
+
+    <Border Margin="0,12,0,0" Padding="14,12" CornerRadius="8" BorderThickness="1"
+            BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+            Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
+            AutomationProperties.Name="{Binding Title, StringFormat='Kartendienst {0}'}">
+        <StackPanel>
+            <!-- Kopf: Name, Status -->
+            <DockPanel>
+                <Border DockPanel.Dock="Right" Padding="8,2" CornerRadius="10" VerticalAlignment="Center">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBackgroundBrush}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsReady}" Value="True">
+                                    <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBackgroundBrush}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <TextBlock Text="{Binding StatusText}" FontSize="12"
+                               AutomationProperties.AutomationId="{Binding Info.Id, StringFormat='MapService-{0}-Status'}" />
+                </Border>
+                <StackPanel Orientation="Horizontal">
+                    <ui:SymbolIcon Symbol="Map24" Margin="0,0,8,0" />
+                    <ui:TextBlock FontTypography="BodyStrong" Text="{Binding Title, StringFormat='Kartendienst {0}'}" VerticalAlignment="Center" />
+                </StackPanel>
+            </DockPanel>
+            <TextBlock Style="{StaticResource Hint}" Margin="0,6,0,0" Text="{Binding Info.Description}" />
+            <TextBlock Style="{StaticResource Hint}" Margin="0,2,0,0" FontWeight="SemiBold" Text="{Binding Info.StylesText}" />
+
+            <!-- Noch nicht eingerichtet: Anforderung + Anleitung in drei Schritten -->
+            <StackPanel Margin="0,10,0,0" Visibility="{Binding IsNotReady, Converter={StaticResource BoolToVis}}">
+                <ui:Button Appearance="Primary" Icon="{ui:SymbolIcon Key24}" Content="API-Schlüssel anfordern…"
+                           ToolTip="Öffnet die Anforderungsseite des Dienstes im Browser (Lumora sendet selbst nichts)"
+                           AutomationProperties.AutomationId="{Binding Info.Id, StringFormat='MapService-{0}-Request'}"
+                           Command="{Binding RequestKeyCommand}" />
+                <ItemsControl Margin="0,8,0,0" ItemsSource="{Binding Steps}" Focusable="False">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Style="{StaticResource Hint}" Margin="0,1,0,1" Text="{Binding}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+
+            <!-- Schlüssel -->
+            <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                <TextBlock Style="{StaticResource Label}" Text="API-Schlüssel" Width="130" />
+                <PasswordBox x:Name="KeyBox" Width="280" PasswordChanged="OnKeyChanged"
+                             AutomationProperties.AutomationId="{Binding Info.Id, StringFormat='MapService-{0}-Key'}"
+                             AutomationProperties.Name="{Binding Title, StringFormat='{}{0}-API-Schlüssel'}" />
+                <ui:Button Margin="8,0,0,0" Content="Schlüssel prüfen" Command="{Binding CheckKeyCommand}"
+                           ToolTip="Lädt genau eine Kachel mit diesem Schlüssel; gültig → gespeichert und eingerichtet"
+                           AutomationProperties.Name="{Binding Title, StringFormat='{}{0}-Schlüssel prüfen'}" />
+            </StackPanel>
+            <TextBlock Style="{StaticResource Hint}" Margin="130,4,0,0" Text="{Binding CheckText}"
+                       Visibility="{Binding CheckText, Converter={StaticResource NullToVis}}" />
+
+            <!-- Website -->
+            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                <TextBlock Style="{StaticResource Label}" Text="Website" Width="130" />
+                <ui:TextBox Width="280" Text="{Binding Website, UpdateSourceTrigger=PropertyChanged}"
+                            AutomationProperties.Name="{Binding Title, StringFormat='Website von {0}'}" />
+                <ui:Button Margin="8,0,0,0" Content="Website öffnen" Command="{Binding OpenWebsiteCommand}" />
+            </StackPanel>
+            <TextBlock Style="{StaticResource Hint}" Margin="130,2,0,0" Text="{Binding WebsiteError}"
+                       Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+                       Visibility="{Binding WebsiteError, Converter={StaticResource NullToVis}}" />
+
+            <!-- E-Mail der Registrierung -->
+            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                <TextBlock Style="{StaticResource Label}" Text="Registriert mit" Width="130" />
+                <ui:TextBox Width="280" PlaceholderText="E-Mail-Adresse (nur zur Erinnerung)"
+                            Text="{Binding Email, UpdateSourceTrigger=PropertyChanged}"
+                            AutomationProperties.Name="{Binding Title, StringFormat='E-Mail-Adresse bei {0}'}" />
+            </StackPanel>
+
+            <!-- Konto / Verbrauch -->
+            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                <TextBlock Style="{StaticResource Label}" Text="Konto / Verbrauch" Width="130" />
+                <ui:TextBox Width="280" Text="{Binding AccountUrl, UpdateSourceTrigger=PropertyChanged}"
+                            AutomationProperties.Name="{Binding Title, StringFormat='Konto-Link von {0}'}" />
+                <ui:Button Margin="8,0,0,0" Content="Konto öffnen" Command="{Binding OpenAccountCommand}" />
+            </StackPanel>
+            <TextBlock Style="{StaticResource Hint}" Margin="130,2,0,0" Text="{Binding AccountUrlError}"
+                       Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+                       Visibility="{Binding AccountUrlError, Converter={StaticResource NullToVis}}" />
+
+            <!-- Notiz -->
+            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                <TextBlock Style="{StaticResource Label}" Text="Notiz" Width="130" />
+                <ui:TextBox Width="420" PlaceholderText="optional" Text="{Binding Note, UpdateSourceTrigger=PropertyChanged}"
+                            AutomationProperties.Name="{Binding Title, StringFormat='Notiz zu {0}'}" />
+            </StackPanel>
+
+            <!-- Lumoras eigene Zählung + Verbrauch im Konto -->
+            <DockPanel Margin="0,10,0,0">
+                <ui:Button DockPanel.Dock="Right" Appearance="Transparent" Content="Verbrauch im Konto ansehen"
+                           ToolTip="Öffnet den Konto-Link — maßgeblich ist die Zählung des Anbieters"
+                           Command="{Binding OpenAccountCommand}" />
+                <TextBlock Style="{StaticResource Hint}" VerticalAlignment="Center" Text="{Binding UsageText}"
+                           AutomationProperties.AutomationId="{Binding Info.Id, StringFormat='MapService-{0}-Usage'}" />
+            </DockPanel>
+        </StackPanel>
+    </Border>
+</UserControl>

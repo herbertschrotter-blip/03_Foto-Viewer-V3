@@ -3,6 +3,30 @@
 Alle nennenswerten Änderungen an Lumora (bis 0.2.48 „PhotoViewer V3“). Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.4.3] — 2026-10-21
+
+### Change (ADR-0056) — Auch technische Namen heißen Lumora
+- **Projekte, Ordner und Namespaces** `PhotoViewerV3.*` → `Lumora.*` (`src/Lumora.Domain|Data|Services|Wpf`,
+  `tests/Lumora.Tests|Wpf.Tests|PerfTests`), Solution `Lumora.slnx`, `AddPhotoViewerServices` → `AddLumoraServices`.
+  Der Debug-Build liegt jetzt unter `src\Lumora.Wpf\bin\Debug\net10.0-windows\Lumora.exe`; der alte Ordner
+  `src\PhotoViewerV3.Wpf` enthält nur noch Build-Reste und kann gelöscht werden.
+- **Datenordner** `%LocalAppData%\PhotoViewerV3` → `%LocalAppData%\Lumora`: der erste Start benennt den alten Ordner um
+  (Katalog, Vorschaubilder, Modelle, Karten-Cache, Protokolle) und schreibt `database-location.json` sowie die
+  Vorschaubild-Pfade im Katalog um. Läuft dabei noch eine ältere Lumora, bleibt der alte Ordner für diesen Start in
+  Gebrauch (Warnung im Protokoll) und der nächste Start versucht es erneut. Gibt es beide Ordner, gilt der neue.
+- **Umgebungsvariablen** `PHOTOVIEWERV3_*` und `PV3_*` → `LUMORA_*` (z. B. `LUMORA_APPDATA`, `LUMORA_FACE_MODELS`,
+  `LUMORA_MOTIF_MODEL`, `LUMORA_MAP_TILES`, `LUMORA_SMOKE_*`); die Rauchtest-Skripte setzen die alten Rauchtest-Variablen
+  zusätzlich, damit ein älteres Paket nie den echten Katalog nimmt.
+- **Protokolle** `logs\lumora-*.log` statt `photoviewer-*.log`; Rauchtest-Arbeitsordner `%TEMP%\Lumora-smoke-*`.
+- Das Build-Ziel, das veraltete `PhotoViewerV3.exe`-Reste aus dem Ausgabeordner löschte, entfällt (neuer Ausgabeordner).
+- Doku: CLAUDE.md, README, PLAN (Kap. 3), ADR-Übersicht und Texte („Lumora lernt …“ statt „PhotoViewer lernt …“); die
+  Historie (Einträge bis 0.4.2, ADRs bis 0055, Spikes, Reviews) bleibt unverändert. ADR-0047 Punkt 3 ist durch ADR-0056
+  ersetzt. GitHub-Repo heißt `herbertschrotter-blip/Lumora` (alte URL leitet weiter).
+
+### Offen
+- Eigene, außerhalb gesetzte `PHOTOVIEWERV3_*`-Variablen wirken nicht mehr — auf `LUMORA_*` umstellen.
+- Verknüpfungen auf die alte Debug-EXE `src\PhotoViewerV3.Wpf\bin\…` umstellen.
+
 ## [0.4.2] — 2026-10-21
 
 ### Docs — Repo zieht aus OneDrive nach `D:\Code\Lumora`

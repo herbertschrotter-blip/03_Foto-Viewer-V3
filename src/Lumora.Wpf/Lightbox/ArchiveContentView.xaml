@@ -1,0 +1,147 @@
+<UserControl x:Class="Lumora.Lightbox.ArchiveContentView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:local="clr-namespace:Lumora.Lightbox"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=local:LightboxViewModel}"
+             d:DesignWidth="900"
+             d:DesignHeight="600"
+             Focusable="False">
+
+    <!-- Inhaltsansicht eines Archivs in der Lightbox (ADR-0022): Kopf mit Name/Zusammenfassung, Liste der Einträge
+         (Pfad, Größe, komprimiert, Datum, Medien-Markierung), Knöpfe „Entpacken…“ (→ ExtractArchiveRequestedMessage an
+         die Galerie) und „Im Explorer anzeigen“. Oben 56 px frei für die Lightbox-Toolbar (Overlay). -->
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="LightboxResources.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <Style x:Key="ArchiveCell" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="Foreground" Value="{DynamicResource LightboxTextBrush}" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+            </Style>
+            <Style x:Key="ArchiveCellSecondary" TargetType="TextBlock" BasedOn="{StaticResource ArchiveCell}">
+                <Setter Property="Foreground" Value="{DynamicResource LightboxTextSecondaryBrush}" />
+                <Setter Property="TextAlignment" Value="Right" />
+            </Style>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <Grid Margin="48,56,48,24" MaxWidth="1100">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Kopf -->
+        <Grid Grid.Row="0" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <ui:SymbolIcon Grid.Column="0" Symbol="Archive24" FontSize="40" Margin="0,0,16,0"
+                           Foreground="{DynamicResource LightboxTextBrush}" VerticalAlignment="Center" />
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock Text="{Binding CurrentItem.Name}" FontSize="18" FontWeight="SemiBold"
+                           TextTrimming="CharacterEllipsis" Foreground="{DynamicResource LightboxTextBrush}" />
+                <TextBlock Text="{Binding ArchiveSummary}" FontSize="12" Margin="0,2,0,0"
+                           Foreground="{DynamicResource LightboxTextSecondaryBrush}" />
+            </StackPanel>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                <ui:Button Content="Entpacken…"
+                           Appearance="Primary"
+                           Icon="{ui:SymbolIcon FolderZip24}"
+                           Margin="0,0,8,0"
+                           AutomationProperties.Name="Archiv entpacken"
+                           Command="{Binding ExtractArchiveCommand}" />
+                <ui:Button Content="Im Explorer anzeigen"
+                           Icon="{ui:SymbolIcon FolderOpen24}"
+                           Command="{Binding ShowInExplorerCommand}" />
+            </StackPanel>
+        </Grid>
+
+        <!-- Fehler (passwortgeschützt, beschädigt) -->
+        <Border Grid.Row="1"
+                Padding="12,8"
+                Margin="0,0,0,8"
+                CornerRadius="6"
+                Background="{DynamicResource LightboxChipBrush}"
+                Visibility="{Binding ArchiveError, Converter={StaticResource StringToVis}}">
+            <TextBlock Text="{Binding ArchiveError}" TextWrapping="Wrap" FontSize="12"
+                       Foreground="{DynamicResource LightboxErrorBrush}" />
+        </Border>
+
+        <!-- Einträge -->
+        <Border Grid.Row="2"
+                CornerRadius="6"
+                Background="{DynamicResource LightboxPanelBrush}"
+                BorderBrush="{DynamicResource LightboxPanelBorderBrush}"
+                BorderThickness="1">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Grid Grid.Row="0" Margin="12,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="24" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="100" />
+                        <ColumnDefinition Width="100" />
+                        <ColumnDefinition Width="130" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="1" Text="Datei im Archiv" Style="{StaticResource ArchiveCellSecondary}" TextAlignment="Left" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="2" Text="Größe" Style="{StaticResource ArchiveCellSecondary}" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="3" Text="Komprimiert" Style="{StaticResource ArchiveCellSecondary}" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="4" Text="Geändert" Style="{StaticResource ArchiveCellSecondary}" FontWeight="SemiBold" />
+                </Grid>
+                <ListBox Grid.Row="1"
+                         x:Name="EntryList"
+                         AutomationProperties.AutomationId="ArchiveEntryList"
+                         ItemsSource="{Binding ArchiveEntries}"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         Padding="4,0,4,4"
+                         Focusable="False"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         VirtualizingPanel.IsVirtualizing="True"
+                         HorizontalContentAlignment="Stretch">
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="Focusable" Value="False" />
+                            <Setter Property="Padding" Value="8,3" />
+                            <Setter Property="Margin" Value="0" />
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="{x:Type local:ArchiveEntryRow}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="24" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="100" />
+                                    <ColumnDefinition Width="100" />
+                                    <ColumnDefinition Width="130" />
+                                </Grid.ColumnDefinitions>
+                                <ui:SymbolIcon Grid.Column="0" Symbol="{Binding Symbol}" FontSize="14"
+                                               Foreground="{DynamicResource LightboxTextSecondaryBrush}" />
+                                <TextBlock Grid.Column="1" Text="{Binding Path}" ToolTip="{Binding Path}" Style="{StaticResource ArchiveCell}" />
+                                <TextBlock Grid.Column="2" Text="{Binding SizeText}" Style="{StaticResource ArchiveCellSecondary}" />
+                                <TextBlock Grid.Column="3" Text="{Binding CompressedText}" Style="{StaticResource ArchiveCellSecondary}" />
+                                <TextBlock Grid.Column="4" Text="{Binding ModifiedText}" Style="{StaticResource ArchiveCellSecondary}" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

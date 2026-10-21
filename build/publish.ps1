@@ -5,7 +5,7 @@
 
 .DESCRIPTION
     Standard: self-contained (kein installiertes .NET nötig), kein Single-File, kein Trimming (WPF verträgt es nicht).
-    Version = oberster Eintrag „## [x.y.z]“ in CHANGELOG.md (dieselbe Quelle liest PhotoViewerV3.Wpf.csproj); das
+    Version = oberster Eintrag „## [x.y.z]“ in CHANGELOG.md (dieselbe Quelle liest Lumora.Wpf.csproj); das
     Skript bricht ab, wenn die veröffentlichte EXE eine andere Produktversion trägt.
 
     Ergebnis (Standard-Ausgabe artifacts\ in der Repo-Wurzel, per .gitignore ausgenommen):
@@ -13,7 +13,7 @@
       artifacts\Lumora-<Version>-win-x64.zip     derselbe Ordner gepackt
 
     Nicht im Paket: FFmpeg (Video-Vorschaubilder) — wird wie im Debug-Build im PATH bzw. unter den winget-Links gesucht
-    („winget install Gyan.FFmpeg“). Daten liegen unabhängig vom Paketordner unter %LocalAppData%\PhotoViewerV3
+    („winget install Gyan.FFmpeg“). Daten liegen unabhängig vom Paketordner unter %LocalAppData%\Lumora
     (bzw. im Ordner aus database-location.json) — der Ordnername bleibt trotz des Produktnamens Lumora (ADR-0047).
 
 .PARAMETER Runtime
@@ -41,7 +41,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
-$project = Join-Path $repo 'src\PhotoViewerV3.Wpf\PhotoViewerV3.Wpf.csproj'
+$project = Join-Path $repo 'src\Lumora.Wpf\Lumora.Wpf.csproj'
 $changelog = Join-Path $repo 'CHANGELOG.md'
 if (-not $OutputRoot) { $OutputRoot = Join-Path $repo 'artifacts' }
 

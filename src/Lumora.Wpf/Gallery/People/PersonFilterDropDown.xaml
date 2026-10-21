@@ -1,0 +1,195 @@
+<UserControl x:Class="Lumora.Gallery.People.PersonFilterDropDown"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:conv="clr-namespace:Lumora.Gallery.Converters"
+             xmlns:gc="clr-namespace:Lumora.Gallery.Controls"
+             xmlns:local="clr-namespace:Lumora.Gallery.People"
+             x:Name="Root"
+             Focusable="False">
+    <!--
+        Chip „Personen: …“ in der Zeile „Inhalt“ (0.2.43, Mockup 06; Filter seit 0.2.38). Flyout „Was soll auf dem Foto
+        sein?“: eine der gewählten / alle gewählten zusammen / keine benannte Person / unbenannte Gesichter / irgendein
+        Gesicht, Suche über die Personen, je Person ein Häkchen mit Zähler, „Auch Vorschläge mitzählen“, „Leeren“, „Fertig“.
+        Nur bestätigte Gesichter zählen als Person, solange „Auch Vorschläge“ aus ist. Bei Modi ohne Personenwahl ist die
+        Liste gedimmt (die Häkchen bleiben erhalten). DataContext = GalleryViewModel (PersonFilterEntries, PersonFilterMode,
+        PersonFilterIncludeSuggestions, PersonFilterValueText, HasPeopleFilter, ApplyPersonFilterCommand, ClearPeopleFilterCommand).
+        Seit 0.2.47 (ADR-0045): Suche findet Vor-/Nachname, Rufname und Beziehung; Abschnitt „Beziehung“ (RelationFilterEntries,
+        ApplyRelationFilterCommand) — UND-verknüpft mit den Personen und allen anderen Filtern.
+    -->
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="../Controls/GalleryFilterStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <BooleanToVisibilityConverter x:Key="BoolToVis" />
+            <conv:InverseBoolToVisibilityConverter x:Key="InvBoolToVis" />
+            <conv:EnumEqualsConverter x:Key="EnumEquals" />
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <Grid>
+        <ToggleButton x:Name="Toggle"
+                      Style="{StaticResource GalleryFilterChip}"
+                      AutomationProperties.AutomationId="GalleryPersonFilterButton"
+                      AutomationProperties.Name="{Binding PersonFilterValueText, StringFormat='Personen-Filter: {0}'}"
+                      ToolTip="{Binding PersonFilterText}"
+                      gc:FilterChip.IsActive="{Binding HasPeopleFilter}"
+                      IsChecked="{Binding IsOpen, ElementName=FilterPopup, Mode=TwoWay}">
+            <StackPanel Orientation="Horizontal">
+                <ui:SymbolIcon Symbol="People24" FontSize="13" Margin="0,0,6,0" />
+                <TextBlock Text="Personen:" Style="{StaticResource GalleryChipLabel}" />
+                <TextBlock Text="{Binding PersonFilterValueText}" MaxWidth="240" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                <ui:SymbolIcon Symbol="ChevronDown24" FontSize="10" Margin="6,0,0,0" />
+            </StackPanel>
+        </ToggleButton>
+
+        <Popup x:Name="FilterPopup"
+               PlacementTarget="{Binding ElementName=Toggle}"
+               Placement="Bottom"
+               StaysOpen="False"
+               AllowsTransparency="True"
+               PopupAnimation="Fade"
+               Closed="OnPopupClosed">
+            <Border Style="{StaticResource GalleryFlyoutBorder}" Width="320" MaxHeight="560">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Top">
+                        <TextBlock Text="WAS SOLL AUF DEM FOTO SEIN?" Style="{StaticResource GalleryFlyoutHeading}" />
+                        <RadioButton GroupName="PersonMode" Margin="0,2"
+                                     AutomationProperties.Name="Eine der gewählten Personen"
+                                     IsChecked="{Binding PersonFilterMode, Converter={StaticResource EnumEquals}, ConverterParameter=Any}">
+                            <StackPanel>
+                                <TextBlock Text="Eine der gewählten Personen" />
+                                <TextBlock Text="z. B. Anna oder Ben" Style="{StaticResource GalleryFlyoutHint}" />
+                            </StackPanel>
+                        </RadioButton>
+                        <RadioButton GroupName="PersonMode" Margin="0,2"
+                                     AutomationProperties.Name="Alle gewählten Personen zusammen"
+                                     IsChecked="{Binding PersonFilterMode, Converter={StaticResource EnumEquals}, ConverterParameter=All}">
+                            <StackPanel>
+                                <TextBlock Text="Alle gewählten Personen zusammen" />
+                                <TextBlock Text="Anna und Ben auf demselben Foto" Style="{StaticResource GalleryFlyoutHint}" />
+                            </StackPanel>
+                        </RadioButton>
+                        <Border Style="{StaticResource GalleryFlyoutDivider}" />
+                        <RadioButton GroupName="PersonMode" Margin="0,2"
+                                     AutomationProperties.Name="Keine benannte Person"
+                                     IsChecked="{Binding PersonFilterMode, Converter={StaticResource EnumEquals}, ConverterParameter=NoPerson}">
+                            <StackPanel>
+                                <TextBlock Text="Keine benannte Person" />
+                                <TextBlock Text="nur Fotos ohne bestätigte Person" Style="{StaticResource GalleryFlyoutHint}" />
+                            </StackPanel>
+                        </RadioButton>
+                        <RadioButton GroupName="PersonMode" Margin="0,2"
+                                     AutomationProperties.Name="Unbenannte Gesichter"
+                                     IsChecked="{Binding PersonFilterMode, Converter={StaticResource EnumEquals}, ConverterParameter=UnnamedFaces}">
+                            <StackPanel>
+                                <TextBlock Text="Unbenannte Gesichter" />
+                                <TextBlock Text="noch zu benennen" Style="{StaticResource GalleryFlyoutHint}" />
+                            </StackPanel>
+                        </RadioButton>
+                        <!-- 0.2.39: jedes erkannte, nicht ignorierte Gesicht (benannt, Vorschlag oder unbenannt) -->
+                        <RadioButton GroupName="PersonMode" Margin="0,2"
+                                     AutomationProperties.Name="Irgendein Gesicht"
+                                     ToolTip="Fotos mit mindestens einem erkannten Gesicht — ignorierte Gesichter zählen nicht"
+                                     IsChecked="{Binding PersonFilterMode, Converter={StaticResource EnumEquals}, ConverterParameter=AnyFace}">
+                            <StackPanel>
+                                <TextBlock Text="Irgendein Gesicht" />
+                                <TextBlock Text="benannt, vorgeschlagen oder unbenannt" Style="{StaticResource GalleryFlyoutHint}" />
+                            </StackPanel>
+                        </RadioButton>
+                        <Border Style="{StaticResource GalleryFlyoutDivider}" />
+                        <ui:TextBox x:Name="SearchBox"
+                                    Margin="0,0,0,6"
+                                    PlaceholderText="Person suchen (Name, Rufname, Beziehung)"
+                                    Icon="{ui:SymbolIcon Search24}"
+                                    ClearButtonEnabled="True"
+                                    AutomationProperties.Name="Person suchen"
+                                    TextChanged="OnSearchTextChanged"
+                                    Visibility="{Binding HasPersons, Converter={StaticResource BoolToVis}}" />
+                        <TextBlock TextWrapping="Wrap"
+                                   Text="Noch keine Personen — Gesichter benennen auf der Seite „Personen“ oder in der Lightbox (Taste F)."
+                                   FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   Visibility="{Binding HasPersons, Converter={StaticResource InvBoolToVis}}" />
+                    </StackPanel>
+
+                    <StackPanel DockPanel.Dock="Bottom">
+                        <!-- Beziehung (0.2.47, ADR-0045): eine der gewählten Beziehungen, UND mit den Personen oben -->
+                        <StackPanel Visibility="{Binding HasRelations, Converter={StaticResource BoolToVis}}">
+                            <Border Style="{StaticResource GalleryFlyoutDivider}" />
+                            <TextBlock Text="BEZIEHUNG" Style="{StaticResource GalleryFlyoutHeading}" />
+                            <ScrollViewer MaxHeight="120" VerticalScrollBarVisibility="Auto">
+                                <ItemsControl x:Name="RelationList" ItemsSource="{Binding RelationFilterEntries}"
+                                              AutomationProperties.Name="Beziehungen">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type local:RelationFilterEntry}">
+                                            <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                      Margin="0,1,10,1"
+                                                      AutomationProperties.Name="{Binding Name, StringFormat='Beziehung {0}'}"
+                                                      Command="{Binding DataContext.ApplyRelationFilterCommand, ElementName=Root}">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                                                    <TextBlock Text="{Binding CountText}" Margin="6,0,0,0" FontSize="11" VerticalAlignment="Center"
+                                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                                                </StackPanel>
+                                            </CheckBox>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                            <TextBlock Text="Fotos mit einer Person dieser Beziehung — zusammen mit den Personen oben"
+                                       Style="{StaticResource GalleryFlyoutHint}" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <CheckBox Margin="0,6,0,0"
+                                  Content="Auch Vorschläge mitzählen"
+                                  ToolTip="Vorgeschlagene, noch nicht bestätigte Personen zählen mit"
+                                  IsChecked="{Binding PersonFilterIncludeSuggestions, Mode=TwoWay}"
+                                  AutomationProperties.Name="Auch Vorschläge mitzählen" />
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+                            <ui:Button Content="Leeren" ToolTip="Personen- und Beziehungs-Filter aufheben" Command="{Binding ClearPeopleFilterCommand}" Click="OnCloseClick" Margin="0,0,6,0" />
+                            <ui:Button Content="Fertig" Appearance="Primary" Click="OnCloseClick" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <ItemsControl x:Name="PersonList" ItemsSource="{Binding PersonFilterEntries}">
+                            <ItemsControl.Style>
+                                <Style TargetType="ItemsControl">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding PersonFilterMode}" Value="NoPerson">
+                                            <Setter Property="Opacity" Value="0.45" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding PersonFilterMode}" Value="UnnamedFaces">
+                                            <Setter Property="Opacity" Value="0.45" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding PersonFilterMode}" Value="AnyFace">
+                                            <Setter Property="Opacity" Value="0.45" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </ItemsControl.Style>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type local:PersonFilterEntry}">
+                                    <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                              Margin="0,1"
+                                              AutomationProperties.Name="{Binding Name}"
+                                              Command="{Binding DataContext.ApplyPersonFilterCommand, ElementName=Root}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                                            <TextBlock Text="{Binding CountText}" Margin="6,0,0,0" FontSize="11" VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                                        </StackPanel>
+                                    </CheckBox>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </Popup>
+    </Grid>
+</UserControl>

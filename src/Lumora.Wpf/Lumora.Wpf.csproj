@@ -1,0 +1,59 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>Lumora</RootNamespace>
+    <!-- Produktname „Lumora“ seit 0.2.49 (ADR-0047): Programmdatei Lumora.exe, Produkt/Titel/Dateibeschreibung „Lumora“.
+         Seit 0.4.3 heißen auch Projekte und Namespaces Lumora.* (ADR-0056); XAML verweist weiter nie per Assembly-Namen
+         auf eigene Ressourcen, sondern relativ (LumoraBrandingTests wacht darüber). -->
+    <AssemblyName>Lumora</AssemblyName>
+    <Product>Lumora</Product>
+    <AssemblyTitle>Lumora</AssemblyTitle>
+    <ApplicationIcon Condition="Exists('Shell\Branding\Lumora.ico')">Shell\Branding\Lumora.ico</ApplicationIcon>
+    <!-- App-Version (Einstellungen → „Über“, Datei-/Produktversion der EXE) = oberster Eintrag „## [x.y.z]“ in
+         CHANGELOG.md, der Versionsquelle des Commit-Profils; so muss sie nicht je Commit nachgezogen werden.
+         Ohne Git-Revisions-Suffix. build/publish.ps1 prüft, dass die veröffentlichte EXE dieselbe Version trägt. -->
+    <ChangelogFile>$(MSBuildThisFileDirectory)..\..\CHANGELOG.md</ChangelogFile>
+    <Version Condition="Exists('$(ChangelogFile)')">$([System.Text.RegularExpressions.Regex]::Match($([System.IO.File]::ReadAllText('$(ChangelogFile)')), '(?m)(?&lt;=^## \[)\d+\.\d+\.\d+(?=\])').Value)</Version>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Lumora.Wpf.Tests" />
+  </ItemGroup>
+
+  <!-- Einstellungen › Info → „Änderungsprotokoll“ (ADR-0042): CHANGELOG.md neben die EXE (Debug-Ausgabe und portables Paket) -->
+  <ItemGroup>
+    <None Include="$(ChangelogFile)" Link="CHANGELOG.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Visible="false" />
+  </ItemGroup>
+
+  <!-- App-Symbol (ADR-0047): Lumora.ico wird mit build/make-icon.ps1 aus Shell/Branding/LumoraIcon.xaml erzeugt und
+       eingecheckt; eingebettet für Window.Icon (LumoraAppIcon). -->
+  <ItemGroup Condition="Exists('Shell\Branding\Lumora.ico')">
+    <EmbeddedResource Include="Shell\Branding\Lumora.ico" LogicalName="Lumora.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Lumora.Domain\Lumora.Domain.csproj" />
+    <ProjectReference Include="..\Lumora.Data\Lumora.Data.csproj" />
+    <ProjectReference Include="..\Lumora.Services\Lumora.Services.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="WPF-UI" />
+    <PackageReference Include="LibVLCSharp.WPF" />
+    <PackageReference Include="VideoLAN.LibVLC.Windows" />
+    <PackageReference Include="Serilog.Extensions.Hosting" />
+    <PackageReference Include="Serilog.Sinks.File" />
+    <PackageReference Include="Serilog.Sinks.Console" />
+  </ItemGroup>
+
+</Project>

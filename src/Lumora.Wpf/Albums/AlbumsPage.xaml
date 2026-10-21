@@ -1,0 +1,198 @@
+<UserControl x:Class="Lumora.Albums.AlbumsPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:shell="clr-namespace:Lumora.Shell"
+             xmlns:local="clr-namespace:Lumora.Albums"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance local:AlbumsViewModel}"
+             d:DesignWidth="1100"
+             d:DesignHeight="700">
+    <!-- Seite „Alben“ (ADR-0054): Kacheln mit Titelbild und Anzahl; Klick öffnet das Album in der Galerie, Rechtsklick
+         umbenennen / Titelbild zurücksetzen / exportieren / löschen. Wenige Kacheln — WrapPanel ohne Virtualisierung. -->
+    <UserControl.Resources>
+        <shell:BoolToVisibilityConverter x:Key="BoolToVis" />
+        <shell:BoolToVisibilityConverter x:Key="InverseBoolToVis" Invert="True" />
+        <shell:NullToVisibilityConverter x:Key="NullToVis" />
+        <shell:NullToBoolConverter x:Key="NullToBool" />
+
+        <DataTemplate x:Key="AlbumTile" DataType="{x:Type local:AlbumTileViewModel}">
+            <Button Margin="6"
+                    Width="232"
+                    Padding="0"
+                    Cursor="Hand"
+                    HorizontalContentAlignment="Stretch"
+                    VerticalContentAlignment="Stretch"
+                    AutomationProperties.Name="{Binding Name}"
+                    AutomationProperties.HelpText="{Binding CountText}"
+                    ToolTip="{Binding FilterText}"
+                    Command="{Binding DataContext.OpenAlbumCommand, RelativeSource={RelativeSource AncestorType={x:Type local:AlbumsPage}}}"
+                    CommandParameter="{Binding}"
+                    Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType={x:Type local:AlbumsPage}}}">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Frame" CornerRadius="8" BorderThickness="1" Padding="0"
+                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource ControlStrongStrokeColorDefaultBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Button.Template>
+                <Button.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="Öffnen" Icon="{ui:SymbolIcon Open24}"
+                                  Command="{Binding PlacementTarget.Tag.OpenAlbumCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding}" />
+                        <MenuItem Header="Umbenennen…" Icon="{ui:SymbolIcon Rename24}"
+                                  Command="{Binding PlacementTarget.Tag.RenameAlbumCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding}" />
+                        <MenuItem Header="Titelbild zurücksetzen" Icon="{ui:SymbolIcon ImageMultiple24}"
+                                  ToolTip="Wieder das neueste Foto als Titelbild (ein eigenes wählst du in der Galerie: „Als Titelbild des Albums“)"
+                                  Command="{Binding PlacementTarget.Tag.ResetCoverCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding}" />
+                        <MenuItem Header="Album exportieren…" Icon="{ui:SymbolIcon ArrowExportUp24}"
+                                  ToolTip="Die Dateien des Albums als echte Kopien in einen Ordner kopieren"
+                                  Command="{Binding PlacementTarget.Tag.ExportAlbumCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding}" />
+                        <Separator />
+                        <MenuItem Header="Album löschen…" Icon="{ui:SymbolIcon Delete24}"
+                                  ToolTip="Nur das Album — die Fotos bleiben"
+                                  Command="{Binding PlacementTarget.Tag.DeleteAlbumCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding}" />
+                    </ContextMenu>
+                </Button.ContextMenu>
+                <StackPanel>
+                    <Grid Height="160" ClipToBounds="True">
+                        <Border CornerRadius="8,8,0,0" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+                            <ui:SymbolIcon Symbol="Album24" FontSize="48" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                        </Border>
+                        <Image Source="{Binding Image}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"
+                               Visibility="{Binding Image, Converter={StaticResource NullToVis}}">
+                            <Image.Clip>
+                                <RectangleGeometry Rect="0,0,230,160" RadiusX="8" RadiusY="8" />
+                            </Image.Clip>
+                        </Image>
+                        <Border Margin="8" Padding="6,2" CornerRadius="10" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                Background="#B3000000"
+                                Visibility="{Binding IsSmart, Converter={StaticResource BoolToVis}}">
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="Sparkle16" FontSize="11" Foreground="White" Margin="0,0,4,0" />
+                                <TextBlock Text="Intelligent" FontSize="10" FontWeight="SemiBold" Foreground="White" />
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                    <StackPanel Margin="12,8,12,10">
+                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding CountText}" FontSize="12" Margin="0,2,0,0"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                </StackPanel>
+            </Button>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Grid Margin="24,16,24,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Kopf: Titel, Zähler, Neues Album -->
+        <Grid Grid.Row="0" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+                <ui:TextBlock FontTypography="Title" Text="Alben" />
+                <TextBlock Text="{Binding SummaryText}" FontSize="13" Margin="0,2,0,0"
+                           AutomationProperties.AutomationId="AlbumsSummary"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+            </StackPanel>
+            <ui:Button Grid.Column="1" VerticalAlignment="Center"
+                       Appearance="Primary"
+                       Icon="{ui:SymbolIcon AlbumAdd24}"
+                       Content="Neues Album…"
+                       AutomationProperties.AutomationId="AlbumsCreate"
+                       Command="{Binding CreateAlbumCommand}" />
+        </Grid>
+
+        <!-- Erklärung: verknüpfen statt kopieren -->
+        <Border Grid.Row="1" Margin="0,0,0,12" Padding="14,10" CornerRadius="8" BorderThickness="1"
+                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}">
+            <StackPanel Orientation="Horizontal">
+                <ui:SymbolIcon Symbol="Link24" FontSize="16" Margin="0,0,10,0" VerticalAlignment="Top"
+                               Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                <TextBlock TextWrapping="Wrap" FontSize="13" MaxWidth="900">
+                    <Run Text="Alben verknüpfen Fotos nur — jedes Foto liegt weiter genau einmal in seinem Ordner. Fotos hinzufügen: in der Galerie Rechtsklick „Zu Album hinzufügen“, Aktionsleiste „Album“ oder Strg+L. Intelligente Alben: in der Galerie Filter setzen und „Als Album speichern…“ — sie füllen sich selbst." />
+                </TextBlock>
+            </StackPanel>
+        </Border>
+
+        <StackPanel Grid.Row="2">
+            <ui:InfoBar Message="{Binding ErrorText}" Severity="Error" IsClosable="False" Margin="0,0,0,8"
+                        IsOpen="{Binding ErrorText, Converter={StaticResource NullToBool}, Mode=OneWay}"
+                        Visibility="{Binding ErrorText, Converter={StaticResource NullToVis}}" />
+            <ui:InfoBar Message="{Binding StatusText}" Severity="Success" IsClosable="False" Margin="0,0,0,8"
+                        AutomationProperties.AutomationId="AlbumsStatus"
+                        IsOpen="{Binding StatusText, Converter={StaticResource NullToBool}, Mode=OneWay}"
+                        Visibility="{Binding StatusText, Converter={StaticResource NullToVis}}" />
+            <!-- Export: Fortschritt + Abbrechen -->
+            <Border Margin="0,0,0,8" Padding="14,10" CornerRadius="8" BorderThickness="1"
+                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                    Visibility="{Binding IsExporting, Converter={StaticResource BoolToVis}}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="{Binding ExportText}" FontSize="13" />
+                        <ProgressBar Margin="0,6,0,0" Height="4" Minimum="0" Maximum="100" Value="{Binding ExportProgress}" />
+                    </StackPanel>
+                    <ui:Button Grid.Column="1" Margin="12,0,0,0" Content="Abbrechen" Command="{Binding CancelExportCommand}" />
+                </Grid>
+            </Border>
+        </StackPanel>
+
+        <Grid Grid.Row="3">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" Focusable="False">
+                <ItemsControl ItemsSource="{Binding Albums}" ItemTemplate="{StaticResource AlbumTile}" Focusable="False"
+                              AutomationProperties.AutomationId="AlbumsList">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="440"
+                        Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVis}}">
+                <ui:SymbolIcon Symbol="Album24" FontSize="48" HorizontalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                <ui:TextBlock FontTypography="Subtitle" Text="Noch keine Alben" TextAlignment="Center" Margin="0,12,0,4" />
+                <TextBlock TextWrapping="Wrap" TextAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Text="Lege ein Album an und füge in der Galerie Fotos hinzu — oder speichere einen Galerie-Filter als intelligentes Album." />
+            </StackPanel>
+
+            <ui:ProgressRing IsIndeterminate="True" Width="28" Height="28" VerticalAlignment="Top" Margin="0,24,0,0"
+                             Visibility="{Binding IsLoading, Converter={StaticResource BoolToVis}}" />
+        </Grid>
+    </Grid>
+</UserControl>

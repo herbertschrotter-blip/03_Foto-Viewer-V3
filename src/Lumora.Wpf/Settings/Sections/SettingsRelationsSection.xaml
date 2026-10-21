@@ -1,0 +1,76 @@
+<UserControl x:Class="Lumora.Settings.Sections.SettingsRelationsSection"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:rel="clr-namespace:Lumora.Settings.PersonRelations"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance rel:PersonRelationsSettingsViewModel}"
+             d:DesignWidth="1000">
+    <!-- Einstellungen › Gesichter › „Personen & Beziehungen“ (0.2.47, ADR-0045). DataContext = PersonRelationsSettingsViewModel. -->
+    <UserControl.Resources>
+        <ResourceDictionary Source="SettingsStyles.xaml" />
+    </UserControl.Resources>
+
+    <Border Style="{StaticResource SectionCard}" AutomationProperties.Name="Personen und Beziehungen">
+        <StackPanel>
+            <ui:TextBlock Style="{StaticResource SectionTitle}" Text="Personen &amp; Beziehungen" />
+            <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,8"
+                       Text="Beziehungen tippst du beim Benennen einer Person selbst ein (z. B. „Schwester“, „Cousin mütterlicherseits“, „Taufpate“); bereits verwendete werden vorgeschlagen. Hier benennst du sie um (gilt für alle Personen, Suche und Filter), führst Doppelte zusammen oder löschst sie — die Personen behalten dann eine leere Beziehung." />
+
+            <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,4"
+                       Text="Noch keine Beziehungen — sie entstehen beim Benennen oder Bearbeiten einer Person (Seite „Personen“)."
+                       Visibility="{Binding HasRelations, Converter={StaticResource InvBoolToVis}}" />
+
+            <ListBox MaxWidth="560" MaxHeight="260" HorizontalAlignment="Left" MinWidth="360"
+                     ItemsSource="{Binding Relations}"
+                     SelectedItem="{Binding SelectedRelation, Mode=TwoWay}"
+                     Visibility="{Binding HasRelations, Converter={StaticResource BoolToVis}}"
+                     AutomationProperties.Name="Beziehungen">
+                <ListBox.ItemTemplate>
+                    <DataTemplate DataType="{x:Type rel:PersonRelationRow}">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Right" Text="{Binding CountText}" Margin="16,0,0,0" FontSize="12"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                        </DockPanel>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
+            <WrapPanel Margin="0,8,0,0" Visibility="{Binding HasRelations, Converter={StaticResource BoolToVis}}">
+                <ui:Button Content="Umbenennen…" Icon="{ui:SymbolIcon Rename24}" Margin="0,0,8,4"
+                           Command="{Binding RenameCommand}"
+                           AutomationProperties.Name="Beziehung umbenennen" />
+                <ui:Button Content="Löschen…" Icon="{ui:SymbolIcon Delete24}" Margin="0,0,16,4"
+                           Command="{Binding DeleteCommand}"
+                           AutomationProperties.Name="Beziehung löschen" />
+                <TextBlock Text="Zusammenführen mit" VerticalAlignment="Center" Margin="0,0,8,4" />
+                <ComboBox MinWidth="180" Margin="0,0,8,4"
+                          ItemsSource="{Binding MergeTargets}"
+                          DisplayMemberPath="Name"
+                          SelectedItem="{Binding MergeTarget, Mode=TwoWay}"
+                          AutomationProperties.Name="Ziel-Beziehung zum Zusammenführen" />
+                <ui:Button Content="Zusammenführen" Icon="{ui:SymbolIcon Merge24}" Margin="0,0,0,4"
+                           Command="{Binding MergeCommand}"
+                           AutomationProperties.Name="Beziehungen zusammenführen" />
+            </WrapPanel>
+
+            <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
+                       Text="{Binding Message}"
+                       Visibility="{Binding Message, Converter={StaticResource NullToVis}}">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding MessageIsError}" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+        </StackPanel>
+    </Border>
+</UserControl>

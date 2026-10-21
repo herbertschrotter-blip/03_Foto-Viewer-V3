@@ -1,6 +1,6 @@
 # ADR-0047: Produktname Lumora mit Schriftzug und App-Symbol
 
-- **Status:** Accepted
+- **Status:** Accepted (Punkt 3 „Bewusst NICHT umbenannt“ ersetzt durch ADR-0056, 0.4.3)
 - **Datum:** 2026-10-21
 - **Entscheider:** Herbert Schrotter (Name „Lumora“ und Design „Gewählt · A + B + C“ in Mockup 07),
   Claude (Umsetzung und Detailentscheidungen ohne Rückfrage, siehe unten)

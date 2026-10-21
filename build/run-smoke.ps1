@@ -5,22 +5,22 @@
 
 .DESCRIPTION
     Kopiert die Testbibliothek in einen frischen Arbeitsordner (der Rauchtest verschiebt/löscht dort Dateien), startet
-    die EXE mit eigenem AppData-Root (PHOTOVIEWERV3_APPDATA, frische DB) und den Rauchtest-Variablen, wartet auf das
+    die EXE mit eigenem AppData-Root (LUMORA_APPDATA, frische DB) und den Rauchtest-Variablen, wartet auf das
     Ende (Timeout → Kill) und gibt smoke-result.txt sowie einen Log-Auszug aus. Keine Maus-/Tastatureingaben.
     ExitCode des Skripts: 0 = alle Schritte OK, 1 = Fehler/Timeout.
 
 .PARAMETER Exe
     Pfad zur Lumora.exe (bis 0.2.48 PhotoViewerV3.exe), z. B. artifacts\Lumora-0.2.49-win-x64\Lumora.exe oder
-    src\PhotoViewerV3.Wpf\bin\Debug\net10.0-windows\Lumora.exe.
+    src\Lumora.Wpf\bin\Debug\net10.0-windows\Lumora.exe.
 
 .PARAMETER TestLib
     Ordner der Testbibliothek (wird nur gelesen; mindestens 6 Dateien).
 
 .PARAMETER WorkDir
-    Arbeitsordner für Bibliothekskopie, AppData und Screenshots; Standard: %TEMP%\PhotoViewerV3-smoke-<Tag>.
+    Arbeitsordner für Bibliothekskopie, AppData und Screenshots; Standard: %TEMP%\Lumora-smoke-<Tag>.
 
 .PARAMETER NoShots
-    Keine PNG-Screenshots der Hauptansichten (PHOTOVIEWERV3_SMOKE_SHOTS bleibt leer).
+    Keine PNG-Screenshots der Hauptansichten (LUMORA_SMOKE_SHOTS bleibt leer).
 
 .EXAMPLE
     pwsh -File build\run-smoke.ps1 -Exe artifacts\Lumora-0.2.49-win-x64\Lumora.exe -TestLib D:\testlib
@@ -40,7 +40,7 @@ $exePath = (Resolve-Path -LiteralPath $Exe).Path
 $testlib = (Resolve-Path -LiteralPath $TestLib).Path
 # Prozessname = Dateiname der EXE (Lumora seit 0.2.49, ältere Pakete PhotoViewerV3)
 $processName = [IO.Path]::GetFileNameWithoutExtension($exePath)
-if (-not $WorkDir) { $WorkDir = Join-Path ([IO.Path]::GetTempPath()) "PhotoViewerV3-smoke-$Tag" }
+if (-not $WorkDir) { $WorkDir = Join-Path ([IO.Path]::GetTempPath()) "Lumora-smoke-$Tag" }
 $lib = Join-Path $WorkDir 'lib'
 $appdata = Join-Path $WorkDir 'appdata'
 $shots = Join-Path $WorkDir 'shots'
@@ -74,11 +74,15 @@ Write-Output "Testbibliothek: $lib ($count Dateien)"
 New-Item -ItemType Directory -Force -Path $appdata | Out-Null
 if (-not $NoShots) { New-Item -ItemType Directory -Force -Path $shots | Out-Null }
 
-$env:PHOTOVIEWERV3_APPDATA = $appdata
-$env:PHOTOVIEWERV3_SMOKE_ROOT = $lib
-$env:PHOTOVIEWERV3_SMOKE_SHOTS = if ($NoShots) { '' } else { $shots }
-$env:PHOTOVIEWERV3_SMOKE_EXIT = '1'
-$env:PHOTOVIEWERV3_SMOKE_CLEANUP = '0'
+$env:LUMORA_APPDATA = $appdata
+$env:LUMORA_SMOKE_ROOT = $lib
+$env:LUMORA_SMOKE_SHOTS = if ($NoShots) { '' } else { $shots }
+$env:LUMORA_SMOKE_EXIT = '1'
+$env:LUMORA_SMOKE_CLEANUP = '0'
+# Ältere Pakete (bis 0.4.2) lesen nur die alten Namen — mitsetzen, sonst nähmen sie den echten Katalog (ADR-0056)
+foreach ($name in 'APPDATA', 'SMOKE_ROOT', 'SMOKE_SHOTS', 'SMOKE_EXIT', 'SMOKE_CLEANUP') {
+    [Environment]::SetEnvironmentVariable("PHOTOVIEWERV3_$name", [Environment]::GetEnvironmentVariable("LUMORA_$name"))
+}
 
 $stdout = Join-Path $appdata 'stdout.txt'
 $stderr = Join-Path $appdata 'stderr.txt'
@@ -99,7 +103,7 @@ $result = Join-Path $appdata 'smoke-result.txt'
 Write-Output "`n== smoke-result.txt =="
 if (Test-Path -LiteralPath $result) { Get-Content -LiteralPath $result } else { Write-Output '(keine Ergebnisdatei)' }
 
-$log = Get-ChildItem (Join-Path $appdata 'logs') -Filter 'photoviewer-*.log' -ErrorAction SilentlyContinue |
+$log = Get-ChildItem (Join-Path $appdata 'logs') -Filter 'lumora-*.log' -ErrorAction SilentlyContinue |
     Sort-Object LastWriteTime | Select-Object -Last 1
 if ($log) {
     $lines = Get-Content -LiteralPath $log.FullName

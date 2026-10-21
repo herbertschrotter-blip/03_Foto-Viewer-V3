@@ -1,0 +1,86 @@
+<UserControl x:Class="Lumora.Settings.Sections.SettingsHiddenLibrariesSection"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:hidden="clr-namespace:Lumora.Shell.HiddenLibraries"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance hidden:HiddenLibrariesViewModel}"
+             d:DesignWidth="1000">
+    <!-- Einstellungen › Versteckte Bibliotheken (ADR-0049) — der Reiter existiert nur mit Startschalter „_hidden“.
+         DataContext = HiddenLibrariesViewModel. -->
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="SettingsStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Style="{StaticResource SectionPanel}">
+            <TextBlock Style="{StaticResource Lead}"
+                       Text="Bibliotheken in einem verschlüsselten Container (VeraCrypt oder BitLocker-VHDX) mit eigenem Katalog — sichtbar nur, wenn Lumora mit „_hidden“ gestartet wurde." />
+
+            <!-- Geöffnete versteckte Bibliothek -->
+            <Border Style="{StaticResource SectionCard}" Visibility="{Binding IsHiddenSessionActive, Converter={StaticResource BoolToVisibility}}">
+                <StackPanel>
+                    <ui:TextBlock Style="{StaticResource SectionTitle}" Text="{Binding ActiveLibraryName}" />
+                    <TextBlock Style="{StaticResource Hint}" Text="{Binding ActiveLocationText}" />
+                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                        <TextBlock VerticalAlignment="Center" Text="Automatisch zusperren nach" Margin="0,0,8,0" />
+                        <ComboBox Width="90" ItemsSource="{Binding AutoLockChoices}" SelectedItem="{Binding AutoLockMinutes, Mode=TwoWay}"
+                                  AutomationProperties.Name="Automatisch zusperren nach Minuten" />
+                        <TextBlock VerticalAlignment="Center" Text="Minuten ohne Maus/Tastatur in Lumora" Margin="8,0,0,0" />
+                    </StackPanel>
+                    <ui:ToggleSwitch Margin="0,12,0,0" Content="Container beim Zusperren und Beenden aushängen"
+                                     IsChecked="{Binding DismountOnLock, Mode=TwoWay}"
+                                     AutomationProperties.Name="Container beim Zusperren und Beenden aushängen" />
+                    <TextBlock Style="{StaticResource Hint}" Margin="0,8,0,0"
+                               Text="Gespeichert in der versteckten Bibliothek selbst (.lumora), nie in den normalen Einstellungen. Aushängen klappt bei VeraCrypt und BitLocker-VHDX; sonst erscheint ein Hinweis." />
+                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                        <ui:Button Appearance="Primary" Content="Jetzt zusperren" Command="{Binding LockCommand}"
+                                   Icon="{ui:SymbolIcon LockClosed24}" AutomationProperties.Name="Jetzt zusperren" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Normale Sitzung: gefundene Bibliotheken, Anlegen, Container -->
+            <Border Style="{StaticResource SectionCard}" Visibility="{Binding IsNormalSession, Converter={StaticResource BoolToVisibility}}">
+                <StackPanel>
+                    <ui:TextBlock Style="{StaticResource SectionTitle}" Text="Gefundene versteckte Bibliotheken" />
+                    <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,8"
+                               Text="Lumora sucht auf allen eingehängten lokalen Laufwerken (Wurzel und eine Ebene darunter) nach „.lumora“-Ordnern und merkt sich nichts davon." />
+                    <ItemsControl ItemsSource="{Binding Found}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                        <TextBlock Text="{Binding DriveRoot}" FontSize="11" Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                                    </StackPanel>
+                                    <ui:Button Grid.Column="1" Content="Öffnen…"
+                                               Command="{Binding DataContext.OpenCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                               CommandParameter="{Binding}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <WrapPanel Margin="0,12,0,0">
+                        <ui:Button Margin="0,0,8,8" Content="Suchen" Command="{Binding RefreshCommand}" Icon="{ui:SymbolIcon Search24}" />
+                        <ui:Button Margin="0,0,8,8" Content="Versteckte Bibliothek anlegen…" Command="{Binding CreateCommand}" Icon="{ui:SymbolIcon Add24}" />
+                        <ui:Button Margin="0,0,8,8" Content="Container öffnen…" Command="{Binding MountContainerCommand}" Icon="{ui:SymbolIcon LockOpen24}" />
+                    </WrapPanel>
+                    <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0"
+                               Text="Hinweise: Container nie in OneDrive ablegen. „_hidden“ nicht in eine sichtbare Verknüpfung legen. Lumora verschlüsselt selbst nichts — Katalog, Vorschaubilder, Gesichter und Protokolle liegen im Container. Kennwort vergessen: im eingehängten Container „.lumora\reset-password.txt“ anlegen." />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

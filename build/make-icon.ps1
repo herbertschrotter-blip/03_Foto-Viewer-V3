@@ -1,7 +1,7 @@
 #Requires -Version 7
 <#
 .SYNOPSIS
-    Erzeugt src\PhotoViewerV3.Wpf\Shell\Branding\Lumora.ico neu aus der Vektor-Quelle LumoraIcon.xaml (ADR-0047).
+    Erzeugt src\Lumora.Wpf\Shell\Branding\Lumora.ico neu aus der Vektor-Quelle LumoraIcon.xaml (ADR-0047).
 
 .DESCRIPTION
     Rendert das App-Symbol in 16, 20, 24, 32, 40, 48, 64, 96, 128 und 256 px (unter 32 px die vereinfachte Variante)
@@ -17,7 +17,7 @@
 param()
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
-$tests = Join-Path $repo 'tests\PhotoViewerV3.Wpf.Tests'
+$tests = Join-Path $repo 'tests\Lumora.Wpf.Tests'
 
 $env:LUMORA_WRITE_ICON = '1'
 try {
@@ -28,5 +28,5 @@ finally {
     Remove-Item Env:\LUMORA_WRITE_ICON -ErrorAction SilentlyContinue
 }
 
-$ico = Join-Path $repo 'src\PhotoViewerV3.Wpf\Shell\Branding\Lumora.ico'
+$ico = Join-Path $repo 'src\Lumora.Wpf\Shell\Branding\Lumora.ico'
 Write-Host "Fertig: $ico ($((Get-Item -LiteralPath $ico).Length) Bytes)"

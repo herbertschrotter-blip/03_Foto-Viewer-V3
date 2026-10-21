@@ -8,7 +8,7 @@
       cities5000.zip (oder entpackt cities5000.txt), admin1CodesASCII.txt, countryInfo.txt
     dazu die kuratierten deutschen Namen in diesem Ordner: countries-de.tsv, admin1-de.tsv, cities-de.tsv.
 
-    Ausgabe: UTF-8-TSV, gzip-komprimiert (Standard src/PhotoViewerV3.Services/Places/Data/geonames.tsv.gz):
+    Ausgabe: UTF-8-TSV, gzip-komprimiert (Standard src/Lumora.Services/Places/Data/geonames.tsv.gz):
       # Kopfzeile (Quelle, Lizenz, Anzahl)
       C <Land> <Name deutsch> <Name englisch>
       R <Land.Admin1> <Name> <GeoNames-Name>
@@ -33,7 +33,7 @@ Set-StrictMode -Version Latest
 
 $here = $PSScriptRoot
 $repo = Resolve-Path (Join-Path $here '..\..')
-if (-not $OutFile) { $OutFile = Join-Path $repo 'src\PhotoViewerV3.Services\Places\Data\geonames.tsv.gz' }
+if (-not $OutFile) { $OutFile = Join-Path $repo 'src\Lumora.Services\Places\Data\geonames.tsv.gz' }
 $inv = [System.Globalization.CultureInfo]::InvariantCulture
 $utf8 = [System.Text.UTF8Encoding]::new($false)
 
