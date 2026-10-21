@@ -3,6 +3,14 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.36] — 2026-10-21
+
+### Doku
+- CLAUDE.md: Regel „Keine externen Sample-Assets im Produktivpfad“ um die Ausnahme für Laufzeit-Modelle ergänzt, die der
+  Benutzer nach Bestätigung herunterlädt (buffalo_l; nie ins Repo, nie in die portable Version; ADR-0035).
+- Zusammenführung von 0.2.34 (Erkennen/Index) und 0.2.35 (Lernen/Gruppieren): 578 Services-Tests, 249 WPF-Tests (3×),
+  Gesichter-Tests mit echtem Modell 80/80.
+
 ## [0.2.35] — 2026-10-21
 
 ### Neu (ADR-0036) — Gesichtserkennung Teil 2: Lernen & Gruppieren (nur Services, noch nicht verdrahtet)

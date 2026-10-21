@@ -48,7 +48,7 @@ Branch-Policy: current
 - `FilesFts` ist eine FTS5-External-Content-Tabelle (`content='Files'`, `rowid = Files.Id`) ohne Trigger. Nach INSERT: `INSERT INTO FilesFts(rowid, Name, Extension) …`. Vor DELETE/UPDATE: `INSERT INTO FilesFts(FilesFts, rowid, Name, Extension) VALUES('delete', …)` mit den ALTEN Werten. Notnagel: `INSERT INTO FilesFts(FilesFts) VALUES('rebuild')`.
 - SQLite: WAL, `busy_timeout` 5000; lange Schreibläufe in einer Transaktion; nur eine schreibende Verbindung zur Zeit (Single-Writer, z. B. `SemaphoreSlim`).
 - Datei-Operationen immer mit `OperationBatch` + `FileOperation` protokollieren (ADR-0012); Papierkorb statt Hard-Delete.
-- Keine externen Sample-Assets im Produktivpfad (nur Spike-Code darf laden).
+- Keine externen Sample-Assets im Produktivpfad (nur Spike-Code darf laden). Ausnahme: Laufzeit-Modelle (Gesichtserkennung buffalo_l), die der Benutzer nach Bestätigung selbst herunterlädt — nie ins Repo, nie in die portable Version (Lizenz nur nicht-kommerziell, ADR-0035).
 - Keine `Wpf.Ui.Controls.MessageBox` verwenden (Layout-Schleife bei umbrechendem Text mit Eingabefeld, v0.2.0-Hänger). Dialoge laufen über `IDialogService` bzw. `Shell/Dialogs/AppDialogWindow`.
 - Fenster erben von `Shell/Dialogs/AppFluentWindow` statt direkt von `FluentWindow` (WPF-UI-4-TitleBar wirft sonst „Hwnd mit dem Wert Null“, wenn ein Fenster vor dem ersten Zeichnen geschlossen wird; 0.2.13).
 - Galerie-Kacheln bleiben im UI-Automation-Baum Blätter (`GalleryListBox`/`GalleryListBoxItem`); viele Vorschaubilder gebündelt mit Background-Priorität an den UI-Thread geben. Sonst blockiert `AutomationPeer.UpdateSubtree` den UI-Thread, sobald ein Automation-Client lauscht (Visual Studio Live Visual Tree).
