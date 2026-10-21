@@ -31,7 +31,7 @@ public sealed class MapTileTests : IDisposable
     {
         var handler = new FakeHandler();
         var now = new DateTime(2026, 10, 21, 12, 0, 0, DateTimeKind.Utc);
-        using var source = new OsmTileSource(new MapTileOptions(), new MapTileDiskCache(_dir, 10_000_000, trimInBackground: false), OsmTileSource.BuildUserAgent("0.2.54"), handler, () => now);
+        using var source = new HttpMapTileSource(new MapTileOptions(), new MapTileDiskCache(_dir, 10_000_000, trimInBackground: false), OsmTileSource.BuildUserAgent("0.2.54"), handler, () => now);
 
         var first = await source.GetTileAsync(new MapTileId(3, 4, 2), CancellationToken.None);
         var second = await source.GetTileAsync(new MapTileId(3, 4, 2), CancellationToken.None);
@@ -57,7 +57,7 @@ public sealed class MapTileTests : IDisposable
     public async Task Hoechstens_zwei_gleichzeitige_Downloads()
     {
         var handler = new FakeHandler { Delay = TimeSpan.FromMilliseconds(80) };
-        using var source = new OsmTileSource(new MapTileOptions(), new MapTileDiskCache(_dir, 10_000_000, trimInBackground: false), "Lumora/test (private use)", handler);
+        using var source = new HttpMapTileSource(new MapTileOptions(), new MapTileDiskCache(_dir, 10_000_000, trimInBackground: false), "Lumora/test (private use)", handler);
 
         await Task.WhenAll(Enumerable.Range(0, 8).Select(i => source.GetTileAsync(new MapTileId(4, i, 3), CancellationToken.None)));
 
@@ -70,7 +70,7 @@ public sealed class MapTileTests : IDisposable
     {
         var handler = new FakeHandler();
         var now = new DateTime(2026, 10, 21, 12, 0, 0, DateTimeKind.Utc);
-        using var source = new OsmTileSource(new MapTileOptions(), new MapTileDiskCache(_dir, 10_000_000, trimInBackground: false), "Lumora/test (private use)", handler, () => now);
+        using var source = new HttpMapTileSource(new MapTileOptions(), new MapTileDiskCache(_dir, 10_000_000, trimInBackground: false), "Lumora/test (private use)", handler, () => now);
         await source.GetTileAsync(new MapTileId(2, 1, 1), CancellationToken.None);
         var changes = 0;
         source.StateChanged += (_, _) => changes++;
@@ -124,7 +124,7 @@ public sealed class MapTileTests : IDisposable
         (await source.GetTileAsync(new MapTileId(0, 0, 0), CancellationToken.None)).Should().BeNull();
         provider.TryGet(new MapTileId(0, 0, 0)).Should().BeNull();
         provider.State.Should().Be(MapTileSourceState.Disabled);
-        MapTileOptions.FromEnvironment().UrlTemplate.Should().StartWith("https://tile.openstreetmap.org/");
+        MapStyleCatalog.OpenStreetMap.UrlTemplate.Should().StartWith("https://tile.openstreetmap.org/");
     }
 
     private sealed class FakeHandler : HttpMessageHandler

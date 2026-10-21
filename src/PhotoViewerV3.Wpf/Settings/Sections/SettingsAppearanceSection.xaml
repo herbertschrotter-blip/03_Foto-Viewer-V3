@@ -5,6 +5,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:settings="clr-namespace:PhotoViewerV3.Settings"
+             xmlns:local="clr-namespace:PhotoViewerV3.Settings.Sections"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance settings:SettingsViewModel}"
              d:DesignWidth="1000">
@@ -25,9 +26,11 @@
                         <RadioButton Content="System" GroupName="Theme" IsChecked="{Binding IsThemeSystem, Mode=TwoWay}" />
                     </StackPanel>
                     <TextBlock Style="{StaticResource Hint}" Margin="0,8,0,0"
-                               Text="„System“ folgt dem Windows-Farbschema auch während Lumora läuft. Die Vorschaugröße stellst du in der Galerie ein." />
+                               Text="„System“ folgt dem Windows-Farbschema auch während Lumora läuft — der Kartenstil „Automatisch“ ebenso. Die Vorschaugröße stellst du in der Galerie ein." />
                 </StackPanel>
             </Border>
+            <!-- Karte (ADR-0055): Kartenstil und API-Schlüssel; DataContext setzt die SettingsPage -->
+            <local:SettingsMapSection x:Name="MapSection" />
         </StackPanel>
     </ScrollViewer>
 </UserControl>

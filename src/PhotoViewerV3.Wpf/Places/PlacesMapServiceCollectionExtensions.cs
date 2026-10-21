@@ -1,3 +1,5 @@
+using System;
+using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -6,6 +8,7 @@ using PhotoViewerV3.Places.Data;
 using PhotoViewerV3.Places.Dialogs;
 using PhotoViewerV3.Places.Map.Tiles;
 using PhotoViewerV3.Places.Picker;
+using PhotoViewerV3.Places.Styles;
 using PhotoViewerV3.Places.ViewModels;
 using PhotoViewerV3.Services.Infrastructure;
 using PhotoViewerV3.Services.Places;
@@ -31,21 +34,61 @@ public static class PlacesMapServiceCollectionExtensions
         services.TryAddSingleton<IPlacesScope, LibraryScopePlacesScope>();
         services.TryAddSingleton<IMapPrivacyContext, CatalogMapPrivacyContext>();
 
-        // Kartenkacheln: OSM mit Platten-Cache (500 MB, LRU) — abgeschaltet mit PHOTOVIEWERV3_MAP_TILES=off und im Rauchtest
+        // Kartenkacheln (ADR-0051/0055): umschaltbarer Stil (OSM, CARTO, MapTiler) mit Platten-Cache je Stil
+        // (<CacheRoot>\maptiles\<stil>, zusammen 500 MB LRU, CARTO/MapTiler höchstens 30 Tage) — abgeschaltet mit
+        // PHOTOVIEWERV3_MAP_TILES=off, in Tests und im Rauchtest (dann wird der Stil aufgelöst, aber nie abgerufen)
         services.TryAddSingleton(_ => MapTileOptions.FromEnvironment());
+        services.TryAddSingleton<IMapStyleService, MapStyleService>();
+        services.TryAddSingleton<IMapThemeSource, WpfUiMapThemeSource>();
+        services.TryAddSingleton<IMapServiceAccountStore, MapServiceAccountStore>(); // Kartendienst-Angaben (Website, E-Mail, Konto)
+        services.TryAddSingleton<IMapTileUsageCounter, MapTileUsageCounter>(); // Lumoras Zählung je Dienst und Monat
+        services.TryAddSingleton<IMapLinkOpener, ShellMapLinkOpener>();
+        services.TryAddSingleton<IMapKeyValidator>(sp => new MapKeyValidator(
+            sp.GetRequiredService<MapTileOptions>(),
+            OsmTileSource.BuildUserAgent(AppInfo.Version),
+            logger: sp.GetRequiredService<ILoggerFactory>().CreateLogger("PhotoViewerV3.Places.Tiles"),
+            usage: sp.GetRequiredService<IMapTileUsageCounter>()));
         services.TryAddSingleton<IMapTileSource>(sp =>
         {
             var options = sp.GetRequiredService<MapTileOptions>();
-            if (!options.Enabled)
+            var logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger("PhotoViewerV3.Places.Tiles");
+            var cacheRoot = sp.GetRequiredService<ICatalogStoragePaths>().CacheRoot;
+            if (options.Enabled)
             {
-                return new DisabledMapTileSource();
+                // Bedingungen von CARTO/MapTiler: auch Kacheln gerade nicht benutzter Stile nach 30 Tagen löschen
+                // dazu einmalig die OSM-Kacheln aus dem Aufbau bis 0.4.0 (maptiles\z\…) in ihren Stil-Ordner übernehmen
+                _ = Task.Run(() =>
+                {
+                    try
+                    {
+                        MapTileDiskCache.MigrateLegacyLayout(cacheRoot, MapStyleCatalog.OpenStreetMap.Id, logger);
+                        MapTileDiskCache.SweepExpired(cacheRoot, MapStyleCatalog.All, DateTime.UtcNow, logger);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogWarning(ex, "Kartenkachel-Cache konnte nicht aufgeräumt werden");
+                    }
+                });
             }
 
-            var logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger("PhotoViewerV3.Places.Tiles");
-            var cache = new MapTileDiskCache(sp.GetRequiredService<ICatalogStoragePaths>().CacheRoot, options.DiskCacheBytes, logger);
-            return new OsmTileSource(options, cache, OsmTileSource.BuildUserAgent(AppInfo.Version), logger: logger);
+            var userAgent = OsmTileSource.BuildUserAgent(AppInfo.Version);
+            var usage = sp.GetRequiredService<IMapTileUsageCounter>();
+            return new StyledMapTileSource(
+                sp.GetRequiredService<IMapStyleService>(),
+                sp.GetRequiredService<IMapThemeSource>(),
+                options,
+                resolution => new HttpMapTileSource(
+                    resolution.Definition,
+                    resolution.ApiKey,
+                    options,
+                    new MapTileDiskCache(cacheRoot, options.DiskCacheBytes, logger, styleFolder: resolution.Definition.Id, maxAge: resolution.Definition.MaxCacheAge),
+                    userAgent,
+                    logger: logger,
+                    onDownload: () => usage.Count(resolution.Definition.Vendor)),
+                logger);
         });
         services.TryAddSingleton<MapTileProvider>();
+        services.TryAddSingleton<MapStyleSettingsViewModel>(); // Einstellungen › Darstellung › Karte
 
         services.TryAddSingleton<IPlacesCatalogReader, PlacesCatalogReader>();
         services.TryAddSingleton<IPlacesImageSource, PlacesThumbnailProvider>();

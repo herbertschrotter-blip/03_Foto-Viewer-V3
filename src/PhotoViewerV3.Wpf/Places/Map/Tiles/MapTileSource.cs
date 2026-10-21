@@ -24,6 +24,9 @@ public enum MapTileSourceState
 
     /// <summary>Kachelquelle abgeschaltet (Tests, Rauchtest, PHOTOVIEWERV3_MAP_TILES=off) — graue Karte.</summary>
     Disabled = 2,
+
+    /// <summary>Der Anbieter lehnt den API-Schlüssel ab (401/403, ADR-0055) — nur Cache, Hinweis auf der Karte.</summary>
+    KeyRejected = 3,
 }
 
 /// <summary>Liefert Kartenkacheln als PNG/JPEG-Bytes (Netz oder Platten-Cache).</summary>
@@ -44,14 +47,29 @@ public interface IMapTileSource
     Task<byte[]?> GetTileAsync(MapTileId id, CancellationToken ct);
 }
 
+/// <summary>Quelle, deren Kartenstil wechseln kann (ADR-0055): <see cref="MapTileProvider"/> lädt dann alle Kacheln neu.</summary>
+public interface ISwitchableMapTileSource : IMapTileSource
+{
+    /// <summary>Andere Quelle (Stil, Schlüssel, Farbschema) — beliebiger Thread.</summary>
+    event EventHandler? SourceChanged;
+}
+
 /// <summary>Abgeschaltete Quelle: liefert nie eine Kachel und fasst das Netz nicht an (Tests, Rauchtest).</summary>
 public sealed class DisabledMapTileSource : IMapTileSource
 {
+    /// <param name="style">Stil, dessen Namensnennung die Karte zeigt (Rauchtest: Stil umschalten ohne Abruf).</param>
+    public DisabledMapTileSource(MapTileStyleDefinition? style = null)
+    {
+        Style = style ?? MapStyleCatalog.OpenStreetMap;
+    }
+
+    public MapTileStyleDefinition Style { get; }
+
     public MapTileSourceState State => MapTileSourceState.Disabled;
 
-    public string Attribution => OsmTileSource.OsmAttribution;
+    public string Attribution => Style.Attribution;
 
-    public int MaxZoom => 19;
+    public int MaxZoom => Style.MaxZoom;
 
     public event EventHandler? StateChanged
     {
@@ -70,9 +88,6 @@ public sealed record MapTileOptions
 
     /// <summary>false = keine Kacheln laden (Tests, Rauchtest).</summary>
     public bool Enabled { get; init; } = true;
-
-    /// <summary>Kachel-URL; {z}/{x}/{y} werden ersetzt.</summary>
-    public string UrlTemplate { get; init; } = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 
     /// <summary>Höchstens so viele gleichzeitige Downloads (OSM-Nutzungsregeln: max. 2).</summary>
     public int MaxParallelDownloads { get; init; } = 2;

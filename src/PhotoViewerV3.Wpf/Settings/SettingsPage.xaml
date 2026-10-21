@@ -97,7 +97,7 @@
                 <sections:SettingsArchivesSection />
             </TabItem>
             <TabItem Header="Darstellung" Tag="{x:Static shell:NavigationTags.SettingsAppearance}">
-                <sections:SettingsAppearanceSection />
+                <sections:SettingsAppearanceSection x:Name="AppearanceView" />
             </TabItem>
             <TabItem Header="Speicher &amp; Wartung" Tag="{x:Static shell:NavigationTags.SettingsStorage}">
                 <sections:SettingsStorageSection />

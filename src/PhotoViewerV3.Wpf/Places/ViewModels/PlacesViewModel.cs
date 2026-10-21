@@ -8,7 +8,9 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Logging;
+using PhotoViewerV3.Gallery.ViewModels;
 using PhotoViewerV3.Lightbox;
+using PhotoViewerV3.Places.Styles;
 using PhotoViewerV3.Places.Data;
 using PhotoViewerV3.Places.Dialogs;
 using PhotoViewerV3.Places.Map;
@@ -70,7 +72,9 @@ public sealed partial class PlacesViewModel : ObservableObject
         IMapPrivacyContext privacy,
         ILogger<PlacesViewModel> logger,
         MapTileProvider? tiles = null,
-        IMessenger? messenger = null)
+        IMessenger? messenger = null,
+        ISharedGalleryFilter? filter = null,
+        IMapStyleService? styles = null)
     {
         _scope = scope;
         _geo = geo;
@@ -92,7 +96,10 @@ public sealed partial class PlacesViewModel : ObservableObject
         if (tiles is not null)
         {
             tiles.StateChanged += (_, _) => UpdateTileStatus();
+            tiles.SourceChanged += (_, _) => OnMapSourceChanged(); // Kartenstil (ADR-0055, PlacesViewModel.Styles.cs)
         }
+
+        InitFilterAndStyles(filter, styles); // gemeinsamer Filter und Kartenstil (ADR-0055)
 
         _messenger.Register<PlacesViewModel, ActiveLibraryChangedMessage>(this, static (r, _) => UiThread.Post(() => r.OnLibraryChanged()));
         _messenger.Register<PlacesViewModel, LibraryRootsChangedMessage>(this, static (r, m) => UiThread.Post(() => r.OnCatalogChanged(m.LibraryId, ownChange: false)));
@@ -123,7 +130,9 @@ public sealed partial class PlacesViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(SummaryText), nameof(UnlocatedHeader), nameof(HasUnlocated))]
     private int _unlocatedCount;
 
-    public string SummaryText => HasLibrary ? PlacesText.Summary(LocatedCount, UnlocatedCount) : "Keine Bibliothek";
+    public string SummaryText => HasLibrary
+        ? PlacesText.Summary(LocatedCount, UnlocatedCount) + (IsFiltered ? " · gefiltert" : string.Empty)
+        : "Keine Bibliothek";
 
     public string UnlocatedHeader => $"Ohne Ort ({PlacesText.N(UnlocatedCount)})";
 
@@ -166,6 +175,9 @@ public sealed partial class PlacesViewModel : ObservableObject
     public bool HasTileStatus => !string.IsNullOrEmpty(TileStatusText);
 
     public string Attribution => Tiles?.Attribution ?? OsmTileSource.OsmAttribution;
+
+    /// <summary>Lizenzseite der Namensnennung (OSM, CARTO bzw. MapTiler).</summary>
+    public string AttributionLink => CurrentDefinition?.AttributionLink ?? MapStyleCatalog.OpenStreetMap.AttributionLink;
 
     [ObservableProperty] private bool _isBusy;
 
@@ -262,9 +274,13 @@ public sealed partial class PlacesViewModel : ObservableObject
                 return;
             }
 
+            // Gemeinsamer Galerie-Filter (ADR-0055): nur die Medien der Treffer — Punkte ohne Medienzeile zählen in Build()
+            // nicht, so filtern Gruppen, Zähler, „Im Ausschnitt“, „Ohne Ort“ und der Start-Ausschnitt mit
+            var filter = CurrentFilter;
+            IsFiltered = filter is not null;
             var pointsTask = _geo.GetPointsAsync(libraries, null, CancellationToken.None);
-            var extentTask = _geo.GetExtentAsync(libraries, CancellationToken.None);
-            var mediaTask = _reader.GetMediaAsync(libraries, CancellationToken.None);
+            var extentTask = filter is null ? _geo.GetExtentAsync(libraries, CancellationToken.None) : Task.FromResult<GeoBounds?>(null);
+            var mediaTask = _reader.GetMediaAsync(libraries, filter, CancellationToken.None);
             await Task.WhenAll(pointsTask, extentTask, mediaTask).ConfigureAwait(true);
             if (version != _loadVersion)
             {
@@ -350,10 +366,20 @@ public sealed partial class PlacesViewModel : ObservableObject
         if (_fitPending)
         {
             _fitPending = false;
+            _fitIfNothingVisible = false;
             Viewport.FitBounds(index.PhotoCount == 0 ? null : extent ?? index.GetExtent());
         }
 
         UpdateMarkers();
+        if (_fitIfNothingVisible)
+        {
+            // Filter geändert: der Ausschnitt bleibt, solange er Treffer zeigt — sonst auf die Treffer (ADR-0055)
+            _fitIfNothingVisible = false;
+            if (VisiblePhotoCount == 0 && index.PhotoCount > 0)
+            {
+                Viewport.FitBounds(index.GetExtent());
+            }
+        }
     }
 
     // ---- Marker --------------------------------------------------------------------------------------------------------
@@ -553,6 +579,7 @@ public sealed partial class PlacesViewModel : ObservableObject
         TileStatusText = Tiles?.State switch
         {
             MapTileSourceState.Offline => "Offline — Karte aus dem Cache, Gruppen funktionieren weiter",
+            MapTileSourceState.KeyRejected => "API-Schlüssel abgelehnt — in den Einstellungen prüfen (Karte aus dem Cache)",
             MapTileSourceState.Disabled or null => "Kartenkacheln abgeschaltet — Karte ohne Hintergrund",
             _ => string.Empty,
         };

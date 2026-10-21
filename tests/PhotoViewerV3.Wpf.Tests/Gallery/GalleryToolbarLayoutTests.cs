@@ -298,13 +298,15 @@ public sealed class GalleryToolbarLayoutTests(ITestOutputHelper output)
 
     private static RenderResult Measure(GalleryToolbar toolbar)
     {
+        // Filterkarte und Suche sind seit 0.4.1 eigene Steuerelemente (ADR-0055) — ihre Namen liegen in deren Namensraum
+        var card = (GalleryFilterCard)toolbar.FindName("FilterCard");
         var headerRow = (ToolbarFlowPanel)toolbar.FindName("HeaderRow");
-        var fileRow = (ToolbarFlowPanel)toolbar.FindName("FileRow");
-        var contentRow = (ToolbarFlowPanel)toolbar.FindName("ContentRow");
+        var fileRow = (ToolbarFlowPanel)card.FindName("FileRow");
+        var contentRow = (ToolbarFlowPanel)card.FindName("ContentRow");
         var viewRow = (ToolbarFlowPanel)toolbar.FindName("ViewRow");
-        var activeRow = (FrameworkElement)toolbar.FindName("ActiveRow");
-        var searchArea = (FrameworkElement)toolbar.FindName("SearchArea");
-        var searchBox = (global::Wpf.Ui.Controls.TextBox)toolbar.FindName("SearchBox");
+        var activeRow = (FrameworkElement)card.FindName("ActiveRow");
+        var searchArea = (GallerySearchBox)toolbar.FindName("SearchArea");
+        var searchBox = searchArea.Box;
 
         var overflow = new List<string>();
         var fileRowUsed = 0.0;

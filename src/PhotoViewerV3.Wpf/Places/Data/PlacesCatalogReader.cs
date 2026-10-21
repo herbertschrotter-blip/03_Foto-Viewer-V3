@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using PhotoViewerV3.Domain.Enums;
+using PhotoViewerV3.Gallery.Data;
 using PhotoViewerV3.Services.Database;
 
 namespace PhotoViewerV3.Places.Data;
@@ -37,6 +38,13 @@ public interface IPlacesCatalogReader
 {
     /// <summary>Alle vorhandenen Bilder und Videos der Bibliotheken, neueste zuerst (Aufnahme-, sonst Änderungsdatum).</summary>
     Task<IReadOnlyList<PlacesMediaRow>> GetMediaAsync(IReadOnlyCollection<int> libraryIds, CancellationToken ct);
+
+    /// <summary>
+    /// Wie oben, aber nur die Treffer des gemeinsamen Galerie-Filters (ADR-0055; null = ohne Filter). Dieselbe
+    /// Klausel-Erzeugung wie die Galerie (<see cref="GalleryPageSource.CreateFilteredCommand"/>); der Bereich kommt immer
+    /// aus <paramref name="libraryIds"/>.
+    /// </summary>
+    Task<IReadOnlyList<PlacesMediaRow>> GetMediaAsync(IReadOnlyCollection<int> libraryIds, GalleryQuery? filter, CancellationToken ct);
 
     /// <summary>Angaben zu den Dateien (nur vorhandene, nur aus den Bibliotheken); Reihenfolge beliebig.</summary>
     Task<IReadOnlyList<PlacesFileInfo>> GetFilesAsync(IReadOnlyCollection<int> libraryIds, IReadOnlyCollection<int> fileIds, CancellationToken ct);
@@ -78,6 +86,43 @@ public sealed class PlacesCatalogReader : IPlacesCatalogReader
 
             return result;
         }, ct);
+
+    public Task<IReadOnlyList<PlacesMediaRow>> GetMediaAsync(IReadOnlyCollection<int> libraryIds, GalleryQuery? filter, CancellationToken ct)
+    {
+        if (filter is null)
+        {
+            return GetMediaAsync(libraryIds, ct);
+        }
+
+        return Task.Run<IReadOnlyList<PlacesMediaRow>>(() =>
+        {
+            var ids = libraryIds.Distinct().ToList();
+            if (ids.Count == 0)
+            {
+                return [];
+            }
+
+            // Bereich der Karte (ILibraryScope) statt dem der Galerie-Abfrage — beide sind gleich, außer kurz beim Wechsel
+            var scoped = filter with { LibraryId = ids[0], LibraryIds = ids.Count > 1 ? ids : null };
+            using var conn = _db.OpenSqliteConnection();
+            using var cmd = GalleryPageSource.CreateFilteredCommand(
+                conn,
+                scoped,
+                "f.Id, f.Rating, COALESCE(f.CapturedAt, f.ModifiedAtUtc)",
+                $"AND f.Missing = 0 AND f.MediaType IN ({(int)MediaType.Image}, {(int)MediaType.Video})\n" +
+                "ORDER BY COALESCE(f.CapturedAt, f.ModifiedAtUtc) DESC, f.Id DESC");
+            var result = new List<PlacesMediaRow>();
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                ct.ThrowIfCancellationRequested();
+                var rating = reader.IsDBNull(1) ? (byte)0 : (byte)reader.GetInt32(1);
+                result.Add(new PlacesMediaRow(reader.GetInt32(0), rating, reader.GetInt64(2)));
+            }
+
+            return result;
+        }, ct);
+    }
 
     public Task<IReadOnlyList<PlacesFileInfo>> GetFilesAsync(IReadOnlyCollection<int> libraryIds, IReadOnlyCollection<int> fileIds, CancellationToken ct)
         => Task.Run<IReadOnlyList<PlacesFileInfo>>(() =>

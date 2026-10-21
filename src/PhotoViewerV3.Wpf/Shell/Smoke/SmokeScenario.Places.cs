@@ -46,7 +46,9 @@ internal sealed partial class SmokeScenario
         var vm = services.GetRequiredService<PlacesViewModel>();
         var dialogs = services.GetService<SmokePlacesDialogs>();
         Check(dialogs is not null, "Fake-Dialog „Fotos verorten“ registriert");
-        Check(services.GetRequiredService<IMapTileSource>() is DisabledMapTileSource, "Kachelquelle im Rauchtest abgeschaltet (kein Netz)");
+        Check(services.GetRequiredService<IMapTileSource>() is { State: MapTileSourceState.Disabled } tileSource
+              && (tileSource as PhotoViewerV3.Places.Styles.StyledMapTileSource)?.Inner is DisabledMapTileSource,
+            "Kachelquelle im Rauchtest abgeschaltet (kein Netz, Stil umschaltbar, ADR-0055)");
 
         // (1) Seite öffnen
         _navigation.NavigateTo(NavigationTags.Places);
@@ -145,6 +147,7 @@ internal sealed partial class SmokeScenario
         if (geoFilterAvailable)
         {
             await WaitUntilAsync(() => !_gallery.IsLoading && _gallery.TotalCount == expected.Count, ShortWait, $"Galerie zeigt genau die {expected.Count} Dateien der Gruppe").ConfigureAwait(true);
+            await SharedFilterAndMapStylesAsync(vm, page, vienna[0], locatedBefore + 5).ConfigureAwait(true); // ADR-0055
             await _gallery.ResetFiltersCommand.ExecuteAsync(null).ConfigureAwait(true);
             await WaitForGalleryAsync("Filter zurückgesetzt").ConfigureAwait(true);
         }

@@ -95,21 +95,22 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Kopfzeile: Titel + Trefferzeile links, Ortssuche rechts (Stil der Galerie-Kopfzeile, Mockup 06) -->
-        <Grid Grid.Row="0" Margin="0,0,0,12">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+        <!-- Kopfzeile: Titel + Trefferzeile links, Galerie-Suche (gemeinsamer Filter) und Ortssuche rechts (Mockup 06) -->
+        <gallery:ToolbarFlowPanel Grid.Row="0" Margin="0,0,0,12" Spacing="12">
+            <StackPanel VerticalAlignment="Center" Margin="0,0,12,0">
                 <ui:TextBlock FontTypography="Title" Text="Orte" />
                 <TextBlock Margin="0,2,0,0" FontSize="13" AutomationProperties.AutomationId="PlacesResultLine"
                            Text="{Binding SummaryText}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
             </StackPanel>
-            <Grid Grid.Column="1" Width="300" VerticalAlignment="Center">
+            <!-- Abstandhalter: schiebt die Suchfelder nach rechts -->
+            <Border gallery:ToolbarFlowPanel.Fill="True" MinWidth="0" Height="1" />
+            <!-- Suche der Galerie (ADR-0055): dasselbe Steuerelement, derselbe Filter wie Galerie und Ordner -->
+            <gallery:GallerySearchBox x:Name="GallerySearch" Width="300" VerticalAlignment="Center" />
+            <Grid Width="260" VerticalAlignment="Center">
                 <ui:TextBox x:Name="SearchBox"
                             PlaceholderText="Ort suchen …"
                             Icon="{ui:SymbolIcon Search24}"
@@ -139,10 +140,14 @@
                     </Border>
                 </Popup>
             </Grid>
-        </Grid>
+        </gallery:ToolbarFlowPanel>
+
+        <!-- Filterkarte der Galerie (ADR-0055): DIESELBE Karte, DERSELBE Filter wie Galerie und Ordner (DataContext =
+             GalleryViewModel, im Code-Behind gesetzt). Gruppen, Zähler, „Im Ausschnitt“ und „Ohne Ort“ zeigen nur Treffer. -->
+        <gallery:GalleryFilterCard x:Name="FilterCard" Grid.Row="1" Margin="0,0,0,12" ShowHitCount="False" />
 
         <!-- Hinweise: versteckte Bibliothek (Kacheln aus dem Internet), Ergebnis/Fehler -->
-        <StackPanel Grid.Row="1">
+        <StackPanel Grid.Row="2">
             <Border Margin="0,0,0,8" Padding="12,8" CornerRadius="6"
                     Background="{DynamicResource SystemFillColorCautionBackgroundBrush}"
                     AutomationProperties.Name="Hinweis Kartenkacheln"
@@ -173,7 +178,7 @@
             </Border>
         </StackPanel>
 
-        <Grid Grid.Row="2">
+        <Grid Grid.Row="3">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="12" />
@@ -206,7 +211,26 @@
                                    AutomationProperties.Name="Alle Fotos zeigen" Command="{Binding ShowAllPhotosCommand}" />
                         <ui:Button Style="{StaticResource MapButton}" Icon="{ui:SymbolIcon Globe24}" ToolTip="Ganze Welt"
                                    AutomationProperties.Name="Ganze Welt" Command="{Binding ShowWorldCommand}" />
+                        <!-- Kartenstil (ADR-0055): Menü mit allen Stilen, gespeichert wie in Einstellungen › Darstellung -->
+                        <ui:Button x:Name="MapStyleButton" Style="{StaticResource MapButton}" Icon="{ui:SymbolIcon Layer24}"
+                                   ToolTip="{Binding MapStyleLabel, StringFormat='Kartenstil: {0}'}"
+                                   AutomationProperties.AutomationId="PlacesMapStyle"
+                                   AutomationProperties.Name="Kartenstil wählen"
+                                   Click="OnMapStyleClick" />
                     </StackPanel>
+
+                    <!-- Rückfall auf OSM, weil der Schlüssel fehlt (ADR-0055) -->
+                    <Border Margin="10,0,10,34" Padding="10,6" CornerRadius="6" HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                            Background="{DynamicResource SystemFillColorCautionBackgroundBrush}"
+                            AutomationProperties.AutomationId="PlacesStyleNotice"
+                            Visibility="{Binding HasStyleNotice, Converter={StaticResource BoolToVis}}">
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="Key24" Margin="0,0,8,0" Foreground="{DynamicResource SystemFillColorCautionBrush}" />
+                            <TextBlock VerticalAlignment="Center" FontSize="12" TextWrapping="Wrap" MaxWidth="520">
+                                <Run Text="{Binding MapStyleLabel, Mode=OneWay}" FontWeight="SemiBold" /><Run Text=": " /><Run Text="{Binding StyleNotice, Mode=OneWay}" /><Run Text=" (Einstellungen › Darstellung › Karte). Bis dahin OpenStreetMap." />
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
 
                     <!-- Ausschnitt in der Galerie zeigen (oben links) -->
                     <ui:Button Margin="10" HorizontalAlignment="Left" VerticalAlignment="Top"
@@ -241,11 +265,11 @@
                         <TextBlock Text="{Binding TileStatusText}" FontSize="11" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                     </Border>
 
-                    <!-- Zuordnung (OSM-Lizenz) unten rechts, immer sichtbar -->
+                    <!-- Namensnennung des Stils (OSM, CARTO, MapTiler) unten rechts, immer gut sichtbar (ADR-0051/0055) -->
                     <Border Padding="6,2" CornerRadius="4,0,0,0" HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                            Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}" Opacity="0.9">
+                            Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}" Opacity="0.92">
                         <TextBlock FontSize="11" AutomationProperties.AutomationId="PlacesAttribution">
-                            <Hyperlink NavigateUri="https://www.openstreetmap.org/copyright" RequestNavigate="OnAttributionNavigate"
+                            <Hyperlink NavigateUri="{Binding AttributionLink, Mode=OneWay}" RequestNavigate="OnAttributionNavigate"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}">
                                 <Run Text="{Binding Attribution, Mode=OneWay}" />
                             </Hyperlink>

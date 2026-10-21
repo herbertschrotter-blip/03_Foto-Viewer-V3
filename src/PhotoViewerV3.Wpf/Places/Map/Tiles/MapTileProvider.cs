@@ -36,6 +36,9 @@ public sealed class MapTileProvider
     private List<MapTileId> _queue = new();
     private readonly int _parallel;
     private int _flushScheduled;
+    private int _generation; // steigt bei jedem Stilwechsel; Kacheln älterer Generationen werden verworfen
+    private int _inFlight; // laufende Abrufe aller Generationen: die Grenze von zwei gilt auch über einen Stilwechsel
+    private IReadOnlyList<MapTileId> _lastWanted = [];
 
     public MapTileProvider(IMapTileSource source, MapTileOptions options, ILogger<MapTileProvider>? logger = null)
     {
@@ -43,9 +46,46 @@ public sealed class MapTileProvider
         _logger = (ILogger?)logger ?? NullLogger.Instance;
         _parallel = Math.Clamp(options.MaxParallelDownloads, 1, 2);
         _source.StateChanged += (_, _) => PostToUi(() => StateChanged?.Invoke(this, EventArgs.Empty));
+        if (_source is ISwitchableMapTileSource switchable)
+        {
+            switchable.SourceChanged += (_, _) => Reset(); // anderer Kartenstil (ADR-0055)
+        }
+    }
+
+    /// <summary>Kartenstil gewechselt: Namensnennung, Hinweis und Kacheln neu (UI-Thread).</summary>
+    public event EventHandler? SourceChanged;
+
+    /// <summary>
+    /// Stilwechsel: Speicher, Fehlversuche und Warteschlange verwerfen, laufende Abrufe des alten Stils ignorieren und die
+    /// zuletzt sichtbaren Kacheln mit dem neuen Stil anfordern (die Karte meldet bei gleichem Ausschnitt nicht erneut).
+    /// </summary>
+    public void Reset()
+    {
+        IReadOnlyList<MapTileId> wanted;
+        lock (_gate)
+        {
+            _generation++;
+            _memory.Clear();
+            _lru.Clear();
+            _failed.Clear();
+            _running.Clear();
+            _queue.Clear();
+            wanted = _lastWanted;
+        }
+
+        PostToUi(() =>
+        {
+            SourceChanged?.Invoke(this, EventArgs.Empty);
+            StateChanged?.Invoke(this, EventArgs.Empty);
+            TilesChanged?.Invoke(this, EventArgs.Empty);
+        });
+        SetWanted(wanted);
     }
 
     public MapTileSourceState State => _source.State;
+
+    /// <summary>Die Kachelquelle (Stil, Namensnennung).</summary>
+    public IMapTileSource Source => _source;
 
     public string Attribution => _source.Attribution;
 
@@ -76,6 +116,7 @@ public sealed class MapTileProvider
     /// <summary>Sichtbare Kacheln in Ladereihenfolge (Mitte zuerst); ersetzt die Warteschlange.</summary>
     public void SetWanted(IReadOnlyList<MapTileId> tiles)
     {
+        _lastWanted = tiles;
         if (_source.State == MapTileSourceState.Disabled)
         {
             return;
@@ -104,9 +145,10 @@ public sealed class MapTileProvider
         while (true)
         {
             MapTileId id;
+            int generation;
             lock (_gate)
             {
-                if (_running.Count >= _parallel || _queue.Count == 0)
+                if (_inFlight >= _parallel || _queue.Count == 0)
                 {
                     return;
                 }
@@ -114,13 +156,15 @@ public sealed class MapTileProvider
                 id = _queue[0];
                 _queue.RemoveAt(0);
                 _running.Add(id);
+                _inFlight++;
+                generation = _generation;
             }
 
-            _ = Task.Run(() => LoadAsync(id));
+            _ = Task.Run(() => LoadAsync(id, generation));
         }
     }
 
-    private async Task LoadAsync(MapTileId id)
+    private async Task LoadAsync(MapTileId id, int generation)
     {
         ImageSource? image = null;
         try
@@ -135,19 +179,27 @@ public sealed class MapTileProvider
 
         lock (_gate)
         {
-            _running.Remove(id);
-            if (image is null)
+            _inFlight--;
+            if (generation != _generation)
             {
-                _failed[id] = DateTime.UtcNow;
+                image = null; // Kachel des vorigen Stils: verwerfen (kein Eintrag, kein Fehlversuch), nur den Platz freigeben
             }
-            else if (!_memory.ContainsKey(id))
+            else
             {
-                _failed.Remove(id);
-                _memory[id] = _lru.AddFirst((id, image));
-                while (_memory.Count > MemoryCapacity && _lru.Last is { } last)
+                _running.Remove(id);
+                if (image is null)
                 {
-                    _lru.RemoveLast();
-                    _memory.Remove(last.Value.Id);
+                    _failed[id] = DateTime.UtcNow;
+                }
+                else if (!_memory.ContainsKey(id))
+                {
+                    _failed.Remove(id);
+                    _memory[id] = _lru.AddFirst((id, image));
+                    while (_memory.Count > MemoryCapacity && _lru.Last is { } last)
+                    {
+                        _lru.RemoveLast();
+                        _memory.Remove(last.Value.Id);
+                    }
                 }
             }
         }

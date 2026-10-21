@@ -28,12 +28,15 @@ public partial class SettingsPage : UserControl
         CategoryManagementPage categories,
         InfoViewModel info,
         Shell.HiddenLibraries.HiddenLibrariesViewModel? hiddenLibraries = null,
-        Motifs.MotifSettingsViewModel? motifs = null)
+        Motifs.MotifSettingsViewModel? motifs = null,
+        Places.Styles.MapStyleSettingsViewModel? mapStyles = null)
     {
         _sections = sections;
         InitializeComponent();
         DataContext = viewModel;
         MotifsView.DataContext = motifs; // Reiter „Motive“ (ADR-0052); ohne Dienst leer
+        AppearanceView.MapSection.DataContext = mapStyles; // Darstellung › Karte (ADR-0055); ohne Dienst ausgeblendet
+        AppearanceView.MapSection.Visibility = mapStyles is null ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;
 
         LibraryTab.Content = library;
         TagsTab.Content = tags;

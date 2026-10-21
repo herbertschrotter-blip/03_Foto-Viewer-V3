@@ -25,6 +25,7 @@ public static class GalleryServiceCollectionExtensions
     public static IServiceCollection AddGallery(this IServiceCollection services)
     {
         services.AddSingleton<GalleryPageSource>();
+        services.TryAddSingleton<ISharedGalleryFilter, SharedGalleryFilter>(); // EIN Filter für Galerie, Ordner, Orte (ADR-0055)
         services.AddSingleton<GalleryViewModel>();
         services.AddTransient<GalleryView>();
         services.TryAddSingleton<IGalleryDialogService, GalleryDialogService>();

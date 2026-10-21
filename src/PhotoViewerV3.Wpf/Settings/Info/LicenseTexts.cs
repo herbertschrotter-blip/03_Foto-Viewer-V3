@@ -39,6 +39,13 @@ public static class LicenseTexts
         "  (operations.osmfoundation.org/policies/tiles): eindeutiger User-Agent, Cache, höchstens zwei gleichzeitige\n" +
         "  Abrufe, keine Massenabrufe; Zuordnung sichtbar auf der Karte. Die Karte selbst ist eine eigene Kachelkarte\n" +
         "  in Lumora (kein Mapsui, kein WebView2).\n\n" +
+        "CARTO Basemaps (Kartenstile Voyager, Positron, Dark Matter; seit 0.4.1) — Kartendaten © OpenStreetMap-Mitwirkende,\n" +
+        "  Kartenstil © CARTO. Nutzung nur mit dem eigenen, kostenlosen CARTO-Schlüssel des Benutzers (carto.com/basemaps),\n" +
+        "  nicht-kommerziell bis 5 Mio. Abrufe im Monat; Kacheln höchstens 30 Tage zwischengespeichert, keine Massenabrufe,\n" +
+        "  Namensnennung „© OpenStreetMap-Mitwirkende, © CARTO“ sichtbar auf der Karte (carto.com/legal/basemap-terms).\n\n" +
+        "MapTiler Satellite (Kartenstil Satellit; seit 0.4.1) — © MapTiler, © OpenStreetMap-Mitwirkende, Satellitenbilder\n" +
+        "  © MapTiler, Maxar, Copernicus u. a. (maptiler.com/copyright). Nur mit dem eigenen MapTiler-Schlüssel des Benutzers;\n" +
+        "  persönlicher Cache, keine Massenabrufe (maptiler.com/terms).\n\n" +
         "Ortsnamen: GeoNames (geonames.org) — Creative Commons Namensnennung 4.0 (CC BY 4.0)\n" +
         "  Datensatz „cities5000“ samt Länder- und Regionsnamen, verdichtet und in Lumora eingebettet\n" +
         "  (offline, keine Abfrage im Netz); deutsche Namen teils ergänzt. https://creativecommons.org/licenses/by/4.0/\n\n" +

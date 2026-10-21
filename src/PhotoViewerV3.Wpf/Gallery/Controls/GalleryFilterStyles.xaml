@@ -15,6 +15,31 @@
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
+    <!-- Rahmenloser Schließen-Knopf (Ordner-Chip, Suche leeren, Bedingungen der „Es gilt“-Zeile); bis 0.4.0 in GalleryToolbar -->
+    <Style x:Key="ChipButton" TargetType="Button">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="3" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bg" Background="{TemplateBinding Background}" CornerRadius="3" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bg" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Bg" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- Kleine Beschriftung vor einer Gruppe der Sortierleiste („Sortieren“, „Ansicht“) -->
     <Style x:Key="GalleryBarLabel" TargetType="TextBlock">
         <Setter Property="FontSize" Value="12" />

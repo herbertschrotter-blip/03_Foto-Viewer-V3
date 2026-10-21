@@ -4,8 +4,9 @@ using System.Windows.Controls;
 namespace PhotoViewerV3.Gallery.Controls;
 
 /// <summary>
-/// Kopfzeile der Galerie (0.2.43): Titel mit Trefferzeile und Suche, Filterkarte („Datei“, „Inhalt“, „Es gilt“),
-/// Sortier- und Ansichtsleiste. Reines Layout; DataContext = GalleryViewModel. <see cref="PageTitle"/> setzt die
+/// Kopfzeile der Galerie (0.2.43): Titel mit Trefferzeile und Suche (<see cref="GallerySearchBox"/>), Filterkarte
+/// (<see cref="GalleryFilterCard"/>: „Datei“, „Inhalt“, „Es gilt“ — seit 0.4.1 eigene Steuerelemente, die auch die Seite
+/// „Orte“ einbindet, ADR-0055), Sortier- und Ansichtsleiste. Reines Layout; DataContext = GalleryViewModel. <see cref="PageTitle"/> setzt die
 /// GalleryView („Galerie“ bzw. „Ordner“ auf der Ordner-Seite).
 /// </summary>
 public partial class GalleryToolbar : UserControl
@@ -29,9 +30,5 @@ public partial class GalleryToolbar : UserControl
     }
 
     /// <summary>Strg+F: Suchfeld fokussieren und den Text markieren.</summary>
-    public void FocusSearch()
-    {
-        SearchBox.Focus();
-        SearchBox.SelectAll();
-    }
+    public void FocusSearch() => SearchArea.FocusSearch();
 }

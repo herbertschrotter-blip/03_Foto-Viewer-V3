@@ -173,6 +173,11 @@ public sealed partial class GalleryViewModel
                 ScheduleReload();
             }
 
+            if (_openedSmartAlbum is { } smart && AlbumFilterEntries.All(e => e.AlbumId != smart.Id))
+            {
+                _openedSmartAlbum = null; // Bereich gewechselt (ADR-0055): nicht in ein Album der alten Gruppe speichern
+            }
+
             OnPropertyChanged(nameof(ManualAlbumEntries));
             NotifyAlbumFilterChanged();
         }

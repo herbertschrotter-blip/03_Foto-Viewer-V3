@@ -6,6 +6,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Navigation;
 using PhotoViewerV3.Gallery.Controls;
+using PhotoViewerV3.Gallery.ViewModels;
 using PhotoViewerV3.Places.Map;
 using PhotoViewerV3.Places.ViewModels;
 using Wpf.Ui.Controls;
@@ -24,12 +25,26 @@ public partial class PlacesPage : UserControl
     private UnlocatedTile? _dragTile;
     private UnlocatedTile? _pendingSelect;
 
-    public PlacesPage(PlacesViewModel viewModel)
+    /// <param name="gallery">Galerie-ViewModel (Singleton): Suchfeld und Filterkarte binden daran — ein Filterzustand für
+    /// Galerie, Ordner und Orte (ADR-0055). Ohne (Tests) bleiben beide ausgeblendet.</param>
+    public PlacesPage(PlacesViewModel viewModel, GalleryViewModel? gallery = null)
     {
         _viewModel = viewModel;
         InitializeComponent();
         DataContext = viewModel;
-        Loaded += (_, _) => _ = viewModel.ActivateAsync();
+        FilterCard.DataContext = gallery;
+        GallerySearch.DataContext = gallery;
+        FilterCard.Visibility = gallery is null ? Visibility.Collapsed : Visibility.Visible;
+        GallerySearch.Visibility = FilterCard.Visibility;
+        Loaded += (_, _) =>
+        {
+            if (gallery is not null)
+            {
+                _ = gallery.EnsureInitializedAsync(); // Filterlisten (Tags, Personen …) und gemeinsamer Filter bereit
+            }
+
+            _ = viewModel.ActivateAsync();
+        };
         Unloaded += (_, _) => viewModel.Deactivate();
         Map.MarkerClicked += (_, e) => _ = _viewModel.ActivateMarkerAsync(e.Marker);
         Map.MarkerDoubleClicked += (_, e) => _viewModel.ShowInGallery(e.Marker);
@@ -92,6 +107,38 @@ public partial class PlacesPage : UserControl
         var (lat, lon) = (e.Latitude, e.Longitude);
         assign.Click += (_, _) => _ = _viewModel.AssignSelectedAtAsync(lat, lon);
         menu.Items.Add(assign);
+        return menu;
+    }
+
+    // ---- Kartenstil (ADR-0055) -------------------------------------------------------------------------------------------
+
+    private void OnMapStyleClick(object sender, RoutedEventArgs e)
+    {
+        var menu = BuildMapStyleMenu();
+        menu.PlacementTarget = MapStyleButton;
+        menu.Placement = PlacementMode.Left;
+        menu.IsOpen = true;
+    }
+
+    /// <summary>Stil-Menü: alle Stile, der gewählte mit Häkchen, fehlende Schlüssel im Text („— Schlüssel nötig“).</summary>
+    internal ContextMenu BuildMapStyleMenu()
+    {
+        var menu = new ContextMenu();
+        foreach (var entry in _viewModel.MapStyleEntries())
+        {
+            var item = new MenuItem
+            {
+                Header = entry.Header,
+                ToolTip = entry.NeedsKey ? $"{entry.Option.Description}. {PhotoViewerV3.Places.Map.Tiles.MapStyleCatalog.KeyMissingNotice}." : entry.Option.Description,
+                IsCheckable = true,
+                IsChecked = entry.IsCurrent,
+            };
+            System.Windows.Automation.AutomationProperties.SetName(item, entry.Option.Label);
+            var style = entry.Option.Style;
+            item.Click += (_, _) => _ = _viewModel.SetMapStyleAsync(style);
+            menu.Items.Add(item);
+        }
+
         return menu;
     }
 

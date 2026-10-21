@@ -3,6 +3,62 @@
 Alle nennenswerten Änderungen an Lumora (bis 0.2.48 „PhotoViewer V3“). Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.4.1] — 2026-10-21
+
+### Feature (ADR-0055) — Orte: umschaltbare moderne Kartenstile und gemeinsamer Filter für Galerie, Ordner und Orte
+- **Kartenstile**: **Automatisch** (Standard — hell CARTO **Positron**, dunkel CARTO **Dark Matter**, folgt dem
+  Farbschema von Lumora live), **Voyager**, **Positron**, **Dark Matter**, **Standard (OpenStreetMap)**, **Satellit**
+  (MapTiler). Umschalten über das **Stil-Menü** auf der Karte (Ebenen-Knopf oben rechts) oder **Einstellungen ›
+  Darstellung › Karte**. Positron statt Voyager für „hell“, weil die farbigen Foto-Marker auf der zurückhaltenden Karte
+  besser lesbar sind.
+- **Nur mit eigenem Schlüssel**: CARTO (`…/rastertiles/{voyager|light_all|dark_all}/{z}/{x}/{y}.png?key=…`) und
+  MapTiler (`…/maps/satellite/256/{z}/{x}/{y}.jpg?key=…`) werden nie ohne Schlüssel abgerufen; ohne Schlüssel zeigt die
+  Karte OpenStreetMap und „API-Schlüssel nötig – in den Einstellungen eintragen“ (Automatisch ohne Schlüssel still OSM).
+- **Karten „Kartendienst“** (Einstellungen › Darstellung › Karte) je Dienst, auch ohne Schlüssel vorgeschlagen:
+  Beschreibung, Status („Kein Schlüssel – noch nicht eingerichtet“ … „Eingerichtet“), **API-Schlüssel anfordern…**
+  (CARTO `carto.com/basemaps/apikey/`, MapTiler `cloud.maptiler.com/account/keys/` — nur Browser, Lumora sendet nichts),
+  Anleitung in drei Schritten, Schlüssel (Passwortfeld) mit **Schlüssel prüfen** (ein Kachelabruf; gültig → gespeichert
+  und eingerichtet), Website, E-Mail der Registrierung, Konto-/Verbrauchs-Link (vorbelegt), Notiz, Lumoras eigene
+  Zählung des Monats („Diesen Monat von Lumora abgerufen: n Kacheln“, CARTO „Gratis bis 5 Mio./Monat“) und „Verbrauch
+  im Konto ansehen“. Keine Verbrauchsabfrage beim Anbieter (keine schlüsselbasierte API dokumentiert). Links nur
+  http/https. Ablage in der Settings-Tabelle (`ui.map.style`, `ui.map.cartoKey`, `ui.map.maptilerKey`,
+  `ui.map.<dienst>.*`), nie im Protokoll; im versteckten Katalog eigene Werte.
+- **Namensnennung je Stil** unten rechts („© OpenStreetMap-Mitwirkende, © CARTO“ bzw. „© MapTiler © OpenStreetMap-
+  Mitwirkende · Satellitenbilder: © MapTiler, Maxar, Copernicus u. a.“) mit Link auf die Lizenzseite; abgelehnter
+  Schlüssel (401/403) → Pause und Hinweis unten links.
+- **Cache je Stil** `<CacheRoot>\maptiles\<stil>` (OSM-Kacheln aus `maptiles\z\…` werden einmalig übernommen), LRU 500 MB
+  über alle Stile, CARTO/MapTiler höchstens **30 Tage** (beim Lesen verworfen, Ablaufzeit gekappt, Aufräumlauf beim Start
+  auch für nicht benutzte Stile); weiter nur sichtbare Kacheln, höchstens zwei gleichzeitig — auch über einen Stilwechsel.
+  In Tests und im Rauchtest weiter keine Abrufe.
+- **Gemeinsamer Filter**: Filterkarte (`GalleryFilterCard`) und Suche (`GallerySearchBox`) sind eigene Steuerelemente;
+  Galerie, Ordner und **Orte** zeigen dieselben. **Ein** Filterzustand für alle drei Seiten (`ISharedGalleryFilter`):
+  Filter bleiben beim Seitenwechsel erhalten, „Filter zurücksetzen“ wirkt überall, „Als Album speichern…“ auch auf der
+  Karte. Die Karte liest ihre Medien mit derselben Galerie-SQL (`GalleryPageSource.CreateFilteredCommand`): Gruppen,
+  Zähler, „Im Ausschnitt“, „Ohne Ort“ und Start-Ausschnitt zeigen nur Treffer („· gefiltert“); der „Kartenausschnitt“
+  aus „In der Galerie zeigen“ gilt nur in Galerie/Ordner.
+- **Seitengebunden** bleiben Ordnerauswahl, Sortierung und Ansicht (Kacheln/Collage/Liste, Ordner-Seite neu unter
+  `ui.folders.viewMode`) von Galerie und Ordner sowie der Kartenausschnitt.
+- **Bibliothekswechsel/„Alle verknüpften“** behält den Filter: Tags, Personen, Kategorien, Motive und Album, die es im
+  neuen Bereich nicht gibt, fallen heraus (Tags/Kategorien jetzt vor der ersten Seite gelesen); Ort, Kartenausschnitt und
+  Bildinhalt-Suche (bereichsbezogen) immer. Bis 0.4.0 setzte ein Wechsel alle Filter zurück.
+- Info › Bausteine/Lizenzen um CARTO Basemaps und MapTiler Satellite ergänzt; README (Kartenstile, Schlüssel anfordern,
+  gemeinsamer Filter).
+
+### Tests
+- `tests/PhotoViewerV3.Tests`: 935 (1 übersprungen ohne Modell, unverändert).
+- `tests/PhotoViewerV3.Wpf.Tests`: 911 (+26, 5 übersprungen ohne Modelle; dreimal hintereinander grün) — `Places/MapStyleTests` (Automatisch folgt Hell/Dunkel, URL mit/ohne
+  Schlüssel, kein CARTO-Abruf ohne Schlüssel, Rückfall OSM mit Hinweis, Cache je Stil, 30-Tage-Grenze, Aufräumlauf,
+  Übernahme alter OSM-Kacheln, Namensnennung je Stil, 401 → KeyRejected, umschaltbare Quelle, abgeschaltet ohne Abruf,
+  Provider lädt nach Stilwechsel neu, „Schlüssel prüfen“, Zählung nur echter Abrufe), `Places/MapStyleSettingsTests`
+  (Stil/Schlüssel und Kartendienst-Angaben speichern/laden samt Vorbelegung, Zählung je Kalendermonat UTC,
+  Link-Validierung nur http/https, Karten vorgeschlagen → prüfen → eingerichtet/abgelehnt), `Gallery/SharedGalleryFilterTests` (Galerie setzt → Ordner/Orte sehen ihn, Zurücksetzen überall,
+  Ordnerauswahl und Sortierung seitengebunden, Bibliothekswechsel, Karte zählt genau die Galerie-Treffer mit
+  Koordinaten, Kartenausschnitt nicht auf der Karte); `GalleryToolbarLayoutTests` auf die neuen Steuerelemente umgestellt.
+- Rauchtest-Schritt „Orte-Karte“ erweitert (`SmokeScenario.PlacesShared.cs`): Filter „Ort“ auf der Karte, Seitenwechsel
+  Orte → Ordner → Orte behält ihn, Stil umschalten ohne Abruf (Hinweis, CARTO-Namensnennung mit Rauchtest-Schlüssel,
+  Automatisch → Dark Matter), Karten „Kartendienst“ vorgeschlagen und „Schlüssel prüfen“ ohne Abruf, Zurücksetzen auf
+  der Karte wirkt überall; Screenshots `40b`–`40f`. Rauchtest 41/41 OK, 0 Binding-Fehler.
+
 ## [0.4.0] — 2026-10-21
 
 ### Release — Abschluss der Welle „Doppelte und Alben“ (0.3.1–0.3.2)

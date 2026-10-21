@@ -136,7 +136,9 @@ public sealed partial class GalleryViewModel : ObservableObject
         PhotoViewerV3.Gallery.Places.PlaceActions? placeActions = null,
         PhotoViewerV3.Services.Motifs.IMotifTermService? motifTerms = null,
         PhotoViewerV3.Services.Library.ILibraryScope? libraryScope = null,
-        PhotoViewerV3.Albums.AlbumActions? albumActions = null)
+        PhotoViewerV3.Albums.AlbumActions? albumActions = null,
+        ISharedGalleryFilter? sharedFilter = null,
+        PhotoViewerV3.Shell.INavigationService? navigation = null)
     {
         InitAlbums(albumActions); // Alben und Ordner-Verknüpfungen (ADR-0054, GalleryViewModel.Albums.cs)
         _libraryScope = libraryScope ?? new PhotoViewerV3.Services.Library.LibraryScope(contextFactory); // ADR-0048, GalleryViewModel.Scope.cs
@@ -166,6 +168,7 @@ public sealed partial class GalleryViewModel : ObservableObject
         RegisterMessages();
         InitCaptureDate(captureDateActions); // „Datum setzen…“, Rückgängig, Neuladen (GalleryViewModel.CaptureDate.cs, ADR-0046)
         InitPlaces(placeActions); // Filter „Ort“, Kartenausschnitt, „Ort setzen…“ (GalleryViewModel.Places.cs, ADR-0050)
+        InitPages(sharedFilter, navigation); // gemeinsamer Filter, seitengebundene Teile (GalleryViewModel.Pages.cs, ADR-0055)
     }
 
     // ---- Gebundene Daten ---------------------------------------------------------------------
@@ -374,8 +377,12 @@ public sealed partial class GalleryViewModel : ObservableObject
         }
     }
 
-    /// <summary>Setzt Filter/Ordner/Suche/Page zurück und lädt die (neue) aktive Library.</summary>
-    private async Task ReloadLibraryAsync(int? libraryId)
+    /// <summary>
+    /// Setzt Ordner/Sortierung/Page zurück und lädt die (neue) aktive Library. Der gemeinsame Filter bleibt (ADR-0055); mit
+    /// <paramref name="reloadTerms"/> werden Tags und Kategorien der (neuen) Gruppe vor der ersten Seite gelesen, damit Begriffe,
+    /// die es im neuen Bereich nicht gibt, schon aus dem Filter gefallen sind.
+    /// </summary>
+    private async Task ReloadLibraryAsync(int? libraryId, bool reloadTerms = false)
     {
         _activeLoadCts?.Cancel();
         _reloadDebounceCts?.Cancel();
@@ -400,18 +407,42 @@ public sealed partial class GalleryViewModel : ObservableObject
 
         await LoadPersonsAsync(); // Personen-Filter mit Zählern der Bibliothek (0.2.38)
         await LoadMotifsAsync(); // Motiv-Filter mit Zählern des Bereichs (ADR-0052)
-        FireAndForget(LoadAlbumsAsync); // Filter „Album“, Menü „Zu Album hinzufügen“ (ADR-0054) — blockiert die erste Seite nicht
+        if (reloadTerms)
+        {
+            // Tags und Kategorien gehören der Gruppe der Bibliothek (ADR-0048); Häkchen bleiben nur für vorhandene (ADR-0055)
+            await LoadTagsAsync();
+            await LoadCategoriesAsync();
+        }
+
+        if (HasAlbumFilter)
+        {
+            await LoadAlbumsAsync(); // gewähltes Album im neuen Bereich? sonst fällt der Filter vor der ersten Seite weg
+        }
+        else
+        {
+            FireAndForget(LoadAlbumsAsync); // Filter „Album“, Menü „Zu Album hinzufügen“ (ADR-0054) — blockiert die erste Seite nicht
+        }
         await ReloadTotalAndPageAsync(restoreSelection: false);
         await RefreshCanUndoAsync();
     }
 
+    /// <summary>
+    /// Bibliothekswechsel: Ordner, Sortierung und Seite aller Seiten zurück. Der gemeinsame Filter bleibt (ADR-0055) —
+    /// Dateiart, Favoriten, Bewertung, Ablage, Doppelte und Suche gelten überall; Tags, Personen, Kategorien, Motive und
+    /// Album behalten nur die Häkchen, die es im neuen Bereich gibt (die Listen werden danach neu geladen). Ort und
+    /// Kartenausschnitt stammen aus der Ortsliste bzw. den Dateien des alten Bereichs und fallen weg.
+    /// </summary>
     private void ResetViewState()
     {
         _suppressReload = true;
         try
         {
-            ResetFileFilter(); // Datei-Filter (ADR-0041)
-            SearchTerm = null;
+            ResetPlaceFilterCore(); // Ort und Kartenausschnitt (ADR-0050) — bereichsbezogen
+            NotifyPlaceFilterChanged();
+            _contentSearchIds = null; // Bildinhalt-Suche = Datei-Ids des alten Bereichs (ADR-0052)
+            _appliedContentSearch = null;
+            ContentSearchText = null;
+            ResetPageStates(); // Ordner/Sortierung der anderen Seite (GalleryViewModel.Pages.cs)
             FolderId = null;
             FolderName = null;
             IncludeSubfolders = true;
@@ -423,11 +454,6 @@ public sealed partial class GalleryViewModel : ObservableObject
             Subfolders.Clear();
             ClearItems();
             ClearSelectionState();
-            ResetTagFilter();
-            ResetCategoryFilter();
-            ResetPersonFilter();
-            ResetMotifFilter(); // ADR-0052
-            ResetAlbumFilter(); // ADR-0054
         }
         finally
         {
@@ -544,10 +570,9 @@ public sealed partial class GalleryViewModel : ObservableObject
     private async Task HandleActiveLibraryChangedAsync(ActiveLibraryChangedMessage m)
     {
         _logger.LogInformation("ActiveLibraryChangedMessage: LibraryId={LibraryId}", m.LibraryId);
-        await ReloadLibraryAsync(m.LibraryId);
-        // Tags und Kategorien gehören der Gruppe der Bibliothek (ADR-0048) — nach jedem Wechsel neu lesen.
-        await LoadTagsAsync();
-        await LoadCategoriesAsync();
+        // Tags und Kategorien gehören der Gruppe der Bibliothek (ADR-0048) — nach jedem Wechsel neu lesen, und zwar vor
+        // der ersten Seite: der gemeinsame Filter bleibt (ADR-0055), Begriffe des alten Bereichs fallen dabei heraus.
+        await ReloadLibraryAsync(m.LibraryId, reloadTerms: true);
     }
 
     private Task HandleScanCompletedAsync(ScanCompletedMessage m)
@@ -697,6 +722,7 @@ public sealed partial class GalleryViewModel : ObservableObject
             ErrorMessage = null;
             var sw = Stopwatch.StartNew();
             var query = BuildQuery();
+            PublishSharedFilter(query); // Ordner- und Orte-Seite sehen denselben Filter (ADR-0055, GalleryViewModel.Pages.cs)
             var total = await _source.GetTotalCountAsync(query, ct);
             if (ct.IsCancellationRequested)
             {
@@ -2220,7 +2246,8 @@ public sealed partial class GalleryViewModel : ObservableObject
         UpdateThumbnailDecodeBox(); // Collage dekodiert auf die Reihenhöhe, Kacheln auf den Bildbereich (ADR-0044)
         if (_isInitialized && !_suppressViewSettings)
         {
-            FireAndForget(() => _viewSettings.SetAsync(GalleryViewSettingsStore.ViewModeKey, value.ToString()));
+            var key = ViewModeSettingKey; // je Seite (Galerie/Ordner, ADR-0055)
+            FireAndForget(() => _viewSettings.SetAsync(key, value.ToString()));
         }
     }
 
@@ -2230,9 +2257,10 @@ public sealed partial class GalleryViewModel : ObservableObject
         try
         {
             var mode = await _viewSettings.GetAsync(GalleryViewSettingsStore.ViewModeKey);
+            await LoadPageViewSettingsAsync(); // Ansicht der Ordner-Seite (ADR-0055)
             if (Enum.TryParse<GalleryViewMode>(mode, ignoreCase: true, out var parsed))
             {
-                ViewMode = parsed;
+                ApplyStoredGalleryViewMode(parsed); // je nach aktiver Seite (GalleryViewModel.Pages.cs)
             }
 
             ListColumnSettings = await _viewSettings.GetAsync(GalleryViewSettingsStore.ListColumnsKey);

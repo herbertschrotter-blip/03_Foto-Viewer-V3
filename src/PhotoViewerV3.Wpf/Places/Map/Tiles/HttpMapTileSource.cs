@@ -8,20 +8,32 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace PhotoViewerV3.Places.Map.Tiles;
 
-/// <summary>
-/// Kartenkacheln von OpenStreetMap (von Herbert freigegeben, ADR-0051) nach den Kachel-Nutzungsregeln: eindeutiger
-/// User-Agent „Lumora/&lt;Version&gt; (private use)“, höchstens zwei gleichzeitige Downloads, Platten-Cache mit
-/// Ablaufzeit aus den HTTP-Kopfzeilen (mindestens <see cref="MapTileOptions.MinimumFreshness"/>), keine Vorab- oder
-/// Massenabrufe (geladen wird nur, was die Karte gerade zeigt — siehe <see cref="MapTileProvider"/>). Abgelaufene
-/// Kacheln werden sofort angezeigt und einmal im Hintergrund neu geholt. Nach einem Netzfehler liefert die Quelle für
-/// <see cref="MapTileOptions.OfflineRetry"/> nur noch aus dem Cache (Zustand <see cref="MapTileSourceState.Offline"/>).
-/// </summary>
-public sealed class OsmTileSource : IMapTileSource, IDisposable
+/// <summary>Konstanten der OpenStreetMap-Quelle (ADR-0051).</summary>
+public static class OsmTileSource
 {
     /// <summary>Zuordnung laut OSM-Lizenz (ODbL), sichtbar unten rechts auf der Karte.</summary>
     public const string OsmAttribution = "© OpenStreetMap-Mitwirkende";
 
+    /// <summary>„Lumora/0.2.54 (private use)“.</summary>
+    public static string BuildUserAgent(string version) => $"Lumora/{version} (private use)";
+}
+
+/// <summary>
+/// Kartenkacheln aus dem Netz für einen Stil (ADR-0051, seit 0.4.1 ADR-0055 für OSM, CARTO und MapTiler): eindeutiger
+/// User-Agent „Lumora/&lt;Version&gt; (private use)“, höchstens zwei gleichzeitige Downloads, Platten-Cache je Stil mit
+/// Ablaufzeit aus den HTTP-Kopfzeilen (mindestens <see cref="MapTileOptions.MinimumFreshness"/>, bei Quellen mit
+/// Alterungsgrenze höchstens <see cref="MapTileStyleDefinition.MaxCacheAge"/>), keine Vorab- oder Massenabrufe (geladen
+/// wird nur, was die Karte gerade zeigt — siehe <see cref="MapTileProvider"/>). Abgelaufene Kacheln werden sofort angezeigt
+/// und einmal im Hintergrund neu geholt; Kacheln über der Alterungsgrenze verwirft der Cache. Quellen mit Schlüsselpflicht
+/// rufen ohne Schlüssel nie ab. Nach einem Netzfehler liefert die Quelle für <see cref="MapTileOptions.OfflineRetry"/> nur
+/// noch aus dem Cache (Zustand <see cref="MapTileSourceState.Offline"/>; 401/403 = <see cref="MapTileSourceState.KeyRejected"/>).
+/// Die Kachel-URL (mit Schlüssel) wird nie protokolliert.
+/// </summary>
+public sealed class HttpMapTileSource : IMapTileSource, IDisposable
+{
     private readonly MapTileOptions _options;
+    private readonly MapTileStyleDefinition _style;
+    private readonly string? _apiKey;
     private readonly MapTileDiskCache _cache;
     private readonly HttpClient _http;
     private readonly SemaphoreSlim _downloads;
@@ -30,33 +42,54 @@ public sealed class OsmTileSource : IMapTileSource, IDisposable
     private readonly System.Collections.Concurrent.ConcurrentDictionary<MapTileId, byte> _refreshing = new();
     private DateTime _offlineUntil = DateTime.MinValue;
     private volatile MapTileSourceState _state = MapTileSourceState.Online;
+    private int _downloadCount;
+    private readonly Action? _onDownload; // Lumoras Zählung je Dienst und Monat (MapTileUsageCounter)
 
     /// <param name="handler">Nur Tests: eigener Handler (kein Netz). Produktiv der Standard-Handler.</param>
-    public OsmTileSource(MapTileOptions options, MapTileDiskCache cache, string userAgent, HttpMessageHandler? handler = null, Func<DateTime>? clock = null, ILogger? logger = null)
+    public HttpMapTileSource(
+        MapTileStyleDefinition style,
+        string? apiKey,
+        MapTileOptions options,
+        MapTileDiskCache cache,
+        string userAgent,
+        HttpMessageHandler? handler = null,
+        Func<DateTime>? clock = null,
+        ILogger? logger = null,
+        Action? onDownload = null)
     {
+        _onDownload = onDownload;
+        _style = style;
+        _apiKey = string.IsNullOrWhiteSpace(apiKey) ? null : apiKey.Trim();
         _options = options;
         _cache = cache;
         _clock = clock ?? (() => DateTime.UtcNow);
         _logger = logger ?? NullLogger.Instance;
-        _downloads = new SemaphoreSlim(Math.Clamp(options.MaxParallelDownloads, 1, 2));
+        _downloads = new SemaphoreSlim(Math.Clamp(Math.Min(options.MaxParallelDownloads, style.MaxParallelDownloads), 1, 2));
         _http = handler is null ? new HttpClient() : new HttpClient(handler, disposeHandler: false);
         _http.Timeout = TimeSpan.FromSeconds(15);
         _http.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
         UserAgent = userAgent;
+        if (style.RequiresKey && _apiKey is null)
+        {
+            _state = MapTileSourceState.Disabled; // nie unbeschlüsselt abrufen (ADR-0055)
+        }
     }
 
-    /// <summary>„Lumora/0.2.54 (private use)“.</summary>
-    public static string BuildUserAgent(string version) => $"Lumora/{version} (private use)";
+    /// <summary>Nur OpenStreetMap (bisheriger Konstruktor, ADR-0051).</summary>
+    public HttpMapTileSource(MapTileOptions options, MapTileDiskCache cache, string userAgent, HttpMessageHandler? handler = null, Func<DateTime>? clock = null, ILogger? logger = null)
+        : this(MapStyleCatalog.OpenStreetMap, null, options, cache, userAgent, handler, clock, logger)
+    {
+    }
 
     public string UserAgent { get; }
 
+    public MapTileStyleDefinition Style => _style;
+
     public MapTileSourceState State => _state;
 
-    public string Attribution => OsmAttribution;
+    public string Attribution => _style.Attribution;
 
-    public int MaxZoom => 19;
-
-    private int _downloadCount;
+    public int MaxZoom => _style.MaxZoom;
 
     /// <summary>Anzahl tatsächlich ausgeführter Downloads (Tests, Protokoll).</summary>
     public int DownloadCount => Volatile.Read(ref _downloadCount);
@@ -77,7 +110,7 @@ public sealed class OsmTileSource : IMapTileSource, IDisposable
             return cached.Value.Bytes;
         }
 
-        if (now < _offlineUntil)
+        if (now < _offlineUntil || _state == MapTileSourceState.Disabled)
         {
             return cached?.Bytes;
         }
@@ -111,7 +144,20 @@ public sealed class OsmTileSource : IMapTileSource, IDisposable
 
     private async Task<byte[]?> DownloadAsync(MapTileId id, CancellationToken ct)
     {
-        await _downloads.WaitAsync(ct).ConfigureAwait(false);
+        if (_style.BuildUrl(id, _apiKey) is not { } url)
+        {
+            return null; // Schlüssel fehlt — kein Abruf
+        }
+
+        try
+        {
+            await _downloads.WaitAsync(ct).ConfigureAwait(false);
+        }
+        catch (ObjectDisposedException)
+        {
+            return null; // Quelle nach einem Stilwechsel freigegeben
+        }
+
         try
         {
             // Inzwischen von einem anderen Auftrag geholt?
@@ -126,11 +172,8 @@ public sealed class OsmTileSource : IMapTileSource, IDisposable
                 return again?.Bytes;
             }
 
-            var url = _options.UrlTemplate
-                .Replace("{z}", id.Zoom.ToString(), StringComparison.Ordinal)
-                .Replace("{x}", id.X.ToString(), StringComparison.Ordinal)
-                .Replace("{y}", id.Y.ToString(), StringComparison.Ordinal);
             Interlocked.Increment(ref _downloadCount);
+            _onDownload?.Invoke();
             using var response = await _http.GetAsync(url, ct).ConfigureAwait(false);
             if (response.StatusCode == HttpStatusCode.NotFound)
             {
@@ -138,11 +181,19 @@ public sealed class OsmTileSource : IMapTileSource, IDisposable
                 return again?.Bytes;
             }
 
+            if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden && _style.RequiresKey)
+            {
+                // Schlüssel abgelehnt: nicht weiter anfragen, Hinweis auf der Karte (URL mit Schlüssel nie ins Log)
+                _logger.LogWarning("Kartenkacheln ({Style}): Schlüssel abgelehnt ({Status}) — Pause, nur Cache", _style.Id, (int)response.StatusCode);
+                GoOffline(MapTileSourceState.KeyRejected);
+                return again?.Bytes;
+            }
+
             if (!response.IsSuccessStatusCode)
             {
                 // 429/5xx: Server überlastet oder blockt — nicht nachdrängen, eine Weile nur Cache
-                _logger.LogWarning("Kartenkachel-Server antwortet {Status} — Pause, nur Cache", (int)response.StatusCode);
-                GoOffline();
+                _logger.LogWarning("Kartenkachel-Server ({Style}) antwortet {Status} — Pause, nur Cache", _style.Id, (int)response.StatusCode);
+                GoOffline(MapTileSourceState.Offline);
                 return again?.Bytes;
             }
 
@@ -154,17 +205,31 @@ public sealed class OsmTileSource : IMapTileSource, IDisposable
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
         {
-            _logger.LogInformation("Kartenkacheln nicht erreichbar ({Message}) — offline, nur Cache", ex.Message);
-            GoOffline();
+            _logger.LogInformation("Kartenkacheln ({Style}) nicht erreichbar ({Error}) — offline, nur Cache", _style.Id, ex.GetType().Name);
+            GoOffline(MapTileSourceState.Offline);
             return null;
+        }
+        catch (ObjectDisposedException)
+        {
+            return null; // Stil inzwischen gewechselt und diese Quelle freigegeben (StyledMapTileSource)
         }
         finally
         {
-            _downloads.Release();
+            try
+            {
+                _downloads.Release();
+            }
+            catch (ObjectDisposedException)
+            {
+                // freigegeben, s. o.
+            }
         }
     }
 
-    /// <summary>Ablaufzeit aus Cache-Control max-age bzw. Expires, mindestens <see cref="MapTileOptions.MinimumFreshness"/>.</summary>
+    /// <summary>
+    /// Ablaufzeit aus Cache-Control max-age bzw. Expires, mindestens <see cref="MapTileOptions.MinimumFreshness"/>; bei
+    /// Quellen mit Alterungsgrenze höchstens bis zu dieser (dann holt die Karte vorher neu).
+    /// </summary>
     private DateTime ExpiresAt(HttpResponseMessage response, DateTime now)
     {
         var expires = now + _options.MinimumFreshness;
@@ -177,13 +242,18 @@ public sealed class OsmTileSource : IMapTileSource, IDisposable
             expires = at.UtcDateTime;
         }
 
+        if (_style.MaxCacheAge is { } limit && expires > now + limit)
+        {
+            expires = now + limit;
+        }
+
         return expires;
     }
 
-    private void GoOffline()
+    private void GoOffline(MapTileSourceState state)
     {
         _offlineUntil = _clock() + _options.OfflineRetry;
-        SetState(MapTileSourceState.Offline);
+        SetState(state);
     }
 
     private void SetState(MapTileSourceState state)

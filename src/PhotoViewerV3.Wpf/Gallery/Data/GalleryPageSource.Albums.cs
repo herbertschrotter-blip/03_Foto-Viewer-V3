@@ -184,12 +184,12 @@ public sealed partial class GalleryPageSource
     public Task<IReadOnlyList<int>> GetFileIdsAsync(GalleryQuery query, int? limit, CancellationToken ct)
         => RunAsync<IReadOnlyList<int>>(conn =>
         {
-            var folder = ResolveFolderClause(conn, query);
-            using var cmd = conn.CreateCommand();
-            var count = BuildCountSql(query, folder.Clause).TrimEnd().TrimEnd(';');
-            var select = count.Replace("SELECT COUNT(*)", "SELECT f.Id", StringComparison.Ordinal);
-            cmd.CommandText = $"{select}\nORDER BY {CaptureDateSortSql.SortKey} DESC, f.Id DESC{(limit is { } n ? $" LIMIT {n.ToString(CultureInfo.InvariantCulture)}" : string.Empty)};";
-            BindFilterParams(cmd, query, folder);
+            // Dieselbe Klausel-Erzeugung wie Karte und Zählung (GalleryPageSource.Shared.cs, ADR-0055)
+            using var cmd = CreateFilteredCommand(
+                conn,
+                query,
+                "f.Id",
+                $"ORDER BY {CaptureDateSortSql.SortKey} DESC, f.Id DESC{(limit is { } n ? $" LIMIT {n.ToString(CultureInfo.InvariantCulture)}" : string.Empty)}");
             var ids = new List<int>();
             using var reader = cmd.ExecuteReader();
             while (reader.Read())

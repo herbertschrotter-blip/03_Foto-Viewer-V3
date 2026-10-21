@@ -225,7 +225,10 @@ Kopfzeile (0.2.43, ADR-0041):
   ihrem Wert („Tags: Urlaub“). **Alle Filter gelten gleichzeitig (UND)** — z. B. nur Bilder UND Favoriten UND Tag
   „Urlaub“ UND ohne benannte Person UND noch im Eingang. Bei aktiven Filtern sagt die Zeile **„Es gilt: Bilder UND
   Favoriten UND Tag „Urlaub“ … → 342 Treffer“**, was gerade wirkt; ✕ an einer Bedingung entfernt genau diese.
-  **Filter zurücksetzen** hebt alle Filter und die Suche auf, die Ordnerauswahl bleibt.
+  **Filter zurücksetzen** hebt alle Filter und die Suche auf, die Ordnerauswahl bleibt. Seit 0.4.1 gibt es **einen**
+  Filterzustand für Galerie, Ordner und Orte (dieselbe Filterkarte auf allen drei Seiten, ADR-0055): Filter bleiben
+  beim Seitenwechsel erhalten, „Filter zurücksetzen“ wirkt überall; Ordnerauswahl, Sortierung und Ansicht gehören der
+  jeweiligen Seite.
 - **Sortieren** [Feld ▾] [Richtung]: **Aufnahmedatum** (Standard seit 0.2.48), Änderungsdatum, Name, Größe oder eine
   Kategorie; der Knopf daneben kehrt die
   Richtung um („Neueste zuerst“ ↔ „Älteste zuerst“, „A → Z“ ↔ „Z → A“ …). Ein neues Feld beginnt mit seiner üblichen
@@ -486,7 +489,8 @@ Reiter oben (ADR-0042):
 - **Gesichter** — Gesichtserkennung, Grafikkarte, Mindestgröße, Modell, Index neu aufbauen, Gesichtsdaten löschen;
   Karte **Personen & Beziehungen** (Beziehungen umbenennen, zusammenführen, löschen).
 - **Archive** — automatisch entpacken (je Bibliothek), vorhandene Archive nachholen.
-- **Darstellung** — Farbschema (Hell/Dunkel/System folgt Windows live).
+- **Darstellung** — Farbschema (Hell/Dunkel/System folgt Windows live); Karte **Karte (Seite „Orte“)**: Kartenstil
+  und die API-Schlüssel für CARTO und MapTiler (seit 0.4.1, siehe „Kartenstile: Schlüssel anfordern“).
 - **Speicher & Wartung** — Speicherorte mit „Ordner öffnen“ und **Ändern…** (siehe „Speicherort des Katalogs“),
   Thumbnail-Cache (Belegung, **Cache leeren** — Vorschaubilder werden bei Bedarf neu erzeugt), FFmpeg-Status mit
   kopierbarem winget-Befehl, unterstützte Bild- und Videoformate.
@@ -666,11 +670,47 @@ springt zum ersten Treffer).
   Umschalt+Klick wählt einen Bereich, Doppelklick öffnet). Ausgewählte Fotos **auf die Karte ziehen** oder
   Rechtsklick auf die Karte › **Hier verorten (n Fotos)** → Bestätigung mit dem nächsten Ort und
   **Änderungsdatum der Dateien beibehalten** (Standard an) → Koordinaten in Katalog und Datei.
-- **Kartenkacheln** kommen von OpenStreetMap (Zuordnung unten rechts) und werden bis 500 MB unter
-  `%LocalAppData%\PhotoViewerV3\cache\maptiles` zwischengespeichert; nur der sichtbare Ausschnitt wird geladen, höchstens
-  zwei Kacheln gleichzeitig. Ohne Netz bleibt die Karte grau bzw. zeigt den Cache („Offline …“), die Gruppen funktionieren
-  weiter. Bei einer versteckten Bibliothek weist eine Leiste darauf hin, dass der Kartenserver den betrachteten
-  Ausschnitt sieht. Abschalten: `PHOTOVIEWERV3_MAP_TILES=off`.
+- **Gemeinsamer Filter (seit 0.4.1, ADR-0055):** über der Karte stehen **dieselbe Suche und dieselbe Filterkarte** wie
+  in Galerie und Ordner (Datei: Art, Favoriten, Bewertung, Ablage; Inhalt: Tags, Personen, Beziehung, Motive, Album,
+  Kategorien, Ort, Doppelte; „Es gilt … UND …“, **Filter zurücksetzen**, „Als Album speichern…“). Gruppen, Zähler,
+  **Im Ausschnitt**, **Ohne Ort** und der Start-Ausschnitt zeigen nur die Treffer (Trefferzeile „… · gefiltert“); nur
+  die Bedingung „Kartenausschnitt“ (aus „In der Galerie zeigen“) gilt auf der Karte selbst nicht. Es
+  gibt **einen** Filterzustand für Galerie, Ordner und Orte: ein Filter bleibt beim Seitenwechsel erhalten, „Filter
+  zurücksetzen“ wirkt überall. Je Seite eigen bleiben nur die **Ordnerauswahl** der Ordner-Seite, **Sortierung** und
+  **Ansicht** (Kacheln/Collage/Liste) von Galerie und Ordner sowie der **Kartenausschnitt**. Ein Bibliothekswechsel
+  behält den Filter; Tags, Personen, Kategorien, Motive oder ein Album, die es im neuen Bereich nicht gibt, fallen
+  heraus, Ort, Kartenausschnitt und Bildinhalt-Suche immer.
+- **Kartenstil (seit 0.4.1):** Knopf mit dem Ebenen-Symbol oben rechts (oder **Einstellungen › Darstellung › Karte**):
+  **Automatisch** (Standard — hell CARTO **Positron**, dunkel CARTO **Dark Matter**, folgt dem Farbschema live),
+  **Voyager**, **Positron**, **Dark Matter**, **Standard (OpenStreetMap)** und **Satellit** (MapTiler). CARTO- und
+  Satellitenkarten brauchen einen **eigenen API-Schlüssel** (siehe „Kartenstile: Schlüssel anfordern“ unten); ohne
+  Schlüssel zeigt die Karte OpenStreetMap und den Hinweis „API-Schlüssel nötig – in den Einstellungen eintragen“
+  („Automatisch“ ohne Schlüssel bleibt still bei OpenStreetMap). Die Namensnennung des Stils steht unten rechts.
+- **Kartenkacheln** werden je Stil getrennt unter `%LocalAppData%\PhotoViewerV3\cache\maptiles\<stil>`
+  zwischengespeichert (zusammen höchstens 500 MB, am längsten unbenutzte zuerst gelöscht; CARTO- und MapTiler-Kacheln
+  höchstens 30 Tage); nur der sichtbare Ausschnitt wird geladen, höchstens zwei Kacheln gleichzeitig, nie vorab. Ohne
+  Netz bleibt die Karte grau bzw. zeigt den Cache („Offline …“), ein abgelehnter Schlüssel meldet sich unten links; die
+  Gruppen funktionieren weiter. Bei einer versteckten Bibliothek weist eine Leiste darauf hin, dass der Kartenserver den
+  betrachteten Ausschnitt sieht. Abschalten: `PHOTOVIEWERV3_MAP_TILES=off`.
+
+#### Kartenstile: Schlüssel anfordern (0.4.1)
+- **CARTO** (Voyager, Positron, Dark Matter, „Automatisch“): unter **carto.com/basemaps** den kostenlosen Schlüssel
+  per E-Mail anfordern (kommt nach etwa einer Minute, kein Konto nötig). Der Schlüssel muss dein eigener sein; frei
+  für nicht-kommerzielle Nutzung bis 5 Mio. Kachelabrufe im Monat. Ohne Schlüssel ruft Lumora CARTO nie ab (sonst
+  Wasserzeichen).
+- **MapTiler** (Satellit): auf **maptiler.com** ein kostenloses Konto anlegen und im Bereich „API keys“ den Schlüssel
+  kopieren (Free-Plan nur nicht-kommerziell).
+- Eintragen unter **Einstellungen › Darstellung › Karte**: dort steht je Dienst schon eine Karte **Kartendienst CARTO**
+  bzw. **Kartendienst MapTiler** (Status „Kein Schlüssel – noch nicht eingerichtet“, Knopf **API-Schlüssel
+  anfordern…** öffnet die Anforderungsseite im Browser, darunter die drei Schritte). Schlüssel ins Feld **API-Schlüssel**
+  (Passwortfeld) einfügen → **Schlüssel prüfen** (genau ein Kachelabruf; gültig → gespeichert, Status **Eingerichtet**,
+  die Stile des Dienstes sind freigeschaltet). Dazu optional **Website** („Website öffnen“), **Registriert mit**
+  (E-Mail, nur zur Erinnerung), **Konto / Verbrauch** („Konto öffnen“, vorbelegt mit dem Konto des Dienstes) und
+  **Notiz**; **Kartendienste speichern** übernimmt Änderungen. Unten zeigt jede Karte Lumoras eigene Zählung „Diesen
+  Monat von Lumora abgerufen: n Kacheln“ (je Kalendermonat; verbindlich ist nur die Zählung im Konto → „Verbrauch im
+  Konto ansehen“). Links öffnen nur auf Klick (nur http/https); Lumora registriert nichts und sendet selbst keine
+  Daten. Schlüssel, E-Mail und Notiz stehen unverschlüsselt in der Datenbank des Katalogs (nie im Protokoll); eine
+  versteckte Bibliothek hat eigene Einstellungen.
 
 ### Doppelte (seit 0.3.1, ADR-0053)
 Findet doppelte Fotos und Videos der aktiven Bibliothek (bzw. aller Bibliotheken in „Alle verknüpften“) und räumt sie auf.
@@ -791,7 +831,7 @@ dort, Protokolle und `database-location.json` bleiben hier:
 | `library.db` (+ `-wal`, `-shm`) | SQLite-Katalog: Bibliotheken, Ordner, Dateien, Thumbnails-Status, OperationBatches/FileOperations, Settings, FTS5-Index |
 | `thumbs\{libraryId}\{fileId}_320_still.jpg` | Vorschaubilder (320 px, FileId-basiert, atomar geschrieben) |
 | `logs\photoviewer-YYYYMMDD.log` | Serilog-Protokoll, täglich rollierend, 14 Tage |
-| `cache\maptiles\z\x\y.png` | Kartenkacheln der Seite „Orte“ (OpenStreetMap), höchstens 500 MB, am längsten unbenutzte zuerst gelöscht |
+| `cache\maptiles\<stil>\z\x\y.png` | Kartenkacheln der Seite „Orte“ je Stil (`osm`, `carto-voyager`, `carto-positron`, `carto-darkmatter`, `maptiler-satellite`), zusammen höchstens 500 MB, am längsten unbenutzte zuerst gelöscht; CARTO/MapTiler höchstens 30 Tage |
 | `models\buffalo_l\` | Nur nach dem Download in den Einstellungen: Modelle der Gesichtserkennung (`det_10g.onnx`, `w600k_r50.onnx`); bleibt beim Umzug des Katalogs hier |
 | `models\siglip2-base-patch16-224\` | Nur nach dem Download in den Einstellungen: Motiv-Modell SigLIP 2 (`onnx\vision_model.onnx`, `onnx\text_model_int8.onnx`, `tokenizer.json` + Konfiguration); bleibt beim Umzug des Katalogs hier |
 

@@ -3,6 +3,8 @@ using System.Windows.Media;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Logging.Abstractions;
 using PhotoViewerV3.Domain.Enums;
+using PhotoViewerV3.Gallery.Data;
+using PhotoViewerV3.Gallery.ViewModels;
 using PhotoViewerV3.Lightbox;
 using PhotoViewerV3.Places;
 using PhotoViewerV3.Places.Data;
@@ -86,6 +88,19 @@ internal sealed class FakePlacesWorld : IGeoQueryService, IGeoTagService, IRever
             .OrderByDescending(f => f.Value.SortKey).ThenByDescending(f => f.Key)
             .Select(f => new PlacesMediaRow(f.Key, f.Value.Rating, f.Value.SortKey))
             .ToList());
+
+    /// <summary>Gefilterte Abfragen (ADR-0055): Filter und Treffer-Prädikat des Tests.</summary>
+    public List<GalleryQuery?> MediaFilters { get; } = [];
+
+    /// <summary>Welche Dateien der (Fake-)Galerie-Filter trifft; null = alle.</summary>
+    public Func<int, bool>? FilterMatches { get; set; }
+
+    public async Task<IReadOnlyList<PlacesMediaRow>> GetMediaAsync(IReadOnlyCollection<int> libraryIds, GalleryQuery? filter, CancellationToken ct)
+    {
+        MediaFilters.Add(filter);
+        var all = await GetMediaAsync(libraryIds, ct);
+        return filter is null || FilterMatches is null ? all : all.Where(r => FilterMatches(r.FileId)).ToList();
+    }
 
     public Task<IReadOnlyList<PlacesFileInfo>> GetFilesAsync(IReadOnlyCollection<int> libraryIds, IReadOnlyCollection<int> fileIds, CancellationToken ct)
         => Task.FromResult<IReadOnlyList<PlacesFileInfo>>(fileIds.Distinct()
@@ -172,11 +187,14 @@ internal sealed class PlacesHarness
     public FakePrivacy Privacy { get; } = new();
     public WeakReferenceMessenger Messenger { get; } = new();
 
-    public PlacesViewModel Create(IMapTileSource? tiles = null)
+    /// <summary>Gemeinsamer Galerie-Filter (ADR-0055) — echter Speicher, die Galerie veröffentlicht per <c>Publish</c>.</summary>
+    public SharedGalleryFilter Filter { get; } = new();
+
+    public PlacesViewModel Create(IMapTileSource? tiles = null, PhotoViewerV3.Places.Styles.IMapStyleService? styles = null)
     {
         var source = tiles ?? new DisabledMapTileSource();
         var vm = new PlacesViewModel(World, World, World, World, World, Images, Dialogs, Lightbox, Navigation, Privacy,
-            NullLogger<PlacesViewModel>.Instance, new MapTileProvider(source, new MapTileOptions { Enabled = false }), Messenger);
+            NullLogger<PlacesViewModel>.Instance, new MapTileProvider(source, new MapTileOptions { Enabled = false }), Messenger, Filter, styles);
         vm.Viewport.SetSize(1000, 700);
         return vm;
     }
