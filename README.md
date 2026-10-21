@@ -16,7 +16,8 @@ großer Foto- und Video-Bibliotheken (50 000–500 000 Dateien). Nachfolger der 
   über Dateiname und Endung (FTS5), frei kombinierbare Filter (Dateiart, Favoriten, Bewertung, Ablage, Tags, Personen,
   Kategorien — alle mit UND, „Filter zurücksetzen“), Ordnerfilter, Unterordner-Kacheln für Ordner
   ohne direkte Dateien, Favorit und 1–5 Sterne je Kachel, Mehrfachauswahl mit Aktionsleiste (Favorit, Bewertung,
-  Tags, Verschieben nach…, Papierkorb) und Rückgängig. Umschaltbar auf eine **Listenansicht** mit Spalten.
+  Tags, Verschieben nach…, Papierkorb) und Rückgängig. Umschaltbar auf eine **Collage** (echte Seitenverhältnisse,
+  randvolle Reihen) und eine **Listenansicht** mit Spalten.
 - **Tags**: frei definierbare, farbige Schlagworte (Einstellungen › Tags), Zuweisen für die Auswahl (Aktionsleiste,
   Kontextmenü, Strg+T), Tag-Punkte auf der Kachel, Filter nach Tags (ODER/UND/ohne Tag), Suche findet Tag-Namen.
 - **Kategorien**: eigene Kategorien mit festen Werten (Einstellungen › Kategorien), ein Wert je Datei, Zuweisen per
@@ -187,8 +188,9 @@ Kopfzeile (0.2.43, ADR-0041):
   **Filter zurücksetzen** hebt alle Filter und die Suche auf, die Ordnerauswahl bleibt.
 - **Sortieren** [Feld ▾] [Richtung]: Änderungsdatum, Name, Größe oder eine Kategorie; der Knopf daneben kehrt die
   Richtung um („Neueste zuerst“ ↔ „Älteste zuerst“, „A → Z“ ↔ „Z → A“ …). Ein neues Feld beginnt mit seiner üblichen
-  Richtung. · **Ansicht** Kacheln | Liste (wird gemerkt) und **Vorschaugröße** (Regler, nur Kacheln: 120–320 px in
-  20er-Stufen, wird gemerkt) · rechts **Alle auswählen**, **Rückgängig**, Aktualisieren.
+  Richtung. · **Ansicht** Kacheln | Collage | Liste (wird gemerkt) und **Vorschaugröße** (Regler bei Kacheln und
+  Collage: 120–320 px in 20er-Stufen, wird gemerkt) · rechts **Alle auswählen**, **Rückgängig**, Aktualisieren (ist die
+  Leiste zu schmal, zeigen die beiden nur ihr Symbol).
 - **Unter der Galerie**: Blättern („‹ Seite 1 von 7 ›“, dazu erste/letzte Seite) und **Pro Seite** (200/500/1000).
 - Bei 1280 Pixel Fensterbreite bleiben Titelzeile, Zeile „Datei“ und Sortierleiste einzeilig; schmaler (bzw. rechts auf
   der Ordner-Seite) brechen sie sauber um, die Suche rutscht unter den Titel.
@@ -205,7 +207,7 @@ Ordner-Umbenennung oder eine Ordner-Übernahme) zurück.
 | Klick, Strg+Klick, Umschalt+Klick | Auswahl, Mehrfachauswahl |
 | Enter, Doppelklick | Lightbox öffnen |
 | Strg+A | Alles auf der Seite auswählen |
-| Strg+Mausrad, Strg+Plus / Strg+Minus | Vorschaugröße größer / kleiner (Kachelansicht) |
+| Strg+Mausrad, Strg+Plus / Strg+Minus | Vorschaugröße größer / kleiner (Kacheln, Collage-Reihenhöhe) |
 | Esc | Auswahl aufheben (im Suchfeld: Suche leeren) |
 | Entf | Auswahl in den Papierkorb (mit Bestätigung) |
 | Strg+← / Strg+→ | Vorherige / nächste Seite |
@@ -244,8 +246,17 @@ wechselt die Kategorie, ↑/↓ den Wert, Enter übernimmt, Esc bricht ab. Die *
 Kategorie-Wert den Suchtext enthält (wie bei Tag-Namen, ohne Groß-/Kleinschreibung); trifft der Suchtext den Namen
 einer Kategorie (z. B. „Projekt“), findet sie alle Dateien, die in dieser Kategorie irgendeinen Wert haben.
 
+#### Collage (0.2.46)
+„Ansicht“ → **Collage** zeigt Fotos und Videos im echten Seitenverhältnis (aus den Bildmaßen, sonst aus dem
+Vorschaubild; Archive 4:3) in gleich hohen, randvollen Reihen wie bei Google Fotos; die letzte Reihe wird nicht
+gestreckt. Die Reihenhöhe folgt dem Vorschaugrößen-Regler (120–320 px, auch Strg+Mausrad, Strg+Plus/Minus). Unter dem
+Bild steht kein Name — er erscheint beim Darüberfahren unten im Bild und als Tooltip. Herz, Sterne, Video-Symbol,
+Personen und „fehlt“/„Eingang“ liegen wie bei den Kacheln auf dem Bild; Auswahl, Rechtsklick-Menü, Doppelklick/Enter
+(Lightbox), Pfeiltasten (über die Reihen), Strg+A und Entf funktionieren wie gewohnt. Sehr hohe (schmaler als 0,4 : 1)
+und sehr breite Bilder (breiter als 6 : 1) werden in ihrer Zelle mittig beschnitten.
+
 #### Listenansicht
-„Ansicht“ in der Sortierleiste wechselt zwischen Kacheln und Liste (die Wahl bleibt gespeichert). Die
+„Ansicht“ in der Sortierleiste wechselt zwischen Kacheln, Collage und Liste (die Wahl bleibt gespeichert). Die
 Liste zeigt dieselbe Seite mit den Spalten Name (mit Vorschaubild), Ordner, Geändert, Größe, Typ, Bewertung (Sterne
 klickbar), Favorit (Herz klickbar), Tags, Status und je Kategorie eine Spalte (neue Kategorien erscheinen am Ende).
 Rechtsklick auf eine Spaltenüberschrift blendet Spalten ein/aus,

@@ -16,6 +16,12 @@
              d:DesignHeight="700"
              Focusable="False">
     <UserControl.Resources>
+        <ResourceDictionary>
+        <!-- Collage-Vorlage (ADR-0044): eigenes Wörterbuch, damit Tests die echte Vorlage laden -->
+        <ResourceDictionary.MergedDictionaries>
+            <ResourceDictionary Source="/PhotoViewerV3;component/Gallery/Views/GalleryCollageTemplates.xaml" />
+        </ResourceDictionary.MergedDictionaries>
+
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
         <conv:InverseBoolToVisibilityConverter x:Key="InverseBoolToVis" />
         <conv:InverseBoolConverter x:Key="InverseBool" />
@@ -334,6 +340,66 @@
                 </StackPanel>
             </ui:Button>
         </DataTemplate>
+
+        <!-- Collage-Container (ADR-0044): Rand 3 = halbe Fuge (JustifiedTilePanel.ItemSpacing 6), Bild füllt die Zelle;
+             Auswahl = Rahmen in Akzentfarbe ÜBER dem Bild + Häkchen; Doppelklick und Kontextmenü wie bei den Kacheln. -->
+        <Style x:Key="CollageContainerStyle" TargetType="ListBoxItem">
+            <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Stretch" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Grid Margin="3">
+                            <Border CornerRadius="4" ClipToBounds="True" Background="{DynamicResource ControlFillColorDefaultBrush}">
+                                <ContentPresenter />
+                            </Border>
+                            <Border x:Name="Frame" CornerRadius="4" BorderThickness="3" BorderBrush="Transparent" IsHitTestVisible="False" />
+                            <Border x:Name="Check"
+                                    Width="20" Height="20"
+                                    CornerRadius="10"
+                                    HorizontalAlignment="Left"
+                                    VerticalAlignment="Top"
+                                    Margin="7"
+                                    Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                    Visibility="Collapsed">
+                                <ui:SymbolIcon Symbol="Checkmark24"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center" />
+                            </Border>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource ControlStrongStrokeColorDefaultBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                                <Setter TargetName="Check" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <EventSetter Event="MouseDoubleClick" Handler="OnItemDoubleClick" />
+            <EventSetter Event="ContextMenuOpening" Handler="OnTileContextMenuOpening" />
+            <Setter Property="ContextMenu" Value="{StaticResource TagContextMenu}" />
+        </Style>
+
+        <!-- Panels der Galerie-ListBox: Kacheln (feste Größe aus dem Regler) bzw. Collage (Reihenhöhe aus dem Regler) -->
+        <ItemsPanelTemplate x:Key="TilePanelTemplate">
+            <controls:VirtualizingTilePanel ItemWidth="{Binding TileWidth}" ItemHeight="{Binding TileHeight}" />
+        </ItemsPanelTemplate>
+        <ItemsPanelTemplate x:Key="CollagePanelTemplate">
+            <controls:JustifiedTilePanel TargetRowHeight="{Binding TileSize}" ItemSpacing="6" LayoutVersion="{Binding CollageLayoutVersion}" />
+        </ItemsPanelTemplate>
+        </ResourceDictionary>
     </UserControl.Resources>
 
     <UserControl.InputBindings>
@@ -382,14 +448,13 @@
                 CornerRadius="6"
                 Background="{DynamicResource LayerFillColorDefaultBrush}">
             <Grid>
-                <!-- Kachel-Grid: eine Page (≤ 1000 Items), Mehrfachauswahl. UI-virtualisiert (VirtualizingTilePanel):
-                     Container nur für sichtbare Zeilen plus Puffer, pixelbasiertes Scrollen über IScrollInfo
-                     (dafür CanContentScroll=True), Container-Recycling. -->
+                <!-- Kachel-Grid bzw. Collage: eine Page (≤ 1000 Items), Mehrfachauswahl. UI-virtualisiert (VirtualizingTilePanel
+                     bzw. JustifiedTilePanel): Container nur für sichtbare Zeilen plus Puffer, pixelbasiertes Scrollen über
+                     IScrollInfo (dafür CanContentScroll=True), Container-Recycling. Panel, Vorlage und Container-Stil
+                     wechseln je Ansicht im Code-Behind (ADR-0044). -->
                 <controls:GalleryListBox x:Name="GalleryList"
                          AutomationProperties.AutomationId="GalleryList"
                          ItemsSource="{Binding CurrentPage}"
-                         ItemTemplate="{StaticResource TileTemplate}"
-                         ItemContainerStyle="{StaticResource TileContainerStyle}"
                          SelectionMode="Extended"
                          Background="Transparent"
                          BorderThickness="0"
@@ -404,13 +469,12 @@
                          PreviewMouseWheel="OnGridPreviewMouseWheel"
                          PreviewKeyDown="OnGridPreviewKeyDown"
                          controls:VirtualizingTilePanel.VisibleRangeChanged="OnVisibleRangeChanged"
-                         Visibility="{Binding ShowGrid, Converter={StaticResource BoolToVis}}">
-                    <controls:GalleryListBox.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <!-- Kachelgröße aus der Vorschaugröße (Regler, Strg+Mausrad) -->
-                            <controls:VirtualizingTilePanel ItemWidth="{Binding TileWidth}" ItemHeight="{Binding TileHeight}" />
-                        </ItemsPanelTemplate>
-                    </controls:GalleryListBox.ItemsPanel>
+                         Visibility="{Binding ShowGalleryList, Converter={StaticResource BoolToVis}}">
+                    <!-- Start = Kacheln; Collage setzt der Code-Behind (ApplyGalleryViewMode) als lokale Werte. Kein Stil-Trigger:
+                         dessen Neubewertung beim Seitenwechsel löste beim Entfernen von Items Binding-Fehler aus (Rauchtest). -->
+                    <controls:GalleryListBox.ItemTemplate><StaticResource ResourceKey="TileTemplate" /></controls:GalleryListBox.ItemTemplate>
+                    <controls:GalleryListBox.ItemContainerStyle><StaticResource ResourceKey="TileContainerStyle" /></controls:GalleryListBox.ItemContainerStyle>
+                    <controls:GalleryListBox.ItemsPanel><StaticResource ResourceKey="TilePanelTemplate" /></controls:GalleryListBox.ItemsPanel>
                     <controls:GalleryListBox.InputBindings>
                         <KeyBinding Key="Delete" Command="{Binding RecycleSelectionCommand}" />
                         <KeyBinding Key="Escape" Command="{Binding ClearSelectionCommand}" />

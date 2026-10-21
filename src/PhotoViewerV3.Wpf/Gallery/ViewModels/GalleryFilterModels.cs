@@ -41,8 +41,8 @@ public sealed record GalleryLocationOption(GalleryLocation Location, string Labe
 public sealed record GalleryMediaOption(GalleryMediaKind Media, string Label, SymbolRegular Symbol, string ToolTip);
 
 /// <summary>
-/// Eintrag des Ansicht-Segments („Kacheln | Liste“). Das Segment ist eine Liste dieser Einträge — ein weiterer
-/// <see cref="GalleryViewMode"/>-Wert (Welle 2: „Collage“) braucht nur einen weiteren Eintrag in
+/// Eintrag des Ansicht-Segments („Kacheln | Collage | Liste“, Collage seit 0.2.46). Das Segment ist eine Liste dieser
+/// Einträge — ein weiterer <see cref="GalleryViewMode"/>-Wert braucht nur einen weiteren Eintrag in
 /// <c>GalleryViewModel.ViewModeOptions</c>.
 /// </summary>
 public sealed record GalleryViewModeOption(GalleryViewMode Mode, string Label, SymbolRegular Symbol, string ToolTip);

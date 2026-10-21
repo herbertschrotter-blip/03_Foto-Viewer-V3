@@ -49,7 +49,13 @@ public partial class GalleryView : UserControl
             {
                 EnsureListView();
             }
+
+            if (e.PropertyName == nameof(GalleryViewModel.ViewMode))
+            {
+                ApplyGalleryViewMode(); // Kacheln ↔ Collage (ADR-0044)
+            }
         };
+        ApplyGalleryViewMode();
         if (viewModel.ShowList)
         {
             EnsureListView();
@@ -113,6 +119,15 @@ public partial class GalleryView : UserControl
                 _gridStopwatch = null;
                 if (sw is null || !IsLoaded)
                 {
+                    return;
+                }
+
+                if (FindVisualChild<JustifiedTilePanel>(GalleryList) is { } collage)
+                {
+                    // Collage (ADR-0044): Reihen statt Spalten, dazu die Dauer des Umbruchs
+                    _logger.LogInformation(
+                        "Collage sichtbar: {Items} Items, {Containers} Container realisiert ({Rows} Reihen, Umbruch {LayoutMs:N2} ms), {Ms:N0} ms nach Seitenänderung",
+                        _viewModel.CurrentPage.Count, collage.RealizedCount, collage.RowCount, collage.LastLayoutMilliseconds, sw.Elapsed.TotalMilliseconds);
                     return;
                 }
 
@@ -220,6 +235,47 @@ public partial class GalleryView : UserControl
     /// <summary>Das Kachel-Panel meldet den sichtbaren Index-Bereich — das ViewModel fordert Vorschaubilder dafür zuerst an.</summary>
     private void OnVisibleRangeChanged(object sender, VisibleRangeChangedEventArgs e)
         => _viewModel.ReportVisibleRange(e.FirstIndex, e.LastIndex);
+
+    // ---- Kacheln / Collage (ADR-0044) ------------------------------------------------------------
+
+    /// <summary>
+    /// Vorlage, Container-Stil und Panel der Galerie-ListBox für Kacheln bzw. Collage als lokale Werte setzen (Liste lässt
+    /// die ListBox unverändert, sie ist dann ausgeblendet).
+    /// </summary>
+    private void ApplyGalleryViewMode()
+    {
+        var mode = _viewModel.ViewMode;
+        if (mode == GalleryViewMode.List)
+        {
+            return;
+        }
+
+        var collage = mode == GalleryViewMode.Collage;
+        ApplyListTemplates(
+            GalleryList,
+            (DataTemplate)FindResource(collage ? "CollageTemplate" : "TileTemplate"),
+            (Style)FindResource(collage ? "CollageContainerStyle" : "TileContainerStyle"),
+            (ItemsPanelTemplate)FindResource(collage ? "CollagePanelTemplate" : "TilePanelTemplate"));
+    }
+
+    /// <summary>Setzt nur geänderte Werte (jede Zuweisung baut die Container neu); das Panel zuletzt.</summary>
+    internal static void ApplyListTemplates(ItemsControl list, DataTemplate template, Style containerStyle, ItemsPanelTemplate panel)
+    {
+        if (!ReferenceEquals(list.ItemTemplate, template))
+        {
+            list.ItemTemplate = template;
+        }
+
+        if (!ReferenceEquals(list.ItemContainerStyle, containerStyle))
+        {
+            list.ItemContainerStyle = containerStyle;
+        }
+
+        if (!ReferenceEquals(list.ItemsPanel, panel))
+        {
+            list.ItemsPanel = panel;
+        }
+    }
 
     // ---- Listenansicht ---------------------------------------------------------------------------
 

@@ -38,6 +38,7 @@ public sealed partial class GalleryItem : ObservableObject
         _isFavorite = dto.IsFavorite;
         _rating = dto.Rating;
         _missing = dto.Missing;
+        InitMediaSize(dto); // Seitenverhältnis für die Collage (GalleryItem.Collage.cs, ADR-0044)
     }
 
     public int Id { get; }

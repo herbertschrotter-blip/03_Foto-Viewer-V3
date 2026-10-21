@@ -51,6 +51,12 @@ public sealed record GalleryFileDto(
     /// <summary>true, wenn die Datei unter einer Eingangs-Wurzel liegt (Badge „Eingang“).</summary>
     public bool IsInbox => RootRole == 0;
 
+    /// <summary>Breite des Originals nach EXIF-Drehung (<c>Files.Width</c>, seit 0.2.45); null/0 = unbekannt. Collage (ADR-0044).</summary>
+    public int? Width { get; init; }
+
+    /// <summary>Höhe des Originals nach EXIF-Drehung (<c>Files.Height</c>); null/0 = unbekannt.</summary>
+    public int? Height { get; init; }
+
     public static string FormatSize(long size) => size switch
     {
         < 1024 => $"{size} B",

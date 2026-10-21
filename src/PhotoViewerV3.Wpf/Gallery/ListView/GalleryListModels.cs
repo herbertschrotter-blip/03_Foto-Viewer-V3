@@ -5,11 +5,15 @@ using PhotoViewerV3.Gallery.Data;
 
 namespace PhotoViewerV3.Gallery.ListView;
 
-/// <summary>Darstellung der Galerie: Kachel-Grid oder Listenansicht (DataGrid über dieselbe Page).</summary>
+/// <summary>
+/// Darstellung der Galerie: Kachel-Grid, Listenansicht (DataGrid über dieselbe Page) oder Collage (echte
+/// Seitenverhältnisse, randvolle Reihen, ADR-0044). Gespeichert wird der Name (Setting <c>ui.gallery.viewMode</c>).
+/// </summary>
 public enum GalleryViewMode
 {
     Grid = 0,
     List = 1,
+    Collage = 2,
 }
 
 /// <summary>Spalten der Listenansicht (Schlüssel für Einstellungen und Kopfzeilen-Kontextmenü).</summary>

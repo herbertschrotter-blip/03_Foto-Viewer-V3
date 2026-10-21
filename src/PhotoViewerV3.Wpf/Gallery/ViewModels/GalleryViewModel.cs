@@ -213,7 +213,7 @@ public sealed partial class GalleryViewModel : ObservableObject
     [ObservableProperty] private string _libraryNameDisplay = string.Empty;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsEmpty), nameof(ShowGrid), nameof(ShowList), nameof(ShowNoLibrary))]
+    [NotifyPropertyChangedFor(nameof(IsEmpty), nameof(ShowGrid), nameof(ShowList), nameof(ShowNoLibrary), nameof(ShowCollage), nameof(ShowGalleryList))]
     private bool _hasLibrary;
 
     [ObservableProperty] private bool _isRootOffline;
@@ -231,7 +231,7 @@ public sealed partial class GalleryViewModel : ObservableObject
     private bool _includeSubfolders = true;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsEmpty), nameof(ShowGrid), nameof(ShowList))]
+    [NotifyPropertyChangedFor(nameof(IsEmpty), nameof(ShowGrid), nameof(ShowList), nameof(ShowCollage), nameof(ShowGalleryList))]
     private bool _showSubfolders;
 
     [ObservableProperty]
@@ -884,6 +884,7 @@ public sealed partial class GalleryViewModel : ObservableObject
                 if (_currentItems.TryGetValue(dto.Id, out var existing) && existing.CoreMatches(dto))
                 {
                     existing.UpdateMetadata(dto.IsFavorite, dto.Rating, dto.Missing);
+                    existing.UpdateMediaSize(dto); // nachgetragene Bildmaße → Collage bricht neu um (ADR-0044)
                     target.Add(existing);
                     continue;
                 }
@@ -1071,6 +1072,12 @@ public sealed partial class GalleryViewModel : ObservableObject
 
     private void OnItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(GalleryItem.LayoutAspectRatio))
+        {
+            ScheduleCollageRelayout(); // GalleryViewModel.Collage.cs (ADR-0044)
+            return;
+        }
+
         if (_suppressSelectionEvents || sender is not GalleryItem item)
         {
             return;
@@ -2078,6 +2085,7 @@ public sealed partial class GalleryViewModel : ObservableObject
     /// <summary>Kachel-Grid oder Listenansicht; die Wahl wird in der Settings-Tabelle gemerkt.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsGridView), nameof(IsListView), nameof(ShowGrid), nameof(ShowList))]
+    [NotifyPropertyChangedFor(nameof(IsCollageView), nameof(ShowCollage), nameof(ShowGalleryList), nameof(IsTileSizeAdjustable))] // Collage (ADR-0044)
     private GalleryViewMode _viewMode = GalleryViewMode.Grid;
 
     public bool IsGridView => ViewMode == GalleryViewMode.Grid;
@@ -2153,6 +2161,7 @@ public sealed partial class GalleryViewModel : ObservableObject
     partial void OnViewModeChanged(GalleryViewMode value)
     {
         _logger.LogInformation("Galerie-Ansicht: {Mode}", value);
+        UpdateThumbnailDecodeBox(); // Collage dekodiert auf die Reihenhöhe, Kacheln auf den Bildbereich (ADR-0044)
         if (_isInitialized && !_suppressViewSettings)
         {
             FireAndForget(() => _viewSettings.SetAsync(GalleryViewSettingsStore.ViewModeKey, value.ToString()));

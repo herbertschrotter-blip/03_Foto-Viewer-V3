@@ -27,6 +27,7 @@ public sealed partial class GalleryViewModel
     private static readonly GalleryViewModeOption[] s_viewModeOptions =
     [
         new(GalleryViewMode.Grid, "Kacheln", SymbolRegular.Grid24, "Kacheln: gleich große Quadrate"),
+        new(GalleryViewMode.Collage, "Collage", SymbolRegular.Board24, "Collage: echte Seitenverhältnisse, Reihen randvoll"), // ADR-0044
         new(GalleryViewMode.List, "Liste", SymbolRegular.AppsListDetail24, "Liste mit Spalten"),
     ];
 

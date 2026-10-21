@@ -529,12 +529,15 @@ public sealed class GalleryToolbarLayoutTests(ITestOutputHelper output)
         public IReadOnlyList<GalleryViewModeOption> ViewModeOptions { get; } =
         [
             new(GalleryViewMode.Grid, "Kacheln", SymbolRegular.Grid24, "Kacheln"),
+            new(GalleryViewMode.Collage, "Collage", SymbolRegular.Board24, "Collage"),
             new(GalleryViewMode.List, "Liste", SymbolRegular.AppsListDetail24, "Liste"),
         ];
 
         public GalleryViewMode ViewMode { get; set; } = GalleryViewMode.Grid;
 
         public bool IsGridView => ViewMode == GalleryViewMode.Grid;
+
+        public bool IsTileSizeAdjustable => ViewMode is GalleryViewMode.Grid or GalleryViewMode.Collage;
 
         public int TileSize { get; set; } = GalleryViewModel.DefaultTileSize;
 

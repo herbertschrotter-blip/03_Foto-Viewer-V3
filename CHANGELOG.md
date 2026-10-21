@@ -61,6 +61,61 @@ Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`,
 - Lightbox „Neue Person…“ fragt weiter nur einen Namen (Details danach auf der Personen-Seite).
 - Alter auf einem Foto (Aufnahmedatum − Geburtsdatum) und der Assistent folgen später.
 
+## [0.2.46] — 2026-10-21
+
+### Neu (ADR-0044) — Collage-Ansicht in der Galerie (Mockup 06, Ansicht „Collage“)
+- **Dritte Ansicht** im Segment der Sortierleiste: **Kacheln | Collage | Liste** (Symbol „Board“, wird gemerkt wie
+  bisher). Fotos und Videos im **echten Seitenverhältnis**, Reihen gleich hoch und **randvoll** (Justified Layout wie
+  Google Fotos/Flickr), letzte Reihe bei Zielhöhe linksbündig (nicht gestreckt), Fugen 6 px. Zielhöhe = Vorschaugrößen-
+  Regler (120–320 DIP, Strg+Mausrad, Strg+Plus/Minus); gefüllte Reihen werden nur verkleinert, nie gestreckt. Panoramen
+  bekommen allein die volle Breite; Seitenverhältnisse sind auf 0,4 … 6 begrenzt (nur extremere Bilder werden mittig
+  beschnitten).
+- **Panel** `Gallery/Controls/JustifiedTilePanel` (UI-virtualisierend, `IScrollInfo` pixelweise, Mausrad, `MakeVisible`,
+  Pfeiltasten über Reihen): Umbruch vorab für die ganze Seite (`JustifiedRowLayout`, O(n)), realisiert nur sichtbare
+  Reihen + 1 Pufferreihe. Regeln wie beim Kachel-Panel seit 0.2.42: recycelte Container immer vorbereitet, Anordnen über
+  den echten Item-Index, Fokus-Container bleibt an seinem Platz. Bei Regler-, Breiten- oder Seitenverhältnis-Änderung
+  bleibt das oberste sichtbare Item oben. Gleiche `GalleryListBox` (Blatt-Automation-Peers, Auswahl-Abgleich); Panel,
+  Vorlage und Container-Stil setzt der Code-Behind je Ansicht als lokale Werte (`GalleryView.ApplyGalleryViewMode`; ein
+  Stil-Trigger erzeugte beim Entfernen von Items nach einem Seitenwechsel 8 Binding-Fehler im Rauchtest).
+- **Collage-Kachel** (`Gallery/Views/GalleryCollageTemplates.xaml`): Bild füllt die Zelle, kein Namensfeld — Name als
+  Tooltip und beim Darüberfahren unten eingeblendet; Herz, Sterne, Video-Symbol, Personen-Plaketten, „fehlt“/„Eingang“
+  als Overlay; Auswahlrahmen über dem Bild; Doppelklick/Enter → Lightbox (gleicher Weg wie Kacheln, inkl. Id-Rückfall
+  aus 0.2.42), Kontextmenü identisch. Archive sind 4:3-Zellen; Unterordner-Kacheln bleiben ein eigener Zustand.
+- **Seitenverhältnis je Datei**: `Files.Width/Height` jetzt im Galerie-DTO (`GalleryFileDto.Width/Height`, über den
+  Spaltennamen gelesen); fehlen sie oder sind 0 × 0 → aus dem geladenen Vorschaubild, sonst 4:3. Nachgetragene Maße bzw.
+  das erste Vorschaubild ohne Maße lassen die Collage gebündelt neu umbrechen (`CollageLayoutVersion`).
+- **Vorschaubilder** (`GalleryViewModel.ThumbnailDecode.cs`): eigener Pfad je Ansicht — die Collage dekodiert auf
+  Reihenhöhe × Bildschirm-Skalierung (`ThumbnailDecodeBox.FromCollageRow`; Querformat: kurze Kante, Hochformat: Breite
+  aus der Höhe), nie hochskaliert; die Kachel-Konstanten gelten dort nicht. Neu dekodiert wird nur, wenn das gezeigte
+  Bild die neue Fläche nicht schon bedeckt (zurück zu Kacheln: nichts neu). `DpiChanged` ohne echte Änderung (neue
+  Elemente melden es dutzendfach) wird übergangen.
+- **Kopfzeile bei 1280 DIP weiter einzeilig** (ADR-0041): reicht die Sortierleiste mit dem dritten Segment-Eintrag nicht,
+  zeigen „Alle auswählen“ und „Rückgängig“ nur ihr Symbol (Tooltip/Automation-Name bleiben, mit Hysterese).
+- **Messung**: Umbruch 1000 Items im Median **0,046 ms** (max 0,18 ms; im Panel inkl. Lesen 0,11 ms), 1000 Items in
+  900 × 600 realisieren 19 Container. Vorschaubild je Item bei gleichem Regler ≈ 2,1-fach der Kachel (Zelle größer).
+
+### Tests
+- `tests/PhotoViewerV3.Wpf.Tests`: 704 (+37, 1 übersprungen), dreimal hintereinander grün: `Gallery/JustifiedRowLayoutTests`
+  (randvoll, höchstens zielhoch, lückenlos in Seitenreihenfolge, Seitenverhältnis in der Zelle, letzte Reihe, Panorama,
+  Begrenzung 0,4/6, sehr hohe Bilder, Messung 1000 Items, Seitenverhältnis aus Maßen/Vorschaubild/Archiv),
+  `Gallery/JustifiedTilePanelTests` mit der echten Collage-Vorlage (Realisierung 1000 Items, Reihen im Fenster randvoll,
+  Container-Zuordnung per Treffertest bei Fokus/Scrollen/Sprüngen/Pfeiltasten in Recycling und Standard, Reload mit
+  neuem Seitenverhältnis, Regler hält das oberste Item, Kacheln ↔ Collage dreimal wechseln), `CollageThumbnailDecodeTests`.
+  Fixture `CollageGridHost`. `tests/PhotoViewerV3.Tests`: 647 unverändert (1 übersprungen ohne Modell).
+- Rauchtest 32/32 OK — neuer Schritt **„Collage-Ansicht“** vor „Ordnerüberwachung“ (`Shell/Smoke/SmokeScenario.Collage.cs`):
+  Segment-Reihenfolge, Einstellung gespeichert, Reihen randvoll ±1 px, letzte nicht gestreckt, Zellen im Seitenverhältnis
+  der Bildmaße (EXIF-6-Foto hochkant), Dekodierfläche = Reihe × Skalierung, Doppelklick über den echten Handler öffnet
+  die getroffene Datei, Screenshots `26-galerie-collage`/`27-galerie-collage-dunkel`, zurück zu Kacheln. Binding-Fehler
+  aus der Galerie: 0; in manchen Läufen 2 aus der Personen-Seite (`ImageBrush` mit `{Binding Image}`,
+  `PersonsPage.xaml` Zeile 77/104, beim ersten Öffnen der Seite) — unabhängig von dieser Änderung.
+
+### Offen
+- Speicher: bei 1000er-Seiten und 150 % ≈ 390 MB Vorschaubilder in der Collage gegen ≈ 180 MB bei Kacheln (gleicher
+  Regler). Stellschraube: Zielhöhe 0,75 × Regler (ADR-0044, Alternativen).
+- Realisierungslogik liegt in `VirtualizingTilePanel` und `JustifiedTilePanel` doppelt vor (gemeinsame Basisklasse als
+  reiner Umbau möglich).
+- Personen-Seite: gelegentlich 2 Binding-Fehler der Gesichts-`ImageBrush` beim ersten Öffnen (siehe Tests).
+
 ## [0.2.45] — 2026-10-21
 
 ### Fix (ADR-0043) — Scharfe Vorschaubilder, Bildmaße im Katalog

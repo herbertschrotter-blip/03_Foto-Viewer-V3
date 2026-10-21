@@ -80,7 +80,8 @@ public sealed record GalleryCategorySort(int CategoryId, bool Descending);
 public sealed partial class GalleryPageSource : IDisposable
 {
     private const string FileColumns =
-        "f.Id, f.FolderId, f.Name, f.Extension, f.Size, f.ModifiedAtUtc, f.MediaType, f.IsFavorite, f.Rating, f.Missing, fo.Path, lr.Role";
+        "f.Id, f.FolderId, f.Name, f.Extension, f.Size, f.ModifiedAtUtc, f.MediaType, f.IsFavorite, f.Rating, f.Missing, fo.Path, lr.Role"
+        + ", f.Width AS MediaWidth, f.Height AS MediaHeight"; // Collage (ADR-0044): gelesen über den Spaltennamen
 
     /// <summary>Rolle der Wurzel je Datei (Badge „Eingang“, ADR-0020); LEFT JOIN, weil Altzeilen ohne RootId denkbar sind.</summary>
     private const string RootJoin = "LEFT JOIN LibraryRoots lr ON lr.Id = fo.RootId";
@@ -637,7 +638,18 @@ public sealed partial class GalleryPageSource : IDisposable
         Rating: reader.IsDBNull(8) ? null : (byte)reader.GetInt32(8),
         Missing: reader.GetInt32(9) == 1,
         FolderPath: reader.GetString(10),
-        RootRole: reader.IsDBNull(11) ? null : reader.GetInt32(11));
+        RootRole: reader.IsDBNull(11) ? null : reader.GetInt32(11))
+    {
+        Width = ReadOptionalInt(reader, "MediaWidth"),
+        Height = ReadOptionalInt(reader, "MediaHeight"),
+    };
+
+    /// <summary>Optionale Spalte über ihren Namen (unabhängig von der Position in <see cref="FileColumns"/>).</summary>
+    private static int? ReadOptionalInt(SqliteDataReader reader, string column)
+    {
+        var ordinal = reader.GetOrdinal(column);
+        return reader.IsDBNull(ordinal) ? null : reader.GetInt32(ordinal);
+    }
 
     // ---- Ausführung -------------------------------------------------------------------------
 

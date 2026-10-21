@@ -44,6 +44,29 @@ public readonly record struct ThumbnailDecodeBox(int Width, int Height)
             Math.Max(1, (int)Math.Ceiling(Math.Max(1, tileHeight - TileChromeHeight) * scale)));
     }
 
+    /// <summary>
+    /// Collage (ADR-0044): Zelle = Bild im eigenen Seitenverhältnis, Bildhöhe höchstens <paramref name="rowHeight"/> DIP
+    /// (gefüllte Reihen werden nur verkleinert). Dekodiert wird deshalb auf die Reihenhöhe × Skalierung — beim Querformat
+    /// reicht die kurze Kante, beim Hochformat ergibt sich daraus die Breite. Die Breite der Fläche ist die schmalste
+    /// Zelle (<see cref="Gallery.Controls.JustifiedRowLayout.MinAspectRatio"/>): nur noch höhere Bilder werden in der
+    /// Zelle beschnitten und brauchen dafür die Breite. Die Kachel-Konstanten (Rand, Namenszeile) gelten hier nicht.
+    /// </summary>
+    public static ThumbnailDecodeBox FromCollageRow(double rowHeight, double dpiScale)
+    {
+        var scale = dpiScale > 0 && double.IsFinite(dpiScale) ? dpiScale : 1.0;
+        var height = Math.Max(1, rowHeight) * scale;
+        return new ThumbnailDecodeBox(
+            Math.Max(1, (int)Math.Ceiling(height * Gallery.Controls.JustifiedRowLayout.MinAspectRatio)),
+            Math.Max(1, (int)Math.Ceiling(height)));
+    }
+
+    /// <summary>
+    /// true, wenn ein schon dekodiertes Bild von <paramref name="pixelWidth"/> × <paramref name="pixelHeight"/> px diese
+    /// Fläche (bis auf die Schwelle) bedeckt — z. B. ein für die Collage dekodiertes Bild in der kleineren Kachel.
+    /// </summary>
+    public bool IsCoveredBy(int pixelWidth, int pixelHeight)
+        => pixelWidth * RedecodeThreshold >= Width && pixelHeight * RedecodeThreshold >= Height;
+
     /// <summary>true, wenn ein für diese Fläche dekodiertes Bild für <paramref name="wanted"/> sichtbar zu klein wäre.</summary>
     public bool IsClearlySmallerThan(ThumbnailDecodeBox wanted)
         => wanted.Width > Width * RedecodeThreshold || wanted.Height > Height * RedecodeThreshold;
@@ -108,7 +131,7 @@ public sealed partial class GalleryViewModel
             return;
         }
 
-        var box = ThumbnailDecodeBox.FromTile(TileWidth, TileHeight, ReadDpiScale());
+        var box = DecodeBoxForView(ReadDpiScale()); // Kachel bzw. Collage-Reihe (GalleryViewModel.Collage.cs)
         var old = ThumbnailDecodeBox.Unpack(Interlocked.Exchange(ref _thumbDecodeBox, box.Pack()));
         if (_thumbnailSources.Count > 0 && (box.Width > old.Width || box.Height > old.Height))
         {
@@ -147,6 +170,13 @@ public sealed partial class GalleryViewModel
 
     private void OnWindowDpiChanged(object? sender, DpiChangedEventArgs e)
     {
+        // DpiChanged ist ein Routed Event: neu erzeugte Elemente im Fenster melden es mit unveränderter Skalierung
+        // (beim Ansichtswechsel dutzendfach) — nur echte Wechsel zählen.
+        if (Math.Abs(e.OldDpi.DpiScaleX - e.NewDpi.DpiScaleX) < 0.001)
+        {
+            return;
+        }
+
         _logger.LogInformation("Bildschirm-Skalierung der Galerie: {Old:P0} → {New:P0}", e.OldDpi.DpiScaleX, e.NewDpi.DpiScaleX);
         UpdateThumbnailDecodeBox();
     }
@@ -175,7 +205,9 @@ public sealed partial class GalleryViewModel
         var stale = new List<GalleryItem>();
         foreach (var item in CurrentPage)
         {
-            if (_thumbnailSources.TryGetValue(item.Id, out var source) && source.Box.IsClearlySmallerThan(wanted))
+            // Fläche deutlich größer UND das gezeigte Bild bedeckt sie nicht (Collage → Kacheln: die Collage-Bilder reichen).
+            if (_thumbnailSources.TryGetValue(item.Id, out var source) && source.Box.IsClearlySmallerThan(wanted)
+                && !(item.Thumbnail is BitmapSource shown && wanted.IsCoveredBy(shown.PixelWidth, shown.PixelHeight)))
             {
                 stale.Add(item);
             }
