@@ -3,6 +3,27 @@
 Alle nennenswerten Änderungen an Lumora (bis 0.2.48 „PhotoViewer V3“). Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.4.10] — 2026-10-22
+
+### Fix — Rauchtest: Spurenprüfung der versteckten Bibliothek wackelte unter Last
+- Der Schritt „Versteckte Bibliothek … keine Spuren im AppData“ meldete zeitweise `library.db-wal`/`library.db-shm` des
+  normalen Katalogs als „nicht lesbar“ und damit als mögliche Spur (beobachtet in den Läufen der Agenten von Welle 6, auch
+  auf unverändertem 0.4.6): direkt nach dem Sitzungswechsel sperrt SQLite diese Dateien kurz ganz.
+- Vor der Prüfung schreibt der Nachfolger den WAL zurück (`PRAGMA wal_checkpoint(TRUNCATE)`); eine ganz gesperrte Datei
+  wird bis zu 20-mal im Abstand von 100 ms erneut gelesen. Bleibt sie gesperrt, zählt sie weiter als Treffer — die
+  Prüfung wird nicht weicher. Zwei neue Tests (`TraceScanLockedRangeTests`).
+
+### Offen
+- Unter Last gelegentlich rot, einzeln grün (von den Agenten mit Namen festgehalten): `FaceCropServiceTests.
+  Fordert_an_rendert_je_Datei_einmal_und_meldet_fertige_Ausschnitte`, `FaceIndexServiceTests.
+  Abbrechen_beendet_den_Durchgang_der_naechste_Anstoss_setzt_fort`, `MotifIndexServiceTests.
+  Pause_haelt_an_und_Fortsetzen_macht_weiter`, `JustifiedTilePanelTests.Pfeiltasten_wandern_ueber_Reihen_…`
+  (IndexOutOfRange), `CatalogWriteRetryTests.Nach_der_Hoechstdauer_kommt_der_Fehler_beim_Aufrufer_an_statt_still_zu_
+  verschwinden` („Expected waits.Counts to be equal to {1, 0}, but found empty collection“ — keine Warte-Meldung, im
+  Zusammenbau von Welle 6 einmal von drei Läufen).
+- Rauchtest: Alben-Schritt meldete in einzelnen Läufen Binding-Fehler beim Öffnen des intelligenten Albums (Galerie lädt
+  zweimal kurz hintereinander, Hauptfenster minimiert) — nicht reproduzierbar.
+
 ## [0.4.9] — 2026-10-22
 
 ### Feature (ADR-0059) — Diashow für Galerie, Alben und Lightbox (Welle 6, ohne Musik)

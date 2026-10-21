@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Lumora.Gallery.ViewModels;
@@ -141,10 +143,23 @@ internal sealed partial class SmokeScenario
         Check(librariesAfter == librariesBefore && filesAfter == filesBefore, $"normale Bibliothek unverändert ({librariesAfter} Bibliothek(en), {filesAfter} Dateien)");
         _successor = next;
 
-        // (7) Spurenprüfung: Name, Pfad und Dateinamen kommen im AppData-Testordner nirgends vor
+        // (7) Spurenprüfung: Name, Pfad und Dateinamen kommen im AppData-Testordner nirgends vor. Vorher den WAL des
+        // normalen Katalogs zurückschreiben und gesperrte Dateien kurz erneut lesen: Direkt nach dem Sitzungswechsel
+        // sperrt SQLite -wal/-shm zeitweise ganz (0.4.10, wackelte unter Last); dauerhaft gesperrt bleibt ein Treffer.
+        try
+        {
+            await next.DbScalarAsync<int>("PRAGMA wal_checkpoint(TRUNCATE)").ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is SqliteException or InvalidOperationException)
+        {
+            _logger.LogDebug(ex, "Rauchtest   WAL-Checkpoint vor der Spurenprüfung nicht möglich");
+        }
+
         var needles = new List<string> { name, "Tresor" + token, libraryFolder, token };
         needles.AddRange(fileNames);
-        var hits = FindTraces(appDataRoot, needles);
+        // Im Hintergrund: Das Warten auf eine Sperre darf den UI-Thread nicht blockieren — sonst bliebe eine Sperre, deren
+        // Halter den UI-Thread zum Weitermachen braucht, für die ganze Wartezeit bestehen
+        var hits = await Task.Run(() => FindTraces(appDataRoot, needles, retries: 20, retryDelay: TimeSpan.FromMilliseconds(100))).ConfigureAwait(true);
         Check(hits.Count == 0, $"keine Spuren im AppData-Testordner ({hits.Count} Treffer{(hits.Count > 0 ? ": " + string.Join(", ", hits.Take(5)) : string.Empty)})");
 
         try
@@ -157,8 +172,12 @@ internal sealed partial class SmokeScenario
         }
     }
 
-    /// <summary>Durchsucht alle Dateien (auch offene DB/WAL/Protokolle) nach den Texten in UTF-8 und UTF-16; liefert Dateinamen der Treffer.</summary>
-    internal static List<string> FindTraces(string root, IReadOnlyList<string> needles)
+    /// <summary>
+    /// Durchsucht alle Dateien (auch offene DB/WAL/Protokolle) nach den Texten in UTF-8 und UTF-16; liefert Dateinamen der
+    /// Treffer. Eine ganz gesperrte Datei wird bis zu <paramref name="retries"/>-mal nach <paramref name="retryDelay"/>
+    /// erneut gelesen und zählt erst danach als „nicht lesbar“.
+    /// </summary>
+    internal static List<string> FindTraces(string root, IReadOnlyList<string> needles, int retries = 0, TimeSpan? retryDelay = null)
     {
         var patterns = needles
             .Where(n => !string.IsNullOrEmpty(n))
@@ -174,6 +193,12 @@ internal sealed partial class SmokeScenario
             }
 
             var content = ReadUnlockedBytes(file);
+            for (var attempt = 0; content is null && attempt < retries; attempt++)
+            {
+                Thread.Sleep(retryDelay ?? TimeSpan.FromMilliseconds(100));
+                content = ReadUnlockedBytes(file);
+            }
+
             if (content is null)
             {
                 hits.Add(Path.GetFileName(file) + " (nicht lesbar)");

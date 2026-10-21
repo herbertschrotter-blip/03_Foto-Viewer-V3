@@ -69,4 +69,37 @@ public sealed class TraceScanLockedRangeTests : IDisposable
 
         SmokeScenario.FindTraces(_root, ["Geheim-Bibliothek"]).Should().ContainSingle().Which.Should().Be("library.db (nicht lesbar)");
     }
+
+    [Fact]
+    public async Task Kurz_ganz_gesperrte_Datei_wird_nach_erneutem_Lesen_durchsucht()
+    {
+        // Wie SQLite direkt nach einem Sitzungswechsel: -wal kurz komplett gesperrt, danach frei (0.4.10)
+        var file = Path.Combine(_root, "library.db-wal");
+        File.WriteAllBytes(file, FileWith(null));
+        var holder = new FileStream(file, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite | FileShare.Delete);
+        holder.Lock(0, 3 * 4096);
+        var release = Task.Run(async () =>
+        {
+            await Task.Delay(250);
+            holder.Unlock(0, 3 * 4096);
+            await holder.DisposeAsync();
+        });
+
+        var hits = SmokeScenario.FindTraces(_root, ["Geheim-Bibliothek"], retries: 20, retryDelay: TimeSpan.FromMilliseconds(50));
+        await release;
+
+        hits.Should().BeEmpty("die Sperre löst sich innerhalb der Wiederholungen");
+    }
+
+    [Fact]
+    public void Dauerhaft_gesperrte_Datei_bleibt_auch_mit_Wiederholungen_eine_moegliche_Spur()
+    {
+        var file = Path.Combine(_root, "library.db-wal");
+        File.WriteAllBytes(file, FileWith(null));
+        using var holder = new FileStream(file, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite | FileShare.Delete);
+        holder.Lock(0, 3 * 4096);
+
+        SmokeScenario.FindTraces(_root, ["Geheim-Bibliothek"], retries: 3, retryDelay: TimeSpan.FromMilliseconds(10))
+            .Should().ContainSingle().Which.Should().Be("library.db-wal (nicht lesbar)");
+    }
 }
