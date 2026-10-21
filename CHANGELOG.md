@@ -3,6 +3,64 @@
 Alle nennenswerten Änderungen an Lumora (bis 0.2.48 „PhotoViewer V3“). Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.3.2] — 2026-10-21
+
+### Feature (ADR-0054) — Alben: Fotos in Ordner und Alben verknüpfen statt kopieren, eigene und intelligente Alben
+- **Ein Foto liegt nur einmal**: Verknüpfungen statt Kopien oder Windows-Hardlinks. Migration **`AddAlbums`** (nur neue
+  Tabellen): `Albums` (je Bibliotheks-Gruppe, eigenes/intelligent, gespeicherter Filter, Titelbild), `AlbumItems`,
+  `FolderLinks`, `FileLinkUndo`. Dienste `IAlbumService` (auch für spätere Storys: Alben lesen, Dateien eines Albums im
+  Bereich) und `IFolderLinkService` (Services/Albums).
+- **Ordneransicht**: Fotos per Ziehen auf einen Ordner im Ordnerbaum (ohne Taste/Alt/Strg = **verknüpfen**, **Umschalt =
+  verschieben** mit Rückfrage) oder Rechtsklick **Hier verknüpfen…** in einen anderen Ordner derselben Bibliothek. Der
+  Ordner zeigt echten Inhalt + verknüpfte Fotos mit Kennzeichen „verknüpft“ (Kachel, Collage, Liste), Schalter **mit
+  Verknüpfungen** / **nur echte Dateien** und Zähler „12 Dateien · 5 verknüpft“ (nur in Ordnern mit Verknüpfungen);
+  **Verknüpfung entfernen** im Kontextmenü. Ohne Verknüpfungen bleibt die Galerie-Abfrage unverändert.
+- **Eigene Alben**: neue Seite **Alben** (Kacheln mit Titelbild und Anzahl; anlegen, umbenennen, löschen, Titelbild
+  zurücksetzen, exportieren). Hinzufügen per Kontextmenü **Zu Album hinzufügen**, Aktionsleiste **Album**, **Strg+L**,
+  Ziehen auf ein Album der Liste unter dem Ordnerbaum. Album öffnet die Galerie gefiltert: Chip **Album** in der Zeile
+  „Inhalt“, Bedingung in „Es gilt“, kombinierbar mit allen Filtern und Ansichten; **Aus Album entfernen**, **Als Titelbild
+  des Albums**.
+- **Intelligente Alben**: **Als Album speichern…** in der „Es gilt“-Zeile speichert den Galerie-Filter (Dateiart,
+  Favoriten, Bewertung, Ablage, Ort, Suche, Tags, Personen, Beziehung, Kategorien, Motive, Ordner, Album) — Begriffe über
+  ihre Namen, damit Verknüpfen/Lösen/„Neu aufbauen“ sie nicht ungültig machen. Auswertung mit derselben SQL wie die
+  Galerie (`GallerySmartAlbumEvaluator`); Öffnen lädt den Filter, neu speichern ersetzt ihn.
+- **Sicherheit**: Verschieben, Umbenennen, Ordner umbenennen, Sortierer und „Ordner übernehmen“ erhalten alle
+  Verknüpfungen (Übernehmen hängt Verknüpfungen in Quellordner auf die Zielordner um). Papierkorb und Verschieben aus der
+  Bibliothek sichern die Verknüpfungen zur Operation (`FileLinkUndo`); **Rückgängig** stellt sie her, ebenso die Rückkehr
+  derselben Datei (Pfad + Größe + Änderungszeit, z. B. Windows „Wiederherstellen“) — ein neuer Import gleichen Namens erbt
+  nichts. „Neu aufbauen“ trägt Album-Einträge, Ordner-Verknüpfungen, Titelbilder und gesicherte Ziele mit.
+- **Album exportieren…**: echte Kopien in einen gewählten Ordner, Fortschritt, Abbrechen, gleichnamige mit „ (2)“; in
+  einen Bibliotheksordner nur nach Rückfrage; in einer versteckten Bibliothek gesperrt.
+- **Bibliotheks-Trennung**: Alben je Gruppe (`TermTables`, `DeleteGroupIfEmpty`), zeigen/zählen nur den Bereich.
+  Verknüpfen führt gleichnamige eigene Alben zusammen, intelligente bekommen bei gleichem Namen den Bibliotheksnamen als
+  Zusatz; Lösen kopiert alle Alben (neue Ids über dem AUTOINCREMENT-Zähler). Ordner-Verknüpfungen nur innerhalb einer
+  Bibliothek.
+- `CLAUDE.md`: Regel zur Files-Löschung um Alben/Ordner-Verknüpfungen ergänzt.
+
+### Tests
+- `tests/PhotoViewerV3.Tests`: 895 (+10, 1 übersprungen ohne Modell) — `Albums/AlbumServiceTests` (verknüpfen/entfernen
+  ohne Fotoverlust, Ordner-Verknüpfung inkl. Unterordner, Verschieben/Umbenennen/Ordner umbenennen erhalten
+  Verknüpfungen, Papierkorb + Rückkehr, neuer Import erbt nichts, Verschieben nach außen + Rückgängig, „Neu aufbauen“,
+  intelligentes Album speichern/ersetzen/JSON, Export inkl. Abbrechen und versteckt gesperrt), `Albums/AlbumScopingTests`
+  (Trennung, Verknüpfen mit Zusammenführen und Zusatz, „Alle verknüpften“, Lösen kopiert, Bibliothek entfernen).
+- `tests/PhotoViewerV3.Wpf.Tests`: 874 (+9, 5 übersprungen ohne Modell/Stichprobe), dreimal hintereinander grün (ein
+  einzelner Ausreißer davor in `EarlyCloseWindowTests.Lightbox_oeffnen_und_sofort_schliessen_ohne_Ausnahme`, nicht
+  reproduzierbar) — `Albums/GalleryAlbumQueryTests` (echt + verknüpft, Zähler, Kennzeichen, „nur echte Dateien“,
+  Abfrageplan unverändert ohne Verknüpfungen, Filter „Album“, intelligentes Album = Galerie-Filter im Bereich),
+  `Albums/BoolOptionConverterTests`.
+- Rauchtest 40/40 OK, 0 Binding-Fehler — neuer Schritt **„Alben“** vor „Versteckte Bibliothek“
+  (`Shell/Smoke/SmokeScenario.Albums.cs`); Navigation-Prüfung um „Alben“ ergänzt. Screenshots `50-alben-galerie-gefiltert`,
+  `51-alben-seite`, `52-ordner-verknuepft`, `53-ordner-verknuepft-dunkel`, `54-alben-seite-dunkel`,
+  `55-alben-intelligent-geoeffnet`.
+
+### Offen
+- Papierkorb hat weiterhin kein Lumora-Rückgängig; Verknüpfungen kommen mit der Datei an ihrem alten Ort zurück.
+- „Ordner übernehmen“: Verknüpfungen in einen Quellordner wandern nur, wenn der Zielordner eine Katalogzeile bekommt;
+  Rückgängig der Übernahme hängt sie nicht zurück.
+- Die Seite „Alben“ wertet intelligente Alben einzeln aus (bei vielen auf großen Bibliotheken spürbar); der Zähler
+  „n verknüpft“ wird je Seitenwechsel neu gezählt. Nicht an 500 000 Dateien gemessen.
+- Der Bestätigungsdialog „Verknüpfen“ der Bibliotheken nennt die Alben noch nicht.
+
 ## [0.3.1] — 2026-10-21
 
 ### Feature (ADR-0053) — Doppelte erkennen: gleiche und ähnliche Fotos finden und aufräumen

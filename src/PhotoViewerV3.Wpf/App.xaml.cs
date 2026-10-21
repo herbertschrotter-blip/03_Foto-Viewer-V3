@@ -26,6 +26,7 @@ using PhotoViewerV3.Lightbox;
 using PhotoViewerV3.Motifs;
 using PhotoViewerV3.Persons;
 using PhotoViewerV3.Places;
+using PhotoViewerV3.Albums;
 using PhotoViewerV3.Services.Faces.Assignment;
 using PhotoViewerV3.Services.Faces.Crops;
 using PhotoViewerV3.Settings;
@@ -176,6 +177,7 @@ public partial class App : Application, ICatalogHostSwitcher
         services.AddMotifsUi(); // Einstellungen › Motive (Wpf/Motifs, ADR-0052)
         services.AddLibraryLinkingUi(); // „Bibliotheken verknüpfen“ in Einstellungen › Bibliotheken & Eingänge (Wpf/Library/Linking, ADR-0048)
         services.AddDuplicatesUi(); // Seite „Doppelte“ (Wpf/Duplicates, ADR-0053)
+        services.AddAlbumsUi(); // Seite „Alben“, Album-Filter, Ordner-Verknüpfungen, intelligente Alben (Wpf/Albums, ADR-0054)
 
         services.AddSingleton<MainWindow>();
     }

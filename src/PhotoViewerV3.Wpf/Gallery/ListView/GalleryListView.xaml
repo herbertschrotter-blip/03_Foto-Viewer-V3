@@ -31,6 +31,10 @@
                 </Border>
                 <ui:SymbolIcon Symbol="Play24" FontSize="12" Margin="0,0,4,0" VerticalAlignment="Center"
                                Visibility="{Binding IsVideo, Converter={StaticResource BoolToVis}}" />
+                <!-- Verknüpft in diesem Ordner (ADR-0054) -->
+                <ui:SymbolIcon Symbol="Link16" FontSize="12" Margin="0,0,4,0" VerticalAlignment="Center"
+                               Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                               Visibility="{Binding IsLinked, Converter={StaticResource BoolToVis}}" />
                 <TextBlock Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
             </StackPanel>
         </DataTemplate>

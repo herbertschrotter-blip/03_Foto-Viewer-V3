@@ -179,6 +179,7 @@ internal static class LibraryLinkStore
 
         // ---- Motiv-Begriffe (0.2.56)
         var motifTermsMerged = LinkMotifTerms(connection, tx, targetGroup, sourceGroup);
+        Albums.AlbumGroupStore.Link(connection, tx, targetGroup, sourceGroup, sourceLibraryName); // Alben (ADR-0054)
 
         // ---- Bibliotheken und Gruppe
         Execute(connection, tx, "UPDATE Libraries SET GroupId = $t WHERE GroupId = $s;", p);
@@ -388,6 +389,7 @@ internal static class LibraryLinkStore
         }
 
         Execute(connection, tx, "DROP TABLE temp._CopyMap;");
+        Albums.AlbumGroupStore.CopyForLibrary(connection, tx, fromGroup, toGroup, libraryId); // Alben (ADR-0054)
         return new LibraryUnlinkResult(toGroup, tags, categories, relations, persons, motifTerms);
     }
 

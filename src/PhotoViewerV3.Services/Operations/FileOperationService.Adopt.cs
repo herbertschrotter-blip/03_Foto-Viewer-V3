@@ -180,6 +180,8 @@ public sealed partial class FileOperationService
                 throw;
             }
 
+            await MoveFolderLinksAsync(ctx, libraryId, plan).ConfigureAwait(false); // Verknüpfungen in übernommene Ordner (ADR-0054)
+
             // Quellordner: nur ohne verbliebene Dateien in den Papierkorb (nie Hard-Delete)
             var remaining = FolderAdoptionSourceReader.FindRemainingFiles(source);
             var recycled = false;
@@ -229,6 +231,19 @@ public sealed partial class FileOperationService
         finally
         {
             _writeLock.Release();
+        }
+    }
+
+    /// <summary>Ordner-Verknüpfungen der Quellordner in die Zielordner umhängen (ADR-0054); ein Fehler bricht die Übernahme nicht ab.</summary>
+    private async Task MoveFolderLinksAsync(LibraryContext ctx, int libraryId, FolderAdoptionPlan plan)
+    {
+        try
+        {
+            await Albums.FolderLinkAdoption.MoveLinksAsync(ctx, libraryId, plan, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is Microsoft.Data.Sqlite.SqliteException or InvalidOperationException)
+        {
+            _logger.LogWarning(ex, "Übernahme: Ordner-Verknüpfungen konnten nicht umgehängt werden");
         }
     }
 
@@ -452,7 +467,7 @@ public sealed partial class FileOperationService
         {
             foreach (var file in leftovers)
             {
-                await RemoveCatalogEntryAsync(ctx, file, token).ConfigureAwait(false);
+                await RemoveCatalogEntryAsync(ctx, file, token, op.Id).ConfigureAwait(false); // Verknüpfungen gesichert (ADR-0054)
             }
 
             await ctx.SaveChangesAsync(token).ConfigureAwait(false);

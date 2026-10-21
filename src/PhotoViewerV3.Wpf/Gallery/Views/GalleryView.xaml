@@ -190,6 +190,14 @@
                                 <TextBlock Text="Eingang" FontSize="10" Foreground="White" FontWeight="SemiBold" />
                             </StackPanel>
                         </Border>
+                        <!-- Nur über eine Verknüpfung in diesem Ordner (ADR-0054) -->
+                        <Border Padding="6,1" Margin="3,0,0,0" CornerRadius="3" Background="#CC5B4FC4"
+                                Visibility="{Binding IsLinked, Converter={StaticResource BoolToVis}}">
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="Link16" FontSize="11" Foreground="White" Margin="0,0,3,0" />
+                                <TextBlock Text="verknüpft" FontSize="10" Foreground="White" FontWeight="SemiBold" />
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
 
                     <!-- Herz oben rechts: Toggle Favorit (sichtbar wenn gesetzt, sonst bei Hover) -->
@@ -411,6 +419,7 @@
         <KeyBinding Modifiers="Ctrl" Key="M" Command="{Binding ArchiveSelectionCommand}" />
         <KeyBinding Modifiers="Ctrl" Key="T" Command="{Binding EditSelectionTagsCommand}" />
         <KeyBinding Modifiers="Ctrl" Key="K" Command="{Binding EditSelectionCategoriesCommand}" />
+        <KeyBinding Modifiers="Ctrl" Key="L" Command="{Binding AddSelectionToNamedAlbumCommand}" />
         <!-- Strg+F: Suchfeld der Kopfzeile (0.2.43) -->
         <KeyBinding Modifiers="Ctrl" Key="F" Command="ApplicationCommands.Find" />
     </UserControl.InputBindings>
@@ -619,6 +628,13 @@
                                            Icon="{ui:SymbolIcon Tag24}"
                                            ToolTip="Tags der Auswahl setzen oder entfernen (Strg+T öffnet die Tag-Auswahl)"
                                            AutomationProperties.Name="Tags" />
+                        <!-- Alben (ADR-0054): zu einem Album hinzufügen (Strg+L), hier verknüpfen; Menü im Code-Behind (GalleryView.Albums.cs) -->
+                        <ui:DropDownButton x:Name="AlbumsDropDown"
+                                           Appearance="Transparent" Content="Album"
+                                           Icon="{ui:SymbolIcon Album24}"
+                                           ToolTip="Auswahl zu einem Album hinzufügen oder in einen Ordner verknüpfen — nichts wird kopiert (Strg+L)"
+                                           AutomationProperties.Name="Album"
+                                           Visibility="{Binding HasAlbumSupport, Converter={StaticResource BoolToVis}}" />
                         <!-- Aufnahmedatum setzen (ADR-0046) -->
                         <ui:Button Appearance="Transparent" Content="Datum…"
                                    Icon="{ui:SymbolIcon CalendarEdit24}"

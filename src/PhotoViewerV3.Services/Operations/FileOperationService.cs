@@ -806,7 +806,7 @@ public sealed partial class FileOperationService : IFileOperationService, IDispo
         }
 
         var error = await CommitItemAsync(ctx, op, undo: false, hint,
-            token => RemoveCatalogEntryAsync(ctx, cf.File, token)).ConfigureAwait(false);
+            token => RemoveCatalogEntryAsync(ctx, cf.File, token, op.Id)).ConfigureAwait(false); // Verknüpfungen gesichert (ADR-0054)
 
         if (error is not null)
         {
@@ -921,7 +921,7 @@ public sealed partial class FileOperationService : IFileOperationService, IDispo
             }
             else
             {
-                await RemoveCatalogEntryAsync(ctx, cf.File, token).ConfigureAwait(false);
+                await RemoveCatalogEntryAsync(ctx, cf.File, token, op.Id).ConfigureAwait(false); // Verknüpfungen gesichert (ADR-0054)
             }
         }).ConfigureAwait(false);
 
@@ -1209,6 +1209,7 @@ public sealed partial class FileOperationService : IFileOperationService, IDispo
                 if (created is not null)
                 {
                     addedId = created.Id;
+                    await Albums.FileLinkUndoStore.RestoreAsync(ctx, op.Id, created.Id, token).ConfigureAwait(false); // ADR-0054
                 }
                 else
                 {
@@ -1565,9 +1566,18 @@ public sealed partial class FileOperationService : IFileOperationService, IDispo
         return FilePathEquals(currentPath, dest) || FilePathEquals(currentPath, source) ? hit.File : null;
     }
 
-    /// <summary>FTS-Eintrag (alte Werte), Thumbnails-Zeilen und Files-Zeile entfernen — innerhalb der laufenden Transaktion.</summary>
-    private async Task RemoveCatalogEntryAsync(LibraryContext ctx, MediaFile file, CancellationToken ct)
+    /// <summary>
+    /// FTS-Eintrag (alte Werte), Thumbnails-Zeilen und Files-Zeile entfernen — innerhalb der laufenden Transaktion. Album-
+    /// und Ordner-Verknüpfungen gehen per Kaskade mit; mit <paramref name="operationId"/> werden sie vorher zur Operation
+    /// gesichert, damit „Rückgängig“ bzw. die Rückkehr der Datei sie wiederherstellt (ADR-0054).
+    /// </summary>
+    private async Task RemoveCatalogEntryAsync(LibraryContext ctx, MediaFile file, CancellationToken ct, int? operationId = null)
     {
+        if (operationId is { } op)
+        {
+            await Albums.FileLinkUndoStore.CaptureAsync(ctx, op, file.Id, ct).ConfigureAwait(false);
+        }
+
         await FtsDeleteAsync(ctx, file.Id, file.Name, file.Extension, ct).ConfigureAwait(false);
         var fileId = file.Id;
         await ctx.Thumbnails.Where(t => t.FileId == fileId).ExecuteDeleteAsync(ct).ConfigureAwait(false);

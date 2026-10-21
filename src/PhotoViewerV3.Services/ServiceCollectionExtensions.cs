@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using PhotoViewerV3.Data.RawSql;
+using PhotoViewerV3.Services.Albums;
 using PhotoViewerV3.Services.Archive;
 using PhotoViewerV3.Services.Catalog;
 using PhotoViewerV3.Services.Categories;
@@ -95,6 +96,8 @@ public static class ServiceCollectionExtensions
 
         // Doppelte erkennen: Prüfsummen, Bild-Fingerabdrücke, Gruppen, Aufräumen mit Rückgängig (Services/Duplicates, ADR-0053)
         services.AddDuplicates();
+        // Alben und Ordner-Verknüpfungen: Fotos verknüpfen statt kopieren (Services/Albums, ADR-0054)
+        services.AddAlbums();
 
         return services;
     }

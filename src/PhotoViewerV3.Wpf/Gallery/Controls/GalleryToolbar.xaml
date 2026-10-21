@@ -12,6 +12,7 @@
              xmlns:places="clr-namespace:PhotoViewerV3.Gallery.Places"
              xmlns:motifs="clr-namespace:PhotoViewerV3.Gallery.Motifs"
              xmlns:vm="clr-namespace:PhotoViewerV3.Gallery.ViewModels"
+             xmlns:albums="clr-namespace:PhotoViewerV3.Albums"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=vm:GalleryViewModel, IsDesignTimeCreatable=False}"
              d:DesignWidth="1028"
@@ -119,6 +120,9 @@
                         </StackPanel>
                     </Border>
                 </StackPanel>
+                <!-- Ordner-Verknüpfungen (ADR-0054): „mit Verknüpfungen“ / „nur echte Dateien“, Zähler — nur in Ordnern mit Verknüpfungen -->
+                <albums:FolderLinksHeader Margin="0,6,0,0" HorizontalAlignment="Left"
+                                          Visibility="{Binding ShowFolderLinksHeader, Converter={StaticResource BoolToVis}}" />
             </StackPanel>
 
             <!-- Suche: Enter sucht sofort, sonst nach kurzer Tipp-Pause; Esc leert; Strg+F fokussiert (GalleryView) -->
@@ -269,6 +273,9 @@
                     <!-- Motiv-Filter (ADR-0052) — sobald Motive erkannt wurden -->
                     <motifs:MotifFilterDropDown Visibility="{Binding ShowMotifFilter, Converter={StaticResource BoolToVis}}" />
 
+                    <!-- Album-Filter (ADR-0054) — sobald es Alben gibt -->
+                    <albums:AlbumFilterDropDown Visibility="{Binding ShowAlbumFilter, Converter={StaticResource BoolToVis}}" />
+
                     <!-- Kategorien-Filter (ADR-0027) — nur wenn Kategorien angelegt sind -->
                     <cats:CategoryFilterDropDown Visibility="{Binding HasCategories, Converter={StaticResource BoolToVis}}" />
 
@@ -346,10 +353,24 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
-                        <TextBlock Grid.Column="2" FontSize="13" Margin="12,3,0,0" VerticalAlignment="Top"
-                                   AutomationProperties.AutomationId="GalleryActiveHits">
-                            <Run Text="→ " Foreground="{DynamicResource TextFillColorSecondaryBrush}" /><Run Text="{Binding TotalCount, StringFormat=N0, Mode=OneWay}" FontWeight="SemiBold" /><Run Text=" Treffer" />
-                        </TextBlock>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Top">
+                            <TextBlock FontSize="13" Margin="12,3,0,0" VerticalAlignment="Top"
+                                       AutomationProperties.AutomationId="GalleryActiveHits">
+                                <Run Text="→ " Foreground="{DynamicResource TextFillColorSecondaryBrush}" /><Run Text="{Binding TotalCount, StringFormat=N0, Mode=OneWay}" FontWeight="SemiBold" /><Run Text=" Treffer" />
+                            </TextBlock>
+                            <!-- Intelligentes Album aus dem aktuellen Filter (ADR-0054) -->
+                            <ui:Button Margin="12,0,0,0" Padding="8,2" Appearance="Transparent"
+                                       AutomationProperties.AutomationId="GallerySaveSmartAlbum"
+                                       AutomationProperties.Name="Als intelligentes Album speichern"
+                                       ToolTip="Diesen Filter als intelligentes Album speichern — es füllt sich selbst"
+                                       Command="{Binding SaveAsSmartAlbumCommand}"
+                                       Visibility="{Binding HasAlbumSupport, Converter={StaticResource BoolToVis}}">
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:SymbolIcon Symbol="Sparkle16" FontSize="12" Margin="0,0,4,0" />
+                                    <TextBlock Text="Als Album speichern…" FontSize="12" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </ui:Button>
+                        </StackPanel>
                     </Grid>
                 </Border>
             </StackPanel>

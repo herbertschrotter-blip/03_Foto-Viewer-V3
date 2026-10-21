@@ -6,6 +6,7 @@
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:shell="clr-namespace:PhotoViewerV3.Shell"
              xmlns:local="clr-namespace:PhotoViewerV3.Folders"
+             xmlns:albums="clr-namespace:PhotoViewerV3.Albums"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance local:FolderTreeViewModel}"
              d:DesignWidth="1100"
@@ -35,6 +36,7 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
@@ -133,7 +135,12 @@
                 </StackPanel>
 
                 <Grid Grid.Row="4">
-                    <TreeView ItemsSource="{Binding Roots}"
+                    <!-- Ablegen von Galerie-Dateien (ADR-0054): verknüpfen, mit Umschalt verschieben (GalleryDragData) -->
+                    <TreeView x:Name="FolderTree"
+                              ItemsSource="{Binding Roots}"
+                              AllowDrop="True"
+                              DragOver="OnTreeDragOver"
+                              Drop="OnTreeDrop"
                               BorderThickness="0"
                               Background="Transparent"
                               VirtualizingStackPanel.IsVirtualizing="True"
@@ -251,6 +258,9 @@
                            TextTrimming="CharacterEllipsis"
                            ToolTip="{Binding SelectionText}"
                            Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+
+                <!-- Alben (ADR-0054): Klick öffnet das Album rechts, Fotos aus der Galerie hierher ziehen = hinzufügen -->
+                <albums:FolderPageAlbumsPanel x:Name="AlbumsPanel" Grid.Row="6" Margin="0,10,0,0" />
             </Grid>
         </Border>
 

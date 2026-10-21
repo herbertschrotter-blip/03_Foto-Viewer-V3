@@ -65,6 +65,7 @@ public partial class GalleryView : UserControl
         var flyout = new ContextMenu();
         flyout.Opened += OnTagMenuOpened;
         TagsDropDown.Flyout = flyout;
+        InitAlbumUi(); // Album-Menü, Ziehen aus der Galerie (ADR-0054, GalleryView.Albums.cs)
     }
 
     /// <summary>Strg+F: Suchfeld der Kopfzeile fokussieren (0.2.43).</summary>
@@ -340,6 +341,7 @@ public partial class GalleryView : UserControl
         if (target is not null)
         {
             AddFileActions(menu, target);
+            AddAlbumActions(menu, target); // Alben und Verknüpfungen (ADR-0054)
             menu.Items.Add(new Separator());
         }
 

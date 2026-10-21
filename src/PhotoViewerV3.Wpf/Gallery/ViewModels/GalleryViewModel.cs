@@ -135,8 +135,10 @@ public sealed partial class GalleryViewModel : ObservableObject
         PhotoViewerV3.Gallery.CaptureDates.CaptureDateActions? captureDateActions = null,
         PhotoViewerV3.Gallery.Places.PlaceActions? placeActions = null,
         PhotoViewerV3.Services.Motifs.IMotifTermService? motifTerms = null,
-        PhotoViewerV3.Services.Library.ILibraryScope? libraryScope = null)
+        PhotoViewerV3.Services.Library.ILibraryScope? libraryScope = null,
+        PhotoViewerV3.Albums.AlbumActions? albumActions = null)
     {
+        InitAlbums(albumActions); // Alben und Ordner-Verknüpfungen (ADR-0054, GalleryViewModel.Albums.cs)
         _libraryScope = libraryScope ?? new PhotoViewerV3.Services.Library.LibraryScope(contextFactory); // ADR-0048, GalleryViewModel.Scope.cs
         InitMotifs(motifTerms); // Bildinhalt-Suche (ADR-0052, GalleryViewModel.Motifs.cs)
         _contextFactory = contextFactory;
@@ -333,6 +335,11 @@ public sealed partial class GalleryViewModel : ObservableObject
                 return motifsMessage;
             }
 
+            if (HasAlbumFilter) // ADR-0054
+            {
+                return "Dieses Album ist (in diesem Bereich) noch leer — füge Fotos über das Kontextmenü „Zu Album hinzufügen“ oder Strg+L hinzu.";
+            }
+
             if (FolderId is not null)
             {
                 return "In diesem Ordner liegen keine Dateien, die zum Filter passen.";
@@ -393,6 +400,7 @@ public sealed partial class GalleryViewModel : ObservableObject
 
         await LoadPersonsAsync(); // Personen-Filter mit Zählern der Bibliothek (0.2.38)
         await LoadMotifsAsync(); // Motiv-Filter mit Zählern des Bereichs (ADR-0052)
+        FireAndForget(LoadAlbumsAsync); // Filter „Album“, Menü „Zu Album hinzufügen“ (ADR-0054) — blockiert die erste Seite nicht
         await ReloadTotalAndPageAsync(restoreSelection: false);
         await RefreshCanUndoAsync();
     }
@@ -419,6 +427,7 @@ public sealed partial class GalleryViewModel : ObservableObject
             ResetCategoryFilter();
             ResetPersonFilter();
             ResetMotifFilter(); // ADR-0052
+            ResetAlbumFilter(); // ADR-0054
         }
         finally
         {
@@ -815,6 +824,7 @@ public sealed partial class GalleryViewModel : ObservableObject
         FireAndForget(() => ApplyPersonsToItemsAsync(rows.Select(r => r.Id).ToList(), ct)); // Personen (0.2.38)
         FireAndForget(() => ApplyPlacesToItemsAsync(rows.Select(r => r.Id).ToList(), ct)); // Orte (ADR-0050,
         FireAndForget(() => ApplyMotifsToItemsAsync(rows.Select(r => r.Id).ToList(), ct)); // Motive (ADR-0052)
+        FireAndForget(() => ApplyFolderLinkMarksAsync(query, rows.Select(r => r.Id).ToList(), ct)); // Verknüpft (ADR-0054)
 
         SetLoadStatus($"{TotalCount:N0} Treffer · Seite {DisplayPageIndex} von {PageCount:N0} · {LastPageLoadMs:N1} ms");
         _logger.LogInformation(
@@ -885,10 +895,10 @@ public sealed partial class GalleryViewModel : ObservableObject
     private GalleryQuery BuildQuery()
     {
         var term = string.IsNullOrWhiteSpace(SearchTerm) ? null : SearchTerm.Trim();
-        return WithMotifs(new GalleryQuery(_libraryId, FilterState, term, FolderId, IncludeSubfolders, SelectedSort.Sort, SelectedTagIds(), TagFilterMode, SelectedCategoryFilters(), SelectedSort.Category, SelectedPersonFilter())
+        return WithAlbums(WithMotifs(new GalleryQuery(_libraryId, FilterState, term, FolderId, IncludeSubfolders, SelectedSort.Sort, SelectedTagIds(), TagFilterMode, SelectedCategoryFilters(), SelectedSort.Category, SelectedPersonFilter())
         {
             LibraryIds = ScopeLibraryIdsForQuery, // ADR-0048: null = nur die aktive Bibliothek
-        }); // Motive (ADR-0052)
+        })); // Motive (ADR-0052), Album/Verknüpfungen (ADR-0054)
     }
 
     /// <summary>

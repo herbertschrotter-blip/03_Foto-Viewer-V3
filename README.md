@@ -115,7 +115,7 @@ außerhalb von OneDrive), `-NoZip` lässt das ZIP weg, `-FrameworkDependent` bau
 
 ### Navigation (seit 0.2.44, ADR-0042)
 Die linke Leiste zeigt ganz oben das App-Symbol mit dem Schriftzug „lumora“, darunter den **Bibliotheks-Umschalter** (Name der aktiven Bibliothek; Klick → andere Bibliothek
-wählen, verknüpfte Bibliotheken als **Alle verknüpften (Name)** gemeinsam ansehen oder **Bibliotheken verwalten…**), darunter **Galerie, Ordner, Personen, Orte, Doppelte, Sortieren** und unten
+wählen, verknüpfte Bibliotheken als **Alle verknüpften (Name)** gemeinsam ansehen oder **Bibliotheken verwalten…**), darunter **Galerie, Ordner, Alben, Personen, Orte, Doppelte, Sortieren** und unten
 **Einstellungen**. Bibliothek, Tags und Kategorien richtet man selten ein — sie sind Reiter der Einstellungen:
 **Bibliotheken & Eingänge · Tags · Kategorien · Gesichter · Archive · Darstellung · Speicher & Wartung · Info**.
 Tags und Kategorien **vergeben** geht wie bisher in der Galerie (Rechtsklick, Strg+T, Strg+K, Lightbox); „Tags
@@ -423,6 +423,32 @@ entfernen), **Favorit für alle**, **Kategorie für alle…** und **Tags für al
 samt Unterordnern, nach einer Bestätigung mit Anzahl. Das Ergebnis steht über dem Baum (✕ blendet es aus).
 **Eingang hinzufügen…** oben neben „Ordner“ nimmt einen unsortierten Quellordner als Eingang der aktiven Bibliothek auf
 (gleicher Ablauf wie in den Einstellungen, danach Angebot „Jetzt aktualisieren“; die Seite bleibt offen).
+
+### Alben und verknüpfte Fotos (seit 0.3.2, ADR-0054)
+Ein Foto liegt immer nur **einmal** auf der Platte. Alben und Ordner-Verknüpfungen zeigen es zusätzlich an anderer Stelle —
+nichts wird kopiert, nichts verschoben; „Verknüpfung entfernen“ und „Album löschen“ löschen nie ein Foto.
+- **In einen anderen Ordner verknüpfen**: Kacheln aus der Galerie auf einen Ordner im Ordnerbaum ziehen (ohne Taste, mit
+  Alt oder Strg = **verknüpfen**; mit **Umschalt = verschieben**, nach Rückfrage, rückgängig machbar) oder Rechtsklick
+  **Hier verknüpfen…** (Ordner wählen). Nur innerhalb einer Bibliothek. Der Ordner zeigt dann seinen echten Inhalt plus
+  die verknüpften Fotos mit dem Kennzeichen **„verknüpft“** (Ketten-Symbol; in der Liste vor dem Namen). Unter dem Titel:
+  **mit Verknüpfungen** / **nur echte Dateien** und der Zähler „12 Dateien · 5 verknüpft“. Rechtsklick auf eine verknüpfte
+  Kachel: **Verknüpfung entfernen**.
+- **Eigene Alben**: Seite **Alben** → **Neues Album…**; Fotos hinzufügen in der Galerie per Rechtsklick **Zu Album
+  hinzufügen**, Aktionsleiste **Album**, **Strg+L** (Albumname eingeben — vorhandenes oder neues Album) oder per Ziehen
+  auf ein Album der Liste „Alben“ unter dem Ordnerbaum. Klick auf eine Album-Kachel öffnet die Galerie gefiltert auf das
+  Album (Chip **Album** in der Zeile „Inhalt“, Bedingung „Album …“ in „Es gilt“ — mit allen übrigen Filtern und
+  Ansichten kombinierbar). In der Album-Ansicht: **Aus Album entfernen**, **Als Titelbild des Albums**. Rechtsklick auf
+  eine Album-Kachel: Umbenennen, Titelbild zurücksetzen, **Album exportieren…** (echte Kopien in einen gewählten Ordner,
+  mit Fortschritt und Abbrechen; in einen Bibliotheksordner nur nach Rückfrage; in einer versteckten Bibliothek gesperrt),
+  Album löschen.
+- **Intelligente Alben**: in der Galerie Filter setzen (Dateiart, Favoriten, Bewertung, Ablage, Ort, Tags, Personen,
+  Beziehung, Kategorien, Motive, Suche, Ordner …) und in der Zeile „Es gilt“ **Als Album speichern…** — das Album füllt
+  sich selbst. Öffnen lädt den Filter in die Galerie; ändern und unter demselben Namen speichern ersetzt ihn (Rückfrage).
+- **Sicherheit**: Verschieben, Umbenennen, Sortieren und „Ordner übernehmen“ behalten alle Verknüpfungen. Papierkorb
+  entfernt die Verknüpfungen mit; kommt dieselbe Datei an ihren Ort zurück (Windows „Wiederherstellen“ + Aktualisieren)
+  bzw. macht man ein Verschieben aus der Bibliothek rückgängig, sind sie wieder da. „Neu aufbauen“ behält Alben und
+  Verknüpfungen. Alben gehören wie Tags der Bibliotheks-Gruppe (Verknüpfen führt gleichnamige eigene Alben zusammen,
+  Lösen kopiert sie).
 
 ### Sortieren
 - **Quelle und Ziel** (beide Bereiche): je eine Auswahl der Wurzeln der aktiven Bibliothek mit Rolle („Eingang“ /

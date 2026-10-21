@@ -29,6 +29,8 @@ public enum GalleryFilterConditionKind
 
     /// <summary>Nur Doppelte (ADR-0053).</summary>
     Duplicates,
+    /// <summary>Eigenes Album (ADR-0054).</summary>
+    Album,
 }
 
 /// <summary>

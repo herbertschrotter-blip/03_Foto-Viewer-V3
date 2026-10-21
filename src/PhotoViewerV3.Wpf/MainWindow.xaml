@@ -11,6 +11,7 @@
                  xmlns:persons="clr-namespace:PhotoViewerV3.Persons"
                  xmlns:places="clr-namespace:PhotoViewerV3.Places"
                  xmlns:duplicates="clr-namespace:PhotoViewerV3.Duplicates"
+                 xmlns:albums="clr-namespace:PhotoViewerV3.Albums"
                  xmlns:branding="clr-namespace:PhotoViewerV3.Shell.Branding"
                  Title="{x:Static branding:LumoraBrand.ProductName}"
                  Height="800"
@@ -60,6 +61,14 @@
                                        TargetPageType="{x:Type folders:FolderTreePage}">
                     <ui:NavigationViewItem.Icon>
                         <ui:SymbolIcon Symbol="Folder24" />
+                    </ui:NavigationViewItem.Icon>
+                </ui:NavigationViewItem>
+                <!-- Alben: Fotos verknüpfen statt kopieren (ADR-0054) -->
+                <ui:NavigationViewItem Content="Alben"
+                                       TargetPageTag="albums"
+                                       TargetPageType="{x:Type albums:AlbumsPage}">
+                    <ui:NavigationViewItem.Icon>
+                        <ui:SymbolIcon Symbol="Album24" />
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
                 <!-- Personen (Gesichtserkennung, ADR-0037) -->

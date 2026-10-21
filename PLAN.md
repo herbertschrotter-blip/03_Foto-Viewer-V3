@@ -197,7 +197,20 @@ FilesFts           -- FTS5 virtual table (Files.Name, Extension)
   (segmentweise Kategorie-Sortierung, Kategorie-Filter, Suche nach Kategorie-Namen lesen nur den Index).
   Global wie Tags; „Neu aufbauen“ trägt die Werte über `UserDataCarryOver` (ADR-0023) mit — seit 0.2.24 in derselben
   Transaktion, die die alten Zeilen ersetzt (ADR-0028, keine Schema-Änderung).
-- Albums / AlbumFiles (V0.3+)
+- Alben und Ordner-Verknüpfungen — umgesetzt in 0.3.2 (Migration `AddAlbums`, ADR-0054; nur neue Tabellen):
+  `Albums (Id AUTOINCREMENT, GroupId, Name COLLATE NOCASE, Kind 0 eigenes | 1 intelligent, FilterJson NULL (gespeicherter
+  Galerie-Filter, Begriffe über ihre Namen), CoverFileId NULL → Files ON DELETE SET NULL, SortOrder, CreatedAtUtc,
+  UpdatedAtUtc; UX_Albums_Group_Name (GroupId, Name) eindeutig, IX_Albums_CoverFile)` — je Bibliotheks-Gruppe wie Tags
+  (`GroupId` ohne Fremdschlüssel, in `LibraryGroupStore.TermTables`).
+  `AlbumItems (AlbumId → Albums, FileId → Files — beide ON DELETE CASCADE, PK (AlbumId, FileId), AddedAtUtc;
+  IX_AlbumItems_File)` — Fotos eigener Alben (verknüpft, nicht kopiert).
+  `FolderLinks (FolderId → Folders, FileId → Files — beide ON DELETE CASCADE, PK (FolderId, FileId), AddedAtUtc;
+  IX_FolderLinks_File)` — Foto zusätzlich in einem weiteren Ordner derselben Bibliothek (keine Windows-Hardlinks).
+  `FileLinkUndo (Id, FileOperationId → FileOperations ON DELETE CASCADE, Kind 0 Album | 1 Ordner, TargetId, AddedAtUtc,
+  SourcePath, FileSize, FileModifiedAtUtc; IX_FileLinkUndo_Operation)` — Verknüpfungen einer Datei, deren Files-Zeile eine
+  Datei-Operation entfernt hat (Papierkorb, aus der Bibliothek heraus); „Rückgängig“ bzw. Rückkehr derselben Datei (Pfad +
+  Größe + Änderungszeit) stellt sie wieder her. „Neu aufbauen“ trägt AlbumItems, FolderLinks (über Ordnerpfad), Titelbilder
+  und gesicherte Ordner-Ziele mit (`UserDataCarryOver.Albums.cs`).
 - Plans / PlanFolders / PlanAssignments (V0.3)
 - FileHashes (V0.3+ separat von Files)
 - SorterProfiles / SorterTokens (Phase 8)

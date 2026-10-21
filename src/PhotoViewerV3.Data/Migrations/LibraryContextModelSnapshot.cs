@@ -16,6 +16,69 @@ namespace PhotoViewerV3.Data.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.0");
 
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.Album", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("CoverFileId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("FilterJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("GroupId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CoverFileId")
+                        .HasDatabaseName("IX_Albums_CoverFile");
+
+                    b.HasIndex("GroupId", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("UX_Albums_Group_Name");
+
+                    b.ToTable("Albums", (string)null);
+                });
+
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.AlbumItem", b =>
+                {
+                    b.Property<int>("AlbumId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("FileId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("AddedAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("AlbumId", "FileId");
+
+                    b.HasIndex("FileId")
+                        .HasDatabaseName("IX_AlbumItems_File");
+
+                    b.ToTable("AlbumItems", (string)null);
+                });
+
             modelBuilder.Entity("PhotoViewerV3.Domain.Entities.CaptureDateUndo", b =>
                 {
                     b.Property<int>("FileOperationId")
@@ -342,6 +405,42 @@ namespace PhotoViewerV3.Data.Migrations
                     b.ToTable("FileFingerprints", (string)null);
                 });
 
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.FileLinkUndo", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("AddedAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("FileModifiedAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("FileOperationId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("FileSize")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SourcePath")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("TargetId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FileOperationId")
+                        .HasDatabaseName("IX_FileLinkUndo_Operation");
+
+                    b.ToTable("FileLinkUndo", (string)null);
+                });
+
             modelBuilder.Entity("PhotoViewerV3.Domain.Entities.FileMotif", b =>
                 {
                     b.Property<int>("FileId")
@@ -455,6 +554,25 @@ namespace PhotoViewerV3.Data.Migrations
                         .HasDatabaseName("UX_Folders_Library_Path");
 
                     b.ToTable("Folders", (string)null);
+                });
+
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.FolderLink", b =>
+                {
+                    b.Property<int>("FolderId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("FileId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("AddedAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("FolderId", "FileId");
+
+                    b.HasIndex("FileId")
+                        .HasDatabaseName("IX_FolderLinks_File");
+
+                    b.ToTable("FolderLinks", (string)null);
                 });
 
             modelBuilder.Entity("PhotoViewerV3.Domain.Entities.GeoTagUndo", b =>
@@ -973,6 +1091,29 @@ namespace PhotoViewerV3.Data.Migrations
                     b.ToTable("Thumbnails", (string)null);
                 });
 
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.Album", b =>
+                {
+                    b.HasOne("PhotoViewerV3.Domain.Entities.MediaFile", null)
+                        .WithMany()
+                        .HasForeignKey("CoverFileId")
+                        .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.AlbumItem", b =>
+                {
+                    b.HasOne("PhotoViewerV3.Domain.Entities.Album", null)
+                        .WithMany()
+                        .HasForeignKey("AlbumId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("PhotoViewerV3.Domain.Entities.MediaFile", null)
+                        .WithMany()
+                        .HasForeignKey("FileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("PhotoViewerV3.Domain.Entities.CaptureDateUndo", b =>
                 {
                     b.HasOne("PhotoViewerV3.Domain.Entities.FileOperation", null)
@@ -1082,6 +1223,15 @@ namespace PhotoViewerV3.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.FileLinkUndo", b =>
+                {
+                    b.HasOne("PhotoViewerV3.Domain.Entities.FileOperation", null)
+                        .WithMany()
+                        .HasForeignKey("FileOperationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("PhotoViewerV3.Domain.Entities.FileMotif", b =>
                 {
                     b.HasOne("PhotoViewerV3.Domain.Entities.MediaFile", null)
@@ -1108,6 +1258,21 @@ namespace PhotoViewerV3.Data.Migrations
                     b.HasOne("PhotoViewerV3.Domain.Entities.Tag", null)
                         .WithMany()
                         .HasForeignKey("TagId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.FolderLink", b =>
+                {
+                    b.HasOne("PhotoViewerV3.Domain.Entities.MediaFile", null)
+                        .WithMany()
+                        .HasForeignKey("FileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("PhotoViewerV3.Domain.Entities.Folder", null)
+                        .WithMany()
+                        .HasForeignKey("FolderId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

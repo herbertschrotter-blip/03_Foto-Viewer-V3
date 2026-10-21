@@ -99,6 +99,11 @@
                         <TextBlock Text="Eingang" FontSize="10" Foreground="White" FontWeight="SemiBold" />
                     </StackPanel>
                 </Border>
+                <!-- Nur über eine Verknüpfung in diesem Ordner (ADR-0054) -->
+                <Border Padding="5,1" Margin="3,0,0,0" CornerRadius="3" Background="#CC5B4FC4"
+                        Visibility="{Binding IsLinked, Converter={StaticResource CollageBoolToVis}}">
+                    <ui:SymbolIcon Symbol="Link16" FontSize="11" Foreground="White" />
+                </Border>
             </StackPanel>
 
             <!-- Herz oben rechts: Favorit (sichtbar wenn gesetzt, sonst beim Darüberfahren) -->

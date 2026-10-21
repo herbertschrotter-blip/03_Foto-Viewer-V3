@@ -386,6 +386,11 @@ public sealed partial class GalleryViewModel
             list.Add((GalleryFilterConditionKind.Motifs, motifLabel, null));
         }
 
+        if (AlbumConditionLabel is { } albumLabel) // Album (ADR-0054, GalleryViewModel.Albums.cs)
+        {
+            list.Add((GalleryFilterConditionKind.Album, albumLabel, null));
+        }
+
         foreach (var group in CategoryFilterGroups.Where(g => g.IsActive))
         {
             var values = group.Entries.Where(e => e.IsSelected).Select(e => e.IsNone ? "ohne Wert" : $"„{e.Name}“");
@@ -450,6 +455,7 @@ public sealed partial class GalleryViewModel
             ResetPersonFilter();
             ResetCategoryFilter();
             ResetMotifFilter(); // ADR-0052
+            ResetAlbumFilter(); // ADR-0054
             SearchTerm = null;
         }
         finally
@@ -503,6 +509,8 @@ public sealed partial class GalleryViewModel
                 return ClearMapAreaFilterAsync();
             case GalleryFilterConditionKind.Motifs:
                 return ClearMotifFilterAsync(); // ADR-0052
+            case GalleryFilterConditionKind.Album:
+                return ClearAlbumFilterAsync(); // ADR-0054
             case GalleryFilterConditionKind.Category when condition.CategoryId is { } categoryId:
                 var group = CategoryFilterGroups.FirstOrDefault(g => g.CategoryId == categoryId);
                 if (group is null || !group.IsActive)
@@ -539,7 +547,7 @@ public sealed partial class GalleryViewModel
     {
         _appliedSearchTerm = query.HasSearch ? query.SearchTerm : null;
         var filtered = query.HasSearch || query.Filter.IsActive || query.HasTagFilter || query.HasPersonFilter
-                       || query.ActiveCategoryFilters.Count > 0 || query.HasMotifFilter;
+                       || query.ActiveCategoryFilters.Count > 0 || query.HasMotifFilter || query.AlbumId is not null;
         if (!filtered)
         {
             UnfilteredCount = total;

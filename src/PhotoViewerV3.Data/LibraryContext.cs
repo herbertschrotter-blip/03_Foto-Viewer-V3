@@ -39,6 +39,10 @@ public sealed class LibraryContext : DbContext
     public DbSet<FileMotif> FileMotifs => Set<FileMotif>();
     public DbSet<FileFingerprint> FileFingerprints => Set<FileFingerprint>(); // Doppelte erkennen (ADR-0053)
     public DbSet<DuplicateCleanupUndo> DuplicateCleanupUndo => Set<DuplicateCleanupUndo>();
+    public DbSet<Album> Albums => Set<Album>(); // Alben und Ordner-Verknüpfungen (ADR-0054)
+    public DbSet<AlbumItem> AlbumItems => Set<AlbumItem>();
+    public DbSet<FolderLink> FolderLinks => Set<FolderLink>();
+    public DbSet<FileLinkUndo> FileLinkUndo => Set<FileLinkUndo>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

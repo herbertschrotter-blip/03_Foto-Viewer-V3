@@ -16,6 +16,7 @@ public static class NavigationTags
     public const string Persons = "persons"; // Seite „Personen“ (ADR-0037)
     public const string Places = "places"; // Seite „Orte“ (ADR-0051)
     public const string Duplicates = "duplicates"; // Seite „Doppelte“ (ADR-0053)
+    public const string Albums = "albums"; // Seite „Alben“ (ADR-0054)
     public const string Sorter = "sorter";
     public const string Settings = "settings";
 

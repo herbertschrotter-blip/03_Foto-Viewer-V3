@@ -417,7 +417,7 @@ public sealed partial class GalleryPageSource : IDisposable
     /// (<c>Path = $folderPath OR Path LIKE $folderPrefix ESCAPE '\'</c>). Der Prefix-Vergleich
     /// läuft als IN-Subquery über die (kleine) Folders-Tabelle statt pro Files-Zeile.
     /// </summary>
-    private static FolderClause ResolveFolderClause(SqliteConnection conn, GalleryQuery query)
+    private static FolderClause ResolveFolderClauseCore(SqliteConnection conn, GalleryQuery query) // erweitert um Verknüpfungen/Album: GalleryPageSource.Albums.cs (ADR-0054)
     {
         if (query.FolderId is not { } folderId)
         {
@@ -622,6 +622,7 @@ public sealed partial class GalleryPageSource : IDisposable
 
         BindPersonParams(cmd, query); // Personen-Filter (0.2.38)
         BindMotifParams(cmd, query); // Motiv-Filter und „Motiv: …“ (ADR-0052)
+        BindAlbumParams(cmd, query); // Filter „Album“ (ADR-0054)
 
         var categoryFilters = query.ActiveCategoryFilters;
         for (var i = 0; i < categoryFilters.Count; i++)
