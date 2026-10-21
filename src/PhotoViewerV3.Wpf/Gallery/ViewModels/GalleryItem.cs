@@ -39,6 +39,7 @@ public sealed partial class GalleryItem : ObservableObject
         _rating = dto.Rating;
         _missing = dto.Missing;
         InitMediaSize(dto); // Seitenverhältnis für die Collage (GalleryItem.Collage.cs, ADR-0044)
+        _captureDate = dto.CaptureDate; // ADR-0046, GalleryItemCaptureDate.cs
     }
 
     public int Id { get; }

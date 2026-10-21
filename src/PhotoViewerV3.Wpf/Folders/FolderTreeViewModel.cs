@@ -78,9 +78,11 @@ public sealed partial class FolderTreeViewModel : ObservableObject
         IDialogService dialogs,
         FolderActions folderActions,
         ILogger<FolderTreeViewModel> logger,
-        Libraries.IInboxActions? inboxActions = null)
+        Libraries.IInboxActions? inboxActions = null,
+        Gallery.CaptureDates.CaptureDateActions? captureDateActions = null)
     {
         _inboxActions = inboxActions; // „Eingang hinzufügen…“ im Seitenkopf (ADR-0042, FolderTreeViewModel.AddInbox.cs)
+        _captureDateActions = captureDateActions; // „Datum setzen…“ (ADR-0046, FolderTreeViewModel.CaptureDate.cs)
         _folderActions = folderActions;
         _factory = factory;
         _libraries = libraries;

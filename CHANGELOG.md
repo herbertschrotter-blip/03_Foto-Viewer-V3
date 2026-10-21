@@ -3,6 +3,72 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.48] — 2026-10-21
+
+### Neu (ADR-0046) — Aufnahmedatum: aus EXIF/Video/Dateiname, Sortierung danach, Datum selbst setzen
+- **Katalog** (Migration `AddCapturedAt`): `Files.CapturedAt` (UTC), `CapturedAtSource` (NULL = noch nicht gelesen,
+  unbekannt, EXIF, Video, Dateiname, manuell), `CapturedAtPrecision` (genau/Tag/Monat/Jahr), `CapturedAtOffset`
+  (Ortszeit der Aufnahme); Ausdrucks-Index `IX_Files_Library_Captured (LibraryId, COALESCE(CapturedAt, ModifiedAtUtc)
+  DESC, Id DESC)`; Tabelle `CaptureDateUndo` für Rückgängig.
+- **Lesen** (`Services/Metadata`, verwaltet, ohne neue NuGet-Pakete): EXIF `DateTimeOriginal` (+ `OffsetTimeOriginal`)
+  aus JPEG, TIFF/DNG/CR2/NEF/ARW/ORF/RW2, Fuji RAF, PNG `eXIf`, WebP `EXIF`, HEIC/HEIF/AVIF (auch ohne HEIF-Erweiterung);
+  Videos MP4/MOV/3GP über Apple `creationdate` (mit Zone) bzw. `mvhd` (UTC); sonst der Dateiname (`IMG_20240712_153012`,
+  `PXL_…`, `Screenshot 2026-09-30 105535`, WhatsApp `IMG-20240712-WA0001` = nur Tag …). `DateTimeDigitized`/IFD0-`DateTime`
+  zählen nicht (bei Scans das Scan-Datum). Gemessen schneller als die WIC-Metadatenabfrage und für alle verglichenen
+  JPEGs gleich (Spike #12).
+- **Nachtragen im Hintergrund** statt im Scan: nach jedem Scan, bei neuen Dateien und 15 s nach dem Start (bestehende
+  Kataloge einmalig ganz), Stapel zu 200 mit einer Transaktion, ruht bei Scan-Sperre/Umzug, liest keine
+  Cloud-Platzhalter (kein Download) und keine Dateien nicht erreichbarer Wurzeln, Fortschritt in der Statusleiste
+  („Aufnahmedatum: 1.234 / 19.556“). Der Scan wird nur durch den neuen Index langsamer (Spike #12: Fresh-Scan 24 217
+  Dateien Median 4,36 → 4,74 s, **+8,8 %**); Lesen im Scan hätte ihn vervielfacht (Nachtragen derselben Dateien mit
+  kaltem Cache 179,5 s = 135 Dateien/s — 500 000 ≈ 1 h einmalig im Hintergrund). Leser je Datei warm 0,12 ms gegen
+  1,3 ms über WIC, Ergebnis für 1 712 von 1 712 EXIF-Bildern gleich. Der Index wird beim Start zusätzlich idempotent
+  sichergestellt (`DatabaseInitializer`).
+- **Sortierung „Aufnahmedatum“** (vorn in der Sortierleiste, **Standard**, Richtung wie bei Datum); Dateien ohne Datum
+  stehen mit ihrem Änderungsdatum dazwischen. Kombinierbar mit allen Filtern, Suche und Ordner — Pläne ohne Vollscan;
+  500 000 Dateien: Seite 1 8 ms, letzte Seite 3 ms, Mitte 0,2–1,3 s (Änderungsdatum zum Vergleich 2,3 s), Ordner 1,3 s
+  (Änderungsdatum 4,4 s), Tag-Filter 0,2 s.
+- **Anzeige**: Lightbox-Info „Aufgenommen: 12.07.2024 15:30 (EXIF)“ bzw. „ca. 1982 (manuell)“, Kachel-Tooltip,
+  Listenspalte „Aufgenommen“ (Kopfklick sortiert die ganze Trefferliste).
+- **Datum setzen…** (Aktionsleiste „Datum…“, Rechtsklick auf Kachel/Zeile, Rechtsklick auf Ordner im Ordnerbaum mit
+  „Unterordner einschließen“): genau (Datum + Uhrzeit), ungefähr (Jahr bzw. Monat + Jahr, „ca. 1982“), verschieben um ±
+  Tage/Stunden/Minuten (falsch gestellte Kamera; noch nicht gelesene Dateien werden dafür erst aus der Datei gelesen),
+  zurücksetzen (wieder lesen). Nur im Katalog; Protokoll als
+  OperationBatch `SetCaptureDate` mit FileOperation je Datei; **Rückgängig** in der Galerie (jüngster Eintrag aus
+  Datei-Operationen und „Datum setzen“). Manuelle Daten bleiben bei Incremental-Scan und **„Neu aufbauen“** immer
+  erhalten (`UserDataCarryOver`); bei geändertem Inhalt werden die übrigen neu gelesen.
+- Dienste: `ICaptureDateService`/`CaptureDateService` (+ `.Backfill`), `ICaptureDateReader`, `MediaDateReader`,
+  `ExifTiffReader`, `FileNameDateParser`, `CaptureDateText`; Wpf: `Gallery/CaptureDates` (Dialog
+  `SetCaptureDateDialog` auf `AppFluentWindow`, `CaptureDateActions`, `AddCaptureDateUi()`), Partials für Galerie,
+  Ordnerbaum, Lightbox, Statusleiste. Harness `spike12-capture-date`, Doku `docs/spikes/12-aufnahmedatum.md`.
+
+### Tests
+- `tests/PhotoViewerV3.Tests`: 722 (+75, 1 übersprungen ohne Modell) (`Metadata/`): Leser je Format mit synthetischen Dateien (JPEG mit/ohne Zone, TIFF
+  big-endian, PNG hinter IDAT, WebP mit/ohne Präfix, HEIC infe v2/v3, MP4 v0/v1 und moov hinter 1-MB-mdat, MOV Apple
+  creationdate, Abgeschnittenes ohne Ausnahme), Dateinamen-Muster (positiv/negativ, Zone), Texte, Dienst (Nachtragen
+  EXIF/Dateiname/unbekannt, fehlende Dateien, nicht erreichbare Wurzel, Scan-Sperre, manuelles Datum während des Lesens,
+  Verschieben einer noch nicht gelesenen Datei, genau/ungefähr/
+  verschieben/zurücksetzen, Protokoll + Rückgängig, Neu aufbauen behält manuell + Rückgängig danach, Incremental bei
+  geändertem Inhalt, Ordner mit/ohne Unterordner, ungültige Eingaben).
+- `tests/PhotoViewerV3.Wpf.Tests`: 717 (+49, 1 übersprungen), dreimal hintereinander grün: Sortierung (beide Richtungen, Rückfall Änderungsdatum, Reverse-Trick, Filter,
+  Pläne ohne Vollscan für 32 Kombinationen, Index ohne Nachsortieren, DTO/Tooltip/Listentext, Sortierfeld/-spalte),
+  Dialog-Logik (Prüfung, gebaute Änderung, Ordner-Zähler, Vorgaben), echtes Dialogfenster, WIC-JPEG/TIFF als Quelle,
+  Statusleiste, Messung `CaptureDateSortMeasurementTests` (`PV3_CAPTURESORT_FILES`).
+- Rauchtest 32/32 OK, 0 Binding-Fehler: neuer Schritt **„Aufnahmedatum“** vor „Ordnerüberwachung“ (`SmokeScenario.CaptureDate.cs`): JPEG mit EXIF
+  1975 → nachgetragen (Herkunft EXIF), Sortierung Aufnahme alt → neu stellt es vorn, Änderungsdatum nicht; „Datum
+  setzen“ ca. 1982 (manuell, Jahr, Listentext „ca. 1982“) und Rückgängig (alter Wert, Batch zurückgenommen).
+  Screenshot `26-galerie-aufnahmedatum`.
+
+### Offen
+- Video-Container ohne Zone (`mvhd`) gelten als UTC; Kameras, die Ortszeit schreiben, liegen um den Zonenabstand daneben.
+- AVI, MKV, MTS, WMV und Canon CR3 nur mit Dateinamen-Datum; Dateien nur in der Cloud bleiben „noch nicht gelesen“ und
+  werden in jedem Durchgang erneut geprüft (nur Attribut, kein Download).
+- Die Sortierung wird weiterhin nicht gespeichert (Start immer mit „Aufnahmedatum, neueste zuerst“).
+- Listenspalte „Aufgenommen“ erscheint bei schon gespeicherter Spaltenauswahl nicht von selbst (Rechtsklick auf die
+  Kopfzeile).
+- Galerie-Ordnerfilter mit Datums-Sortierung über 500 000 Dateien braucht 1–4 s für Seite 1 (Planer läuft den
+  Datums-Index entlang; schon vorher so beim Änderungsdatum).
+
 ## [0.2.47] — 2026-10-21
 
 ### Feature (ADR-0045) — Personen mit Vor-/Nachname, Rufname, eigener Beziehung, Geburtsdatum und „Das bin ich“

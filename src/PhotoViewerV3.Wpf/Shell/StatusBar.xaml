@@ -202,6 +202,16 @@
                     <Border Style="{StaticResource StatusSeparator}" />
                 </StackPanel>
 
+                <!-- Aufnahmedatum nachtragen (Services/Metadata, ADR-0046) -->
+                <StackPanel Orientation="Horizontal"
+                            AutomationProperties.Name="Aufnahmedatum"
+                            ToolTip="Aufnahmedatum wird im Hintergrund aus EXIF, Video-Metadaten bzw. Dateinamen gelesen (nur lokale Dateien, nichts wird heruntergeladen)."
+                            Visibility="{Binding CaptureDateText, Converter={StaticResource NullToVis}}">
+                    <ui:SymbolIcon Symbol="CalendarClock24" Style="{StaticResource StatusIcon}" />
+                    <TextBlock Style="{StaticResource StatusText}" Text="{Binding CaptureDateText}" />
+                    <Border Style="{StaticResource StatusSeparator}" />
+                </StackPanel>
+
                 <StackPanel Orientation="Horizontal"
                             Visibility="{Binding IsBackgroundActive, Converter={StaticResource BoolToVis}}">
                     <Ellipse Width="7" Height="7" Margin="0,0,6,0" VerticalAlignment="Center"

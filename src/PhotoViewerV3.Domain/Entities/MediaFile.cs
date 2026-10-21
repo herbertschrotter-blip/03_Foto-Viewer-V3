@@ -25,4 +25,17 @@ public sealed class MediaFile
     public bool IsFavorite { get; set; }
     public byte? Rating { get; set; }
     public bool Missing { get; set; }
+
+    // ---- Aufnahmedatum (ADR-0046) ----
+
+    /// <summary>Aufnahmezeitpunkt als UTC (null = unbekannt bzw. noch nicht gelesen; Sortierung fällt auf <see cref="ModifiedAtUtc"/> zurück).</summary>
+    public DateTime? CapturedAt { get; set; }
+
+    /// <summary>Herkunft; null = noch nicht gelesen (Nachtragen im Hintergrund).</summary>
+    public CaptureDateSource? CapturedAtSource { get; set; }
+
+    public CaptureDatePrecision CapturedAtPrecision { get; set; }
+
+    /// <summary>Abstand der Ortszeit der Aufnahme zu UTC in Minuten (Anzeige als Wanduhrzeit „wie fotografiert“).</summary>
+    public int? CapturedAtOffset { get; set; }
 }

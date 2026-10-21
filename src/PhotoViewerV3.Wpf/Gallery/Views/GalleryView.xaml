@@ -117,8 +117,8 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <!-- Medienbereich -->
-                <Grid Grid.Row="0" ClipToBounds="True">
+                <!-- Medienbereich; Tooltip „Aufgenommen: …“ (ADR-0046) -->
+                <Grid Grid.Row="0" ClipToBounds="True" Background="Transparent" ToolTip="{Binding CaptureDateToolTip}">
                     <!-- Platzhalter (Bild), solange kein Thumbnail da ist -->
                     <ui:SymbolIcon Symbol="Image24"
                                    FontSize="48"
@@ -619,6 +619,12 @@
                                            Icon="{ui:SymbolIcon Tag24}"
                                            ToolTip="Tags der Auswahl setzen oder entfernen (Strg+T öffnet die Tag-Auswahl)"
                                            AutomationProperties.Name="Tags" />
+                        <!-- Aufnahmedatum setzen (ADR-0046) -->
+                        <ui:Button Appearance="Transparent" Content="Datum…"
+                                   Icon="{ui:SymbolIcon CalendarEdit24}"
+                                   ToolTip="Aufnahmedatum der Auswahl setzen, ungefähr angeben oder verschieben (nur im Katalog)"
+                                   AutomationProperties.Name="Datum setzen"
+                                   Command="{Binding SetSelectionCaptureDateCommand}" />
 
                         <Border Width="1" Margin="6,4,6,4" Background="{DynamicResource ControlStrokeColorDefaultBrush}" />
 

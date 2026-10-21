@@ -107,6 +107,7 @@ public sealed partial class StatusBarViewModel : ObservableObject, IDisposable
         _messenger.Register<StatusBarViewModel, ArchiveAutoExtractStatusMessage>(this, static (r, m) => UiThread.Post(() => r.OnAutoExtractStatus(m.Status)));
         InitCatalogWriteWait(); // Schreibvorgänge warten auf die Katalog-DB (ADR-0030, StatusBarViewModel.CatalogWriteWait.cs)
         InitFaceIndex(faceIndex); // Gesichts-Index (ADR-0035, StatusBarViewModel.FaceIndex.cs)
+        InitCaptureDate(); // Aufnahmedatum nachtragen (ADR-0046, StatusBarViewModel.CaptureDate.cs)
     }
 
     /// <summary>Datei-Operationen, die auf einen laufenden Scan derselben Bibliothek warten (Hinweis + „Abbrechen“).</summary>

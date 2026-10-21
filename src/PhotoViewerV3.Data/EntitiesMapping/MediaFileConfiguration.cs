@@ -37,5 +37,15 @@ internal sealed class MediaFileConfiguration : IEntityTypeConfiguration<MediaFil
         b.HasIndex(x => new { x.FolderId, x.Name, x.Size, x.ModifiedAtUtc })
             .IsUnique()
             .HasDatabaseName("UX_Files_Folder_Name_Size_Modified");
+
+        // Aufnahmedatum (ADR-0046). Sortier-Index ist ein Ausdrucks-Index, den EF nicht abbilden kann — er entsteht per
+        // Raw-SQL in der Migration AddCapturedAt: IX_Files_Library_Captured ON Files(LibraryId,
+        // COALESCE(CapturedAt, ModifiedAtUtc) DESC, Id DESC); DatabaseInitializer legt ihn bei jedem Start idempotent an
+        // (CaptureDateSortSql.CreateIndexSql), falls eine spätere Migration „Files“ per Tabellen-Neuaufbau ändert.
+        b.Property(x => x.CapturedAt).HasConversion(ValueConverters.NullableDateTimeToUnixSeconds);
+        b.Property(x => x.CapturedAtSource).HasConversion<int?>();
+        // DB-Default 0, damit die Raw-INSERTs von Scan und Datei-Operationen die Spalte weglassen dürfen — auch nach einem
+        // späteren Tabellen-Neuaufbau durch EF.
+        b.Property(x => x.CapturedAtPrecision).HasConversion<int>().HasDefaultValue(Domain.Enums.CaptureDatePrecision.Exact);
     }
 }

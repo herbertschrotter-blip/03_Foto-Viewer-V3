@@ -29,7 +29,7 @@ public sealed partial class FolderTreeViewModel
     public bool ResultIsWarning => ResultWarning is not null;
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(AdoptFolderCommand), nameof(EditFolderTagsCommand), nameof(EditFolderCategoriesCommand))]
+    [NotifyCanExecuteChangedFor(nameof(AdoptFolderCommand), nameof(EditFolderTagsCommand), nameof(EditFolderCategoriesCommand), nameof(SetFolderCaptureDateCommand))]
     private bool _isFolderActionRunning;
 
     [RelayCommand(CanExecute = nameof(CanRunFolderAction))]

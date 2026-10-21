@@ -64,6 +64,9 @@ public static class SmokeTestRunner
         // Personen-Seite (ADR-0037): Dialoge mit vorgegebenen Antworten, vor AddPersonsUi (TryAdd)
         services.AddSingleton<SmokePersonsDialogs>();
         services.AddSingleton<Persons.IPersonsDialogService>(sp => sp.GetRequiredService<SmokePersonsDialogs>());
+        // „Datum setzen…“ (ADR-0046): vorgegebene Antwort, vor AddCaptureDateUi (TryAdd)
+        services.AddSingleton<Smoke.SmokeCaptureDateDialog>();
+        services.AddSingleton<Gallery.CaptureDates.ICaptureDateDialogService>(sp => sp.GetRequiredService<Smoke.SmokeCaptureDateDialog>());
         return services;
     }
 

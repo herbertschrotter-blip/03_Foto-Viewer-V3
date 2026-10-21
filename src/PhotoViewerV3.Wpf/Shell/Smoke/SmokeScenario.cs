@@ -163,6 +163,7 @@ internal sealed partial class SmokeScenario
         _recognition = services.GetService<PhotoViewerV3.Services.Faces.Assignment.IFaceRecognitionService>();
         _personsDialogs = services.GetService<SmokePersonsDialogs>();
         InitSettingsTabs(services); // Einstellungs-Reiter, Info, Bibliotheks-Umschalter (ADR-0042)
+        _captureDialog = services.GetService<SmokeCaptureDateDialog>(); // Schritt „Aufnahmedatum“ (ADR-0046)
         _messenger.Register<SmokeScenario, ScanCompletedMessage>(this, static (r, m) => r._lastScan = m.Result);
     }
 
@@ -230,6 +231,7 @@ internal sealed partial class SmokeScenario
         await StepAsync("Vorschaubild-Größe und Bildmaße: kurze Kante min(400, Original), EXIF-6 gedreht, Files.Width/Height, Kachel × Skalierung", ThumbnailSizeAsync).ConfigureAwait(true); // ADR-0043
         await StepAsync("Personen-Details und Beziehungen: benennen mit Vor-/Nachname/Beziehung, Vorschlag beim zweiten Mal, Filter „Beziehung“, Umbenennen in den Einstellungen wirkt überall, „Das bin ich“ eindeutig", PersonDetailsAsync).ConfigureAwait(true); // ADR-0045
         await StepAsync("Collage-Ansicht: umschalten, Reihen randvoll ±1 px, Seitenverhältnisse, Doppelklick öffnet richtige Datei, zurück zu Kacheln", CollageAsync).ConfigureAwait(true); // ADR-0044
+        await StepAsync("Aufnahmedatum: EXIF-Foto 1975 nachgetragen, Sortierung Aufnahme ≠ Änderung, Datum setzen ca. 1982 + Rückgängig", CaptureDateAsync).ConfigureAwait(true); // ADR-0046
         await StepAsync("Ordnerüberwachung: Datei kopieren → automatischer Diff-Scan → Galerie", WatchAsync).ConfigureAwait(true);
         if (_cleanup)
         {

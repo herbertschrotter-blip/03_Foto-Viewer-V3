@@ -12,7 +12,8 @@ großer Foto- und Video-Bibliotheken (50 000–500 000 Dateien). Nachfolger der 
   (Offline-Guard), bei ungewöhnlich vielen fehlenden Dateien fragt die App nach (Mass-Missing-Guard).
 - **Galerie**: seitenweises, virtualisiertes Kachel-Grid (200/500/1000 pro Seite) mit echten Vorschaubildern (WIC,
   EXIF-Orientierung; Videos und Formate ohne Windows-Codec über FFmpeg; scharf passend zu Vorschaugröße und
-  Bildschirm-Skalierung, Bildmaße im Katalog), Sortierung nach Datum/Name/Größe, Volltextsuche
+  Bildschirm-Skalierung, Bildmaße im Katalog), Sortierung nach Aufnahmedatum (EXIF/Video/Dateiname, selbst setzbar —
+  auch „ca. 1982“)/Änderungsdatum/Name/Größe, Volltextsuche
   über Dateiname und Endung (FTS5), frei kombinierbare Filter (Dateiart, Favoriten, Bewertung, Ablage, Tags, Personen,
   Kategorien — alle mit UND, „Filter zurücksetzen“), Ordnerfilter, Unterordner-Kacheln für Ordner
   ohne direkte Dateien, Favorit und 1–5 Sterne je Kachel, Mehrfachauswahl mit Aktionsleiste (Favorit, Bewertung,
@@ -186,7 +187,8 @@ Kopfzeile (0.2.43, ADR-0041):
   „Urlaub“ UND ohne benannte Person UND noch im Eingang. Bei aktiven Filtern sagt die Zeile **„Es gilt: Bilder UND
   Favoriten UND Tag „Urlaub“ … → 342 Treffer“**, was gerade wirkt; ✕ an einer Bedingung entfernt genau diese.
   **Filter zurücksetzen** hebt alle Filter und die Suche auf, die Ordnerauswahl bleibt.
-- **Sortieren** [Feld ▾] [Richtung]: Änderungsdatum, Name, Größe oder eine Kategorie; der Knopf daneben kehrt die
+- **Sortieren** [Feld ▾] [Richtung]: **Aufnahmedatum** (Standard seit 0.2.48), Änderungsdatum, Name, Größe oder eine
+  Kategorie; der Knopf daneben kehrt die
   Richtung um („Neueste zuerst“ ↔ „Älteste zuerst“, „A → Z“ ↔ „Z → A“ …). Ein neues Feld beginnt mit seiner üblichen
   Richtung. · **Ansicht** Kacheln | Collage | Liste (wird gemerkt) und **Vorschaugröße** (Regler bei Kacheln und
   Collage: 120–320 px in 20er-Stufen, wird gemerkt) · rechts **Alle auswählen**, **Rückgängig**, Aktualisieren (ist die
@@ -199,8 +201,8 @@ Kacheln: Herz = Favorit, Sterne = Bewertung, Badge „fehlt“ bei Dateien, die
 beim letzten Scan nicht mehr auf der Platte lagen. Ordner ohne direkte Dateien zeigen ihre Unterordner als Kacheln.
 **Alle auswählen** (Knopf rechts in der Sortierleiste neben „Rückgängig“, wie Strg+A) wählt alle Dateien der aktuellen
 Seite. Bei einer Auswahl erscheint unten die Aktionsleiste (Favorit setzen/entfernen, Bewertung, Verschieben nach…,
-In die Bibliothek…, Papierkorb, Alle auswählen, Auswahl aufheben); **Rückgängig** nimmt die letzte Verschiebung/Umbenennung (auch eine
-Ordner-Umbenennung oder eine Ordner-Übernahme) zurück.
+In die Bibliothek…, Papierkorb, Datum…, Alle auswählen, Auswahl aufheben); **Rückgängig** nimmt die letzte Verschiebung/Umbenennung (auch eine
+Ordner-Umbenennung oder eine Ordner-Übernahme) bzw. das zuletzt gesetzte Aufnahmedatum zurück.
 
 | Taste | Wirkung |
 |---|---|
@@ -219,6 +221,27 @@ Ordner-Umbenennung oder eine Ordner-Übernahme) zurück.
 | Rechtsklick | Tag-Menü der Auswahl (nicht ausgewählte Kachel/Zeile wird zuerst gewählt) |
 | Strg+F | Suchfeld der Kopfzeile |
 | Enter im Suchfeld | Suchen (sonst sucht es nach einer kurzen Tipp-Pause) |
+
+#### Aufnahmedatum (seit 0.2.48, ADR-0046)
+Die Galerie sortiert standardmäßig nach dem **Aufnahmedatum** statt nach dem Änderungsdatum der Datei (das bei
+kopierten oder alten Fotos oft falsch ist). Es kommt aus dem EXIF-Feld `DateTimeOriginal` (JPEG, TIFF/RAW, HEIC/AVIF,
+PNG, WebP — auch ohne HEIF-Erweiterung von Windows), bei Videos aus den Container-Metadaten (MP4/MOV), sonst aus dem
+Dateinamen (`IMG_20240712_153012`, `PXL_…`, `Screenshot 2026-09-30 105535`, WhatsApp `IMG-20240712-WA0001` = nur Tag).
+Gelesen wird **im Hintergrund nach jedem Scan** — bei bestehenden Katalogen einmalig für alle Dateien; die Statusleiste
+zeigt „Aufnahmedatum: 1.234 / 19.556“. Es ruht während Scans, Datei-Operationen und eines Katalog-Umzugs und liest nur
+Dateien, die lokal vorliegen (OneDrive-Platzhalter werden **nicht** heruntergeladen, sie folgen später). Dateien ohne
+jedes Datum sortieren nach ihrem Änderungsdatum („unbekannt“ im Tooltip).
+
+Anzeige: Kachel-Tooltip „Aufgenommen: 12.07.2024 15:30 (EXIF)“, Listenspalte **Aufgenommen** (Klick sortiert die ganze
+Trefferliste; bei schon gespeicherten Spalten per Rechtsklick auf die Kopfzeile einblenden), in der Lightbox die Zeile
+„Aufgenommen“ im Info-Bereich.
+
+**Datum setzen…** (Aktionsleiste „Datum…“, Rechtsklick auf Kachel/Zeile, im Ordnerbaum Rechtsklick auf einen Ordner =
+alle Dateien darin, wahlweise mit Unterordnern): **genau** (Datum + Uhrzeit), **ungefähr** („ca. 1982“ bzw. „ca. Juli
+1982“ — sortiert in der Mitte des Zeitraums), **verschieben** um ± Tage/Stunden/Minuten (falsch gestellte Kamera) oder
+**zurücksetzen** (wieder aus der Datei lesen). Geändert wird nur der Katalog, nie die Datei. **Rückgängig** in der
+Galerie nimmt die letzte Änderung zurück (gemeinsam mit Verschieben/Umbenennen: der jüngste Eintrag zuerst). Manuell
+gesetzte Daten bleiben bei „Aktualisieren“ und „Neu aufbauen“ immer erhalten; gelesene liest „Neu aufbauen“ neu.
 
 #### Tags
 Tags legt man auf der Seite **Tags** an (Name, Farbe aus einer Palette mit zwölf Farben, Reihenfolge, Umbenennen,
@@ -257,10 +280,10 @@ und sehr breite Bilder (breiter als 6 : 1) werden in ihrer Zelle mittig beschnit
 
 #### Listenansicht
 „Ansicht“ in der Sortierleiste wechselt zwischen Kacheln, Collage und Liste (die Wahl bleibt gespeichert). Die
-Liste zeigt dieselbe Seite mit den Spalten Name (mit Vorschaubild), Ordner, Geändert, Größe, Typ, Bewertung (Sterne
+Liste zeigt dieselbe Seite mit den Spalten Name (mit Vorschaubild), Ordner, Aufgenommen, Geändert, Größe, Typ, Bewertung (Sterne
 klickbar), Favorit (Herz klickbar), Tags, Status und je Kategorie eine Spalte (neue Kategorien erscheinen am Ende).
 Rechtsklick auf eine Spaltenüberschrift blendet Spalten ein/aus,
-Ziehen ändert die Reihenfolge — beides bleibt gespeichert. Klick auf Name, Geändert oder Größe sortiert die ganze
+Ziehen ändert die Reihenfolge — beides bleibt gespeichert. Klick auf Name, Aufgenommen, Geändert oder Größe sortiert die ganze
 Trefferliste (wie „Sortieren“ in der Kopfzeile). Klick auf eine Kategorie-Spalte sortiert ebenfalls die ganze Trefferliste:
 Werte in ihrer Reihenfolge von der Seite **Kategorien**, erneuter Klick kehrt um; Dateien ohne Wert stehen immer am
 Ende, gleiche Werte nach Datum neu → alt. „Sortieren“ zeigt dann „Kategorie: …“ als Feld (dort auch direkt wählbar);

@@ -16,6 +16,28 @@ namespace PhotoViewerV3.Data.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.0");
 
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.CaptureDateUndo", b =>
+                {
+                    b.Property<int>("FileOperationId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("OldCapturedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("OldOffset")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("OldPrecision")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("OldSource")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("FileOperationId");
+
+                    b.ToTable("CaptureDateUndo", (string)null);
+                });
+
             modelBuilder.Entity("PhotoViewerV3.Domain.Entities.Category", b =>
                 {
                     b.Property<int>("Id")
@@ -377,6 +399,20 @@ namespace PhotoViewerV3.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
+                    b.Property<long?>("CapturedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("CapturedAtOffset")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("CapturedAtPrecision")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0);
+
+                    b.Property<int?>("CapturedAtSource")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Codec")
                         .HasColumnType("TEXT");
 
@@ -658,6 +694,15 @@ namespace PhotoViewerV3.Data.Migrations
                         .HasDatabaseName("IX_Thumbnails_File_Size_Kind");
 
                     b.ToTable("Thumbnails", (string)null);
+                });
+
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.CaptureDateUndo", b =>
+                {
+                    b.HasOne("PhotoViewerV3.Domain.Entities.FileOperation", null)
+                        .WithOne()
+                        .HasForeignKey("PhotoViewerV3.Domain.Entities.CaptureDateUndo", "FileOperationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("PhotoViewerV3.Domain.Entities.CategoryValue", b =>

@@ -20,4 +20,10 @@ public enum OperationType
     /// angelegtem Zielordner, Move je Datei (auch Nicht-Mediendateien), optional Recycle des Quellordners.
     /// </summary>
     AdoptFolder = 6,
+
+    /// <summary>
+    /// Aufnahmedatum im Katalog gesetzt, verschoben oder zurückgesetzt (ADR-0046) — ändert keine Datei. Je Datei eine
+    /// Operation; die alten Werte stehen in <c>CaptureDateUndo</c>, „Rückgängig“ schreibt sie zurück.
+    /// </summary>
+    SetCaptureDate = 7,
 }

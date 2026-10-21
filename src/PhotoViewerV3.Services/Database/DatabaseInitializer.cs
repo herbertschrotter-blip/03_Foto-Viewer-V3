@@ -49,6 +49,10 @@ public sealed class DatabaseInitializer
                 applied.Length);
         }
 
+        // Sortier-Index fürs Aufnahmedatum (ADR-0046) ist ein Ausdrucks-Index, den EF nicht kennt: nach einem künftigen
+        // Tabellen-Neuaufbau von Files durch eine Migration wäre er weg — hier idempotent sicherstellen.
+        await ctx.Database.ExecuteSqlRawAsync(Data.RawSql.CaptureDateSortSql.CreateIndexSql, ct).ConfigureAwait(false);
+
         // Crash-Recovery: Thumbnails im Status 'Pending' sind nach Abstürzen unklar.
         // → Auf 'Stale' setzen; der ThumbnailService rendert Stale-Zeilen beim nächsten Request neu.
         var staleRecovered = await ctx.Thumbnails

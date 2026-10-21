@@ -169,7 +169,7 @@ OperationBatches   (Id, OperationType, Status, CreatedAtUtc, CompletedAtUtc,
                    -- Status: pending | applying | applied | undoing | undone | failed
 FileOperations     (Id, BatchId, FileId, Action, SourcePath, DestPath,
                     Status, Error, ExecutedAtUtc, UndoneAtUtc)
-                   -- Action: move | copy | recycle | rename | mkdir | renamefolder (0.2.5)
+                   -- Action: move | copy | recycle | rename | mkdir | renamefolder (0.2.5) | adoptfolder | setcapturedate (0.2.48)
 Settings           (Key, Value)
 FilesFts           -- FTS5 virtual table (Files.Name, Extension)
 ```
@@ -216,6 +216,17 @@ FilesFts           -- FTS5 virtual table (Files.Name, Extension)
   Beziehungen, global wie Tags.
   „Neu aufbauen“ parkt Faces/FaceScans in seiner Transaktion und setzt sie über Ordnerpfad + Name auf die neuen FileIds
   (`UserDataCarryOver.Faces.cs`); Face-Ids bleiben.
+- Aufnahmedatum — umgesetzt in 0.2.48 (Migration `AddCapturedAt`, ADR-0046): `Files.CapturedAt` (Unix-Sekunden UTC,
+  NULL = unbekannt), `Files.CapturedAtSource` (NULL = noch nicht gelesen, 0 unbekannt, 1 EXIF, 2 Video, 3 Dateiname,
+  4 manuell), `Files.CapturedAtPrecision` (0 genau, 1 Tag, 2 Monat, 3 Jahr — ungefähre Angaben in der Mitte des
+  Zeitraums), `Files.CapturedAtOffset` (Minuten Ortszeit − UTC, Anzeige als Wanduhrzeit). Ausdrucks-Index
+  `IX_Files_Library_Captured ON Files(LibraryId, COALESCE(CapturedAt, ModifiedAtUtc) DESC, Id DESC)` (Raw-SQL in der
+  Migration, EF kennt ihn nicht — `DatabaseInitializer` legt ihn bei jedem Start idempotent an,
+  `CaptureDateSortSql.CreateIndexSql`). `CaptureDateUndo (FileOperationId PK → FileOperations ON DELETE CASCADE,
+  OldCapturedAt, OldSource, OldPrecision, OldOffset)` — alte Werte für „Rückgängig“ von „Datum setzen…“
+  (`OperationBatches.OperationType = 7 SetCaptureDate`, je Datei eine FileOperation). Gefüllt vom Nachtragen im
+  Hintergrund (nicht im Scan); manuelle Daten überleben „Neu aufbauen“ (`UserDataCarryOver`) und Inhaltsänderungen
+  (Incremental-Scan setzt nur nicht-manuelle zurück).
 
 ### Pflicht-Indizes V0.1
 ```sql

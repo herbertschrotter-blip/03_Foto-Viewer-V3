@@ -7,6 +7,7 @@ using PhotoViewerV3.Faces;
 using PhotoViewerV3.Folders;
 using PhotoViewerV3.Services.Faces.Indexing;
 using PhotoViewerV3.Gallery;
+using PhotoViewerV3.Gallery.CaptureDates;
 using PhotoViewerV3.Services;
 using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Infrastructure;
@@ -122,6 +123,7 @@ public partial class App : Application
         // Galerie (Wpf/Gallery: PageSource, ViewModel, View, Dialog-/Ordnerauswahl-Dienste) und Sortieren (Wpf/Sorter)
         services.AddGallery();
         services.AddFolderActions(); // Ordner übernehmen / Ordner bewerten (Wpf/Folders, ADR-0034)
+        services.AddCaptureDateUi(); // „Datum setzen…“ für Galerie und Ordnerbaum (Wpf/Gallery/CaptureDates, ADR-0046)
         services.AddSorterUi();
         services.AddTagManagement(); // Seite „Tags“ (Wpf/Settings/TagManagement, ADR-0021)
         services.AddCategoryManagement(); // Seite „Kategorien“ (Wpf/Settings/CategoryManagement, ADR-0027)
@@ -220,6 +222,9 @@ public partial class App : Application
             {
                 Log.Warning(personsEx, "Gesichter-Zuordnung konnte nicht gestartet werden");
             }
+
+            // Aufnahmedatum (ADR-0046): Nachtragen im Hintergrund nach jedem Scan und einmalig für bestehende Kataloge
+            _host.Services.GetRequiredService<PhotoViewerV3.Services.Metadata.ICaptureDateService>().Start();
 
             var mainWindow = _host.Services.GetRequiredService<MainWindow>();
             mainWindow.Show();

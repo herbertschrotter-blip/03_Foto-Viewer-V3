@@ -19,6 +19,7 @@ public sealed partial class GalleryViewModel
 {
     private static readonly GallerySortFieldOption[] s_fixedSortFields =
     [
+        new(GallerySortField.Captured, "Aufnahmedatum"), // ADR-0046: Standard
         new(GallerySortField.Modified, "Änderungsdatum"),
         new(GallerySortField.Name, "Name"),
         new(GallerySortField.Size, "Größe"),
@@ -75,7 +76,7 @@ public sealed partial class GalleryViewModel
 
     /// <summary>Absteigend (Datum: neueste zuerst, Name: Z → A, Größe: größte zuerst, Kategorie: Werte rückwärts).</summary>
     public bool SortDescending
-        => SelectedSort.Category is { } category ? category.Descending : SelectedSort.Sort is GallerySort.ModifiedDesc or GallerySort.NameDesc or GallerySort.SizeDesc;
+        => SelectedSort.Category is { } category ? category.Descending : SelectedSort.Sort is GallerySort.ModifiedDesc or GallerySort.NameDesc or GallerySort.SizeDesc or GallerySort.CapturedDesc;
 
     /// <summary>Beschriftung des Richtungsknopfs.</summary>
     public string SortDirectionText
@@ -89,8 +90,8 @@ public sealed partial class GalleryViewModel
 
             return SelectedSort.Sort switch
             {
-                GallerySort.ModifiedDesc => "Neueste zuerst",
-                GallerySort.ModifiedAsc => "Älteste zuerst",
+                GallerySort.ModifiedDesc or GallerySort.CapturedDesc => "Neueste zuerst",
+                GallerySort.ModifiedAsc or GallerySort.CapturedAsc => "Älteste zuerst",
                 GallerySort.NameAsc => "A → Z",
                 GallerySort.NameDesc => "Z → A",
                 GallerySort.SizeDesc => "Größte zuerst",
@@ -154,6 +155,7 @@ public sealed partial class GalleryViewModel
     {
         GallerySort.NameAsc or GallerySort.NameDesc => GallerySortField.Name,
         GallerySort.SizeAsc or GallerySort.SizeDesc => GallerySortField.Size,
+        GallerySort.CapturedAsc or GallerySort.CapturedDesc => GallerySortField.Captured,
         _ => GallerySortField.Modified,
     };
 
@@ -163,6 +165,7 @@ public sealed partial class GalleryViewModel
     {
         GallerySortField.Name => descending ? GallerySort.NameDesc : GallerySort.NameAsc,
         GallerySortField.Size => descending ? GallerySort.SizeDesc : GallerySort.SizeAsc,
+        GallerySortField.Captured => descending ? GallerySort.CapturedDesc : GallerySort.CapturedAsc,
         _ => descending ? GallerySort.ModifiedDesc : GallerySort.ModifiedAsc,
     };
 }

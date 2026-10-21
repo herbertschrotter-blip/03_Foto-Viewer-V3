@@ -11,6 +11,10 @@ public enum GallerySort
     NameDesc,
     SizeDesc,
     SizeAsc,
+
+    /// <summary>Aufnahmedatum neu → alt; ohne Aufnahmedatum zählt das Änderungsdatum (ADR-0046).</summary>
+    CapturedDesc,
+    CapturedAsc,
 }
 
 /// <summary>Verknüpfung der gewählten Tags im Tag-Filter (ADR-0021).</summary>
@@ -29,6 +33,7 @@ public enum GalleryTagMode
 /// <summary>
 /// Flaches Zeilen-DTO einer Grid-Page (ADR-0010: kleine DTOs, keine Entities im UI).
 /// <paramref name="RootRole"/> = Rolle der Wurzel des Ordners (0 Eingang, 1 Archiv, null unbekannt — ADR-0020).
+/// <paramref name="CaptureDate"/> = Aufnahmedatum aus dem Katalog (ADR-0046; null nur bei DTOs ohne Katalogzeile).
 /// </summary>
 public sealed record GalleryFileDto(
     int Id,
@@ -42,7 +47,8 @@ public sealed record GalleryFileDto(
     byte? Rating,
     bool Missing,
     string FolderPath,
-    int? RootRole = null)
+    int? RootRole = null,
+    PhotoViewerV3.Services.Metadata.CaptureDateInfo? CaptureDate = null)
 {
     public bool IsVideo => MediaType == 1;
     public bool IsArchive => MediaType == 2;

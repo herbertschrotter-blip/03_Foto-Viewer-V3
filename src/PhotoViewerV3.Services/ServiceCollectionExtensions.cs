@@ -12,6 +12,7 @@ using PhotoViewerV3.Services.Faces.Erase;
 using PhotoViewerV3.Services.Infrastructure;
 using PhotoViewerV3.Services.Library;
 using PhotoViewerV3.Services.Media;
+using PhotoViewerV3.Services.Metadata;
 using PhotoViewerV3.Services.Operations;
 using PhotoViewerV3.Services.Scanning;
 using PhotoViewerV3.Services.Sorter;
@@ -68,6 +69,7 @@ public static class ServiceCollectionExtensions
         services.AddTags();
         services.AddCategories(); // frei konfigurierbare Kategorien mit Werten (ADR-0027)
         services.AddFolderAdoption(); // Ordner in die Bibliothek übernehmen, Ordner bewerten (ADR-0034)
+        services.AddCaptureDates(); // Aufnahmedatum: EXIF/Video/Dateiname, Nachtragen, „Datum setzen…“ (ADR-0046)
 
         // Ordnerüberwachung (Services/Watch): FileSystemWatcher je Wurzel → Incremental-Scan nach Ruhezeit
         services.AddWatch();

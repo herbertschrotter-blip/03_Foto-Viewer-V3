@@ -471,6 +471,12 @@ public partial class GalleryView : UserControl
             Command = _viewModel.ShowInExplorerCommand,
             CommandParameter = target,
         });
+        menu.Items.Add(new MenuItem
+        {
+            Header = "Datum setzen…", // Aufnahmedatum der Auswahl (ADR-0046)
+            Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.CalendarEdit24 },
+            Command = _viewModel.SetSelectionCaptureDateCommand,
+        });
     }
 
     private static T? FindAncestor<T>(DependencyObject? start)

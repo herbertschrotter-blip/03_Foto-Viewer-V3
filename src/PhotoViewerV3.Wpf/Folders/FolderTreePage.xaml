@@ -187,6 +187,11 @@
                                                       Icon="{ui:SymbolIcon Tag24}"
                                                       Command="{Binding PlacementTarget.Tag.EditFolderTagsCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                                       CommandParameter="{Binding}" />
+                                            <!-- ADR-0046: Aufnahmedatum für alle Dateien (im Dialog wahlweise mit Unterordnern) -->
+                                            <MenuItem Header="Datum setzen…"
+                                                      Icon="{ui:SymbolIcon CalendarEdit24}"
+                                                      Command="{Binding PlacementTarget.Tag.SetFolderCaptureDateCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                      CommandParameter="{Binding}" />
                                         </ContextMenu>
                                     </Setter.Value>
                                 </Setter>

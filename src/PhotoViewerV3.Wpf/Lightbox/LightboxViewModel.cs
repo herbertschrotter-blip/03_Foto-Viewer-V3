@@ -100,6 +100,7 @@ public sealed partial class LightboxViewModel : ObservableObject, IDisposable
         InitTags(tags, tagPicker); // Tags anzeigen/bearbeiten (LightboxViewModel.Tags.cs, ADR-0021)
         InitCategories(categories, categoryPicker); // Kategorie-Werte anzeigen/zuweisen (LightboxViewModel.Categories.cs, ADR-0027)
         InitFaces(faceRecognition, dialogs, viewSettings); // Gesichtsrahmen, Taste F gemerkt (LightboxViewModel.Faces.cs, 0.2.38/0.2.39)
+        InitCaptureDate(); // Zeile „Aufgenommen“ (LightboxViewModel.CaptureDate.cs, ADR-0046)
     }
 
     // ----- Anbindung an das Fenster (View-Mechanik) -----
@@ -1216,6 +1217,7 @@ public sealed partial class LightboxViewModel : ObservableObject, IDisposable
         FileInfoRows.Add(new LightboxInfoRow("Typ", item.IsArchive ? "Archiv" : item.IsVideo ? "Video" : "Bild"));
         FileInfoRows.Add(new LightboxInfoRow("Größe", FormatSize(item.Size)));
         FileInfoRows.Add(new LightboxInfoRow("Geändert", item.ModifiedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm", CultureInfo.CurrentCulture)));
+        QueueCaptureDateRow(item); // „Aufgenommen“ (ADR-0046, LightboxViewModel.CaptureDate.cs)
     }
 
     private void BuildImageInfo(LightboxItem item, DecodedImage decoded)

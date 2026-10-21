@@ -40,8 +40,16 @@ internal static class IncrementalCatalogWriter
     private const string CountRangeSql =
         "SELECT COUNT(*) FROM Files WHERE LibraryId = $lib AND Id BETWEEN $from AND $to;";
 
-    private const string UpdateFileSql =
-        "UPDATE Files SET Size = $size, CreatedAtUtc = $created, ModifiedAtUtc = $modified, Missing = 0 WHERE Id = $id;";
+    // Aufnahmedatum (ADR-0046): Inhalt geändert → aus der Datei neu lesen (CapturedAtSource NULL = Nachtragen), außer
+    // es wurde manuell gesetzt (4). Die SET-Ausdrücke sehen die alten Werte der Zeile.
+    private const string UpdateFileSql = """
+        UPDATE Files SET Size = $size, CreatedAtUtc = $created, ModifiedAtUtc = $modified, Missing = 0,
+            CapturedAt = CASE WHEN CapturedAtSource = 4 OR (Size = $size AND ModifiedAtUtc = $modified) THEN CapturedAt END,
+            CapturedAtPrecision = CASE WHEN CapturedAtSource = 4 OR (Size = $size AND ModifiedAtUtc = $modified) THEN CapturedAtPrecision ELSE 0 END,
+            CapturedAtOffset = CASE WHEN CapturedAtSource = 4 OR (Size = $size AND ModifiedAtUtc = $modified) THEN CapturedAtOffset END,
+            CapturedAtSource = CASE WHEN CapturedAtSource = 4 OR (Size = $size AND ModifiedAtUtc = $modified) THEN CapturedAtSource END
+        WHERE Id = $id;
+        """;
 
     // Gesichtserkennung (ADR-0035): Inhalt an Ort und Stelle geändert → Datei zur erneuten Analyse freigeben (der Abgleich
     // über die Box behält bestätigte Zuordnungen). Läuft VOR dem Update, solange die alten Werte noch in der Zeile stehen.

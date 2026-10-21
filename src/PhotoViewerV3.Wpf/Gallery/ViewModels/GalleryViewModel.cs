@@ -59,6 +59,8 @@ public sealed partial class GalleryViewModel : ObservableObject
 
     private static readonly GallerySortOption[] s_sortOptions =
     [
+        new(GallerySort.CapturedDesc, "Aufnahme neu → alt"), // Standard seit 0.2.48 (ADR-0046)
+        new(GallerySort.CapturedAsc, "Aufnahme alt → neu"),
         new(GallerySort.ModifiedDesc, "Datum neu → alt"),
         new(GallerySort.ModifiedAsc, "Datum alt → neu"),
         new(GallerySort.NameAsc, "Name A → Z"),
@@ -129,7 +131,8 @@ public sealed partial class GalleryViewModel : ObservableObject
         ICategoryService categories,
         ICategoryPickerService categoryPicker,
         IGalleryViewSettingsStore viewSettings,
-        ILogger<GalleryViewModel> logger)
+        ILogger<GalleryViewModel> logger,
+        PhotoViewerV3.Gallery.CaptureDates.CaptureDateActions? captureDateActions = null)
     {
         _contextFactory = contextFactory;
         _source = source;
@@ -154,6 +157,7 @@ public sealed partial class GalleryViewModel : ObservableObject
         TagFilterEntries = new ObservableCollection<TagFilterEntry>();
         _thumbnails.ThumbnailReady += OnThumbnailReady;
         RegisterMessages();
+        InitCaptureDate(captureDateActions); // „Datum setzen…“, Rückgängig, Neuladen (GalleryViewModel.CaptureDate.cs, ADR-0046)
     }
 
     // ---- Gebundene Daten ---------------------------------------------------------------------
@@ -885,6 +889,7 @@ public sealed partial class GalleryViewModel : ObservableObject
                 {
                     existing.UpdateMetadata(dto.IsFavorite, dto.Rating, dto.Missing);
                     existing.UpdateMediaSize(dto); // nachgetragene Bildmaße → Collage bricht neu um (ADR-0044)
+                    existing.CaptureDate = dto.CaptureDate; // Aufnahmedatum (ADR-0046)
                     target.Add(existing);
                     continue;
                 }
@@ -1508,6 +1513,11 @@ public sealed partial class GalleryViewModel : ObservableObject
     private Task UndoAsync()
         => RunOperationAsync("Rückgängig", async () =>
         {
+            if (await TryUndoCaptureDateAsync())
+            {
+                return; // „Datum setzen“ war der jüngste Eintrag (ADR-0046)
+            }
+
             var result = await _fileOps.UndoLastAsync();
             if (result is null)
             {
@@ -1546,8 +1556,8 @@ public sealed partial class GalleryViewModel : ObservableObject
     {
         try
         {
-            var batches = await _fileOps.GetRecentBatchesAsync(10);
-            CanUndo = batches.Any(b => b.CanUndo);
+            var batches = await _fileOps.GetRecentBatchesAsync(UndoBatchWindow); // 50 statt 10: „Datum setzen“-Batches füllen das Fenster (ADR-0046)
+            CanUndo = batches.Any(b => b.CanUndo) || await HasCaptureDateUndoAsync(); // + „Datum setzen“ (ADR-0046)
         }
         catch (Exception ex)
         {

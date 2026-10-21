@@ -31,6 +31,9 @@ public enum GalleryListColumnKey
 
     /// <summary>Bestätigte Personen (und Vorschläge kursiv mit „?“), 0.2.38 — nur innerhalb der Page sortierbar.</summary>
     Persons,
+
+    /// <summary>Aufnahmedatum (ADR-0046) — sortiert die ganze Trefferliste.</summary>
+    Captured,
 }
 
 /// <summary>Stammdaten einer Spalte: Überschrift, Startbreite, serverseitige Sortierung (auf/ab) oder null = nur innerhalb der Page.</summary>
@@ -52,6 +55,7 @@ public static class GalleryListColumns
     [
         new(GalleryListColumnKey.Name, "Name", 280, GallerySort.NameAsc, GallerySort.NameDesc),
         new(GalleryListColumnKey.Folder, "Ordner", 260, null, null),
+        new(GalleryListColumnKey.Captured, "Aufgenommen", 130, GallerySort.CapturedAsc, GallerySort.CapturedDesc), // ADR-0046
         new(GalleryListColumnKey.Modified, "Geändert", 130, GallerySort.ModifiedAsc, GallerySort.ModifiedDesc),
         new(GalleryListColumnKey.Size, "Größe", 90, GallerySort.SizeAsc, GallerySort.SizeDesc),
         new(GalleryListColumnKey.Type, "Typ", 70, null, null),

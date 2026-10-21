@@ -54,6 +54,9 @@ public enum GallerySortField
     Name,
     Size,
     Category,
+
+    /// <summary>Aufnahmedatum (ADR-0046); ohne Aufnahmedatum zählt das Änderungsdatum.</summary>
+    Captured,
 }
 
 /// <summary>
