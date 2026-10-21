@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lumora — Storys (Entwurf 09, Welle 6)</title>
+<style>
+/* =====================================================================
+   Mockup 09 · Storys (Welle 6). Tokens 1:1 aus 08-lumora-app.html
+   (Grundwerte 04/05, Marke aus 07). Hell/Dunkel über die Klasse „dark“ am body.
+   Fotos sind gezeichnete Platzhalter (keine echten Bilder).
+   Entscheidungen Herbert 2026-10-21: alle vier Story-Arten automatisch, nur sachliche
+   Überschriften (kein erfundener Text), Diashow ohne Musik, Collage-Bild erst mit Welle 6b.
+   ABGENOMMEN von Herbert am 2026-10-21: Übersicht (Rückblick-Banner, Angeheftet, Neu, Reisen & Ereignisse
+   mit Jahren, Personen, Orte, Filter nach Art), Story-Ansicht (Titelbild, sachliche Überschrift, fixierte
+   Leiste Highlights/Alle Fotos + Tage + Diashow, Tagesabschnitte mit Collage-Blöcken, Videos, Serien-Hinweis,
+   „warum ausgewählt“ beim Überfahren, Ende-Kasten, Menü), Rückblick-Story, Diashow (Vollbild, Überblendung,
+   Ken Burns auf Gesichter, Datum/Ort, Leiste) und Einstellungen › Storys. Bewusst weggelassen: Musik,
+   Collage-Bild speichern (ausgegraut, Welle 6b), Text per Sprach-KI.
+   ===================================================================== */
+:root {
+  --mica-base:        #F3F3F3;
+  --layer-default:    rgba(255,255,255,0.7);
+  --layer-card:       #FFFFFF;
+  --layer-subtle:     rgba(0,0,0,0.026);
+  --layer-secondary:  rgba(0,0,0,0.04);
+  --layer-tertiary:   rgba(0,0,0,0.06);
+  --text-primary:     #1A1A1A;
+  --text-secondary:   #5C5C5C;
+  --text-tertiary:    #8B8B8B;
+  --text-disabled:    #B5B5B5;
+  --text-on-accent:   #FFFFFF;
+  --stroke-default:   rgba(0,0,0,0.0578);
+  --stroke-divider:   rgba(0,0,0,0.0803);
+  --stroke-card:      rgba(0,0,0,0.0578);
+  --ctl-bottom:       rgba(0,0,0,0.16);
+  --accent:           #5B5FC7;
+  --accent-light:     #7579D8;
+  --accent-dark:      #4145A0;
+  --accent-soft:      rgba(91,95,199,0.08);
+  --accent-soft-2:    rgba(91,95,199,0.16);
+  --success:          #107C10;
+  --shadow-card:      0 2px 4px rgba(0,0,0,0.02), 0 1px 2px rgba(0,0,0,0.03);
+  --shadow-flyout:    0 8px 16px rgba(0,0,0,0.14);
+  --brand-indigo: #5B5FC7; --brand-violet: #8B5CF6; --brand-coral: #F97362; --brand-amber: #F5A524;
+  --star:             #F2B01E;
+  --page-bg:          #E4E4EA;
+}
+body.dark {
+  color-scheme: dark;
+  --mica-base:        #202020;
+  --layer-default:    rgba(43,43,43,0.7);
+  --layer-card:       #2C2C2C;
+  --layer-subtle:     rgba(255,255,255,0.03);
+  --layer-secondary:  rgba(255,255,255,0.0418);
+  --layer-tertiary:   rgba(255,255,255,0.0605);
+  --text-primary:     #FFFFFF;
+  --text-secondary:   #D0D0D0;
+  --text-tertiary:    #A0A0A0;
+  --text-disabled:    #6A6A6A;
+  --stroke-default:   rgba(255,255,255,0.0837);
+  --stroke-divider:   rgba(255,255,255,0.0837);
+  --stroke-card:      rgba(255,255,255,0.0578);
+  --ctl-bottom:       rgba(255,255,255,0.22);
+  --accent:           #818CF8;
+  --accent-light:     #A5B0FF;
+  --accent-dark:      #6066D8;
+  --accent-soft:      rgba(129,140,248,0.12);
+  --accent-soft-2:    rgba(129,140,248,0.24);
+  --success:          #6CCB5F;
+  --shadow-card:      0 2px 4px rgba(0,0,0,0.18), 0 1px 2px rgba(0,0,0,0.22);
+  --shadow-flyout:    0 8px 16px rgba(0,0,0,0.4);
+  --brand-indigo: #818CF8; --brand-violet: #A78BFA; --brand-coral: #FB8A7A; --brand-amber: #FBBF24;
+  --star:             #FBBF24;
+  --page-bg:          #121214;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--page-bg); color: var(--text-primary);
+  font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif; font-size: 14px; }
+button, input, select { font: inherit; color: inherit; }
+.ic { font-family: 'Segoe Fluent Icons', 'Segoe MDL2 Assets'; font-size: 16px; line-height: 1; font-style: normal; font-weight: 400; }
+.ic.s { font-size: 12px; }
+.muted { color: var(--text-secondary); }
+.hidden { display: none !important; }
+
+/* ===== Mockup-Leiste (gehört nicht zur App) ===== */
+.mock-bar { position: sticky; top: 0; z-index: 100; display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+  padding: 7px 20px; background: #2B2B33; color: #EEE; font-size: 12px; }
+.mock-bar b { font-weight: 600; }
+.mock-bar .grp { display: flex; gap: 4px; align-items: center; }
+.mock-bar button { background: #44444F; color: #EEE; border: 1px solid #5A5A66; border-radius: 4px; padding: 3px 9px; cursor: pointer; font-size: 12px; }
+.mock-bar button.on { background: #5B5FC7; border-color: #7579D8; }
+.mock-bar .note { margin-left: auto; color: #AAB; }
+
+/* ===== App-Fenster (wie 08) ===== */
+.stage-wrap { padding: 16px 20px 32px; display: flex; justify-content: center; }
+.win-box { position: relative; flex: none; }
+.window { position: absolute; left: 0; top: 0; transform-origin: 0 0; background: var(--mica-base); border-radius: 8px;
+  border: 1px solid var(--stroke-default); box-shadow: 0 16px 48px rgba(0,0,0,0.22); overflow: hidden;
+  display: grid; grid-template-columns: 232px 1fr; grid-template-rows: 36px 1fr 30px; }
+.titlebar { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; padding: 0 0 0 14px; font-size: 12px; color: var(--text-secondary); user-select: none; }
+.titlebar .tile { width: 16px; height: 16px; border-radius: 4px; background: linear-gradient(135deg, #6366F1, #4145A0); }
+.titlebar .wc { margin-left: auto; display: flex; height: 100%; }
+.titlebar .wc span { width: 46px; display: grid; place-items: center; font-family: 'Segoe Fluent Icons'; font-size: 10px; color: var(--text-primary); }
+.nav { padding: 2px 8px 10px; display: flex; flex-direction: column; gap: 2px; min-height: 0; overflow: hidden; }
+.brand { display: flex; align-items: center; gap: 8px; padding: 2px 4px 10px; }
+.wbs { font-family: 'Segoe UI Variable Display', 'Segoe UI', sans-serif; font-weight: 400; font-size: 22px; letter-spacing: .3px; padding-left: 8px;
+  background: linear-gradient(100deg, var(--brand-indigo), var(--brand-violet) 45%, var(--brand-coral) 75%, var(--brand-amber));
+  -webkit-background-clip: text; background-clip: text; color: transparent; }
+.lib-switch { margin: 0 2px 8px; padding: 8px 10px; border-radius: 6px; background: var(--layer-card); border: 1px solid var(--stroke-card);
+  box-shadow: var(--shadow-card); display: flex; align-items: center; gap: 10px; }
+.lib-switch b { display: block; font-weight: 600; }
+.lib-switch small { display: block; color: var(--text-tertiary); font-size: 11px; }
+.lib-switch .chev { margin-left: auto; font-size: 10px; color: var(--text-secondary); }
+.nav-item { display: flex; align-items: center; gap: 12px; padding: 9px 12px; border-radius: 4px; color: var(--text-primary);
+  cursor: pointer; position: relative; user-select: none; white-space: nowrap; }
+.nav-item:hover, .nav-item.active { background: var(--layer-secondary); }
+.nav-item.active::before { content: ''; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 2px; background: var(--accent); }
+.nav-item .new { margin-left: auto; font-size: 10px; border-radius: 8px; padding: 0 6px; background: var(--accent-soft-2); color: var(--accent); font-weight: 600; }
+.nav .spacer { flex: 1; }
+.content { position: relative; min-width: 0; min-height: 0; background: var(--layer-default); border-top-left-radius: 8px;
+  border-left: 1px solid var(--stroke-default); border-top: 1px solid var(--stroke-default); overflow: hidden; }
+.page { position: absolute; inset: 0; overflow: auto; padding: 18px 24px 28px; display: none; }
+.page.on { display: block; }
+.statusbar { grid-column: 1 / -1; display: flex; align-items: center; gap: 18px; padding: 0 14px; font-size: 12px; color: var(--text-secondary);
+  border-top: 1px solid var(--stroke-divider); background: var(--mica-base); white-space: nowrap; overflow: hidden; }
+.statusbar span { display: inline-flex; gap: 6px; align-items: center; }
+.statusbar .ok { color: var(--success); }
+.statusbar .r { margin-left: auto; display: flex; gap: 18px; }
+
+/* ===== Bedienelemente (wie 08) ===== */
+.btn-acc { background: var(--accent); color: var(--text-on-accent); border: 1px solid transparent; border-radius: 4px; padding: 5px 14px;
+  font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+body.dark .btn-acc { color: #111; }
+.btn-acc:hover { background: var(--accent-light); }
+.btn-std { background: var(--layer-card); color: var(--text-primary); border: 1px solid var(--stroke-divider); border-bottom-color: var(--ctl-bottom);
+  border-radius: 4px; padding: 5px 12px; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.btn-std:hover { background: var(--layer-subtle); }
+.ibtn { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 4px; border: 0;
+  background: transparent; font-size: 13px; color: var(--text-primary); cursor: pointer; white-space: nowrap; }
+.ibtn:hover { background: var(--layer-secondary); }
+.seg { display: inline-flex; background: var(--layer-secondary); border-radius: 6px; padding: 2px; gap: 2px; }
+.seg button { border: 0; background: transparent; color: var(--text-primary); padding: 5px 11px; border-radius: 4px;
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; white-space: nowrap; }
+.seg button:hover { background: var(--layer-tertiary); }
+.seg button.on { background: var(--layer-card); box-shadow: 0 1px 2px rgba(0,0,0,0.12); color: var(--accent); font-weight: 600; }
+body.dark .seg button.on { background: #3A3A3A; }
+.seg button small { font-weight: 400; color: var(--text-tertiary); }
+.search { display: flex; align-items: center; gap: 8px; height: 34px; width: 320px; padding: 0 12px;
+  background: var(--layer-card); border: 1px solid var(--stroke-default); border-bottom: 1px solid var(--ctl-bottom); border-radius: 4px; }
+.search input { flex: 1; border: 0; outline: 0; background: transparent; min-width: 0; }
+.search input::placeholder { color: var(--text-tertiary); }
+.pill { font-size: 11px; border-radius: 10px; padding: 1px 8px; background: var(--layer-tertiary); color: var(--text-secondary); white-space: nowrap; font-weight: 600; }
+.tgl { width: 40px; height: 20px; border-radius: 10px; border: 1px solid var(--text-secondary); background: transparent; position: relative; cursor: pointer; flex: none; padding: 0; }
+.tgl::after { content: ''; position: absolute; left: 3px; top: 3px; width: 12px; height: 12px; border-radius: 50%; background: var(--text-secondary); transition: left .12s; }
+.tgl.on { background: var(--accent); border-color: var(--accent); }
+.tgl.on::after { left: 23px; background: #FFF; }
+.dd { height: 30px; padding: 0 8px; border-radius: 4px; background: var(--layer-card); border: 1px solid var(--stroke-default);
+  border-bottom-color: var(--ctl-bottom); font-size: 13px; color: var(--text-primary); }
+
+/* ===== Kopf der Seite ===== */
+.phead { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; flex-wrap: wrap; }
+.phead h1 { font-size: 28px; font-weight: 600; margin: 0; line-height: 1.2; }
+.phead .sub { color: var(--text-secondary); font-size: 13px; margin-top: 4px; }
+.phead .r { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
+.toolbar .r { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+
+/* ===== Platzhalter-Fotos ===== */
+.ph { position: relative; overflow: hidden; background-size: cover; border-radius: 6px; }
+.ph .vid { position: absolute; inset: 0; display: grid; place-items: center; }
+.ph .vid span { width: 46px; height: 46px; border-radius: 50%; background: rgba(0,0,0,.45); color: #FFF; display: grid; place-items: center; font-size: 18px; backdrop-filter: blur(4px); }
+.ph .dur { position: absolute; right: 8px; bottom: 8px; font-size: 11px; color: #FFF; background: rgba(0,0,0,.55); border-radius: 4px; padding: 1px 6px; display: inline-flex; gap: 4px; align-items: center; }
+.ph .burst { position: absolute; left: 8px; bottom: 8px; font-size: 11px; color: #FFF; background: rgba(0,0,0,.55); border-radius: 10px; padding: 1px 8px; display: inline-flex; gap: 4px; align-items: center; }
+.ph .why { position: absolute; left: 8px; top: 8px; font-size: 11px; color: #FFF; background: rgba(0,0,0,.6); border-radius: 4px; padding: 3px 7px; display: none; gap: 6px; align-items: center; }
+.ph:hover .why { display: inline-flex; }
+.ph .fav { position: absolute; right: 8px; top: 8px; color: var(--star); font-size: 14px; text-shadow: 0 1px 2px rgba(0,0,0,.5); }
+
+/* ===== Übersicht ===== */
+.sec { margin: 26px 0 10px; display: flex; align-items: baseline; gap: 10px; }
+.sec h2 { font-size: 20px; font-weight: 600; margin: 0; }
+.sec .cnt { color: var(--text-tertiary); font-size: 13px; }
+.sec .more { margin-left: auto; font-size: 13px; color: var(--accent); cursor: pointer; }
+.hero { position: relative; border-radius: 10px; overflow: hidden; height: 268px; display: grid; grid-template-columns: 2fr 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 3px; cursor: pointer; box-shadow: var(--shadow-card); }
+.hero .ph { border-radius: 0; }
+.hero .ph:first-child { grid-row: 1 / 3; }
+.hero .cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 18px 20px 16px; color: #FFF;
+  background: linear-gradient(transparent, rgba(0,0,0,.66)); pointer-events: none; }
+.hero .cap .k { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; opacity: .9; font-weight: 600; }
+.hero .cap .t { font-size: 26px; font-weight: 600; margin-top: 2px; font-family: 'Segoe UI Variable Display', 'Segoe UI', sans-serif; }
+.hero .cap .m { font-size: 13px; opacity: .9; margin-top: 2px; }
+.hero .acts { position: absolute; right: 16px; bottom: 16px; display: flex; gap: 8px; }
+.glass { background: rgba(255,255,255,.18); color: #FFF; border: 1px solid rgba(255,255,255,.35); border-radius: 4px; padding: 5px 12px; font-size: 13px;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 6px; backdrop-filter: blur(8px); white-space: nowrap; }
+.glass:hover { background: rgba(255,255,255,.3); }
+.row { display: grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); gap: 16px; }
+.card { background: var(--layer-card); border: 1px solid var(--stroke-card); border-radius: 8px; box-shadow: var(--shadow-card); overflow: hidden; cursor: pointer; position: relative; }
+.card:hover { box-shadow: var(--shadow-flyout); }
+.card .cv { height: 150px; display: grid; grid-template-columns: 2fr 1fr; grid-template-rows: 1fr 1fr; gap: 2px; }
+.card .cv .ph { border-radius: 0; }
+.card .cv .ph:first-child { grid-row: 1 / 3; }
+.card .cv.one { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+.card .badge { position: absolute; left: 8px; top: 8px; font-size: 11px; font-weight: 600; color: #FFF; background: rgba(0,0,0,.55);
+  border-radius: 10px; padding: 1px 8px; display: inline-flex; gap: 5px; align-items: center; backdrop-filter: blur(4px); }
+.card .pin { position: absolute; right: 8px; top: 8px; color: #FFF; background: rgba(0,0,0,.55); border-radius: 50%; width: 24px; height: 24px; display: grid; place-items: center; font-size: 12px; }
+.card .play { position: absolute; right: 8px; top: 112px; display: none; }
+.card:hover .play { display: inline-flex; }
+.card .b { padding: 10px 12px 12px; }
+.card .t { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card .p { color: var(--text-secondary); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+.card .m { color: var(--text-tertiary); font-size: 12px; margin-top: 6px; display: flex; align-items: center; gap: 8px; }
+.card .m .faces { margin-left: auto; display: flex; }
+.av { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--layer-card); margin-left: -6px; background-size: cover; flex: none; }
+.card.person .cv { position: relative; }
+.card.person .face { position: absolute; left: 12px; bottom: -22px; width: 52px; height: 52px; border-radius: 50%; border: 3px solid var(--layer-card); background-size: cover; box-shadow: var(--shadow-card); }
+.card.person .b { padding-top: 26px; }
+.years { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 12px; }
+.ychip { height: 28px; padding: 0 12px; border-radius: 14px; border: 1px solid var(--stroke-divider); background: var(--layer-card); cursor: pointer; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; }
+.ychip small { color: var(--text-tertiary); }
+.ychip.on { background: var(--accent-soft-2); border-color: var(--accent); color: var(--accent-dark); font-weight: 600; }
+body.dark .ychip.on { color: var(--accent-light); }
+
+/* ===== Story-Ansicht ===== */
+.crumb { display: flex; align-items: center; gap: 6px; color: var(--text-secondary); font-size: 13px; margin-bottom: 12px; }
+.crumb a { color: var(--accent); cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+.cover { position: relative; height: 340px; border-radius: 10px; overflow: hidden; box-shadow: var(--shadow-card); }
+.cover .ph { position: absolute; inset: 0; border-radius: 0; }
+.cover .cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 60px 26px 22px; color: #FFF; background: linear-gradient(transparent, rgba(0,0,0,.7)); }
+.cover .k { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; opacity: .92; }
+.cover h1 { margin: 4px 0 0; font-size: 38px; font-weight: 600; line-height: 1.1; font-family: 'Segoe UI Variable Display', 'Segoe UI', sans-serif; }
+.cover .pl { font-size: 16px; margin-top: 4px; opacity: .95; }
+.cover .mt { font-size: 13px; margin-top: 8px; opacity: .85; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.cover .mt .faces { display: flex; padding-left: 6px; }
+.cover .mt .av { border-color: rgba(0,0,0,.4); }
+.cover .acts { position: absolute; right: 22px; bottom: 22px; display: flex; gap: 8px; }
+.cover .top { position: absolute; right: 14px; top: 14px; display: flex; gap: 6px; }
+.sbar { position: sticky; top: 0; z-index: 5; box-shadow: 0 -18px 0 var(--mica-base); margin: 0 -24px; padding: 12px 24px; background: var(--mica-base); border-bottom: 1px solid var(--stroke-divider);
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.sbar .days { display: flex; gap: 4px; flex-wrap: wrap; }
+.sbar .day { height: 28px; padding: 0 10px; border-radius: 14px; border: 1px solid var(--stroke-divider); background: var(--layer-card); font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.sbar .day:hover { background: var(--layer-subtle); }
+.sbar .day.on { background: var(--accent-soft-2); border-color: var(--accent); color: var(--accent-dark); font-weight: 600; }
+body.dark .sbar .day.on { color: var(--accent-light); }
+.sbar .r { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.dayh { margin: 30px 0 12px; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.dayh .n { font-size: 12px; font-weight: 700; color: var(--accent); letter-spacing: .06em; text-transform: uppercase; }
+.dayh h2 { margin: 0; font-size: 22px; font-weight: 600; }
+.dayh .pl { color: var(--text-secondary); font-size: 14px; display: inline-flex; align-items: center; gap: 5px; }
+.dayh .c { margin-left: auto; color: var(--text-tertiary); font-size: 12px; }
+.blk { display: grid; gap: 6px; margin-bottom: 6px; }
+.blk .ph { cursor: zoom-in; }
+.b-big2 { grid-template-columns: 2fr 1fr; grid-template-rows: 190px 190px; }
+.b-big2 .ph:first-child { grid-row: 1 / 3; }
+.b-2big { grid-template-columns: 1fr 2fr; grid-template-rows: 190px 190px; }
+.b-2big .ph:last-child { grid-row: 1 / 3; grid-column: 2; }
+.b-3 { grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 230px; }
+.b-pano { grid-template-columns: 1fr; grid-template-rows: 250px; }
+.b-port { grid-template-columns: 1fr 1fr 2fr; grid-template-rows: 340px; }
+.b-4 { grid-template-columns: 1.4fr 1fr 1fr 1.4fr; grid-template-rows: 200px; }
+.restlink { margin: 10px 0 0; display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: var(--accent); cursor: pointer; }
+.just { display: flex; flex-wrap: wrap; gap: 4px; }
+.just .ph { height: 120px; border-radius: 3px; flex-grow: 1; }
+.just .ph.off { opacity: .38; }
+.collapsed { margin-top: 26px; padding: 16px 18px; border: 1px dashed var(--stroke-divider); border-radius: 8px; display: flex; align-items: center; gap: 12px; color: var(--text-secondary); }
+.endbox { margin: 34px 0 6px; padding: 20px; border-radius: 10px; background: var(--layer-card); border: 1px solid var(--stroke-card); display: flex; align-items: center; gap: 14px; box-shadow: var(--shadow-card); }
+.endbox .t { font-weight: 600; }
+
+/* ===== Menü ===== */
+.menu { position: absolute; z-index: 40; min-width: 240px; background: var(--layer-card); border: 1px solid var(--stroke-card); border-radius: 8px;
+  box-shadow: var(--shadow-flyout); padding: 4px; display: none; }
+.menu.show { display: block; }
+.menu .mi { display: flex; gap: 12px; align-items: center; padding: 7px 10px; border-radius: 4px; cursor: pointer; font-size: 13px; white-space: nowrap; }
+.menu .mi:hover { background: var(--layer-secondary); }
+.menu .mi .k { margin-left: auto; color: var(--text-tertiary); font-size: 12px; }
+.menu .sep { height: 1px; background: var(--stroke-divider); margin: 4px 6px; }
+.menu .mi.dis { color: var(--text-disabled); cursor: default; }
+.menu .mi.dis:hover { background: transparent; }
+
+/* ===== Diashow (eigenes Vollbild-Fenster, hier im App-Rahmen dargestellt) ===== */
+.show { position: absolute; inset: 0; z-index: 60; background: #000; display: none; overflow: hidden; color: #FFF; }
+.show.on { display: block; }
+.show .slide { position: absolute; inset: 0; opacity: 0; transition: opacity 1.2s ease; }
+.show .slide.on { opacity: 1; }
+.show .slide .ph { position: absolute; inset: -4%; border-radius: 0; }
+.show .slide.kb .ph { animation: kb 7s ease-out forwards; }
+.show .slide.kb.alt .ph { animation-name: kb2; }
+@keyframes kb { from { transform: scale(1) translate(0,0); } to { transform: scale(1.09) translate(-2%,-1.5%); } }
+@keyframes kb2 { from { transform: scale(1.08) translate(2%,1%); } to { transform: scale(1) translate(0,0); } }
+.show .facebox { position: absolute; border: 2px dashed rgba(255,255,255,.7); border-radius: 6px; display: none; }
+.show.facesOn .facebox { display: block; }
+.show .info { position: absolute; left: 34px; bottom: 34px; text-shadow: 0 1px 3px rgba(0,0,0,.6); transition: opacity .4s; }
+.show .info .d { font-size: 24px; font-weight: 600; font-family: 'Segoe UI Variable Display', 'Segoe UI', sans-serif; }
+.show .info .p { font-size: 15px; opacity: .9; margin-top: 2px; }
+.show.noinfo .info { opacity: 0; }
+.show .ctl { position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%); display: flex; gap: 6px; align-items: center; padding: 6px 10px;
+  background: rgba(30,30,30,.72); border: 1px solid rgba(255,255,255,.14); border-radius: 8px; backdrop-filter: blur(12px); opacity: 0; transition: opacity .25s; }
+.show:hover .ctl, .show .ctl.pin { opacity: 1; }
+.show .ctl button { background: transparent; border: 0; color: #FFF; height: 32px; min-width: 32px; padding: 0 8px; border-radius: 4px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; font-size: 13px; }
+.show .ctl button:hover { background: rgba(255,255,255,.12); }
+.show .ctl button.on { background: rgba(129,140,248,.35); }
+.show .ctl .pos { font-size: 12px; opacity: .8; padding: 0 8px; white-space: nowrap; }
+.show .ctl .vs { width: 1px; height: 20px; background: rgba(255,255,255,.2); }
+.show .ctl select { background: rgba(255,255,255,.1); color: #FFF; border: 1px solid rgba(255,255,255,.2); border-radius: 4px; height: 28px; font-size: 12px; }
+.show .ctl select option { color: #000; }
+.show .topr { position: absolute; right: 18px; top: 16px; display: flex; gap: 8px; align-items: center; font-size: 12px; opacity: .75; }
+.show .prog { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--brand-amber); width: 0; }
+.show .prog.run { animation: prog 6s linear forwards; }
+@keyframes prog { from { width: 0; } to { width: 100%; } }
+
+/* ===== Einstellungen › Storys ===== */
+.set { max-width: 780px; }
+.set .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--stroke-divider); margin-bottom: 16px; }
+.set .tabs span { padding: 8px 14px; font-size: 13px; color: var(--text-secondary); border-bottom: 2px solid transparent; }
+.set .tabs span.on { color: var(--text-primary); border-color: var(--accent); font-weight: 600; }
+.sc { background: var(--layer-card); border: 1px solid var(--stroke-card); border-radius: 8px; box-shadow: var(--shadow-card); margin-bottom: 12px; }
+.sc .r { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-top: 1px solid var(--stroke-divider); }
+.sc .r:first-child { border-top: 0; }
+.sc .r .ic { color: var(--text-secondary); font-size: 18px; }
+.sc .r .tx { flex: 1; min-width: 0; }
+.sc .r .tx b { display: block; font-weight: 600; font-size: 14px; }
+.sc .r .tx small { display: block; color: var(--text-secondary); font-size: 12px; margin-top: 2px; }
+.sc h3 { margin: 0; padding: 12px 16px 0; font-size: 14px; }
+.toast { position: absolute; left: 50%; bottom: 46px; transform: translateX(-50%); background: var(--layer-card); border: 1px solid var(--stroke-card);
+  border-radius: 8px; box-shadow: var(--shadow-flyout); padding: 10px 16px; font-size: 13px; z-index: 70; display: none; }
+.toast.show { display: block; }
+</style>
+</head>
+<body>
+
+<div class="mock-bar">
+  <span><b>Mockup 09 · Storys (Welle 6) · Entwurf</b></span>
+  <span class="grp">Design: <button id="mbLight" class="on">Hell</button><button id="mbDark">Dunkel</button></span>
+  <span class="grp">Ansicht: <button data-go="overview" class="on">Übersicht</button><button data-go="story">Story</button><button data-go="memory">Rückblick</button><button data-go="show">Diashow</button><button data-go="settings">Einstellungen</button></span>
+  <span class="grp">Fensterbreite: <button data-w="1280" class="on">1280</button><button data-w="1600">1600</button></span>
+  <span class="note">Fotos sind Platzhalter · Überschriften nur Datum, Ort, Personen · keine Musik</span>
+</div>
+
+<div class="stage-wrap"><div class="win-box" id="winBox">
+<div class="window" id="win">
+  <div class="titlebar"><span class="tile"></span> Lumora
+    <span class="wc"><span>&#xE921;</span><span>&#xE922;</span><span>&#xE8BB;</span></span></div>
+
+  <nav class="nav">
+    <div class="brand"><span class="wbs">lumora</span></div>
+    <div class="lib-switch"><span class="ic">&#xE8F1;</span><div><b>Familienfotos</b><small>Bibliothek wechseln</small></div><span class="ic chev">&#xE70D;</span></div>
+    <div class="nav-item"><span class="ic">&#xE91B;</span>Galerie</div>
+    <div class="nav-item"><span class="ic">&#xE8B7;</span>Ordner</div>
+    <div class="nav-item"><span class="ic">&#xE8F1;</span>Alben</div>
+    <div class="nav-item active" data-go="overview"><span class="ic">&#xE786;</span>Storys<span class="new">3 neu</span></div>
+    <div class="nav-item"><span class="ic">&#xE716;</span>Personen</div>
+    <div class="nav-item"><span class="ic">&#xE707;</span>Orte</div>
+    <div class="nav-item"><span class="ic">&#xE8C8;</span>Doppelte</div>
+    <div class="nav-item"><span class="ic">&#xE8CB;</span>Sortieren</div>
+    <div class="spacer"></div>
+    <div class="nav-item" data-go="settings"><span class="ic">&#xE713;</span>Einstellungen</div>
+  </nav>
+
+  <main class="content" id="content">
+
+    <!-- ===================== Übersicht ===================== -->
+    <section class="page on" id="page-overview">
+      <div class="phead">
+        <div><h1>Storys</h1><div class="sub">214 Storys aus 48 312 Fotos und Videos · automatisch aus Datum, Ort, Personen und Motiven</div></div>
+        <div class="r">
+          <div class="search"><span class="ic s">&#xE721;</span><input placeholder="Story suchen – Ort, Person, Jahr"></div>
+        </div>
+      </div>
+      <div class="toolbar">
+        <div class="seg" id="kindSeg">
+          <button class="on" data-k="all">Alle <small>214</small></button>
+          <button data-k="event">Ereignisse &amp; Reisen <small>162</small></button>
+          <button data-k="memory">Rückblicke <small>12</small></button>
+          <button data-k="person">Personen <small>24</small></button>
+          <button data-k="place">Orte <small>16</small></button>
+        </div>
+        <div class="r">
+          <button class="btn-std" data-toast="Story aus Auswahl: in Galerie oder Album Fotos markieren → Rechtsklick „Als Story…“"><span class="ic s">&#xE710;</span>Story aus Auswahl…</button>
+          <button class="ibtn" data-toast="Ausgeblendete Storys (3) – „Wieder zeigen“ je Story"><span class="ic s">&#xE7B3;</span>Ausgeblendet (3)</button>
+        </div>
+      </div>
+
+      <div id="ovMemory">
+        <div class="hero" data-open="memory" id="memHero"></div>
+      </div>
+
+      <div class="sec" data-sec="pinned"><h2>Angeheftet</h2><span class="cnt">2</span></div>
+      <div class="row" id="rowPinned" data-sec="pinned"></div>
+
+      <div class="sec" data-sec="event"><h2>Neu</h2><span class="cnt">seit dem letzten Besuch</span></div>
+      <div class="row" id="rowNew" data-sec="event"></div>
+
+      <div class="sec" data-sec="event"><h2>Reisen &amp; Ereignisse</h2><span class="cnt">162</span><span class="more">Alle anzeigen</span></div>
+      <div class="years" data-sec="event" id="years"></div>
+      <div class="row" id="rowEvents" data-sec="event"></div>
+
+      <div class="sec" data-sec="person"><h2>Personen</h2><span class="cnt">Jahre mit vielen bestätigten Fotos</span><span class="more">Alle 24</span></div>
+      <div class="row" id="rowPersons" data-sec="person"></div>
+
+      <div class="sec" data-sec="place"><h2>Orte</h2><span class="cnt">Orte mit mehreren Besuchen</span><span class="more">Alle 16</span></div>
+      <div class="row" id="rowPlaces" data-sec="place"></div>
+    </section>
+
+    <!-- ===================== Story ===================== -->
+    <section class="page" id="page-story">
+      <div class="crumb"><a data-go="overview"><span class="ic s">&#xE72B;</span>Storys</a><span>›</span><span id="crumbKind">Reisen &amp; Ereignisse</span></div>
+      <div class="cover" id="cover"></div>
+      <div class="sbar">
+        <div class="seg" id="modeSeg"><button class="on" data-m="hl"><span class="ic s">&#xE734;</span>Highlights <small>64</small></button><button data-m="all">Alle Fotos <small>421</small></button></div>
+        <div class="days" id="days"></div>
+        <div class="r"><button class="btn-acc" data-go="show"><span class="ic s">&#xE768;</span>Diashow</button></div>
+      </div>
+      <div id="storyBody"></div>
+    </section>
+
+    <!-- ===================== Einstellungen ===================== -->
+    <section class="page" id="page-settings">
+      <div class="phead"><div><h1>Einstellungen</h1></div></div>
+      <div class="set">
+        <div class="tabs"><span>Bibliotheken &amp; Eingänge</span><span>Darstellung</span><span>Gesichter</span><span>Motive</span><span class="on">Storys</span><span>Info</span></div>
+        <div class="sc">
+          <h3>Automatische Storys</h3>
+          <div class="r"><span class="ic">&#xE786;</span><div class="tx"><b>Ereignisse &amp; Reisen</b><small>Fotos nach Zeit und Ort zusammenfassen; mehrere Tage weg von zu Hause = Reise</small></div><button class="tgl on"></button></div>
+          <div class="r"><span class="ic">&#xE81C;</span><div class="tx"><b>Rückblicke</b><small>„Heute vor … Jahren“ und dieser Monat in früheren Jahren</small></div><button class="tgl on"></button></div>
+          <div class="r"><span class="ic">&#xE716;</span><div class="tx"><b>Personen-Storys</b><small>Jahre mit vielen bestätigten Fotos einer Person (ab 30 Fotos)</small></div><button class="tgl on"></button></div>
+          <div class="r"><span class="ic">&#xE707;</span><div class="tx"><b>Orte-Storys</b><small>Orte mit mindestens drei Besuchen in verschiedenen Jahren</small></div><button class="tgl on"></button></div>
+        </div>
+        <div class="sc">
+          <h3>Erkennung</h3>
+          <div class="r"><span class="ic">&#xE80F;</span><div class="tx"><b>Zu Hause</b><small>Wird nicht als Reise gezählt · automatisch = häufigster Ort</small></div>
+            <select class="dd"><option>Automatisch (Graz)</option><option>Ort wählen…</option></select></div>
+          <div class="r"><span class="ic">&#xE916;</span><div class="tx"><b>Neues Ereignis nach einer Pause von</b><small>oder sobald die Fotos weiter als 30 km entfernt aufgenommen wurden</small></div>
+            <select class="dd"><option>6 Stunden</option><option>3 Stunden</option><option>12 Stunden</option></select></div>
+          <div class="r"><span class="ic">&#xE8B9;</span><div class="tx"><b>Mindestgröße einer Story</b><small>Kleinere Gruppen bleiben nur in der Galerie</small></div>
+            <select class="dd"><option>12 Fotos</option><option>8 Fotos</option><option>20 Fotos</option></select></div>
+        </div>
+        <div class="sc">
+          <h3>Highlights</h3>
+          <div class="r"><span class="ic">&#xE734;</span><div class="tx"><b>Auswahl</b><small>Schärfe, Belichtung, Bildwirkung (aus den Motiv-Vektoren), bestätigte Personen, Favoriten und Bewertung; Serien und Doppelte nur einmal</small></div>
+            <select class="dd"><option>Automatisch (~15 %)</option><option>Knapp (~8 %)</option><option>Großzügig (~30 %)</option></select></div>
+          <div class="r"><span class="ic">&#xE7B3;</span><div class="tx"><b>Unscharfe und dunkle Fotos nie als Titelbild</b><small>Titelbild lässt sich je Story selbst wählen</small></div><button class="tgl on"></button></div>
+        </div>
+        <div class="sc">
+          <h3>Diashow</h3>
+          <div class="r"><span class="ic">&#xE916;</span><div class="tx"><b>Anzeigedauer je Foto</b></div><select class="dd"><option>5 Sekunden</option><option>3 Sekunden</option><option>8 Sekunden</option></select></div>
+          <div class="r"><span class="ic">&#xE740;</span><div class="tx"><b>Langsamer Zoom (Ken Burns)</b><small>Zielt auf erkannte Gesichter, sonst auf die Bildmitte</small></div><button class="tgl on"></button></div>
+          <div class="r"><span class="ic">&#xE714;</span><div class="tx"><b>Videos abspielen</b><small>Mit Ton, höchstens 30 Sekunden je Video</small></div><button class="tgl on"></button></div>
+          <div class="r"><span class="ic">&#xE8A1;</span><div class="tx"><b>Datum und Ort einblenden</b></div><button class="tgl on"></button></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="menu" id="menu"></div>
+    <div class="toast" id="toast"></div>
+  </main>
+
+    <!-- ===================== Diashow ===================== -->
+    <div class="show" id="show">
+      <div id="slides"></div>
+      <div class="info" id="shInfo"><div class="d"></div><div class="p"></div></div>
+      <div class="topr"><span id="shTitle"></span><span>· eigenes Vollbild-Fenster · Leiste blendet sich nach 2 s ohne Mausbewegung aus · Esc beendet</span></div>
+      <div class="ctl pin" id="shCtl">
+        <button title="Zurück (←)" data-sh="prev"><span class="ic">&#xE892;</span></button>
+        <button title="Pause / Weiter (Leertaste)" data-sh="pause"><span class="ic" id="shPP">&#xE769;</span></button>
+        <button title="Weiter (→)" data-sh="next"><span class="ic">&#xE893;</span></button>
+        <span class="pos" id="shPos"></span>
+        <span class="vs"></span>
+        <select title="Anzeigedauer"><option>5 s</option><option>3 s</option><option>8 s</option></select>
+        <button class="on" data-sh="kb" title="Langsamer Zoom"><span class="ic s">&#xE740;</span>Zoom</button>
+        <button class="on" data-sh="info" title="Datum und Ort einblenden"><span class="ic s">&#xE8A1;</span>Datum &amp; Ort</button>
+        <button data-sh="faces" title="Zoom-Ziel zeigen (nur im Mockup)"><span class="ic s">&#xE8D4;</span>Zoom-Ziel</button>
+        <span class="vs"></span>
+        <button data-sh="close" title="Beenden (Esc)"><span class="ic">&#xE8BB;</span></button>
+      </div>
+      <div class="prog" id="shProg"></div>
+    </div>
+
+  <div class="statusbar">
+    <span class="ok"><span class="ic s">&#xE73E;</span>Storys aktuell</span>
+    <span>Foto-Güte: 48 312 von 48 312 bewertet</span>
+    <span>Zuletzt neu berechnet nach dem Scan um 22:41</span>
+    <div class="r"><span>Familienfotos</span><span>0.5.0</span></div>
+  </div>
+</div>
+</div></div>
+
+<script>
+const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
+
+// ---------- Platzhalter-Fotos (Szenen aus Verläufen, keine echten Bilder) ----------
+const SCENES = {
+  beach:  { sky: ['#8EC5FC', '#D9F0FF'], ground: '#E9D3A6', hill: '#3E8EC9', sun: '#FFF4C2' },
+  sea:    { sky: ['#6FB1E8', '#CFE8FA'], ground: '#2F7DBA', hill: '#1F5F94', sun: '#FFFFFF' },
+  sunset: { sky: ['#F97362', '#F5A524'], ground: '#5B3A6B', hill: '#3B2550', sun: '#FFE7A3' },
+  dusk:   { sky: ['#4145A0', '#F97362'], ground: '#1E1B3A', hill: '#2C2752', sun: '#FDE68A' },
+  alps:   { sky: ['#A7C7E7', '#EEF4FA'], ground: '#5E8C61', hill: '#8FA3B8', sun: '#FFFFFF' },
+  forest: { sky: ['#B9E3C6', '#EAF6EC'], ground: '#2E6B3F', hill: '#3F8A52', sun: '#FFF8D6' },
+  city:   { sky: ['#1B1F3B', '#4B4F7D'], ground: '#2A2A35', hill: '#5A5A70', sun: '#FBBF24' },
+  snow:   { sky: ['#CFD9E8', '#F7FAFD'], ground: '#F2F5F9', hill: '#B9C7D8', sun: '#FFFFFF' },
+  warm:   { sky: ['#F3D9B1', '#FBEBD3'], ground: '#B98652', hill: '#8B5E34', sun: '#FFF1D6' },
+  meadow: { sky: ['#9FD3F5', '#E8F6FF'], ground: '#7CB55B', hill: '#5D9B45', sun: '#FFF6C9' },
+};
+const PEOPLE = [['#F2C9A5', '#5B5FC7'], ['#E3B48F', '#F97362'], ['#C99A72', '#2F7DBA'], ['#F5D2B8', '#8B5CF6'], ['#B88763', '#107C10']];
+function rnd(seed) { let s = seed * 9301 + 49297; return () => ((s = (s * 9301 + 49297) % 233280) / 233280); }
+function photoBg(scene, seed = 1, person = -1) {
+  const S = SCENES[scene], r = rnd(seed), sx = 15 + r() * 70, sy = 14 + r() * 20, ha = 160 + r() * 30, hy = 52 + r() * 14;
+  let layers = [];
+  if (person >= 0) {
+    const [skin, shirt] = PEOPLE[person % PEOPLE.length], px = 30 + r() * 40;
+    layers.push(`radial-gradient(circle at ${px}% 44%, ${skin} 0 9%, transparent 9.5%)`,
+                `radial-gradient(ellipse 22% 30% at ${px}% 88%, ${shirt} 0 99%, transparent 100%)`);
+  }
+  layers.push(`radial-gradient(circle at ${sx}% ${sy}%, ${S.sun} 0 5%, transparent 5.6%)`,
+              `linear-gradient(${ha}deg, transparent ${hy}%, ${S.hill} ${hy + .4}%)`,
+              `linear-gradient(180deg, ${S.sky[0]}, ${S.sky[1]} 62%, ${S.ground} 62.3%)`);
+  return layers.join(',');
+}
+function ph(p, extra = '') {
+  const vid = p.v ? `<div class="vid"><span class="ic">&#xE768;</span></div><span class="dur"><span class="ic s">&#xE714;</span>${p.v}</span>` : '';
+  const burst = p.b ? `<span class="burst"><span class="ic s">&#xE8B9;</span>+${p.b} ähnliche</span>` : '';
+  const why = p.w ? `<span class="why"><span class="ic s">&#xE946;</span>${p.w}</span>` : '';
+  const fav = p.f ? `<span class="fav">&#9733;</span>` : '';
+  return `<div class="ph" style="background:${photoBg(p.s, p.n || 1, p.p ?? -1)};${extra}">${vid}${burst}${why}${fav}</div>`;
+}
+const face = (i) => `background:${photoBg('warm', 7 + i, i)}`;
+
+// ---------- Daten (fiktiv) ----------
+const STORIES = [
+  { id: 'grado', kind: 'event', badge: 'Reise', icon: '&#xE709;', t: '12.–19. Juli 2025', p: 'Grado · Triest · Aquileia — Italien', n: '421 Fotos · 9 Videos', faces: [0, 1, 2], c: ['beach', 'sea', 'sunset'], pinned: true, isNew: true },
+  { id: 'hochzeit', kind: 'event', badge: 'Ereignis', icon: '&#xE787;', t: 'Samstag, 6. September 2025', p: 'Schloss Eggenberg, Graz', n: '286 Fotos · 4 Videos', faces: [3, 1, 4], c: ['warm', 'meadow', 'forest'], isNew: true },
+  { id: 'dachstein', kind: 'event', badge: 'Ausflug', icon: '&#xE787;', t: 'Sonntag, 21. September 2025', p: 'Dachstein, Ramsau', n: '58 Fotos · 2 Videos', faces: [0, 2], c: ['alps', 'snow', 'alps'], isNew: true },
+  { id: 'wien', kind: 'event', badge: 'Reise', icon: '&#xE709;', t: '3.–5. Mai 2025', p: 'Wien', n: '134 Fotos', faces: [0, 1], c: ['city', 'warm', 'dusk'] },
+  { id: 'advent', kind: 'event', badge: 'Ereignis', icon: '&#xE787;', t: '24. Dezember 2024', p: 'Graz · zu Hause', n: '96 Fotos · 3 Videos', faces: [0, 1, 2, 3], c: ['warm', 'snow', 'warm'], pinned: true },
+  { id: 'kroatien', kind: 'event', badge: 'Reise', icon: '&#xE709;', t: '28. Juli – 9. August 2024', p: 'Poreč · Rovinj · Pula — Kroatien', n: '612 Fotos · 15 Videos', faces: [0, 1, 2], c: ['sea', 'sunset', 'beach'] },
+  { id: 'anna19', kind: 'person', badge: 'Person', icon: '&#xE77B;', t: 'Anna · 2019', p: '312 Fotos mit Anna', n: '312 Fotos · 11 Videos', faces: [3], c: ['meadow', 'beach', 'warm'], pf: 3 },
+  { id: 'max', kind: 'person', badge: 'Person', icon: '&#xE77B;', t: 'Max · 2021–2023', p: 'Kindergartenjahre', n: '488 Fotos · 20 Videos', faces: [2], c: ['forest', 'warm', 'meadow'], pf: 2, sub: '' },
+  { id: 'oma', kind: 'person', badge: 'Person', icon: '&#xE77B;', t: 'Oma · 2010–2016', p: '204 Fotos mit Oma', n: '204 Fotos', faces: [4], c: ['warm', 'meadow', 'snow'], pf: 4 },
+  { id: 'gradoall', kind: 'place', badge: 'Ort', icon: '&#xE707;', t: 'Grado · 2014–2025', p: '6 Besuche · Italien', n: '1 340 Fotos · 31 Videos', faces: [0, 1], c: ['beach', 'sunset', 'sea'] },
+  { id: 'ramsau', kind: 'place', badge: 'Ort', icon: '&#xE707;', t: 'Ramsau am Dachstein · 2011–2025', p: '5 Besuche', n: '402 Fotos', faces: [0, 2], c: ['alps', 'snow', 'forest'] },
+  { id: 'wienall', kind: 'place', badge: 'Ort', icon: '&#xE707;', t: 'Wien · 2008–2025', p: '9 Besuche', n: '880 Fotos · 12 Videos', faces: [1], c: ['city', 'dusk', 'warm'] },
+];
+const YEARS = [['2025', 31], ['2024', 28], ['2023', 24], ['2022', 19], ['2021', 17], ['2020', 9], ['ältere', 34]];
+
+function card(s) {
+  const cv = `<div class="cv">${ph({ s: s.c[0], n: s.t.length, p: s.faces[0] ?? -1 })}${ph({ s: s.c[1], n: s.t.length + 3 })}${ph({ s: s.c[2], n: s.t.length + 5, p: s.faces[1] ?? -1 })}`
+    + (s.pf !== undefined ? `<div class="face" style="${face(s.pf)}"></div>` : '') + `</div>`;
+  const faces = s.faces.map(i => `<span class="av" style="${face(i)}"></span>`).join('');
+  return `<div class="card${s.kind === 'person' ? ' person' : ''}" data-open="${s.id}">${cv}
+    <span class="badge"><span class="ic s">${s.icon}</span>${s.badge}</span>
+    ${s.pinned ? '<span class="pin" title="Angeheftet"><span class="ic s">&#xE718;</span></span>' : ''}
+    <button class="glass play" data-go="show" title="Diashow"><span class="ic s">&#xE768;</span>Diashow</button>
+    <div class="b"><div class="t">${s.t}</div><div class="p">${s.p}</div>
+      <div class="m"><span>${s.n}</span><span class="faces">${faces}</span></div></div></div>`;
+}
+function renderOverview() {
+  $('#memHero').innerHTML = ph({ s: 'city', n: 4, p: 0 }) + ph({ s: 'dusk', n: 6 }) + ph({ s: 'warm', n: 9, p: 1 }) + ph({ s: 'city', n: 12 }) + ph({ s: 'snow', n: 15, p: 2 })
+    + `<div class="cap"><div class="k">Heute vor 3 Jahren</div><div class="t">Freitag, 21. Oktober 2022</div><div class="m">Wien · 48 Fotos · 2 Videos · Anna, Max</div></div>
+       <div class="acts"><button class="glass" data-go="show"><span class="ic s">&#xE768;</span>Diashow</button><button class="glass" data-open="memory">Öffnen</button></div>`;
+  $('#rowPinned').innerHTML = STORIES.filter(s => s.pinned).map(card).join('');
+  $('#rowNew').innerHTML = STORIES.filter(s => s.isNew).map(card).join('');
+  $('#years').innerHTML = YEARS.map(([y, n], i) => `<span class="ychip${i === 0 ? ' on' : ''}">${y} <small>${n}</small></span>`).join('');
+  $('#rowEvents').innerHTML = STORIES.filter(s => s.kind === 'event').map(card).join('');
+  $('#rowPersons').innerHTML = STORIES.filter(s => s.kind === 'person').map(card).join('');
+  $('#rowPlaces').innerHTML = STORIES.filter(s => s.kind === 'place').map(card).join('');
+}
+function filterKind(k) {
+  $$('#kindSeg button').forEach(b => b.classList.toggle('on', b.dataset.k === k));
+  $('#ovMemory').classList.toggle('hidden', !(k === 'all' || k === 'memory'));
+  $$('[data-sec]').forEach(el => el.classList.toggle('hidden', !(k === 'all' || el.dataset.sec === k || (k === 'event' && el.dataset.sec === 'pinned'))));
+}
+
+// ---------- Story: Abschnitte je Tag mit Collage-Blöcken ----------
+const DAYS = [
+  { n: 'Tag 1', d: 'Samstag, 12. Juli', pl: 'Grado', c: '58 Fotos · 2 Videos · 9 ausgewählt', blocks: [
+    ['b-big2', [{ s: 'beach', n: 3, p: 0, f: 1, w: 'scharf · 2 Personen · Favorit' }, { s: 'sea', n: 4 }, { s: 'beach', n: 5, p: 1, b: 4, w: 'beste aus einer Serie von 5' }]],
+    ['b-3', [{ s: 'sunset', n: 6, v: '0:42' }, { s: 'warm', n: 7, p: 2, w: 'scharf · Gesicht gut sichtbar' }, { s: 'sea', n: 8 }]],
+    ['b-pano', [{ s: 'sunset', n: 9, w: 'Panorama · Motiv „Sonnenuntergang“' }]] ] },
+  { n: 'Tag 2', d: 'Sonntag, 13. Juli', pl: 'Grado · Lagune', c: '71 Fotos · 1 Video · 8 ausgewählt', blocks: [
+    ['b-pano', [{ s: 'sea', n: 11 }]],
+    ['b-port', [{ s: 'beach', n: 12, p: 3 }, { s: 'meadow', n: 13, p: 0 }, { s: 'sea', n: 14, p: 1, f: 1 }]],
+    ['b-4', [{ s: 'beach', n: 15 }, { s: 'warm', n: 16, p: 2 }, { s: 'sea', n: 17, v: '1:12' }, { s: 'sunset', n: 18 }]] ] },
+  { n: 'Tag 3', d: 'Montag, 14. Juli', pl: 'Triest', c: '64 Fotos · 3 Videos · 10 ausgewählt', blocks: [
+    ['b-2big', [{ s: 'city', n: 21 }, { s: 'warm', n: 22, p: 4 }, { s: 'dusk', n: 23, w: 'Bildwirkung hoch · Motiv „Altstadt“' }]],
+    ['b-3', [{ s: 'sea', n: 24, p: 0 }, { s: 'city', n: 25, b: 7 }, { s: 'warm', n: 26, v: '0:18' }]] ] },
+];
+const EXTRA_DAYS = ['Di 15.', 'Mi 16.', 'Do 17.', 'Fr 18.', 'Sa 19.'];
+let storyMode = 'hl', currentStory = 'grado';
+function renderStory() {
+  const memory = currentStory === 'memory';
+  const s = memory ? null : (STORIES.find(x => x.id === currentStory) || STORIES[0]);
+  const kind = memory ? 'Rückblick' : s.badge, icon = memory ? '&#xE81C;' : s.icon;
+  const title = memory ? 'Freitag, 21. Oktober 2022' : s.t, place = memory ? 'Wien · heute vor 3 Jahren' : s.p;
+  const scene = memory ? 'city' : s.c[0];
+  $('#crumbKind').textContent = memory ? 'Rückblicke' : ({ event: 'Reisen & Ereignisse', person: 'Personen', place: 'Orte' })[s.kind];
+  const faces = (memory ? [0, 2] : s.faces).map(i => `<span class="av" style="${face(i)}"></span>`).join('');
+  $('#cover').innerHTML = ph({ s: scene, n: 2, p: 1 }) +
+    `<div class="top"><button class="glass" data-menu="story" title="Weitere Aktionen"><span class="ic s">&#xE712;</span></button></div>
+     <div class="cap"><div class="k"><span class="ic s">${icon}</span>${kind}${memory ? '' : ' · 8 Tage'}</div><h1>${title}</h1><div class="pl">${place}</div>
+       <div class="mt"><span>${memory ? '48 Fotos · 2 Videos' : s.n}</span><span>Anna, Max, Oma</span><span class="faces">${faces}</span></div></div>
+     <div class="acts"><button class="glass" data-toast="Titelbild wählen: Klick auf ein Foto der Story"><span class="ic s">&#xE7C5;</span>Titelbild</button>
+       <button class="glass" data-toast="${memory ? 'Rückblick angeheftet' : 'Story angeheftet'}"><span class="ic s">&#xE718;</span>Anheften</button></div>`;
+  $('#days').innerHTML = (memory ? ['Vormittag · Prater', 'Abend · Innere Stadt'] : ['Sa 12.', 'So 13.', 'Mo 14.', ...EXTRA_DAYS])
+    .map((d, i) => `<span class="day${i === 0 ? ' on' : ''}">${d}</span>`).join('');
+  const days = memory ? [
+    { n: 'Vormittag', d: 'Freitag, 21. Oktober 2022', pl: 'Prater, Wien', c: '22 Fotos · 1 Video · 6 ausgewählt', blocks: [DAYS[2].blocks[0], DAYS[0].blocks[1]] },
+    { n: 'Abend', d: 'Freitag, 21. Oktober 2022', pl: 'Innere Stadt, Wien', c: '26 Fotos · 1 Video · 5 ausgewählt', blocks: [DAYS[1].blocks[2]] }] : DAYS;
+  let html = '';
+  days.forEach((d, di) => {
+    html += `<div class="dayh"><span class="n">${d.n}</span><h2>${d.d}</h2><span class="pl"><span class="ic s">&#xE707;</span>${d.pl}</span><span class="c">${d.c}</span></div>`;
+    if (storyMode === 'hl') {
+      d.blocks.forEach(([cls, ps]) => { html += `<div class="blk ${cls}">${ps.map(p => ph(p)).join('')}</div>`; });
+      html += `<span class="restlink"><span class="ic s">&#xE70D;</span>Alle ${parseInt(d.c)} Fotos dieses Tages</span>`;
+    } else {
+      const r = rnd(di + 3), sc = Object.keys(SCENES);
+      html += `<div class="just">${Array.from({ length: 34 }, (_, i) => {
+        const w = [80, 120, 160, 180, 213][Math.floor(r() * 5)], off = r() < .22;
+        return `<div class="ph${off ? ' off' : ''}" title="${off ? 'Nicht in den Highlights (unscharf bzw. Serie)' : 'Highlight'}" style="flex-basis:${w}px;background:${photoBg(sc[Math.floor(r() * sc.length)], i + di * 40, r() < .3 ? i % 5 : -1)}"></div>`;
+      }).join('')}</div>`;
+    }
+  });
+  if (!memory) html += `<div class="collapsed"><span class="ic">&#xE787;</span><span><b>5 weitere Tage</b> · Di 15. – Sa 19. Juli · Aquileia, Grado</span><button class="btn-std" style="margin-left:auto">Anzeigen</button></div>`;
+  html += `<div class="endbox"><span class="ic" style="font-size:22px;color:var(--accent)">&#xE786;</span><div><div class="t">Ende der Story</div><div class="muted" style="font-size:13px">${storyMode === 'hl' ? '64 von 421 Fotos als Highlights · 37 ähnliche weggelassen' : 'Blasse Kacheln sind nicht in den Highlights'}</div></div>
+    <div style="margin-left:auto;display:flex;gap:8px"><button class="btn-std" data-toast="Als Album gespeichert (Verknüpfung, keine Kopien)"><span class="ic s">&#xE8F1;</span>Als Album speichern</button><button class="btn-acc" data-go="show"><span class="ic s">&#xE768;</span>Diashow</button></div></div>`;
+  $('#storyBody').innerHTML = html;
+  $$('#modeSeg button').forEach(b => b.classList.toggle('on', b.dataset.m === storyMode));
+}
+
+// ---------- Diashow ----------
+const SLIDES = [
+  { s: 'beach', n: 3, p: 0, d: 'Samstag, 12. Juli 2025', pl: 'Grado', fx: [28, 30, 14, 20] },
+  { s: 'sunset', n: 9, d: 'Samstag, 12. Juli 2025', pl: 'Grado', fx: [40, 30, 20, 20] },
+  { s: 'sea', n: 14, p: 1, d: 'Sonntag, 13. Juli 2025', pl: 'Grado · Lagune', fx: [36, 30, 14, 20] },
+  { s: 'dusk', n: 23, d: 'Montag, 14. Juli 2025', pl: 'Triest', fx: [44, 34, 14, 18] },
+];
+let shIdx = 0, shTimer = null, shPaused = false;
+function slideHtml(sl, i) {
+  return `<div class="slide kb${i % 2 ? ' alt' : ''}" data-i="${i}">${ph(sl)}<div class="facebox" style="left:${sl.fx[0]}%;top:${sl.fx[1]}%;width:${sl.fx[2]}%;height:${sl.fx[3]}%"></div></div>`;
+}
+function openShow() {
+  $('#show').classList.add('on'); $('#shTitle').textContent = 'Grado · Juli 2025';
+  $('#slides').innerHTML = SLIDES.map(slideHtml).join(''); shIdx = 0; shPaused = false; showSlide(); }
+function showSlide() {
+  $$('#slides .slide').forEach((el, i) => {
+    const on = i === shIdx; el.classList.toggle('on', on);
+    if (on) { const p = $('.ph', el); p.style.animation = 'none'; void p.offsetWidth; p.style.animation = ''; }
+  });
+  const sl = SLIDES[shIdx]; $('#shInfo .d').textContent = sl.d; $('#shInfo .p').textContent = sl.pl;
+  $('#shPos').textContent = `${shIdx + 12} / 64`;
+  const pr = $('#shProg'); pr.classList.remove('run'); void pr.offsetWidth; if (!shPaused) pr.classList.add('run');
+  clearTimeout(shTimer); if (!shPaused) shTimer = setTimeout(() => { shIdx = (shIdx + 1) % SLIDES.length; showSlide(); }, 6000);
+}
+function closeShow() { $('#show').classList.remove('on'); clearTimeout(shTimer); }
+
+// ---------- Menü, Toast ----------
+function showMenu(anchor) {
+  const m = $('#menu'), c = $('#content').getBoundingClientRect(), r = anchor.getBoundingClientRect(), s = scale;
+  m.innerHTML = [
+    ['&#xE70F;', 'Titel ändern…', 'nur eigener Text'], ['&#xE7C5;', 'Titelbild wählen'], ['&#xE710;', 'Fotos hinzufügen…'], ['&#xE738;', 'Fotos entfernen…'],
+    'sep', ['&#xE718;', 'Anheften'], ['&#xE8F1;', 'Als Album speichern'], ['&#xE91B;', 'In der Galerie zeigen'],
+    'sep', ['&#xE7B3;', 'Ausblenden'], ['&#xE72C;', 'Neu berechnen'],
+    'sep', ['&#xEB9F;', 'Als Collage-Bild speichern…', 'Welle 6b', true],
+  ].map(x => x === 'sep' ? '<div class="sep"></div>' :
+    `<div class="mi${x[3] ? ' dis' : ''}" data-toast="${x[3] ? '' : x[1].replace('…', '')}"><span class="ic s">${x[0]}</span>${x[1]}${x[2] ? `<span class="k">${x[2]}</span>` : ''}</div>`).join('');
+  m.style.left = ((r.right - c.left) / s - 250) + 'px'; m.style.top = ((r.bottom - c.top) / s + 4) + 'px';
+  m.classList.add('show');
+}
+function toast(t) { if (!t) return; const el = $('#toast'); el.textContent = t; el.classList.add('show'); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('show'), 2400); }
+
+// ---------- Navigation, Thema, Breite ----------
+function go(v) {
+  closeShow(); $('#menu').classList.remove('show');
+  if (v === 'show') { if (!$('#page-story').classList.contains('on') && !$('#page-overview').classList.contains('on')) setPage('overview'); openShow(); mark('show'); return; }
+  if (v === 'story' || v === 'memory') { currentStory = v === 'memory' ? 'memory' : 'grado'; storyMode = 'hl'; renderStory(); setPage('story'); mark(v); return; }
+  setPage(v); mark(v);
+}
+function openStory(id) { currentStory = id; storyMode = 'hl'; renderStory(); setPage('story'); mark(id === 'memory' ? 'memory' : 'story'); }
+function setPage(p) { $$('.page').forEach(x => x.classList.toggle('on', x.id === 'page-' + p)); $('#page-' + p).scrollTop = 0;
+  $$('.nav-item[data-go]').forEach(n => n.classList.toggle('active', n.dataset.go === (p === 'story' ? 'overview' : p))); }
+function mark(v) { $$('.mock-bar [data-go]').forEach(b => b.classList.toggle('on', b.dataset.go === v)); }
+let scale = 1, width = 1280;
+function setWidth(w) { width = w; $$('.mock-bar [data-w]').forEach(b => b.classList.toggle('on', +b.dataset.w === w)); fit(); }
+function fit() {
+  const h = Math.round(width * 0.625), win = $('#win'); win.style.width = width + 'px'; win.style.height = h + 'px';
+  scale = Math.min(1, (document.documentElement.clientWidth - 40) / width); win.style.transform = `scale(${scale})`;
+  $('#winBox').style.width = (width * scale) + 'px'; $('#winBox').style.height = (h * scale) + 'px';
+}
+function theme(dark) { document.body.classList.toggle('dark', dark); $('#mbLight').classList.toggle('on', !dark); $('#mbDark').classList.toggle('on', dark); }
+
+document.addEventListener('click', e => {
+  const t = e.target;
+  const menuBtn = t.closest('[data-menu]'); if (menuBtn) { e.stopPropagation(); showMenu(menuBtn); return; }
+  if (!t.closest('#menu')) $('#menu').classList.remove('show');
+  const tst = t.closest('[data-toast]'); if (tst) { $('#menu').classList.remove('show'); toast(tst.dataset.toast); return; }
+  const g = t.closest('[data-go]'); if (g) { go(g.dataset.go); return; }
+  const o = t.closest('[data-open]'); if (o) { openStory(o.dataset.open); return; }
+  const k = t.closest('#kindSeg button'); if (k) { filterKind(k.dataset.k); return; }
+  const m = t.closest('#modeSeg button'); if (m) { storyMode = m.dataset.m; renderStory(); return; }
+  const y = t.closest('.ychip'); if (y) { $$('.ychip').forEach(c => c.classList.toggle('on', c === y)); return; }
+  const d = t.closest('.sbar .day'); if (d) { $$('.sbar .day').forEach(c => c.classList.toggle('on', c === d)); return; }
+  const tg = t.closest('.tgl'); if (tg) { tg.classList.toggle('on'); return; }
+  const w = t.closest('[data-w]'); if (w) { setWidth(+w.dataset.w); return; }
+  const sh = t.closest('[data-sh]'); if (sh) {
+    const a = sh.dataset.sh;
+    if (a === 'close') closeShow();
+    if (a === 'next') { shIdx = (shIdx + 1) % SLIDES.length; showSlide(); }
+    if (a === 'prev') { shIdx = (shIdx + SLIDES.length - 1) % SLIDES.length; showSlide(); }
+    if (a === 'pause') { shPaused = !shPaused; $('#shPP').innerHTML = shPaused ? '&#xE768;' : '&#xE769;'; showSlide(); }
+    if (a === 'kb') { sh.classList.toggle('on'); $$('#slides .slide').forEach(s => s.classList.toggle('kb', sh.classList.contains('on'))); }
+    if (a === 'info') { sh.classList.toggle('on'); $('#show').classList.toggle('noinfo', !sh.classList.contains('on')); }
+    if (a === 'faces') { sh.classList.toggle('on'); $('#show').classList.toggle('facesOn', sh.classList.contains('on')); }
+  }
+});
+document.addEventListener('keydown', e => {
+  if (!$('#show').classList.contains('on')) return;
+  if (e.key === 'Escape') closeShow();
+  if (e.key === 'ArrowRight') { shIdx = (shIdx + 1) % SLIDES.length; showSlide(); }
+  if (e.key === 'ArrowLeft') { shIdx = (shIdx + SLIDES.length - 1) % SLIDES.length; showSlide(); }
+  if (e.key === ' ') { e.preventDefault(); $('[data-sh=pause]').click(); }
+});
+$('#mbLight').onclick = () => theme(false); $('#mbDark').onclick = () => theme(true);
+window.addEventListener('resize', fit);
+theme(window.matchMedia('(prefers-color-scheme: dark)').matches);
+renderOverview(); renderStory(); setWidth(1280);
+</script>
+</body>
+</html>

@@ -3,6 +3,16 @@
 Alle nennenswerten Änderungen an Lumora (bis 0.2.48 „PhotoViewer V3“). Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.4.6] — 2026-10-21
+
+### Docs — Mockup 09 „Storys“ (Welle 6), abgenommen
+- `mockups/09-storys.html`: Übersicht (Rückblick „Heute vor … Jahren“, Angeheftet, Neu, Reisen & Ereignisse nach Jahr,
+  Personen, Orte), Story-Ansicht (Titelbild, sachliche Überschrift aus Datum/Ort/Personen, Highlights/Alle Fotos,
+  Tagesabschnitte mit Collage-Blöcken, Videos, Serien zusammengefasst), Diashow (Vollbild, Überblendung, langsamer Zoom
+  auf Gesichter, Datum/Ort, ohne Musik), Einstellungen › Storys. Hell/dunkel, Stil aus Mockup 08.
+- Entscheidungen Herbert: alle vier Story-Arten automatisch, kein erfundener Text, keine Musik, „Als Collage-Bild
+  speichern“ erst mit Welle 6b.
+
 ## [0.4.5] — 2026-10-21
 
 ### Docs — README ohne alten Namen
