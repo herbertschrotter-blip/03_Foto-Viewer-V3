@@ -42,6 +42,15 @@ public static class MediaDateReader
 
     /// <summary>Datum aus einem lesbaren, suchbaren Stream (Tests: MemoryStream).</summary>
     public static CaptureDateValue? Read(Stream stream)
+        => ReadContainer<CaptureDateValue>(stream, ExifTiffReader.Read, ReadMovie);
+
+    /// <summary>
+    /// Gemeinsamer Container-Durchgang (seit 0.2.53 auch für GPS, ADR-0050): erkennt das Format am Dateikopf und ruft
+    /// <paramref name="tiff"/> für den gefundenen EXIF-TIFF-Block (Versatz im Stream) bzw. <paramref name="movie"/> für
+    /// das <c>moov</c>-Atom eines MP4/MOV auf. Fehler und Unbekanntes ergeben null.
+    /// </summary>
+    internal static T? ReadContainer<T>(Stream stream, Func<Stream, long, T?> tiff, Func<Stream, Box, T?> movie)
+        where T : struct
     {
         try
         {
@@ -55,33 +64,33 @@ public static class MediaDateReader
             stream.ReadExactly(head);
             if (head[0] == 0xFF && head[1] == 0xD8)
             {
-                return ReadJpeg(stream, 0);
+                return ReadJpeg(stream, 0, tiff);
             }
 
             if ((head[0] == 'I' && head[1] == 'I') || (head[0] == 'M' && head[1] == 'M'))
             {
-                return ExifTiffReader.Read(stream, 0);
+                return tiff(stream, 0);
             }
 
             if (head[0] == 0x89 && head[1] == 'P' && head[2] == 'N' && head[3] == 'G')
             {
-                return ReadPng(stream);
+                return ReadPng(stream, tiff);
             }
 
             if (Ascii(head[..4]) == "RIFF" && Ascii(head[8..12]) == "WEBP")
             {
-                return ReadWebP(stream);
+                return ReadWebP(stream, tiff);
             }
 
             if (Ascii(head[..15]) == "FUJIFILMCCD-RAW")
             {
-                return ReadRaf(stream);
+                return ReadRaf(stream, tiff);
             }
 
             var type = Ascii(head[4..8]);
             if (type is "ftyp" or "moov" or "mdat" or "wide" or "free" or "skip" or "pnot")
             {
-                return ReadIsoBmff(stream);
+                return ReadIsoBmff(stream, tiff, movie);
             }
 
             return null;
@@ -94,7 +103,8 @@ public static class MediaDateReader
 
     // ---- JPEG ------------------------------------------------------------------------------------
 
-    private static CaptureDateValue? ReadJpeg(Stream stream, long start)
+    private static T? ReadJpeg<T>(Stream stream, long start, Func<Stream, long, T?> tiff)
+        where T : struct
     {
         var position = start + 2;
         Span<byte> marker = stackalloc byte[4];
@@ -132,7 +142,7 @@ public static class MediaDateReader
 
             if (code == 0xE1 && length >= 8 && ReadAt(stream, position + 4, ident) && Ascii(ident[..4]) == "Exif" && ident[4] == 0 && ident[5] == 0)
             {
-                if (ExifTiffReader.Read(stream, position + 10) is { } value)
+                if (tiff(stream, position + 10) is { } value)
                 {
                     return value;
                 }
@@ -146,15 +156,17 @@ public static class MediaDateReader
 
     // ---- Fuji RAF: eingebettetes JPEG (Offset an Byte 84) ---------------------------------------
 
-    private static CaptureDateValue? ReadRaf(Stream stream)
+    private static T? ReadRaf<T>(Stream stream, Func<Stream, long, T?> tiff)
+        where T : struct
     {
         Span<byte> offset = stackalloc byte[4];
-        return ReadAt(stream, 84, offset) ? ReadJpeg(stream, BinaryPrimitives.ReadUInt32BigEndian(offset)) : null;
+        return ReadAt(stream, 84, offset) ? ReadJpeg(stream, BinaryPrimitives.ReadUInt32BigEndian(offset), tiff) : null;
     }
 
     // ---- PNG: eXIf ------------------------------------------------------------------------------
 
-    private static CaptureDateValue? ReadPng(Stream stream)
+    private static T? ReadPng<T>(Stream stream, Func<Stream, long, T?> tiff)
+        where T : struct
     {
         long position = 8;
         Span<byte> header = stackalloc byte[8];
@@ -164,7 +176,7 @@ public static class MediaDateReader
             var type = Ascii(header[4..]);
             if (type == "eXIf")
             {
-                return ExifTiffReader.Read(stream, position + 8);
+                return tiff(stream, position + 8);
             }
 
             if (type == "IEND")
@@ -180,7 +192,8 @@ public static class MediaDateReader
 
     // ---- WebP: EXIF -----------------------------------------------------------------------------
 
-    private static CaptureDateValue? ReadWebP(Stream stream)
+    private static T? ReadWebP<T>(Stream stream, Func<Stream, long, T?> tiff)
+        where T : struct
     {
         long position = 12;
         Span<byte> header = stackalloc byte[8];
@@ -197,7 +210,7 @@ public static class MediaDateReader
                     data += 6;
                 }
 
-                return ExifTiffReader.Read(stream, data);
+                return tiff(stream, data);
             }
 
             position += 8L + size + (size & 1);
@@ -208,9 +221,10 @@ public static class MediaDateReader
 
     // ---- ISO-BMFF: HEIF/AVIF (Exif-Element) und MP4/MOV (mvhd, Apple creationdate) ----------------
 
-    private readonly record struct Box(string Type, long Start, long DataStart, long End);
+    internal readonly record struct Box(string Type, long Start, long DataStart, long End);
 
-    private static CaptureDateValue? ReadIsoBmff(Stream stream)
+    private static T? ReadIsoBmff<T>(Stream stream, Func<Stream, long, T?> tiff, Func<Stream, Box, T?> movie)
+        where T : struct
     {
         Box? meta = null;
         Box? moov = null;
@@ -226,15 +240,15 @@ public static class MediaDateReader
             }
         }
 
-        if (meta is { } m && ReadHeifExif(stream, m) is { } exif)
+        if (meta is { } m && ReadHeifExif(stream, m, tiff) is { } exif)
         {
             return exif;
         }
 
-        return moov is { } v ? ReadMovie(stream, v) : null;
+        return moov is { } v ? movie(stream, v) : null;
     }
 
-    private static IEnumerable<Box> Boxes(Stream stream, long start, long end)
+    internal static IEnumerable<Box> Boxes(Stream stream, long start, long end)
     {
         var position = start;
         var header = new byte[16];
@@ -274,7 +288,8 @@ public static class MediaDateReader
     }
 
     /// <summary>HEIF: Element vom Typ „Exif“ in <c>iinf</c>, seine Lage in <c>iloc</c>; Nutzdaten = 4 Byte Versatz + TIFF.</summary>
-    private static CaptureDateValue? ReadHeifExif(Stream stream, Box meta)
+    private static T? ReadHeifExif<T>(Stream stream, Box meta, Func<Stream, long, T?> tiff)
+        where T : struct
     {
         var children = meta.DataStart + 4; // FullBox: Version + Flags
         uint? exifItem = null;
@@ -302,8 +317,8 @@ public static class MediaDateReader
             return null;
         }
 
-        var tiff = offset + 4 + BinaryPrimitives.ReadUInt32BigEndian(skip);
-        return ExifTiffReader.Read(stream, tiff);
+        var tiffStart = offset + 4 + BinaryPrimitives.ReadUInt32BigEndian(skip);
+        return tiff(stream, tiffStart);
     }
 
     private static uint? FindExifItem(Stream stream, Box iinf)
@@ -521,7 +536,7 @@ public static class MediaDateReader
         return null;
     }
 
-    private static int? FindKeyIndex(Stream stream, Box keys, string name)
+    internal static int? FindKeyIndex(Stream stream, Box keys, string name)
     {
         Span<byte> head = stackalloc byte[8];
         if (!ReadAt(stream, keys.DataStart, head))
@@ -576,7 +591,7 @@ public static class MediaDateReader
 
     // ---- Hilfen ---------------------------------------------------------------------------------
 
-    private static bool ReadAt(Stream stream, long position, Span<byte> buffer)
+    internal static bool ReadAt(Stream stream, long position, Span<byte> buffer)
     {
         if (position < 0 || position + buffer.Length > stream.Length)
         {
@@ -588,7 +603,7 @@ public static class MediaDateReader
         return true;
     }
 
-    private static string Ascii(ReadOnlySpan<byte> bytes) => Encoding.ASCII.GetString(bytes);
+    internal static string Ascii(ReadOnlySpan<byte> bytes) => Encoding.ASCII.GetString(bytes);
 
     /// <summary>Big-Endian-Leser über einem kleinen Puffer (iloc); läuft er über, endet die Suche (InvalidDataException).</summary>
     private ref struct BigEndianCursor(ReadOnlySpan<byte> data)

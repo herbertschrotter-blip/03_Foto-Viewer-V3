@@ -1,0 +1,48 @@
+# Deutsche Ortsnamen (Exonyme) für Orte, die GeoNames englisch führt — Lumora, ADR-0050. Schlüssel: Land + GeoNames-Name
+# (Spalte „name“ in cities5000.txt); bei gleichnamigen Orten gilt der einwohnerstärkste. Der GeoNames-Name bleibt für
+# die Suche erhalten. Erweiterbar; das Skript meldet Zeilen ohne Treffer.
+AT	Vienna	Wien
+BE	Brussels	Brüssel
+BE	Brugge	Brügge
+BE	Liège	Lüttich
+CH	Geneva	Genf
+CN	Beijing	Peking
+CY	Nicosia	Nikosia
+CZ	Prague	Prag
+CZ	Brno	Brünn
+CZ	Pilsen	Pilsen
+CZ	Karlovy Vary	Karlsbad
+CZ	České Budějovice	Budweis
+CZ	Český Krumlov	Krumau
+DE	Munich	München
+DE	Nuremberg	Nürnberg
+DK	Copenhagen	Kopenhagen
+EG	Cairo	Kairo
+FR	Strasbourg	Straßburg
+FR	Nice	Nizza
+GR	Athens	Athen
+IT	Rome	Rom
+IT	Milan	Mailand
+IT	Venice	Venedig
+IT	Naples	Neapel
+IT	Florence	Florenz
+IT	Genoa	Genua
+IT	Siracusa	Syrakus
+IT	Bolzano	Bozen
+IT	Merano	Meran
+IT	Bressanone	Brixen
+IT	Trento	Trient
+JP	Tokyo	Tokio
+LU	Luxembourg	Luxemburg
+MX	Mexico City	Mexiko-Stadt
+NL	The Hague	Den Haag
+PL	Warsaw	Warschau
+PL	Kraków	Krakau
+PT	Lisbon	Lissabon
+RO	Bucharest	Bukarest
+RS	Belgrade	Belgrad
+RU	Moscow	Moskau
+RU	Saint Petersburg	Sankt Petersburg
+SE	Gothenburg	Göteborg
+UA	Kyiv	Kiew
+US	New York City	New York

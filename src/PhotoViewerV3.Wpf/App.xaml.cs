@@ -10,6 +10,7 @@ using PhotoViewerV3.Folders;
 using PhotoViewerV3.Services.Faces.Indexing;
 using PhotoViewerV3.Gallery;
 using PhotoViewerV3.Gallery.CaptureDates;
+using PhotoViewerV3.Gallery.Places;
 using PhotoViewerV3.Services;
 using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.HiddenLibraries;
@@ -159,6 +160,7 @@ public partial class App : Application, ICatalogHostSwitcher
         services.AddGallery();
         services.AddFolderActions(); // Ordner übernehmen / Ordner bewerten (Wpf/Folders, ADR-0034)
         services.AddCaptureDateUi(); // „Datum setzen…“ für Galerie und Ordnerbaum (Wpf/Gallery/CaptureDates, ADR-0046)
+        services.AddPlacesUi(); // „Ort setzen…“, Filter „Ort“ (Wpf/Gallery/Places, ADR-0050)
         services.AddSorterUi();
         services.AddTagManagement(); // Seite „Tags“ (Wpf/Settings/TagManagement, ADR-0021)
         services.AddCategoryManagement(); // Seite „Kategorien“ (Wpf/Settings/CategoryManagement, ADR-0027)
@@ -167,7 +169,7 @@ public partial class App : Application, ICatalogHostSwitcher
         services.AddPersonsUi(); // Seite „Personen“: Zuordnen, Gruppen, Gesichts-Ausschnitte (Wpf/Persons, ADR-0037)
         services.AddFaceDataSettings(); // „Gesichtsdaten löschen…“ in den Einstellungen (Wpf/Settings/FaceData, 0.2.38)
         services.AddPersonRelationsSettings(); // „Personen & Beziehungen“ in den Einstellungen (Wpf/Settings/PersonRelations, ADR-0045)
-        services.AddPlacesUi(); // Seite „Orte“: Weltkarte mit Foto-Gruppen, Verorten (Wpf/Places, ADR-0051)
+        services.AddPlacesMap(); // Seite „Orte“: Weltkarte mit Foto-Gruppen, Verorten (Wpf/Places, ADR-0051)
 
         services.AddSingleton<MainWindow>();
     }
@@ -301,6 +303,9 @@ public partial class App : Application, ICatalogHostSwitcher
 
         // Aufnahmedatum (ADR-0046): Nachtragen im Hintergrund nach jedem Scan und einmalig für bestehende Kataloge
         _host.Services.GetRequiredService<PhotoViewerV3.Services.Metadata.ICaptureDateService>().Start();
+
+        // Orte (ADR-0050): Koordinaten nachtragen im Hintergrund, Ortsnamen (GeoNames) vorladen
+        _host.Services.GetRequiredService<PhotoViewerV3.Services.Places.IGeoBackfillService>().Start();
     }
 
     // ----- Katalogwechsel (ADR-0049) -----

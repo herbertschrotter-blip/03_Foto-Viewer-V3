@@ -38,4 +38,18 @@ public sealed class MediaFile
 
     /// <summary>Abstand der Ortszeit der Aufnahme zu UTC in Minuten (Anzeige als Wanduhrzeit „wie fotografiert“).</summary>
     public int? CapturedAtOffset { get; set; }
+
+    // ---- Orte (ADR-0050) ----
+
+    /// <summary>Breitengrad WGS84 in Dezimalgrad (null = keine Koordinaten bzw. noch nicht gelesen).</summary>
+    public double? Latitude { get; set; }
+
+    /// <summary>Längengrad WGS84 in Dezimalgrad.</summary>
+    public double? Longitude { get; set; }
+
+    /// <summary>Herkunft der Koordinaten; null = noch nicht gelesen (Nachtragen im Hintergrund).</summary>
+    public GeoSource? GeoSource { get; set; }
+
+    /// <summary>Nächster Ort aus den eingebetteten GeoNames-Daten (GeoNames-Id), null ohne Koordinaten bzw. ohne Ort in der Nähe.</summary>
+    public int? PlaceId { get; set; }
 }

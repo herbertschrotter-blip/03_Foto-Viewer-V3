@@ -1,0 +1,135 @@
+# Deutsche Namen der Regionen (GeoNames admin1, Schlüssel „Land.Code“) — Lumora, ADR-0050. Erweiterbar; fehlende
+# Schlüssel behalten den GeoNames-Namen.
+AT.01	Burgenland
+AT.02	Kärnten
+AT.03	Niederösterreich
+AT.04	Oberösterreich
+AT.05	Salzburg
+AT.06	Steiermark
+AT.07	Tirol
+AT.08	Vorarlberg
+AT.09	Wien
+DE.01	Baden-Württemberg
+DE.02	Bayern
+DE.03	Bremen
+DE.04	Hamburg
+DE.05	Hessen
+DE.06	Niedersachsen
+DE.07	Nordrhein-Westfalen
+DE.08	Rheinland-Pfalz
+DE.09	Saarland
+DE.10	Schleswig-Holstein
+DE.11	Brandenburg
+DE.12	Mecklenburg-Vorpommern
+DE.13	Sachsen
+DE.14	Sachsen-Anhalt
+DE.15	Thüringen
+DE.16	Berlin
+CH.AG	Aargau
+CH.AI	Appenzell Innerrhoden
+CH.AR	Appenzell Ausserrhoden
+CH.BE	Bern
+CH.BL	Basel-Landschaft
+CH.BS	Basel-Stadt
+CH.FR	Freiburg
+CH.GE	Genf
+CH.GL	Glarus
+CH.GR	Graubünden
+CH.JU	Jura
+CH.LU	Luzern
+CH.NE	Neuenburg
+CH.NW	Nidwalden
+CH.OW	Obwalden
+CH.SG	St. Gallen
+CH.SH	Schaffhausen
+CH.SO	Solothurn
+CH.SZ	Schwyz
+CH.TG	Thurgau
+CH.TI	Tessin
+CH.UR	Uri
+CH.VD	Waadt
+CH.VS	Wallis
+CH.ZG	Zug
+CH.ZH	Zürich
+IT.01	Abruzzen
+IT.02	Basilikata
+IT.03	Kalabrien
+IT.04	Kampanien
+IT.05	Emilia-Romagna
+IT.06	Friaul-Julisch Venetien
+IT.07	Latium
+IT.08	Ligurien
+IT.09	Lombardei
+IT.10	Marken
+IT.11	Molise
+IT.12	Piemont
+IT.13	Apulien
+IT.14	Sardinien
+IT.15	Sizilien
+IT.16	Toskana
+IT.17	Trentino-Südtirol
+IT.18	Umbrien
+IT.19	Aostatal
+IT.20	Venetien
+FR.11	Île-de-France
+FR.24	Centre-Val de Loire
+FR.27	Burgund-Franche-Comté
+FR.28	Normandie
+FR.32	Hauts-de-France
+FR.44	Grand Est
+FR.52	Pays de la Loire
+FR.53	Bretagne
+FR.75	Nouvelle-Aquitaine
+FR.76	Okzitanien
+FR.84	Auvergne-Rhône-Alpes
+FR.93	Provence-Alpes-Côte d’Azur
+FR.94	Korsika
+ES.07	Balearen
+ES.29	Madrid
+ES.31	Murcia
+ES.32	Navarra
+ES.34	Asturien
+ES.39	Kantabrien
+ES.51	Andalusien
+ES.52	Aragonien
+ES.53	Kanarische Inseln
+ES.54	Kastilien-La Mancha
+ES.55	Kastilien und León
+ES.56	Katalonien
+ES.57	Extremadura
+ES.58	Galicien
+ES.59	Baskenland
+ES.60	Valencia
+HR.03	Dubrovnik-Neretva
+HR.04	Istrien
+HR.12	Primorje-Gorski Kotar
+HR.15	Split-Dalmatien
+HR.19	Zadar
+HR.21	Zagreb
+CZ.52	Prag
+CZ.78	Südmähren
+CZ.79	Südböhmen
+CZ.81	Karlsbad
+CZ.88	Mittelböhmen
+HU.05	Budapest
+NL.02	Friesland
+NL.06	Nordbrabant
+NL.07	Nordholland
+NL.11	Südholland
+BE.BRU	Brüssel
+BE.VLG	Flandern
+BE.WAL	Wallonien
+GR.ESYE31	Attika
+GR.ESYE43	Kreta
+GR.ESYE42	Südliche Ägäis
+GR.ESYE22	Ionische Inseln
+GR.ESYE41	Nördliche Ägäis
+PT.10	Madeira
+PT.14	Lissabon
+PT.23	Azoren
+PL.77	Kleinpolen
+PL.78	Masowien
+PL.72	Niederschlesien
+PL.83	Schlesien
+PL.82	Pommern
+DK.17	Hauptstadtregion

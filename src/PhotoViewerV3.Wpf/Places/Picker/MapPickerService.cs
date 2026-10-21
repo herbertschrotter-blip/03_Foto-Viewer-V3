@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using Microsoft.Extensions.Logging;
+using PhotoViewerV3.Gallery.Places;
 using PhotoViewerV3.Places.Map;
 using PhotoViewerV3.Places.Map.Tiles;
 using PhotoViewerV3.Services.Places;
@@ -31,8 +32,10 @@ public sealed class MapPickerService : IMapPicker
         _tiles = tiles;
     }
 
-    public async Task<(double Latitude, double Longitude)?> PickAsync(double? initialLatitude, double? initialLongitude, string? title, CancellationToken ct)
+    public async Task<(double Latitude, double Longitude)?> PickAsync(double? initialLatitude, double? initialLongitude, Window? owner)
     {
+        var ct = CancellationToken.None;
+        const string? title = null;
         GeoBounds? extent = null;
         if (initialLatitude is null || initialLongitude is null)
         {
@@ -47,7 +50,7 @@ public sealed class MapPickerService : IMapPicker
         }
 
         var window = new MapPickerWindow(_tiles, _geocoder, title);
-        var owner = Application.Current?.Windows is { } windows ? FindActive(windows) : null;
+        owner ??= Application.Current?.Windows is { } windows ? FindActive(windows) : null;
         if (owner is { IsVisible: true })
         {
             window.Owner = owner;

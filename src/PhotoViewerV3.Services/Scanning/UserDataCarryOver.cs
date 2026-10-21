@@ -6,7 +6,7 @@ namespace PhotoViewerV3.Services.Scanning;
 /// <summary>
 /// Trägt die Benutzerdaten einer Bibliothek über „Neu aufbauen“ (<see cref="ScanMode.ClearAndRescan"/>) hinweg
 /// (ADR-0023): Favorit (<c>Files.IsFavorite</c>), Bewertung (<c>Files.Rating</c>), Tag-Zuweisungen
-/// (<c>FileTags</c>), Kategorie-Werte (<c>FileCategoryValues</c>, ADR-0027) und manuell gesetzte Aufnahmedaten (ADR-0046). <see cref="Capture"/> sichert sie VOR dem
+/// (<c>FileTags</c>), Kategorie-Werte (<c>FileCategoryValues</c>, ADR-0027) manuell gesetzte Aufnahmedaten (ADR-0046) und manuell gesetzte bzw. entfernte Orte (ADR-0050). <see cref="Capture"/> sichert sie VOR dem
 /// Löschen der alten Zeilen in TEMP-Tabellen, <see cref="Restore"/> schreibt sie NACH dem Bulk-Insert auf die neuen
 /// FileIds zurück — mengenbasiert (INSERT…SELECT / UPDATE…FROM, keine Zeilenschleife in C#). Beides läuft in der
 /// EINEN Schreibtransaktion, in der <see cref="FullScanCatalogWriter"/> den Katalog ersetzt (ADR-0028).
@@ -36,7 +36,8 @@ public sealed partial class UserDataCarryOver
         TimeSpan Duration,
         int CategoryValuesRestored = 0,
         int FacesRestored = 0,
-        int CaptureDatesRestored = 0);
+        int CaptureDatesRestored = 0,
+        int GeoLocationsRestored = 0);
 
     private const string CaseFoldFunction = "pv_casefold";
 
@@ -57,6 +58,10 @@ public sealed partial class UserDataCarryOver
             CapturedAtPrecision INTEGER,
             CapturedAtOffset INTEGER,
             ManualDate INTEGER NOT NULL DEFAULT 0,
+            Latitude REAL,
+            Longitude REAL,
+            PlaceId INTEGER,
+            ManualGeo INTEGER NOT NULL DEFAULT 0,
             UNIQUE(FolderKey, NameKey));
         CREATE TEMP TABLE pv_carry_tags(
             OldFileId INTEGER NOT NULL,
@@ -78,12 +83,13 @@ public sealed partial class UserDataCarryOver
     // Nur Dateien mit Benutzerdaten. Bei kollidierenden Schlüsseln (nur auf case-sensitiven Ordnern möglich) gewinnt
     // die vorhandene vor der „fehlt“-markierten Zeile, sonst die ältere.
     private const string CaptureFilesSql = """
-        INSERT OR IGNORE INTO temp.pv_carry_files(OldFileId, FolderKey, NameKey, Name, IsFavorite, Rating, CapturedAt, CapturedAtPrecision, CapturedAtOffset, ManualDate)
+        INSERT OR IGNORE INTO temp.pv_carry_files(OldFileId, FolderKey, NameKey, Name, IsFavorite, Rating, CapturedAt, CapturedAtPrecision, CapturedAtOffset, ManualDate, Latitude, Longitude, PlaceId, ManualGeo)
         SELECT f.Id, pv_casefold(d.Path), pv_casefold(f.Name), f.Name, f.IsFavorite, f.Rating,
-               f.CapturedAt, f.CapturedAtPrecision, f.CapturedAtOffset, CASE WHEN f.CapturedAtSource = 4 THEN 1 ELSE 0 END
+               f.CapturedAt, f.CapturedAtPrecision, f.CapturedAtOffset, CASE WHEN f.CapturedAtSource = 4 THEN 1 ELSE 0 END,
+               f.Latitude, f.Longitude, f.PlaceId, CASE WHEN f.GeoSource = 3 THEN 1 ELSE 0 END
         FROM Files f JOIN Folders d ON d.Id = f.FolderId
         WHERE f.LibraryId = $lib
-          AND (f.IsFavorite <> 0 OR f.Rating IS NOT NULL OR f.CapturedAtSource = 4
+          AND (f.IsFavorite <> 0 OR f.Rating IS NOT NULL OR f.CapturedAtSource = 4 OR f.GeoSource = 3
                OR EXISTS (SELECT 1 FROM FileTags t WHERE t.FileId = f.Id)
                OR EXISTS (SELECT 1 FROM FileCategoryValues v WHERE v.FileId = f.Id)
                OR EXISTS (SELECT 1 FROM FaceScans s WHERE s.FileId = f.Id)
@@ -141,6 +147,13 @@ public sealed partial class UserDataCarryOver
         UPDATE Files SET CapturedAt = c.CapturedAt, CapturedAtSource = 4, CapturedAtPrecision = c.CapturedAtPrecision, CapturedAtOffset = c.CapturedAtOffset
         FROM temp.pv_carry_map m CROSS JOIN temp.pv_carry_files c ON c.OldFileId = m.OldFileId
         WHERE Files.Id = m.NewFileId AND c.ManualDate = 1;
+        """;
+
+    // Manuell gesetzter bzw. entfernter Ort (ADR-0050) bleibt erhalten; alle übrigen liest das Nachtragen neu.
+    private const string RestoreGeoSql = """
+        UPDATE Files SET Latitude = c.Latitude, Longitude = c.Longitude, PlaceId = c.PlaceId, GeoSource = 3
+        FROM temp.pv_carry_map m CROSS JOIN temp.pv_carry_files c ON c.OldFileId = m.OldFileId
+        WHERE Files.Id = m.NewFileId AND c.ManualGeo = 1;
         """;
 
     // Ein während des Scans gelöschtes Tag fällt still heraus (sonst verletzt die Zuweisung den Fremdschlüssel).
@@ -229,11 +242,12 @@ public sealed partial class UserDataCarryOver
         mapped += Execute(_connection, tx, MapCaseInsensitiveSql, _libraryId);
         var files = Execute(_connection, tx, RestoreFilesSql, _libraryId);
         var captureDates = Execute(_connection, tx, RestoreCaptureDatesSql, _libraryId); // ADR-0046
+        var geo = Execute(_connection, tx, RestoreGeoSql, _libraryId); // ADR-0050
         var tags = Execute(_connection, tx, RestoreTagsSql, _libraryId);
         var categories = Execute(_connection, tx, RestoreCategoriesSql, _libraryId);
         var faces = RestoreFaces(); // ADR-0035
 
-        return new RestoreReport(CapturedFiles, mapped, CapturedFiles - mapped, files, tags, sw.Elapsed, categories, faces, captureDates);
+        return new RestoreReport(CapturedFiles, mapped, CapturedFiles - mapped, files, tags, sw.Elapsed, categories, faces, captureDates, geo);
     }
 
     private static int Execute(SqliteConnection connection, SqliteTransaction? tx, string sql, int libraryId)

@@ -477,6 +477,12 @@ public partial class GalleryView : UserControl
             Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.CalendarEdit24 },
             Command = _viewModel.SetSelectionCaptureDateCommand,
         });
+        menu.Items.Add(new MenuItem
+        {
+            Header = "Ort setzen…", // Ort der Auswahl (ADR-0050)
+            Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Location24 },
+            Command = _viewModel.SetSelectionPlaceCommand,
+        });
     }
 
     private static T? FindAncestor<T>(DependencyObject? start)

@@ -625,6 +625,12 @@
                                    ToolTip="Aufnahmedatum der Auswahl setzen, ungefähr angeben oder verschieben (nur im Katalog)"
                                    AutomationProperties.Name="Datum setzen"
                                    Command="{Binding SetSelectionCaptureDateCommand}" />
+                        <!-- Ort setzen (ADR-0050) -->
+                        <ui:Button Appearance="Transparent" Content="Ort…"
+                                   Icon="{ui:SymbolIcon Location24}"
+                                   ToolTip="Ort der Auswahl setzen oder entfernen (JPEG: EXIF, sonst XMP-Begleitdatei, Videos: nur Katalog)"
+                                   AutomationProperties.Name="Ort setzen"
+                                   Command="{Binding SetSelectionPlaceCommand}" />
 
                         <Border Width="1" Margin="6,4,6,4" Background="{DynamicResource ControlStrokeColorDefaultBrush}" />
 

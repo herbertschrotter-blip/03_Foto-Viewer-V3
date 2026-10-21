@@ -21,7 +21,8 @@ vorhandene Kataloge laufen ohne Umzug weiter ([ADR-0047](docs/adr/0047-produktna
   Bildschirm-Skalierung, Bildmaße im Katalog), Sortierung nach Aufnahmedatum (EXIF/Video/Dateiname, selbst setzbar —
   auch „ca. 1982“)/Änderungsdatum/Name/Größe, Volltextsuche
   über Dateiname und Endung (FTS5), frei kombinierbare Filter (Dateiart, Favoriten, Bewertung, Ablage, Tags, Personen,
-  Kategorien — alle mit UND, „Filter zurücksetzen“), Ordnerfilter, Unterordner-Kacheln für Ordner
+  Kategorien, Ort — alle mit UND, „Filter zurücksetzen“), Orte aus GPS samt Ortsnamen offline und „Ort setzen…“ (EXIF/XMP,
+  rückgängig machbar), Ordnerfilter, Unterordner-Kacheln für Ordner
   ohne direkte Dateien, Favorit und 1–5 Sterne je Kachel, Mehrfachauswahl mit Aktionsleiste (Favorit, Bewertung,
   Tags, Verschieben nach…, Papierkorb) und Rückgängig. Umschaltbar auf eine **Collage** (echte Seitenverhältnisse,
   randvolle Reihen) und eine **Listenansicht** mit Spalten.
@@ -213,8 +214,8 @@ Kacheln: Herz = Favorit, Sterne = Bewertung, Badge „fehlt“ bei Dateien, die
 beim letzten Scan nicht mehr auf der Platte lagen. Ordner ohne direkte Dateien zeigen ihre Unterordner als Kacheln.
 **Alle auswählen** (Knopf rechts in der Sortierleiste neben „Rückgängig“, wie Strg+A) wählt alle Dateien der aktuellen
 Seite. Bei einer Auswahl erscheint unten die Aktionsleiste (Favorit setzen/entfernen, Bewertung, Verschieben nach…,
-In die Bibliothek…, Papierkorb, Datum…, Alle auswählen, Auswahl aufheben); **Rückgängig** nimmt die letzte Verschiebung/Umbenennung (auch eine
-Ordner-Umbenennung oder eine Ordner-Übernahme) bzw. das zuletzt gesetzte Aufnahmedatum zurück.
+In die Bibliothek…, Papierkorb, Datum…, Ort…, Alle auswählen, Auswahl aufheben); **Rückgängig** nimmt die letzte Verschiebung/Umbenennung (auch eine
+Ordner-Umbenennung oder eine Ordner-Übernahme) bzw. das zuletzt gesetzte Aufnahmedatum oder den zuletzt gesetzten Ort zurück.
 
 | Taste | Wirkung |
 |---|---|
@@ -254,6 +255,28 @@ alle Dateien darin, wahlweise mit Unterordnern): **genau** (Datum + Uhrzeit), **
 **zurücksetzen** (wieder aus der Datei lesen). Geändert wird nur der Katalog, nie die Datei. **Rückgängig** in der
 Galerie nimmt die letzte Änderung zurück (gemeinsam mit Verschieben/Umbenennen: der jüngste Eintrag zuerst). Manuell
 gesetzte Daten bleiben bei „Aktualisieren“ und „Neu aufbauen“ immer erhalten; gelesene liest „Neu aufbauen“ neu.
+
+#### Orte (seit 0.2.53, ADR-0050)
+Fotos und Videos mit Koordinaten bekommen einen **Ort** („Wien, Österreich“). Die Koordinaten kommen aus dem EXIF-GPS
+(JPEG, TIFF/RAW, HEIC, PNG, WebP), aus einer **XMP-Begleitdatei** (`name.ext.xmp` bzw. `name.xmp`, z. B. von Lightroom
+oder digiKam — sie gewinnt vor dem EXIF) und bei Videos aus den Container-Metadaten (Android `©xyz`, iPhone
+„ISO6709“). Gelesen wird wie beim Aufnahmedatum **im Hintergrund nach jedem Scan** (Statusleiste „Orte: 1.234 /
+19.556“, nur lokale Dateien, nichts wird heruntergeladen). Der Ortsname kommt **offline** aus eingebetteten
+GeoNames-Daten (rund 65 000 Orte ab 5 000 Einwohnern, Länder und Regionen mit deutschen Namen) — es geht nichts ins Netz.
+
+Anzeige: Lightbox-Info „Ort: Wien, Österreich (48,2082° N, 16,3738° O)“, Listenspalte **Ort** (Koordinate im Tooltip).
+Filter **Ort** in der Zeile „Inhalt“: Länder → Regionen → Orte mit Anzahl (auf- und zuklappbar, mit Suche), dazu
+„ohne Ort“ — ein Land steht für alle seine Orte; mehrere Häkchen gelten mit ODER, zusammen mit den übrigen Filtern UND.
+Die Karte kann die Galerie auf einen **Kartenausschnitt** einschränken (Bedingung „Kartenausschnitt (n Dateien)“).
+
+**Ort setzen…** (Aktionsleiste „Ort…“, Rechtsklick): Ort **suchen** (offline, z. B. „Wien“, „Rom“ oder „Paris,
+Frankreich“), **Koordinaten** eingeben (48,2082 und 16,3738 — auch „48.2082, 16.3738“ in einem Feld oder
+48°12'29"N), **Ort von anderem Foto übernehmen** (zuletzt gesetzte und häufige Orte der Bibliothek) oder **Ort
+entfernen**. „Änderungsdatum beibehalten“ ist voreingestellt. Geschrieben wird **in die Datei**: JPEG verlustfrei ins
+EXIF (nur der EXIF-Block ändert sich, die Bilddaten bleiben Byte für Byte), RAW/HEIC/TIFF/PNG/WebP in eine
+XMP-Begleitdatei (die Originaldatei bleibt unangetastet), Videos nur im Katalog. Schreibgeschützte, gesperrte oder nur in
+der Cloud liegende Dateien bleiben unverändert und werden mit Grund gemeldet. **Rückgängig** in der Galerie stellt die
+Dateien Byte für Byte wieder her (samt Änderungsdatum) — aber nur, wenn sie seither niemand verändert hat.
 
 #### Tags
 Tags legt man auf der Seite **Tags** an (Name, Farbe aus einer Palette mit zwölf Farben, Reihenfolge, Umbenennen,

@@ -108,6 +108,7 @@ public sealed partial class StatusBarViewModel : ObservableObject, IDisposable
         InitCatalogWriteWait(); // Schreibvorgänge warten auf die Katalog-DB (ADR-0030, StatusBarViewModel.CatalogWriteWait.cs)
         InitFaceIndex(faceIndex); // Gesichts-Index (ADR-0035, StatusBarViewModel.FaceIndex.cs)
         InitCaptureDate(); // Aufnahmedatum nachtragen (ADR-0046, StatusBarViewModel.CaptureDate.cs)
+        InitPlaces(); // Orte nachtragen (ADR-0050, StatusBarViewModel.Places.cs)
     }
 
     /// <summary>Datei-Operationen, die auf einen laufenden Scan derselben Bibliothek warten (Hinweis + „Abbrechen“).</summary>

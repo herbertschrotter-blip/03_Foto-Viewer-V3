@@ -47,7 +47,12 @@ internal static class IncrementalCatalogWriter
             CapturedAt = CASE WHEN CapturedAtSource = 4 OR (Size = $size AND ModifiedAtUtc = $modified) THEN CapturedAt END,
             CapturedAtPrecision = CASE WHEN CapturedAtSource = 4 OR (Size = $size AND ModifiedAtUtc = $modified) THEN CapturedAtPrecision ELSE 0 END,
             CapturedAtOffset = CASE WHEN CapturedAtSource = 4 OR (Size = $size AND ModifiedAtUtc = $modified) THEN CapturedAtOffset END,
-            CapturedAtSource = CASE WHEN CapturedAtSource = 4 OR (Size = $size AND ModifiedAtUtc = $modified) THEN CapturedAtSource END
+            CapturedAtSource = CASE WHEN CapturedAtSource = 4 OR (Size = $size AND ModifiedAtUtc = $modified) THEN CapturedAtSource END,
+            -- Orte (ADR-0050): ebenso neu lesen, außer manuell gesetzt/entfernt (GeoSource 3)
+            Latitude = CASE WHEN GeoSource = 3 OR (Size = $size AND ModifiedAtUtc = $modified) THEN Latitude END,
+            Longitude = CASE WHEN GeoSource = 3 OR (Size = $size AND ModifiedAtUtc = $modified) THEN Longitude END,
+            PlaceId = CASE WHEN GeoSource = 3 OR (Size = $size AND ModifiedAtUtc = $modified) THEN PlaceId END,
+            GeoSource = CASE WHEN GeoSource = 3 OR (Size = $size AND ModifiedAtUtc = $modified) THEN GeoSource END
         WHERE Id = $id;
         """;
 

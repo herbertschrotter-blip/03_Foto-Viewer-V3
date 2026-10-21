@@ -206,6 +206,16 @@ public partial class GalleryListView : UserControl
                     SortMemberPath = nameof(GalleryItem.CaptureSortKey),
                     ElementStyle = CaptureCellStyle(),
                 };
+            case GalleryListColumnKey.Place:
+                // Ort (ADR-0050): „Wien, Österreich“, Koordinate im Tooltip; Sortierung nur innerhalb der Page.
+                var placeStyle = TrimmedTextStyle();
+                placeStyle.Setters.Add(new Setter(ToolTipProperty, new Binding(nameof(GalleryItem.PlaceToolTip)) { Mode = BindingMode.OneWay }));
+                return new DataGridTextColumn
+                {
+                    Binding = new Binding(nameof(GalleryItem.PlaceText)) { Mode = BindingMode.OneWay },
+                    SortMemberPath = nameof(GalleryItem.PlaceText),
+                    ElementStyle = placeStyle,
+                };
             default:
                 throw new ArgumentOutOfRangeException(nameof(def), def.Key, "Unbekannte Spalte");
         }

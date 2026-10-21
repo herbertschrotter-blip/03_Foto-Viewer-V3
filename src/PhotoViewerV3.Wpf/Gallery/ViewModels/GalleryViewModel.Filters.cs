@@ -79,7 +79,7 @@ public sealed partial class GalleryViewModel
     /// </summary>
     public GalleryFilterState FilterState
     {
-        get => new(MediaFilter, FavoritesOnly, LocationFilter, MinRating);
+        get => new(MediaFilter, FavoritesOnly, LocationFilter, MinRating) { Place = _placeFilter, Geo = _geoFilter }; // Ort/Karte: ADR-0050
         set
         {
             var suppress = _suppressReload;
@@ -90,6 +90,7 @@ public sealed partial class GalleryViewModel
                 FavoritesOnly = value.FavoritesOnly;
                 LocationFilter = value.Location;
                 MinRating = value.EffectiveMinRating;
+                SetPlaceFiltersFromState(value); // GalleryViewModel.Places.cs
             }
             finally
             {
@@ -97,6 +98,7 @@ public sealed partial class GalleryViewModel
             }
 
             NotifyFileFilterChanged();
+            NotifyPlaceFilterChanged();
             if (!_suppressReload && _isInitialized)
             {
                 FireAndForget(ChangeQueryAsync);
@@ -184,6 +186,7 @@ public sealed partial class GalleryViewModel
             FavoritesOnly = false;
             LocationFilter = GalleryLocation.Anywhere;
             MinRating = 0;
+            ResetPlaceFilterCore(); // Ort und Kartenausschnitt (ADR-0050)
         }
         finally
         {
@@ -191,6 +194,7 @@ public sealed partial class GalleryViewModel
         }
 
         NotifyFileFilterChanged();
+        NotifyPlaceFilterChanged();
     }
 
     /// <summary>Knopf „Bewertung“: Eintrag gewählt.</summary>
@@ -215,6 +219,16 @@ public sealed partial class GalleryViewModel
 
     internal static string EmptyMessageForFileFilter(GalleryFilterState filter)
     {
+        if (filter.Geo is { IsActive: true })
+        {
+            return "Keine Dateien in diesem Kartenausschnitt."; // ADR-0050
+        }
+
+        if (filter.Place is { IsActive: true })
+        {
+            return "Keine Dateien an diesem Ort.";
+        }
+
         if (filter.Media != GalleryMediaKind.All)
         {
             return filter.Media switch
@@ -338,6 +352,8 @@ public sealed partial class GalleryViewModel
             list.Add((GalleryFilterConditionKind.Location, LocationFilter == GalleryLocation.Inbox ? "noch im Eingang" : "in der Bibliothek", null));
         }
 
+        list.AddRange(PlaceConditions().Select(c => (c.Kind, c.Label, (int?)null))); // Ort, Kartenausschnitt (ADR-0050)
+
         if (HasTagFilter)
         {
             list.Add((GalleryFilterConditionKind.Tags, TagConditionLabel(), null));
@@ -460,6 +476,10 @@ public sealed partial class GalleryViewModel
                 return ClearPersonFilterAsync();
             case GalleryFilterConditionKind.Relations:
                 return ClearRelationFilterAsync();
+            case GalleryFilterConditionKind.Place:
+                return ClearPlaceFilterAsync(); // ADR-0050
+            case GalleryFilterConditionKind.MapArea:
+                return ClearMapAreaFilterAsync();
             case GalleryFilterConditionKind.Category when condition.CategoryId is { } categoryId:
                 var group = CategoryFilterGroups.FirstOrDefault(g => g.CategoryId == categoryId);
                 if (group is null || !group.IsActive)

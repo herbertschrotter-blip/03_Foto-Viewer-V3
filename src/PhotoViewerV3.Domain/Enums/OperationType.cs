@@ -26,4 +26,10 @@ public enum OperationType
     /// Operation; die alten Werte stehen in <c>CaptureDateUndo</c>, „Rückgängig“ schreibt sie zurück.
     /// </summary>
     SetCaptureDate = 7,
+
+    /// <summary>
+    /// Ort gesetzt oder entfernt (ADR-0050): Katalog + EXIF (JPEG) bzw. XMP-Begleitdatei. Je Datei eine Operation; alte
+    /// Werte und alte Bytes stehen in <c>GeoTagUndo</c>, „Rückgängig“ stellt sie wieder her.
+    /// </summary>
+    SetGeoLocation = 8,
 }

@@ -48,6 +48,12 @@ public sealed record GalleryFilterState(
 
     public const int MaxRating = 5;
 
+    /// <summary>Ort-Filter (ADR-0050, Zeile „Inhalt“); null = keiner.</summary>
+    public GalleryPlaceFilter? Place { get; init; }
+
+    /// <summary>Kartenausschnitt (ADR-0050, von der Karte); null = keiner.</summary>
+    public GalleryGeoFilter? Geo { get; init; }
+
     /// <summary>Mindest-Bewertung auf 0–5 begrenzt.</summary>
     public int EffectiveMinRating => Math.Clamp(MinRating, 0, MaxRating);
 
@@ -56,10 +62,15 @@ public sealed record GalleryFilterState(
         => (Media != GalleryMediaKind.All ? 1 : 0)
            + (FavoritesOnly ? 1 : 0)
            + (Location != GalleryLocation.Anywhere ? 1 : 0)
-           + (EffectiveMinRating > 0 ? 1 : 0);
+           + (EffectiveMinRating > 0 ? 1 : 0)
+           + (Place is { IsActive: true } ? 1 : 0)
+           + (Geo is { IsActive: true } ? 1 : 0);
 
     public bool IsActive => ActiveCount > 0;
 
     /// <summary>Kurzform fürs Log („Art=Images Fav=True Ablage=Inbox Min=3“).</summary>
-    public override string ToString() => $"Art={Media} Fav={FavoritesOnly} Ablage={Location} Min={EffectiveMinRating}";
+    public override string ToString()
+        => $"Art={Media} Fav={FavoritesOnly} Ablage={Location} Min={EffectiveMinRating}"
+           + (Place is { IsActive: true } p ? $" Ort={p.PlaceIds.Count}{(p.IncludeWithoutLocation ? "+ohne" : string.Empty)}" : string.Empty)
+           + (Geo is { IsActive: true } g ? $" Karte={g.FileIds?.Count.ToString() ?? "Ausschnitt"}" : string.Empty);
 }

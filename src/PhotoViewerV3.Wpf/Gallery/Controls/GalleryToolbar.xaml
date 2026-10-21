@@ -9,6 +9,7 @@
              xmlns:tags="clr-namespace:PhotoViewerV3.Gallery.Tags"
              xmlns:cats="clr-namespace:PhotoViewerV3.Gallery.Categories"
              xmlns:people="clr-namespace:PhotoViewerV3.Gallery.People"
+             xmlns:places="clr-namespace:PhotoViewerV3.Gallery.Places"
              xmlns:vm="clr-namespace:PhotoViewerV3.Gallery.ViewModels"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=vm:GalleryViewModel, IsDesignTimeCreatable=False}"
@@ -266,6 +267,9 @@
 
                     <!-- Kategorien-Filter (ADR-0027) — nur wenn Kategorien angelegt sind -->
                     <cats:CategoryFilterDropDown Visibility="{Binding HasCategories, Converter={StaticResource BoolToVis}}" />
+
+                    <!-- Ort-Filter (ADR-0050): Land → Region → Ort, „ohne Ort“ -->
+                    <places:PlaceFilterDropDown />
                 </gc:ToolbarFlowPanel>
 
                 <!-- Fußzeile: wirkende Bedingungen in Worten (nur bei aktiven Filtern) -->

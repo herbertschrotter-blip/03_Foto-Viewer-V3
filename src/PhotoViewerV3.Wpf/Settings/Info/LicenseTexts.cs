@@ -39,6 +39,9 @@ public static class LicenseTexts
         "  (operations.osmfoundation.org/policies/tiles): eindeutiger User-Agent, Cache, höchstens zwei gleichzeitige\n" +
         "  Abrufe, keine Massenabrufe; Zuordnung sichtbar auf der Karte. Die Karte selbst ist eine eigene Kachelkarte\n" +
         "  in Lumora (kein Mapsui, kein WebView2).\n\n" +
+        "Ortsnamen: GeoNames (geonames.org) — Creative Commons Namensnennung 4.0 (CC BY 4.0)\n" +
+        "  Datensatz „cities5000“ samt Länder- und Regionsnamen, verdichtet und in Lumora eingebettet\n" +
+        "  (offline, keine Abfrage im Netz); deutsche Namen teils ergänzt. https://creativecommons.org/licenses/by/4.0/\n\n" +
         "FFmpeg (Video-Vorschaubilder) — LGPL/GPL je nach Build\n" +
         "  Nicht Teil von Lumora: wird, falls installiert (z. B. „winget install Gyan.FFmpeg“), als externes\n" +
         "  Programm aufgerufen.";

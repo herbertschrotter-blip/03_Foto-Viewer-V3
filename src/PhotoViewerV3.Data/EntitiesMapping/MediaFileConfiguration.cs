@@ -47,5 +47,15 @@ internal sealed class MediaFileConfiguration : IEntityTypeConfiguration<MediaFil
         // DB-Default 0, damit die Raw-INSERTs von Scan und Datei-Operationen die Spalte weglassen dürfen — auch nach einem
         // späteren Tabellen-Neuaufbau durch EF.
         b.Property(x => x.CapturedAtPrecision).HasConversion<int>().HasDefaultValue(Domain.Enums.CaptureDatePrecision.Exact);
+
+        // Orte (ADR-0050, Vertrag mit der Karte): Bereichsabfragen über Bibliothek + Koordinaten (nur verortete Zeilen),
+        // Ortsfilter und Ortszähler über Bibliothek + PlaceId.
+        b.Property(x => x.GeoSource).HasConversion<int?>();
+        b.HasIndex(x => new { x.LibraryId, x.Latitude, x.Longitude })
+            .HasFilter("Latitude IS NOT NULL")
+            .HasDatabaseName("IX_Files_Library_Geo");
+        b.HasIndex(x => new { x.LibraryId, x.PlaceId })
+            .HasFilter("PlaceId IS NOT NULL")
+            .HasDatabaseName("IX_Files_Library_Place");
     }
 }

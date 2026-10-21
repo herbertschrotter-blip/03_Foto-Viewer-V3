@@ -172,7 +172,7 @@ OperationBatches   (Id, OperationType, Status, CreatedAtUtc, CompletedAtUtc,
                    -- Status: pending | applying | applied | undoing | undone | failed
 FileOperations     (Id, BatchId, FileId, Action, SourcePath, DestPath,
                     Status, Error, ExecutedAtUtc, UndoneAtUtc)
-                   -- Action: move | copy | recycle | rename | mkdir | renamefolder (0.2.5) | adoptfolder | setcapturedate (0.2.48)
+                   -- Action: move | copy | recycle | rename | mkdir | renamefolder (0.2.5) | adoptfolder | setcapturedate (0.2.48) | setgeolocation (0.2.53)
 Settings           (Key, Value)
 FilesFts           -- FTS5 virtual table (Files.Name, Extension)
 ```
@@ -230,6 +230,17 @@ FilesFts           -- FTS5 virtual table (Files.Name, Extension)
   (`OperationBatches.OperationType = 7 SetCaptureDate`, je Datei eine FileOperation). Gefüllt vom Nachtragen im
   Hintergrund (nicht im Scan); manuelle Daten überleben „Neu aufbauen“ (`UserDataCarryOver`) und Inhaltsänderungen
   (Incremental-Scan setzt nur nicht-manuelle zurück).
+- Orte — umgesetzt in 0.2.53 (Migration `AddGeoLocation`, ADR-0050, Vertrag mit der Karte): `Files.Latitude`/`Longitude`
+  (REAL, WGS84-Dezimalgrad), `Files.GeoSource` (NULL = noch nicht gelesen, 0 keine Koordinaten, 1 EXIF/XMP, 2 Video,
+  3 manuell gesetzt bzw. entfernt), `Files.PlaceId` (GeoNames-Id des nächsten Orts aus der eingebetteten Ressource, NULL
+  ohne Ort im Umkreis von 100 km). Gefilterte Indizes `IX_Files_Library_Geo ON Files(LibraryId, Latitude, Longitude) WHERE
+  Latitude IS NOT NULL` (Karte, Ausschnitt) und `IX_Files_Library_Place ON Files(LibraryId, PlaceId) WHERE PlaceId IS NOT
+  NULL` (Ortsfilter, Ortszähler). `GeoTagUndo (FileOperationId PK → FileOperations ON DELETE CASCADE, OldLatitude,
+  OldLongitude, OldGeoSource, OldPlaceId, NewLatitude, NewLongitude, WriteKind 0 Katalog | 1 JPEG-EXIF | 2 XMP-Begleitdatei,
+  WrittenPath, OldBytes BLOB (altes APP1-Segment bzw. alte XMP-Datei), WrittenHash BLOB (SHA-256 des Geschriebenen),
+  SegmentOffset, OldModifiedTicks (UTC-Ticks), OldSize)` — „Rückgängig“ von „Ort setzen/entfernen“ (`OperationBatches.OperationType = 8
+  SetGeoLocation`, je Datei eine FileOperation). Gefüllt vom Nachtragen im Hintergrund; manuelle Orte überleben „Neu
+  aufbauen“ und Inhaltsänderungen wie das Aufnahmedatum.
 
 ### Pflicht-Indizes V0.1
 ```sql

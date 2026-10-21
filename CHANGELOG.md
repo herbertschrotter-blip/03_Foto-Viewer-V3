@@ -52,6 +52,63 @@ Alle nennenswerten Änderungen an Lumora (bis 0.2.48 „PhotoViewer V3“). Form
   zeigen“ (Nachricht + Galerie; Trefferzahl wird geprüft, sobald `GalleryGeoFilter` von Agent V da ist); Screenshots
   `39-orte-karte-hell`, `40-orte-karte-dunkel`. Navigationsprüfung um „Orte“ ergänzt.
 
+## [0.2.53] — 2026-10-21
+
+### Neu (ADR-0050) — Orte: GPS aus Fotos lesen, selbst verorten mit EXIF-Schreiben, Ortsnamen offline, Filter „Ort“
+- **Katalog** (Migration `AddGeoLocation`, Vertrag mit der Karte): `Files.Latitude`/`Longitude` (WGS84), `GeoSource`
+  (NULL = noch nicht gelesen, keine, EXIF/XMP, Video, manuell), `PlaceId` (GeoNames-Id); gefilterte Indizes
+  `IX_Files_Library_Geo` und `IX_Files_Library_Place`; Tabelle `GeoTagUndo`; `OperationType.SetGeoLocation = 8`.
+- **Lesen** (`Services/Metadata`, verwaltet, keine neuen Pakete): EXIF-GPS aus JPEG, TIFF/RAW, RAF, PNG, WebP, HEIC
+  (der Container-Durchgang des Aufnahmedatums ist jetzt generisch), Videos über `©xyz` bzw. Apple ISO 6709, eine
+  **XMP-Begleitdatei** (`name.ext.xmp`, sonst `name.xmp`) gewinnt. **Nachtragen im Hintergrund** nach jedem Scan und
+  einmalig für bestehende Kataloge (eigene Schleife wie beim Aufnahmedatum: Stapel, Single-Writer, Scan-Sperre, keine
+  Cloud-Platzhalter), Statusleiste „Orte: n / m“; Incremental-Scan liest geänderte Dateien neu, „Neu aufbauen“ behält
+  manuelle Orte.
+- **Ortsnamen offline** (`Services/Places/ReverseGeocoder`): GeoNames `cities5000` ohne Stadtteile, verdichtet von
+  `build/geonames/Build-GeoNames.ps1` zu einer eingebetteten Ressource (1,5 MB, 64 584 Orte); deutsche Länder-,
+  Regions- und Städtenamen aus kleinen kuratierten Tabellen (`build/geonames/*-de.tsv`). Nächster Ort über einen
+  Raster-Index (1,8–8 µs je Aufruf, Grenze 100 km), Suche auch „Muenchen“/„Paris, Frankreich“. Namensnennung „GeoNames,
+  CC BY 4.0“ in Info › Verwendete Bausteine und Alle Lizenzen.
+- **Ort setzen…** (Aktionsleiste „Ort…“, Rechtsklick): Ortssuche, Koordinaten (auch „48.2082, 16.3738“ oder Grad/Minuten/
+  Sekunden), „Ort von anderem Foto übernehmen“ (zuletzt gesetzte und häufige Orte der Bibliothek), „Ort entfernen“,
+  „Änderungsdatum beibehalten“ (Standard an); Haken `IMapPicker` für die Kartenauswahl der Karte. Geschrieben wird
+  **JPEG verlustfrei ins EXIF** (nur das APP1-Segment ändert sich, Bilddaten Byte für Byte gleich), RAW/HEIC/TIFF/PNG/
+  WebP in eine **XMP-Begleitdatei**, Videos nur in den Katalog — über eine Temp-Datei, geprüft und ersetzt (nie halbe
+  Dateien), unter der Scan-Sperre und als eigener Schreibvorgang für die Ordnerüberwachung. Schreibgeschützte, gesperrte
+  oder nur in der Cloud liegende Dateien bleiben unverändert und erscheinen mit Grund in einer Fehlerliste.
+- **Rückgängig** in der Galerie (gemeinsam mit Datei-Operationen und „Datum setzen“, jüngster Eintrag zuerst) stellt die
+  Dateien Byte für Byte wieder her (altes EXIF-Segment, alte Änderungszeit; angelegte XMP-Dateien in den Papierkorb) —
+  nur, wenn sie seither unverändert sind.
+- **Galerie:** Filter **Ort** in der Zeile „Inhalt“ (Länder → Regionen → Orte mit Anzahl, auf-/zuklappbar, Suche, „ohne
+  Ort“, „ohne Ortsnamen“), Filter **Kartenausschnitt** (`GalleryGeoFilter`, Empfänger von
+  `ShowFilesOnMapSelectionMessage`), beide in „Es gilt“ und im Zähler; Listenspalte **Ort**. **Lightbox:** Zeile „Ort:
+  Wien, Österreich (48,2082° N, 16,3738° O)“. Karten-Abfragen `IGeoQueryService` (Punkte, Ausschnitt auch über die
+  Datumsgrenze, Ausdehnung) — alle nur für die übergebenen Bibliotheken.
+
+### Tests
+- `tests/PhotoViewerV3.Tests`: +68 — `Places/MediaGpsReaderTests` (je Format, Byte-Reihenfolgen, Süd/West, Höhe, 0/0,
+  Videos, ISO 6709, XMP-Vorrang, JPEG ignoriert die Lightroom-XMP des RAW-Paars), `Places/GeoWriterTests` (JPEG ohne/mit EXIF/GPS in II und MM: nur das Segment ändert
+  sich, SOS-Daten gleich; Entfernen, Änderungsdatum, schreibgeschützt/gesperrt/kaputt ohne Temp-Reste, 64-KB-Grenze,
+  HEIC → XMP, vorhandene Lightroom-XMP ergänzt und entfernt, Begleitdatei ohne GPS bleibt unangetastet, Änderungszeit
+  mit Bruchteilen zurück), `Places/ReverseGeocoderTests` (deutsche Namen,
+  Datumsgrenze, Meer, Suche, Nearest < 0,1 ms), `Places/GeoLocationServiceTests` (Nachtragen, Ort setzen + Protokoll +
+  Rückgängig byte-genau, veränderte Datei, HEIC/Video, Entfernen + „Neu aufbauen“, Fehler, Incremental, Karte und Zähler
+  nur im Bereich, zuletzt verwendete Orte, mehrfaches Dispose).
+- `tests/PhotoViewerV3.Wpf.Tests`: +18 — `Gallery/GalleryPlaceFilterTests` (Orte/ohne Ort/Kartengruppe/Ausschnitt,
+  UND mit Dateiart, andere Bibliothek), `Gallery/PlacesUiTests` (Flyout-Baum, Sichtbarkeit, Koordinaten-Schreibweisen,
+  Dialog-Logik), `Gallery/PlacesWicTests` (WIC-GPS gelesen, Lumoras EXIF von WIC gelesen, Dialogfenster).
+- Rauchtest-Schritt „Orte: GPS lesen und setzen“ (vor „Ordnerüberwachung“): Foto mit WIC-GPS → „Wien, Österreich“,
+  Ort setzen (Graz) → GPS im EXIF, SOS-Daten und Änderungsdatum gleich, Filter „Ort: Graz“ über das Flyout, Rückgängig →
+  Datei Byte für Byte wie vorher; Screenshot `40-galerie-ort`.
+- Spike #13 (`docs/spikes/13-orte.md`, Harness `spike13-places`): GPS je Datei warm +0,16 ms, WIC-Übereinstimmung
+  1 619 / 1 619, Nachtragen 790 Dateien/s, Schreiben 4-MB-JPEG 38 ms, Rückgängig byte-gleich 50 / 50.
+
+### Offen
+- Rückgängig-Speicher alter EXIF-Segmente wird nicht aufgeräumt (≈ 10–60 KB je verortetem JPEG).
+- Verschieben/Umbenennen nimmt XMP-Begleitdateien noch nicht mit.
+- Ortsfilter und Karte nutzen bis zum Zusammenbau die aktive Bibliothek als Bereich (Agent T stellt auf die
+  Verknüpfungsgruppe um).
+
 ## [0.2.52] — 2026-10-21
 
 ### Feature (ADR-0049) — Versteckte Bibliotheken im verschlüsselten Container

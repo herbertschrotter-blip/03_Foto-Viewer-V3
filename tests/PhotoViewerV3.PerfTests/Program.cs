@@ -12,6 +12,7 @@ internal static class Program
     private const string SpikeV01Scan = "spike-v01-scan";
     private const string SpikeThumbSize = "spike11-thumb-size";
     private const string SpikeCaptureDate = "spike12-capture-date";
+    private const string SpikePlaces = "spike13-places";
 
     public static async Task<int> Main(string[] args)
     {
@@ -30,6 +31,7 @@ internal static class Program
             SpikeV01Scan => await Spikes.V01Scan.SpikeV01Scan.RunAsync(args[1..]),
             SpikeThumbSize => await Spikes.Wic.Spike11ThumbnailSize.RunAsync(args[1..]),
             SpikeCaptureDate => await Spikes.Metadata.Spike12CaptureDate.RunAsync(args[1..]),
+            SpikePlaces => await Spikes.Metadata.Spike13Places.RunAsync(args[1..]),
             _ => UnknownCommand(args[0]),
         };
     }
@@ -60,5 +62,7 @@ internal static class Program
         Console.WriteLine("    Vorschaubild-Größe alt (lange Kante 320) gegen kurze Kante 480/400 (ADR-0043).");
         Console.WriteLine($"  {SpikeCaptureDate} --root PATH [--limit 2000] [--runs 3] [--work PATH]");
         Console.WriteLine("    Aufnahmedatum: Scan ohne/mit Sortier-Index, Leser je Datei gegen WIC, Nachtragen (ADR-0046).");
+        Console.WriteLine($"  {SpikePlaces} --root PATH [--limit 2000] [--work PATH]");
+        Console.WriteLine("    Orte: GPS-Leser je Datei gegen WIC, Ortsnamen (Nearest/Suche), Nachtragen, EXIF-Schreiben (ADR-0050).");
     }
 }

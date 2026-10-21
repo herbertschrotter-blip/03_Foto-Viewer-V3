@@ -18,6 +18,12 @@ public enum GalleryFilterConditionKind
 
     /// <summary>Beziehung der Personen auf dem Foto (0.2.47, ADR-0045).</summary>
     Relations,
+
+    /// <summary>Ort (ADR-0050).</summary>
+    Place,
+
+    /// <summary>Kartenausschnitt (von der Karte, ADR-0050).</summary>
+    MapArea,
 }
 
 /// <summary>

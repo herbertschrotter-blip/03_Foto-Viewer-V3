@@ -1,0 +1,153 @@
+<dialogs:AppFluentWindow xmlns:dialogs="clr-namespace:PhotoViewerV3.Shell.Dialogs"
+        x:Class="PhotoViewerV3.Gallery.Places.SetPlaceDialog"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 xmlns:conv="clr-namespace:PhotoViewerV3.Gallery.Converters"
+                 xmlns:local="clr-namespace:PhotoViewerV3.Gallery.Places"
+                 xmlns:places="clr-namespace:PhotoViewerV3.Services.Places;assembly=PhotoViewerV3.Services"
+                 Title="Ort setzen"
+                 Width="560"
+                 SizeToContent="Height"
+                 ResizeMode="NoResize"
+                 ShowInTaskbar="False"
+                 WindowStartupLocation="CenterOwner"
+                 WindowBackdropType="Mica"
+                 ExtendsContentIntoTitleBar="True"
+                 KeyDown="OnKeyDown">
+
+    <!-- „Ort setzen…“ (ADR-0050): Ortssuche offline, Koordinaten, zuletzt verwendete Orte, optional Karte; „Ort entfernen“. -->
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        <conv:InverseBoolConverter x:Key="InverseBool" />
+        <conv:StringToVisibilityConverter x:Key="StringToVis" />
+        <Style x:Key="Hint" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Grid.Row="0" Title="Ort setzen" ShowMaximize="False" ShowMinimize="False" />
+
+        <StackPanel Grid.Row="1" Margin="24,4,24,16">
+            <TextBlock FontSize="13" Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextWrapping="Wrap">
+                <Run Text="{Binding Request.Subject, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding CountText, Mode=OneWay}" />
+            </TextBlock>
+            <TextBlock Text="{Binding CurrentText, Mode=OneWay}" Style="{StaticResource Hint}" Margin="0,2,0,0"
+                       AutomationProperties.AutomationId="PlaceDialogCurrent" />
+
+            <!-- Ort setzen -->
+            <RadioButton GroupName="PlaceMode" Margin="0,14,0,6" Content="Ort setzen"
+                         AutomationProperties.Name="Ort setzen"
+                         IsChecked="{Binding IsRemove, Converter={StaticResource InverseBool}}" />
+            <StackPanel Margin="28,0,0,0" IsEnabled="{Binding IsRemove, Converter={StaticResource InverseBool}}">
+                <ui:TextBox x:Name="SearchBox"
+                            PlaceholderText="Ort suchen (z. B. Wien, Rom oder „Paris, Frankreich“)"
+                            Icon="{ui:SymbolIcon Search24}"
+                            ClearButtonEnabled="True"
+                            AutomationProperties.Name="Ort suchen"
+                            Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                <ListBox x:Name="ResultList"
+                         Margin="0,4,0,0"
+                         MaxHeight="190"
+                         ItemsSource="{Binding SearchResults}"
+                         SelectedItem="{Binding SelectedHit}"
+                         AutomationProperties.Name="Gefundene Orte"
+                         Visibility="{Binding HasSearchResults, Converter={StaticResource BoolToVis}}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="{x:Type local:PlaceSearchHit}">
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="Location24" FontSize="13" Margin="0,0,6,0" />
+                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding Detail}" Margin="8,0,0,0" FontSize="12" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+                <TextBlock Text="Koordinaten (Dezimalgrad)" Margin="0,10,0,4" FontSize="12"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                <StackPanel Orientation="Horizontal">
+                    <ui:TextBox Width="150" PlaceholderText="Breite, z. B. 48,2082"
+                                AutomationProperties.Name="Breitengrad"
+                                AutomationProperties.AutomationId="PlaceDialogLatitude"
+                                Text="{Binding LatitudeText, UpdateSourceTrigger=PropertyChanged}" />
+                    <ui:TextBox Width="150" Margin="8,0,0,0" PlaceholderText="Länge, z. B. 16,3738"
+                                AutomationProperties.Name="Längengrad"
+                                AutomationProperties.AutomationId="PlaceDialogLongitude"
+                                Text="{Binding LongitudeText, UpdateSourceTrigger=PropertyChanged}" />
+                    <ui:Button Margin="8,0,0,0" Content="Auf der Karte wählen…"
+                               Icon="{ui:SymbolIcon Map24}"
+                               Command="{Binding PickOnMapCommand}"
+                               Visibility="{Binding HasMapPicker, Converter={StaticResource BoolToVis}}" />
+                </StackPanel>
+                <TextBlock Text="{Binding PreviewText, Mode=OneWay}" Margin="0,6,0,0" FontSize="13" TextWrapping="Wrap"
+                           AutomationProperties.AutomationId="PlaceDialogPreview"
+                           Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+
+                <StackPanel Margin="0,10,0,0" Visibility="{Binding HasRecent, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Text="Ort von anderem Foto übernehmen" FontSize="12" Margin="0,0,0,4"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    <ItemsControl ItemsSource="{Binding Recent}" Focusable="False" AutomationProperties.Name="Zuletzt verwendete Orte">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type places:RecentLocation}">
+                                <ui:Button Margin="0,0,6,6" Padding="10,4" FontSize="12"
+                                           Content="{Binding Label}"
+                                           Icon="{ui:SymbolIcon History24}"
+                                           ToolTip="Diesen Ort übernehmen"
+                                           Command="{Binding DataContext.UseRecentCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                           CommandParameter="{Binding}" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
+                <CheckBox Margin="0,8,0,0" Content="Änderungsdatum der Dateien beibehalten"
+                          IsChecked="{Binding KeepModifiedTime}"
+                          AutomationProperties.Name="Änderungsdatum beibehalten" />
+            </StackPanel>
+
+            <!-- Ort entfernen -->
+            <RadioButton GroupName="PlaceMode" Margin="0,14,0,4" Content="Ort entfernen"
+                         AutomationProperties.Name="Ort entfernen"
+                         IsChecked="{Binding IsRemove}" />
+
+            <TextBlock Style="{StaticResource Hint}" Margin="0,14,0,0"
+                       Text="JPEG: GPS wird verlustfrei ins EXIF geschrieben (Bilddaten bleiben unverändert). RAW, HEIC, TIFF, PNG und WebP: XMP-Begleitdatei („name.ext.xmp“). Videos: nur im Katalog. „Rückgängig“ in der Galerie stellt die Dateien Byte für Byte wieder her." />
+            <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0"
+                       Visibility="{Binding IsRemove, Converter={StaticResource BoolToVis}}"
+                       Text="Entfernen: aus JPEG-EXIF und XMP-Begleitdateien. GPS im eigenen EXIF von RAW, HEIC, PNG und WebP bleibt in der Datei — Lumora vergisst den Ort nur im Katalog." />
+            <TextBlock Text="{Binding VideoHint, Mode=OneWay}" Style="{StaticResource Hint}" Margin="0,4,0,0"
+                       Visibility="{Binding VideoHint, Converter={StaticResource StringToVis}}" />
+            <TextBlock Text="{Binding ErrorText, Mode=OneWay}" Margin="0,8,0,0" FontSize="12" TextWrapping="Wrap"
+                       Foreground="{DynamicResource SystemFillColorCriticalBrush}" />
+        </StackPanel>
+
+        <Border Grid.Row="2"
+                Padding="24,12"
+                Background="{DynamicResource LayerFillColorDefaultBrush}"
+                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                BorderThickness="0,1,0,0">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <ui:Button x:Name="OkButton" MinWidth="120" Margin="0,0,8,0" Appearance="Primary"
+                           Content="{Binding AcceptText}"
+                           IsEnabled="{Binding CanAccept}" Click="OnOkClick" />
+                <ui:Button MinWidth="110" Content="Abbrechen" Click="OnCancelClick" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</dialogs:AppFluentWindow>

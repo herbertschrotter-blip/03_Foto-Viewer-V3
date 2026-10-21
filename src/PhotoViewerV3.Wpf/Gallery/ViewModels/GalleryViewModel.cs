@@ -132,7 +132,8 @@ public sealed partial class GalleryViewModel : ObservableObject
         ICategoryPickerService categoryPicker,
         IGalleryViewSettingsStore viewSettings,
         ILogger<GalleryViewModel> logger,
-        PhotoViewerV3.Gallery.CaptureDates.CaptureDateActions? captureDateActions = null)
+        PhotoViewerV3.Gallery.CaptureDates.CaptureDateActions? captureDateActions = null,
+        PhotoViewerV3.Gallery.Places.PlaceActions? placeActions = null)
     {
         _contextFactory = contextFactory;
         _source = source;
@@ -158,6 +159,7 @@ public sealed partial class GalleryViewModel : ObservableObject
         _thumbnails.ThumbnailReady += OnThumbnailReady;
         RegisterMessages();
         InitCaptureDate(captureDateActions); // „Datum setzen…“, Rückgängig, Neuladen (GalleryViewModel.CaptureDate.cs, ADR-0046)
+        InitPlaces(placeActions); // Filter „Ort“, Kartenausschnitt, „Ort setzen…“ (GalleryViewModel.Places.cs, ADR-0050)
     }
 
     // ---- Gebundene Daten ---------------------------------------------------------------------
@@ -794,6 +796,7 @@ public sealed partial class GalleryViewModel : ObservableObject
         FireAndForget(() => ApplyTagsToItemsAsync(rows.Select(r => r.Id).ToList(), ct));
         FireAndForget(() => ApplyCategoriesToItemsAsync(rows.Select(r => r.Id).ToList(), ct)); // ADR-0027
         FireAndForget(() => ApplyPersonsToItemsAsync(rows.Select(r => r.Id).ToList(), ct)); // Personen (0.2.38)
+        FireAndForget(() => ApplyPlacesToItemsAsync(rows.Select(r => r.Id).ToList(), ct)); // Orte (ADR-0050)
 
         SetLoadStatus($"{TotalCount:N0} Treffer · Seite {DisplayPageIndex} von {PageCount:N0} · {LastPageLoadMs:N1} ms");
         _logger.LogInformation(
@@ -1513,6 +1516,11 @@ public sealed partial class GalleryViewModel : ObservableObject
     private Task UndoAsync()
         => RunOperationAsync("Rückgängig", async () =>
         {
+            if (await TryUndoGeoTagAsync())
+            {
+                return; // „Ort setzen“ war der jüngste Eintrag (ADR-0050)
+            }
+
             if (await TryUndoCaptureDateAsync())
             {
                 return; // „Datum setzen“ war der jüngste Eintrag (ADR-0046)
@@ -1557,7 +1565,7 @@ public sealed partial class GalleryViewModel : ObservableObject
         try
         {
             var batches = await _fileOps.GetRecentBatchesAsync(UndoBatchWindow); // 50 statt 10: „Datum setzen“-Batches füllen das Fenster (ADR-0046)
-            CanUndo = batches.Any(b => b.CanUndo) || await HasCaptureDateUndoAsync(); // + „Datum setzen“ (ADR-0046)
+            CanUndo = batches.Any(b => b.CanUndo) || await HasCaptureDateUndoAsync() || await HasGeoTagUndoAsync(); // + „Datum setzen“ (ADR-0046), „Ort setzen“ (ADR-0050)
         }
         catch (Exception ex)
         {

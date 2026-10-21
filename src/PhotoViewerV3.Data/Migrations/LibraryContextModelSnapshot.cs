@@ -333,6 +333,55 @@ namespace PhotoViewerV3.Data.Migrations
                     b.ToTable("Folders", (string)null);
                 });
 
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.GeoTagUndo", b =>
+                {
+                    b.Property<int>("FileOperationId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<double?>("NewLatitude")
+                        .HasColumnType("REAL");
+
+                    b.Property<double?>("NewLongitude")
+                        .HasColumnType("REAL");
+
+                    b.Property<byte[]>("OldBytes")
+                        .HasColumnType("BLOB");
+
+                    b.Property<int?>("OldGeoSource")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<double?>("OldLatitude")
+                        .HasColumnType("REAL");
+
+                    b.Property<double?>("OldLongitude")
+                        .HasColumnType("REAL");
+
+                    b.Property<long?>("OldModifiedTicks")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("OldPlaceId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("OldSize")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("SegmentOffset")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("WriteKind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<byte[]>("WrittenHash")
+                        .HasColumnType("BLOB");
+
+                    b.Property<string>("WrittenPath")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("FileOperationId");
+
+                    b.ToTable("GeoTagUndo", (string)null);
+                });
+
             modelBuilder.Entity("PhotoViewerV3.Domain.Entities.Library", b =>
                 {
                     b.Property<int>("Id")
@@ -429,14 +478,23 @@ namespace PhotoViewerV3.Data.Migrations
                     b.Property<int>("FolderId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int?>("GeoSource")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int?>("Height")
                         .HasColumnType("INTEGER");
 
                     b.Property<bool>("IsFavorite")
                         .HasColumnType("INTEGER");
 
+                    b.Property<double?>("Latitude")
+                        .HasColumnType("REAL");
+
                     b.Property<int>("LibraryId")
                         .HasColumnType("INTEGER");
+
+                    b.Property<double?>("Longitude")
+                        .HasColumnType("REAL");
 
                     b.Property<int>("MediaType")
                         .HasColumnType("INTEGER");
@@ -450,6 +508,9 @@ namespace PhotoViewerV3.Data.Migrations
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("TEXT");
+
+                    b.Property<int?>("PlaceId")
+                        .HasColumnType("INTEGER");
 
                     b.Property<byte?>("Rating")
                         .HasColumnType("INTEGER");
@@ -477,6 +538,14 @@ namespace PhotoViewerV3.Data.Migrations
                     b.HasIndex("LibraryId", "ModifiedAtUtc")
                         .IsDescending(false, true)
                         .HasDatabaseName("IX_Files_Library_Modified");
+
+                    b.HasIndex("LibraryId", "PlaceId")
+                        .HasDatabaseName("IX_Files_Library_Place")
+                        .HasFilter("PlaceId IS NOT NULL");
+
+                    b.HasIndex("LibraryId", "Latitude", "Longitude")
+                        .HasDatabaseName("IX_Files_Library_Geo")
+                        .HasFilter("Latitude IS NOT NULL");
 
                     b.HasIndex("FolderId", "Name", "Size", "ModifiedAtUtc")
                         .IsUnique()
@@ -789,6 +858,15 @@ namespace PhotoViewerV3.Data.Migrations
                     b.HasOne("PhotoViewerV3.Domain.Entities.Tag", null)
                         .WithMany()
                         .HasForeignKey("TagId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.GeoTagUndo", b =>
+                {
+                    b.HasOne("PhotoViewerV3.Domain.Entities.FileOperation", null)
+                        .WithOne()
+                        .HasForeignKey("PhotoViewerV3.Domain.Entities.GeoTagUndo", "FileOperationId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

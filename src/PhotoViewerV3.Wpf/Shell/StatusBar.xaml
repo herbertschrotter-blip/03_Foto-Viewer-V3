@@ -212,6 +212,16 @@
                     <Border Style="{StaticResource StatusSeparator}" />
                 </StackPanel>
 
+                <!-- Orte nachtragen (Services/Places, ADR-0050) -->
+                <StackPanel Orientation="Horizontal"
+                            AutomationProperties.Name="Orte"
+                            ToolTip="Koordinaten werden im Hintergrund aus EXIF, XMP-Begleitdateien bzw. Video-Metadaten gelesen (nur lokale Dateien, nichts wird heruntergeladen)."
+                            Visibility="{Binding GeoBackfillText, Converter={StaticResource NullToVis}}">
+                    <ui:SymbolIcon Symbol="Location24" Style="{StaticResource StatusIcon}" />
+                    <TextBlock Style="{StaticResource StatusText}" Text="{Binding GeoBackfillText}" />
+                    <Border Style="{StaticResource StatusSeparator}" />
+                </StackPanel>
+
                 <StackPanel Orientation="Horizontal"
                             Visibility="{Binding IsBackgroundActive, Converter={StaticResource BoolToVis}}">
                     <Ellipse Width="7" Height="7" Margin="0,0,6,0" VerticalAlignment="Center"

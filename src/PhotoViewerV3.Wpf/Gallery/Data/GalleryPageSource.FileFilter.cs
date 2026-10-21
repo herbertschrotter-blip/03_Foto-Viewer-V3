@@ -60,6 +60,7 @@ public sealed partial class GalleryPageSource
                 break;
         }
 
+        parts.AddRange(BuildPlaceClauses(filter)); // Ort und Kartenausschnitt (ADR-0050, GalleryPageSource.Places.cs)
         return string.Join("\n  ", parts);
     }
 
@@ -69,6 +70,8 @@ public sealed partial class GalleryPageSource
         {
             cmd.Parameters.AddWithValue("$minRating", filter.EffectiveMinRating);
         }
+
+        BindPlaceParams(cmd, filter); // ADR-0050
     }
 
     /// <summary>

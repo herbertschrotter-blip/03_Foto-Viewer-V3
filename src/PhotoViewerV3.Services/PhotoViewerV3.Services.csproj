@@ -24,4 +24,9 @@
     <PackageReference Include="Microsoft.ML.OnnxRuntime.DirectML" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Ortsnamen offline (ADR-0050): GeoNames cities5000, verdichtet von build/geonames/Build-GeoNames.ps1 (CC BY 4.0). -->
+    <EmbeddedResource Include="Places\Data\geonames.tsv.gz" LogicalName="PhotoViewerV3.Services.Places.geonames.tsv.gz" />
+  </ItemGroup>
+
 </Project>
