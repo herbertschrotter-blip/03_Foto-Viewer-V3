@@ -53,8 +53,10 @@ public sealed class FaceCropServiceTests
             cmd.ExecuteNonQuery();
         }
 
-        service.SweepNow(world.LibraryId).Should().Be(1);
-        File.Exists(service.GetCropPath(world.LibraryId, b1)).Should().BeFalse();
+        // Der entprellte Abgleich, den die FacesChangedMessage oben angestoßen hat, kann unter Last erst jetzt laufen und den
+        // verwaisten Ausschnitt selbst entfernen — dann findet SweepNow nichts mehr. Entscheidend: danach ist er weg.
+        service.SweepNow(world.LibraryId).Should().BeInRange(0, 1);
+        File.Exists(service.GetCropPath(world.LibraryId, b1)).Should().BeFalse("SweepNow oder der entprellte Abgleich entfernt den verwaisten Ausschnitt");
 
         service.Request(world.LibraryId, [a1]);
         await WaitUntilAsync(() => File.Exists(service.GetCropPath(world.LibraryId, a1)));

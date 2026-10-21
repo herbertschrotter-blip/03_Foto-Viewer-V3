@@ -3,6 +3,18 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.41] — 2026-10-21
+
+### Tests
+- Zwei unter Last wackelnde Gesichter-Tests stabilisiert (Befund aus 0.2.39/0.2.40):
+  - `FaceCropServiceTests.Fordert_an_rendert_je_Datei_einmal_…`: der entprellte Abgleich nach `FacesChangedMessage` (50 ms)
+    konnte erst nach dem Löschen des Gesichts laufen und den verwaisten Ausschnitt selbst entfernen — `SweepNow` fand dann 0.
+    Geprüft wird jetzt, dass der Ausschnitt danach weg ist (`SweepNow` 0 oder 1).
+  - `FaceRecognitionServiceTests.Gruppen_nur_aus_unbekannten_Gesichtern_…`: wartet nach dem Bestätigen von „Bert“ auf
+    `WaitForIdleAsync`, bevor neue Gesichter entstehen — sonst bekamen sie vom verspäteten Vorschlagsdurchlauf schon einen
+    Vorschlag und fehlten in den unbenannten Gruppen.
+- Zusammenführung 0.2.39 + 0.2.40: Services 602 (8× volle Suite grün), WPF 305 (3×), beide Klassen 15× grün, Rauchtest 28/28.
+
 ## [0.2.40] — 2026-10-21
 
 ### Neu (ADR-0040) — Ignorierte Gesichter ansehen und zurückholen, ganze Gruppe ignorieren, Mindestgröße

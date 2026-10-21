@@ -265,7 +265,10 @@ public sealed class FaceRecognitionServiceTests
         var after = await service.GetGroupsAsync();
         after.Groups.Should().ContainSingle().Which.Members.Select(m => m.FaceId).Should().BeEquivalentTo(carl.Skip(1));
 
-        // Gruppenzentrum → Namensvorschlag einer bekannten Person
+        // Gruppenzentrum → Namensvorschlag einer bekannten Person. Erst warten, bis das Neu-Lernen nach „Bert“ samt
+        // Vorschlagsdurchlauf fertig ist — sonst bekommen die neuen Anna-Gesichter unter Last schon einen Vorschlag
+        // (State 1) und stehen nicht mehr in einer unbenannten Gruppe.
+        await service.WaitForIdleAsync().WaitAsync(Wait);
         var moreAnna = await world.AddFacesAsync("anna", 4);
         var fresh = await service.GetGroupsAsync(refresh: true);
         fresh.Groups.Should().Contain(g => g.SuggestedPersonId == annaId && g.SuggestedPersonName == "Anna"
