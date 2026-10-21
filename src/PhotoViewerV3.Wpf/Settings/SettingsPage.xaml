@@ -6,6 +6,7 @@
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:shell="clr-namespace:PhotoViewerV3.Shell"
              xmlns:local="clr-namespace:PhotoViewerV3.Settings"
+             xmlns:faces="clr-namespace:PhotoViewerV3.Faces"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance local:SettingsViewModel}"
              d:DesignWidth="1000"
@@ -13,6 +14,7 @@
     <UserControl.Resources>
         <shell:BoolToVisibilityConverter x:Key="BoolToVis" />
         <shell:BoolToVisibilityConverter x:Key="InvBoolToVis" Invert="True" />
+        <shell:NullToVisibilityConverter x:Key="NullToVis" />
 
         <Style x:Key="SectionCard" TargetType="Border">
             <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
@@ -240,6 +242,77 @@
                     <TextBlock Margin="0,4,0,0" FontSize="12" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                Text="Archive, die schon vor dem Einschalten im Katalog standen, entpackt die Automatik nicht. Dieser Knopf holt das für die aktive Bibliothek nach (nur bei eingeschalteter Einstellung; Archive, deren Zielordner schon existiert, zählen nicht)." />
+                </StackPanel>
+            </Border>
+
+            <!-- Gesichtserkennung (Services/Faces + Wpf/Faces, ADR-0035) -->
+            <Border Style="{StaticResource SectionCard}"
+                    DataContext="{Binding Faces}"
+                    Visibility="{Binding Converter={StaticResource NullToVis}}"
+                    AutomationProperties.Name="Gesichtserkennung">
+                <StackPanel>
+                    <ui:TextBlock Style="{StaticResource SectionTitle}" Text="Gesichtserkennung" />
+                    <TextBlock Margin="0,0,0,8" FontSize="12" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Text="Erkennt im Hintergrund Gesichter in den Fotos der aktiven Bibliothek und speichert je Gesicht einen Fingerabdruck im Katalog — vollständig auf diesem PC, nichts verlässt den Rechner. Videos werden noch nicht analysiert; Personen benennen und Fotos nach Personen filtern folgen in einer späteren Version." />
+                    <ui:ToggleSwitch Content="Gesichter im Hintergrund erkennen"
+                                     IsChecked="{Binding IsEnabled, Mode=TwoWay}"
+                                     AutomationProperties.Name="Gesichter im Hintergrund erkennen" />
+                    <CheckBox Margin="0,8,0,0" Content="Grafikkarte verwenden (DirectML; sonst Prozessor)"
+                              IsChecked="{Binding UseGpu, Mode=TwoWay}"
+                              AutomationProperties.Name="Grafikkarte für die Gesichtserkennung verwenden" />
+
+                    <Grid Margin="0,12,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource Label}" Text="Modell" />
+                        <TextBlock Grid.Row="0" Grid.Column="1" Style="{StaticResource ValueText}"
+                                   Text="{Binding ModelStatusText}" ToolTip="{Binding ModelFolder}" />
+                        <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource Label}" Text="Index" Margin="0,8,12,0" />
+                        <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource ValueText}" Margin="0,8,0,0"
+                                   Text="{Binding IndexStatusText}" ToolTip="{Binding IndexStatusText}" />
+                        <ui:Button Grid.Row="1" Grid.Column="2" Content="Index neu aufbauen" Icon="{ui:SymbolIcon ArrowClockwise24}"
+                                   Margin="12,6,0,0"
+                                   Command="{Binding RebuildIndexCommand}"
+                                   AutomationProperties.Name="Gesichts-Index neu aufbauen" />
+                    </Grid>
+
+                    <ui:Button Margin="0,10,0,0" Icon="{ui:SymbolIcon ArrowDownload24}"
+                               Content="{x:Static faces:FaceSettingsViewModel.DownloadButtonText}"
+                               Command="{Binding DownloadModelCommand}"
+                               Visibility="{Binding IsModelReady, Converter={StaticResource InvBoolToVis}}"
+                               AutomationProperties.Name="Modell für die Gesichtserkennung herunterladen" />
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0"
+                                Visibility="{Binding IsDownloading, Converter={StaticResource BoolToVis}}">
+                        <ProgressBar Width="260" Height="4" Minimum="0" Maximum="100" VerticalAlignment="Center"
+                                     Value="{Binding DownloadPercent, Mode=OneWay}" />
+                        <TextBlock Style="{StaticResource ValueText}" Margin="12,0,0,0" Text="{Binding DownloadText}" />
+                        <ui:Button Content="Abbrechen" Margin="12,0,0,0"
+                                   Command="{Binding CancelDownloadCommand}"
+                                   AutomationProperties.Name="Modell-Download abbrechen" />
+                    </StackPanel>
+
+                    <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
+                               Text="{Binding Message}"
+                               Visibility="{Binding Message, Converter={StaticResource NullToVis}}">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding MessageIsError}" Value="True">
+                                        <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
                 </StackPanel>
             </Border>
 

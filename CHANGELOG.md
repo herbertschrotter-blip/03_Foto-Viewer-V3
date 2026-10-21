@@ -3,6 +3,72 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.34] — 2026-10-21
+
+### Neu (ADR-0035, PLAN Phase 9 Teil 1)
+- **Gesichtserkennung im Hintergrund** mit InsightFace *buffalo_l*: SCRFD `det_10g` (Erkennung, 5 Landmarken) und
+  ArcFace `w600k_r50` (Fingerabdruck 512 float, L2-normiert) über ONNX Runtime (`Microsoft.ML.OnnxRuntime.DirectML`
+  1.24.4, nur im Services-Projekt). Vorverarbeitung wie InsightFace (Letterbox 640 oben links, RGB, (x − 127.5)/128;
+  Anker-Dekodierung Stride 8/16/32 × 2 Anker, Score 0.5, NMS 0.4; Ähnlichkeitstransformation auf `arcface_dst` 112 × 112,
+  (x − 127.5)/127.5). Ein-/Ausgaben der ONNX-Dateien geprüft; die Ausgaben werden über ihre Formen zugeordnet.
+- **DirectML mit Rückfall auf CPU** (Einstellung „Grafikkarte verwenden“, Standard an; Probelauf beim Laden), Sitzungen
+  einmal geladen, je Sitzung ein Lauf zur Zeit; ArcFace auf der CPU in Stapeln, mit DirectML einzeln.
+- **Bild laden** über `IFaceImageLoader` (Services) mit `WicFaceImageLoader` (Wpf): skaliertes WIC-Dekodieren auf
+  längste Kante 1280, EXIF-Orientierung, RGB24. Videos werden übersprungen.
+- **Qualität je Gesicht**: Erkennungs-Score, Größe (px), Schärfe (Laplace-Varianz des 112er-Ausschnitts) und ein Wert
+  0..1 (0.25 Score + 0.40 Größe + 0.35 Schärfe), Einzelwerte gespeichert.
+- **Schema — Migration `AddFaces`**: `Persons`, `Faces`, `FaceRejections`, `FaceScans` (Kaskaden siehe PLAN Kap. 4;
+  `Persons.CoverFaceId` ohne Fremdschlüssel). Bestehende Daten bleiben. `FaceEmbeddingCodec` (float[512] ↔ 2048 Bytes
+  little-endian) als Schnittstelle zur Lern-/Gruppierlogik.
+- **Hintergrund-Index** `IFaceIndexService`: aktive Bibliothek, neueste Fotos zuerst, drei Bilder vorab geladen, niedrige
+  Priorität, Schreiben stapelweise in einer Transaktion mit stiller Warte-Logik (ADR-0030), nie zwei Durchgänge
+  gleichzeitig; startet 10 s nach dem App-Start, nach jedem Scan und bei neuen Dateien; pausier-/fortsetzbar/abbrechbar.
+  Erneute Analyse (neue Modell-Kennung, „Index neu aufbauen“) gleicht über die Box ab — bestätigte Zuordnungen,
+  Ablehnungen und Titelbilder bleiben; nicht wiedergefundene bestätigte/ignorierte Gesichter bleiben stehen. Fehlende
+  Dateien werden später erneut versucht, nicht dekodierbare (`decode_failed`) und nicht analysierbare (`analyze_failed`)
+  vermerkt; drei Analysefehler hintereinander beenden den Durchgang mit Fehlermeldung. An Ort und Stelle geänderte
+  Dateien (Incremental-Scan: Größe/Zeit anders) werden neu analysiert (`IncrementalCatalogWriter` löscht ihren FaceScans-Eintrag).
+- **„Neu aufbauen“ behält die Gesichter**: Faces und FaceScans werden in der Neuaufbau-Transaktion geparkt (negative
+  FileId, aufgeschobene Fremdschlüssel) und über Ordnerpfad + Name auf die neuen FileIds gesetzt
+  (`UserDataCarryOver.Faces.cs`); Face-Ids bleiben, kein Foto muss neu analysiert werden.
+- **Modell per Benutzer-Download** (`IFaceModelProvider`): Ordner `<AppData>\models\buffalo_l\`
+  (`PHOTOVIEWERV3_FACE_MODELS` überschreibt); Knopf „Modell herunterladen… (275 MB, InsightFace buffalo_l, nur
+  nicht-kommerzielle Nutzung)“ nur nach Bestätigung im Dialog, mit Fortschritt, SHA-256-Prüfung, abbrechbar; entpackt
+  werden nur `det_10g.onnx` und `w600k_r50.onnx`.
+- **Einstellungen → Gesichtserkennung**: an/aus (Standard aus), Grafikkarte, Modellstatus, Download, Indexstand,
+  „Index neu aufbauen“. **Statusleiste**: „Gesichter: 1.234 / 19.556 · 37 ms/Foto“ mit Pause/Fortsetzen und Abbrechen.
+
+### Messung (Spike 09, `docs/spikes/09-gesichtserkennung.md`)
+- 1 000 Handyfotos (nur Zahlen): Laden 115 ms, Erkennen CPU 130 ms / DirectML 23 ms, Fingerabdruck je Gesicht CPU
+  112 ms / DirectML 12 ms; Durchsatz mit 3 Bildern vorab **46 ms/Foto (DirectML)** bzw. 231 ms/Foto (CPU, 2 vorab).
+  44,4 % der Fotos mit Gesichtern, Ø 1,12 Gesichter je Foto. Kosinus: Serienpaar (dieselbe Person) Ø 0,79, 94 % > 0,4;
+  Gesichter im selben Foto Ø 0,09, 87,5 % < 0,2. Hochrechnung 500 000 Fotos: ≈ 6,4 h (DirectML) bzw. ≈ 32 h (CPU),
+  DB ≈ +1,3 GB.
+
+### Tests
+- `tests/PhotoViewerV3.Tests`: 538 (+39, 1 übersprungen ohne Modelle): `Faces/FaceMathTests` (Codec, Letterbox und
+  Normierung, Ausgaben-Zuordnung, Anker-Dekodierung, NMS/IoU, Ähnlichkeitstransformation mit bekannten Punkten,
+  Ausschnitt, ArcFace-Tensor, Qualität), `Faces/FaceIndexServiceTests` (alle Fotos, Pause/Fortsetzen, neue Dateien,
+  Modell-Wechsel mit Bestätigung/Ablehnung/Titelbild, kein Doppel-Lauf, aus/kein Modell, fehlende/kaputte Datei, neu
+  aufbauen, Abbrechen, einzelner/gehäufte Analysefehler, geänderte Datei, nicht mehr dekodierbar), `Faces/FaceSchemaTests` (Migration auf Bestands-DB, Kaskaden, Abgleich, „Neu aufbauen“ trägt
+  Gesichter samt Zuordnungen), `Faces/FaceModelProviderTests` (Prüfsumme, nur zwei Dateien, falsche Prüfsumme, Abbruch,
+  HTTP über lokalen Handler — der echte Download läuft in Tests nie), `Faces/OnnxFaceAnalyzerModelTests` (nur mit
+  `PHOTOVIEWERV3_FACE_MODELS`: CPU/DirectML, leeres Bild ohne Gesicht, normierte und gleiche Fingerabdrücke).
+- `tests/PhotoViewerV3.Wpf.Tests`: 249 (+10, 1 übersprungen): `Faces/WicFaceImageLoaderTests`, `Faces/FaceUiTests`
+  (Einstellungs-Abschnitt, Download nur nach Bestätigung, Abbruch/Fehler, neu aufbauen, Statusleiste),
+  `Faces/FaceRecognitionMeasurementTests` (Messung, nur lokal mit Modellen und `PV3_FACE_SAMPLE_DIR`).
+- Rauchtest 26/26 OK, 0 WPF-Binding-Fehler — neuer Schritt **„Gesichter“** vor „Ordnerüberwachung“
+  (`Shell/Smoke/SmokeScenario.Faces.cs`, Fake-Analysator ohne Modelle über den echten WIC-Lader): Einschalten in den
+  Einstellungen, Statusleiste, Pause hält an, Fortsetzen, FaceScans/Faces für alle Fotos, wieder aus.
+
+### Offen
+- Personen-Seite, Lernen/Vorschläge (Welle 2, `Services/Faces/Recognition`), Filter/Lightbox/Liste nach Personen.
+- Videos werden nicht analysiert. Bestätigte Gesichter, die ein neues Modell nicht wiederfindet, behalten den
+  Fingerabdruck der alten Kennung (Welle 2 muss `ModelVersion` beachten).
+- `Persons.CoverFaceId` hat keinen Fremdschlüssel — Leser müssen ein gelöschtes Gesicht tolerieren.
+- Vorschlag an Herbert: CLAUDE.md-Regel „Keine externen Sample-Assets im Produktivpfad“ um „außer vom Benutzer nach
+  Bestätigung geladene Laufzeit-Modelle (ADR-0035)“ präzisieren.
+
 ## [0.2.33] — 2026-10-20
 
 ### Behoben

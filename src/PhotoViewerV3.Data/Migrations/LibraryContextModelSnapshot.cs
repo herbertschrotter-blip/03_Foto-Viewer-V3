@@ -68,6 +68,122 @@ namespace PhotoViewerV3.Data.Migrations
                     b.ToTable("CategoryValues", (string)null);
                 });
 
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.Face", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<float>("BoxH")
+                        .HasColumnType("REAL");
+
+                    b.Property<float>("BoxW")
+                        .HasColumnType("REAL");
+
+                    b.Property<float>("BoxX")
+                        .HasColumnType("REAL");
+
+                    b.Property<float>("BoxY")
+                        .HasColumnType("REAL");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<float>("DetScore")
+                        .HasColumnType("REAL");
+
+                    b.Property<byte[]>("Embedding")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
+
+                    b.Property<int>("FileId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<byte[]>("Landmarks")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
+
+                    b.Property<string>("ModelVersion")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("PersonId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<float>("Quality")
+                        .HasColumnType("REAL");
+
+                    b.Property<float>("Sharpness")
+                        .HasColumnType("REAL");
+
+                    b.Property<float>("Size")
+                        .HasColumnType("REAL");
+
+                    b.Property<int>("State")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("SuggestedPersonId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<float?>("SuggestionScore")
+                        .HasColumnType("REAL");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FileId")
+                        .HasDatabaseName("IX_Faces_File");
+
+                    b.HasIndex("PersonId")
+                        .HasDatabaseName("IX_Faces_Person");
+
+                    b.HasIndex("State")
+                        .HasDatabaseName("IX_Faces_State");
+
+                    b.HasIndex("SuggestedPersonId")
+                        .HasDatabaseName("IX_Faces_SuggestedPerson");
+
+                    b.ToTable("Faces", (string)null);
+                });
+
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.FaceRejection", b =>
+                {
+                    b.Property<int>("FaceId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("PersonId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("FaceId", "PersonId");
+
+                    b.HasIndex("PersonId")
+                        .HasDatabaseName("IX_FaceRejections_Person");
+
+                    b.ToTable("FaceRejections", (string)null);
+                });
+
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.FaceScan", b =>
+                {
+                    b.Property<int>("FileId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ErrorCode")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("FaceCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ModelVersion")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ScannedAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("FileId");
+
+                    b.ToTable("FaceScans", (string)null);
+                });
+
             modelBuilder.Entity("PhotoViewerV3.Domain.Entities.FileCategoryValue", b =>
                 {
                     b.Property<int>("FileId")
@@ -353,6 +469,31 @@ namespace PhotoViewerV3.Data.Migrations
                     b.ToTable("OperationBatches", (string)null);
                 });
 
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.Person", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("CoverFaceId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsHidden")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Persons", (string)null);
+                });
+
             modelBuilder.Entity("PhotoViewerV3.Domain.Entities.Setting", b =>
                 {
                     b.Property<string>("Key")
@@ -452,6 +593,49 @@ namespace PhotoViewerV3.Data.Migrations
                     b.HasOne("PhotoViewerV3.Domain.Entities.Category", null)
                         .WithMany()
                         .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.Face", b =>
+                {
+                    b.HasOne("PhotoViewerV3.Domain.Entities.MediaFile", null)
+                        .WithMany()
+                        .HasForeignKey("FileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("PhotoViewerV3.Domain.Entities.Person", null)
+                        .WithMany()
+                        .HasForeignKey("PersonId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("PhotoViewerV3.Domain.Entities.Person", null)
+                        .WithMany()
+                        .HasForeignKey("SuggestedPersonId")
+                        .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.FaceRejection", b =>
+                {
+                    b.HasOne("PhotoViewerV3.Domain.Entities.Face", null)
+                        .WithMany()
+                        .HasForeignKey("FaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("PhotoViewerV3.Domain.Entities.Person", null)
+                        .WithMany()
+                        .HasForeignKey("PersonId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.FaceScan", b =>
+                {
+                    b.HasOne("PhotoViewerV3.Domain.Entities.MediaFile", null)
+                        .WithOne()
+                        .HasForeignKey("PhotoViewerV3.Domain.Entities.FaceScan", "FileId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

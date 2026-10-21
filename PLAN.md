@@ -107,6 +107,7 @@ src/
   PhotoViewerV3.Services/                # → Domain + Data, WPF-frei; AddPhotoViewerServices()
     Catalog/                          # CatalogUpdateService (Favorit/Bewertung)
     Database/                         # LibraryContextFactory (+ IDatabaseAccessGate), DatabaseInitializer, SqlitePragmaInterceptor
+    Faces/                            # Gesichtserkennung (ADR-0035): FaceEmbeddingCodec, Detection (SCRFD), Alignment, Onnx (DirectML/CPU), Models (Download), Indexing (Hintergrund-Index); Recognition/ = Lern-/Gruppierlogik (Welle 2)
       Relocation/                     # DatabaseRelocationService, StorageProbe, ThumbnailInventory — Katalog + Thumbnails umziehen (ADR-0026)
     Infrastructure/                   # AppDataPaths, DatabaseLocationStore (database-location.json, ADR-0026)
     Library/                          # LibraryService, LibraryCatalogCleanup
@@ -117,6 +118,7 @@ src/
     Sorter/                           # FileSorterService, FlattenService, SorterPatternEngine, SorterProfileStore
     Thumbnails/                       # ThumbnailService, FfmpegVideoThumbnailer, Renderer-Interfaces
   PhotoViewerV3.Wpf/                     # net10.0-windows → alle; App.xaml.cs = Host + DI, MainWindow = NavigationView
+    Faces/                            # WicFaceImageLoader (IFaceImageLoader), Einstellungs-Abschnitt Gesichtserkennung
     Folders/                          # Ordnerbaum-Seite
     Gallery/                          # Galerie: Data (GalleryPageSource), ViewModels, Views, Controls, Converters, Services
     Library/                          # Bibliotheks-Seite (Namespace PhotoViewerV3.Libraries)
@@ -194,7 +196,16 @@ FilesFts           -- FTS5 virtual table (Files.Name, Extension)
 - FileHashes (V0.3+ separat von Files)
 - SorterProfiles / SorterTokens (Phase 8)
 - ~~ExtractedArchives (Phase 8)~~ — entfällt: Archive sind Files-Zeilen mit `MediaType = 2`, der Papierkorb protokolliert über OperationBatches (ADR-0022)
-- Persons / Faces (Phase 9 — eigene Migration)
+- Persons / Faces / FaceRejections / FaceScans — Teil 1 umgesetzt in 0.2.34 (Migration `AddFaces`, ADR-0035):
+  `Persons (Id, Name COLLATE NOCASE, CreatedAtUtc, CoverFaceId NULL ohne Fremdschlüssel, IsHidden)` — global wie Tags;
+  `Faces (Id, FileId → Files ON DELETE CASCADE, BoxX/BoxY/BoxW/BoxH relativ 0..1, Landmarks BLOB 10 float32, DetScore,
+  Size, Sharpness, Quality, Embedding BLOB 512 float32 = 2048 Bytes L2-normiert, ModelVersion, PersonId / SuggestedPersonId
+  → Persons ON DELETE SET NULL, State 0 unbestätigt | 1 Vorschlag | 2 bestätigt | 3 ignoriert, SuggestionScore, CreatedAtUtc;
+  IX_Faces_File, IX_Faces_Person, IX_Faces_State, IX_Faces_SuggestedPerson)`,
+  `FaceRejections (FaceId → Faces, PersonId → Persons, PK beide, CASCADE)`,
+  `FaceScans (FileId PK → Files CASCADE, ModelVersion, ScannedAtUtc, FaceCount, ErrorCode)` — Merker des Hintergrund-Index.
+  „Neu aufbauen“ parkt Faces/FaceScans in seiner Transaktion und setzt sie über Ordnerpfad + Name auf die neuen FileIds
+  (`UserDataCarryOver.Faces.cs`); Face-Ids bleiben.
 
 ### Pflicht-Indizes V0.1
 ```sql
@@ -295,7 +306,7 @@ Status (Stand 0.2.0): ✅ umgesetzt · 🟡 teilweise · ⬜ offen
 | 🟡 | **V0.2** | LibVLC-Lightbox produktiv ✅, Move/Rename ✅, OperationBatches voll ✅ (ADR-0018), Recovery-UI 🟡 (Statusleisten-Hinweis + Undo), Thumbnail-Priorities komplett ⬜ (zwei Worker-Pools, keine 4-Prio-Queue); dazu Incremental-Scan ✅ (ADR-0019), Bibliotheksverwaltung ✅, Ordnerbaum ✅, Einstellungen ✅ | 25–40 PT |
 | ⬜ | **V0.3** | Plan-Ordner: Plans/PlanFolders/PlanAssignments + Drag&Drop + Preflight + Apply Move-only + Block-Undo | 25–40 PT |
 | 🟡 | **V0.4 / Phase 8** | FTS5 erweitert (Tags) ⬜, Tags/Albums-UI ⬜, Rating ✅ (vorgezogen), Animated Hover ⬜, File-Sorter ✅ (vorgezogen: Regex-Profile, Multi-Level, Import/Export; Drag&Drop-Editor ⬜), Archive im Katalog + Entpacken ✅ (vorgezogen, ADR-0022; Auto-Extract nach dem Scan ✅, ADR-0032), pHash Duplikate ⬜, Flatten & Move ✅ (vorgezogen) | 40–60 PT |
-| ⬜ | **V0.5 / Phase 9** | Face Recognition (RetinaFace + ArcFace via ONNX), Auto-Clustering, Personen benennen | 30–50 PT |
+| 🟡 | **V0.5 / Phase 9** | Face Recognition: Teil 1 ✅ (0.2.34, ADR-0035: InsightFace buffalo_l = SCRFD + ArcFace via ONNX Runtime/DirectML, Modell per Benutzer-Download, Schema `AddFaces`, Hintergrund-Index mit Statusleiste, Einstellungen), Lern-/Gruppierlogik ⬜, Personen-Seite, Filter/Lightbox/Liste nach Personen ⬜ (Welle 2) | 30–50 PT |
 
 **Gesamt-V0.1 brutto:** 70–108 PT = **8–10 Wochen** für 1 erfahrenen Entwickler bei 5 PT/Woche.
 

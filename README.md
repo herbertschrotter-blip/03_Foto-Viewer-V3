@@ -348,6 +348,25 @@ einen anderen Ordner (ADR-0026); **Standardort** holt sie nach `%LocalAppData%\P
 - Ist der gewählte Ordner beim Start nicht erreichbar (USB-Laufwerk abgezogen), startet PhotoViewer nicht und nennt die
   Datei `database-location.json`, deren Löschen zum Standardort zurückführt.
 
+### Gesichtserkennung (Teil 1)
+Erkennt im Hintergrund Gesichter in den Fotos der aktiven Bibliothek und speichert je Gesicht Position, Qualität und
+einen Fingerabdruck (512 Werte) im Katalog (ADR-0035) — vollständig auf diesem PC. Personen benennen, Vorschläge und
+Filter nach Personen folgen in Teil 2.
+- **Einstellungen → Gesichtserkennung**: „Gesichter im Hintergrund erkennen“ (Standard **aus**), „Grafikkarte
+  verwenden“ (Standard an; DirectML, bei Problemen automatisch Prozessor), Modellstatus, **Index neu aufbauen**
+  (analysiert alle Fotos erneut; bestätigte Zuordnungen bleiben).
+- **Modell**: InsightFace *buffalo_l* (Erkennung SCRFD `det_10g.onnx`, Fingerabdruck ArcFace `w600k_r50.onnx`). Fehlt
+  es, steht dort **„Modell herunterladen… (275 MB, InsightFace buffalo_l, nur nicht-kommerzielle Nutzung)“**: nach
+  Bestätigung lädt PhotoViewer das Paket von GitHub (InsightFace Release v0.7), prüft die SHA-256-Prüfsumme und entpackt
+  nur die zwei benötigten Dateien nach `%LocalAppData%\PhotoViewerV3\models\buffalo_l\` (Fortschritt, abbrechbar). Ohne
+  Klick wird nichts geladen. Die Modelle sind nur für die nicht-kommerzielle Nutzung freigegeben und liegen nie im Repo
+  oder im portablen Paket.
+- **Statusleiste**: „Gesichter: 1.234 / 19.556 · 37 ms/Foto“ mit **Pause**/**Fortsetzen** und **Abbrechen** (bis zum
+  nächsten Scan oder Neustart). Der Index startet 10 s nach dem App-Start, nach jedem Scan und bei neuen Dateien,
+  arbeitet die neuesten Fotos zuerst ab und läuft mit niedriger Priorität.
+- Videos werden noch nicht analysiert; Fotos, die WIC nicht dekodieren kann (z. B. HEIC ohne Codec), werden als
+  „nicht dekodierbar“ vermerkt. „Neu aufbauen“ der Bibliothek behält alle Gesichter (kein erneutes Analysieren).
+
 ### Ordnerüberwachung
 Die Bibliotheksordner der aktiven Bibliothek werden im Hintergrund überwacht (`FileSystemWatcher` je Wurzel, rekursiv).
 Neue, gelöschte, umbenannte oder geänderte Fotos und Videos (nur Formate aus dem Formatregister; `.tmp`/`.part`,
@@ -403,6 +422,7 @@ dort, Protokolle und `database-location.json` bleiben hier:
 | `library.db` (+ `-wal`, `-shm`) | SQLite-Katalog: Bibliotheken, Ordner, Dateien, Thumbnails-Status, OperationBatches/FileOperations, Settings, FTS5-Index |
 | `thumbs\{libraryId}\{fileId}_320_still.jpg` | Vorschaubilder (320 px, FileId-basiert, atomar geschrieben) |
 | `logs\photoviewer-YYYYMMDD.log` | Serilog-Protokoll, täglich rollierend, 14 Tage |
+| `models\buffalo_l\` | Nur nach dem Download in den Einstellungen: Modelle der Gesichtserkennung (`det_10g.onnx`, `w600k_r50.onnx`); bleibt beim Umzug des Katalogs hier |
 
 Die Datenbank wird beim Start per EF-Core-Migration auf den aktuellen Stand gebracht; unterbrochene Thumbnail-Jobs
 werden dabei zurückgesetzt und unfertige Dateivorgänge gemeldet.
@@ -416,6 +436,8 @@ werden dabei zurückgesetzt und unfertige Dateivorgänge gemeldet.
 | `PHOTOVIEWERV3_SMOKE_SHOTS` | Ordner für PNG-Screenshots der Hauptansichten (optional) |
 | `PHOTOVIEWERV3_SMOKE_EXIT` | `1` → App nach dem Rauchtest beenden; ExitCode 0 = alle Schritte OK, 2 = mindestens ein Schritt FAIL |
 | `PHOTOVIEWERV3_SMOKE_CLEANUP` | `1` → die Testbibliothek am Ende wieder aus dem Katalog entfernen |
+| `PHOTOVIEWERV3_FACE_MODELS` | Ordner mit `det_10g.onnx` und `w600k_r50.onnx` statt `models\buffalo_l\` (Entwicklung, Tests; dann kein Download). Tests mit echten Modellen laufen nur mit dieser Variable |
+| `PV3_FACE_SAMPLE_DIR` | Nur für die lokale Messung (`FaceRecognitionMeasurementTests`): Ordner mit Fotos, aus dem eine Stichprobe gelesen wird; Ausgabe nur zusammengefasste Zahlen |
 
 Das Ergebnis des Rauchtests steht in `<AppData>\smoke-result.txt` und im Log (Zeilen „Rauchtest …“).
 

@@ -75,7 +75,8 @@ public sealed partial class StatusBarViewModel : ObservableObject, IDisposable
         IFileOperationService fileOperations,
         IScanGate scanGate,
         ILogger<StatusBarViewModel> logger,
-        IMessenger? messenger = null)
+        IMessenger? messenger = null,
+        PhotoViewerV3.Services.Faces.Indexing.IFaceIndexService? faceIndex = null)
     {
         _messenger = messenger ?? WeakReferenceMessenger.Default;
         _thumbnails = thumbnails;
@@ -105,6 +106,7 @@ public sealed partial class StatusBarViewModel : ObservableObject, IDisposable
         _archiveTimer.Stop();
         _messenger.Register<StatusBarViewModel, ArchiveAutoExtractStatusMessage>(this, static (r, m) => UiThread.Post(() => r.OnAutoExtractStatus(m.Status)));
         InitCatalogWriteWait(); // Schreibvorgänge warten auf die Katalog-DB (ADR-0030, StatusBarViewModel.CatalogWriteWait.cs)
+        InitFaceIndex(faceIndex); // Gesichts-Index (ADR-0035, StatusBarViewModel.FaceIndex.cs)
     }
 
     /// <summary>Datei-Operationen, die auf einen laufenden Scan derselben Bibliothek warten (Hinweis + „Abbrechen“).</summary>
@@ -306,6 +308,11 @@ public sealed partial class StatusBarViewModel : ObservableObject, IDisposable
         if (ArchiveIsRunning)
         {
             parts.Add("Entpacken");
+        }
+
+        if (FaceIndexIsActive && !FaceIndexIsPaused)
+        {
+            parts.Add("Gesichter");
         }
 
         IsBackgroundActive = parts.Count > 0;

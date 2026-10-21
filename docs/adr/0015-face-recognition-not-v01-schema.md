@@ -1,6 +1,6 @@
 # ADR-0015: Face Recognition NICHT im V0.1-Schema
 
-- **Status:** Accepted
+- **Status:** Accepted — Umgesetzt durch [ADR-0035](0035-gesichtserkennung-buffalo-l-directml.md) (0.2.34: eigene Migration `AddFaces`, Schema-Design siehe dort)
 - **Datum:** 2026-05-10
 - **Entscheider:** Herbert Schrotter (Wunsch für Feature), Claude (ursprünglich für Schema-Vorbereitung), GPT-5 (Widerspruch, hat überzeugt)
 

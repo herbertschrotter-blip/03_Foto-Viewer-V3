@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using PhotoViewerV3.Gallery.Services;
 using PhotoViewerV3.Services.Infrastructure;
@@ -58,6 +59,8 @@ public static class SmokeTestRunner
         services.AddSingleton<Gallery.Categories.ICategoryPickerService>(sp => sp.GetRequiredService<SmokeCategoryPickerService>());
         services.AddSingleton<SmokeFolderAdoptionPicker>(); // „Ordner in die Bibliothek übernehmen…“ (ADR-0034)
         services.AddSingleton<Folders.Adoption.IFolderAdoptionPicker>(sp => sp.GetRequiredService<SmokeFolderAdoptionPicker>());
+        // Gesichtserkennung ohne Modelle (ADR-0035): Replace, weil AddPhotoViewerServices schon registriert hat
+        services.Replace(ServiceDescriptor.Singleton<Services.Faces.IFaceAnalyzerFactory, SmokeFaceAnalyzerFactory>());
         return services;
     }
 

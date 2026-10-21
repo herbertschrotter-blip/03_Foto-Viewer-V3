@@ -21,6 +21,7 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="Microsoft.Data.Sqlite" />
     <PackageReference Include="SharpCompress" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.DirectML" />
   </ItemGroup>
 
 </Project>

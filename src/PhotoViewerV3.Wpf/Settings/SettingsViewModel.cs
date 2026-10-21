@@ -8,6 +8,7 @@ using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Logging;
+using PhotoViewerV3.Faces;
 using PhotoViewerV3.Services.Archive;
 using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Database.Relocation;
@@ -57,7 +58,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         IAppRestartService restart,
         ILogger<SettingsViewModel> logger,
         IArchiveAutoExtractService? autoExtract = null,
-        ILibraryService? libraries = null)
+        ILibraryService? libraries = null,
+        FaceSettingsViewModel? faces = null)
     {
         _factory = factory;
         _paths = paths;
@@ -72,7 +74,11 @@ public sealed partial class SettingsViewModel : ObservableObject
         _logger = logger;
         _autoExtract = autoExtract;
         _libraries = libraries;
+        Faces = faces;
     }
+
+    /// <summary>Abschnitt „Gesichtserkennung“ (ADR-0035); null = Abschnitt ausgeblendet (Tests ohne den Dienst).</summary>
+    public FaceSettingsViewModel? Faces { get; }
 
     // ---- Archive automatisch entpacken (Services/Archive, ADR-0032; je Bibliothek, ADR-0033) ---------
 
@@ -366,6 +372,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         NotifyThemeChanged();
         LoadWatchSettings();
         await LoadAutoExtractSettingsAsync().ConfigureAwait(true);
+        Faces?.Load();
 
         await RefreshCacheStatsAsync().ConfigureAwait(true);
     }

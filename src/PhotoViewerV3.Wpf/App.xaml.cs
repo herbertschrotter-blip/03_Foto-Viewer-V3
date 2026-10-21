@@ -3,7 +3,9 @@ using System.IO;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
+using PhotoViewerV3.Faces;
 using PhotoViewerV3.Folders;
+using PhotoViewerV3.Services.Faces.Indexing;
 using PhotoViewerV3.Gallery;
 using PhotoViewerV3.Services;
 using PhotoViewerV3.Services.Database;
@@ -118,6 +120,7 @@ public partial class App : Application
         services.AddSorterUi();
         services.AddTagManagement(); // Seite „Tags“ (Wpf/Settings/TagManagement, ADR-0021)
         services.AddCategoryManagement(); // Seite „Kategorien“ (Wpf/Settings/CategoryManagement, ADR-0027)
+        services.AddFacesUi(); // Gesichtserkennung: WIC-Lader + Einstellungs-Abschnitt (Wpf/Faces, ADR-0035)
 
         services.AddSingleton<MainWindow>();
     }
@@ -186,6 +189,16 @@ public partial class App : Application
             catch (Exception archiveEx)
             {
                 Log.Warning(archiveEx, "Automatisches Entpacken konnte nicht gestartet werden");
+            }
+
+            // Gesichtserkennung (ADR-0035, Standard aus): Einstellungen lesen, Worker starten (erster Durchgang verzögert)
+            try
+            {
+                await _host.Services.GetRequiredService<IFaceIndexService>().StartAsync().ConfigureAwait(true);
+            }
+            catch (Exception faceEx)
+            {
+                Log.Warning(faceEx, "Gesichtserkennung konnte nicht gestartet werden");
             }
 
             var mainWindow = _host.Services.GetRequiredService<MainWindow>();

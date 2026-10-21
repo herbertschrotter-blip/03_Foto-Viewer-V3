@@ -28,6 +28,10 @@ public sealed class LibraryContext : DbContext
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<CategoryValue> CategoryValues => Set<CategoryValue>();
     public DbSet<FileCategoryValue> FileCategoryValues => Set<FileCategoryValue>();
+    public DbSet<Person> Persons => Set<Person>();
+    public DbSet<Face> Faces => Set<Face>();
+    public DbSet<FaceRejection> FaceRejections => Set<FaceRejection>();
+    public DbSet<FaceScan> FaceScans => Set<FaceScan>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

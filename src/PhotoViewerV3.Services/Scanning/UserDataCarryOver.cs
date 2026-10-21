@@ -24,7 +24,7 @@ namespace PhotoViewerV3.Services.Scanning;
 /// Zeilen samt Benutzerdaten unverändert, weil die Transaktion nie committet wurde (ADR-0028).
 /// </para>
 /// </summary>
-public sealed class UserDataCarryOver
+public sealed partial class UserDataCarryOver
 {
     /// <summary>Ergebnis des Zurückschreibens; <see cref="LostFiles"/> = gesicherte Dateien ohne Gegenstück im Neuscan.</summary>
     public readonly record struct RestoreReport(
@@ -34,7 +34,8 @@ public sealed class UserDataCarryOver
         int FavoritesOrRatingsRestored,
         int TagAssignmentsRestored,
         TimeSpan Duration,
-        int CategoryValuesRestored = 0);
+        int CategoryValuesRestored = 0,
+        int FacesRestored = 0);
 
     private const string CaseFoldFunction = "pv_casefold";
 
@@ -78,7 +79,9 @@ public sealed class UserDataCarryOver
         WHERE f.LibraryId = $lib
           AND (f.IsFavorite <> 0 OR f.Rating IS NOT NULL
                OR EXISTS (SELECT 1 FROM FileTags t WHERE t.FileId = f.Id)
-               OR EXISTS (SELECT 1 FROM FileCategoryValues v WHERE v.FileId = f.Id))
+               OR EXISTS (SELECT 1 FROM FileCategoryValues v WHERE v.FileId = f.Id)
+               OR EXISTS (SELECT 1 FROM FaceScans s WHERE s.FileId = f.Id)
+               OR EXISTS (SELECT 1 FROM Faces x WHERE x.FileId = f.Id))
         ORDER BY f.Missing, f.Id;
         """;
 
@@ -183,6 +186,7 @@ public sealed class UserDataCarryOver
         carry.CapturedFiles = Execute(connection, transaction, CaptureFilesSql, libraryId);
         carry.CapturedTagAssignments = Execute(connection, transaction, CaptureTagsSql, libraryId);
         carry.CapturedCategoryValues = Execute(connection, transaction, CaptureCategoriesSql, libraryId);
+        carry.ParkFaces(); // Gesichter + FaceScans (ADR-0035, UserDataCarryOver.Faces.cs)
         carry.CaptureDuration = sw.Elapsed;
         return carry;
     }
@@ -213,8 +217,9 @@ public sealed class UserDataCarryOver
         var files = Execute(_connection, tx, RestoreFilesSql, _libraryId);
         var tags = Execute(_connection, tx, RestoreTagsSql, _libraryId);
         var categories = Execute(_connection, tx, RestoreCategoriesSql, _libraryId);
+        var faces = RestoreFaces(); // ADR-0035
 
-        return new RestoreReport(CapturedFiles, mapped, CapturedFiles - mapped, files, tags, sw.Elapsed, categories);
+        return new RestoreReport(CapturedFiles, mapped, CapturedFiles - mapped, files, tags, sw.Elapsed, categories, faces);
     }
 
     private static int Execute(SqliteConnection connection, SqliteTransaction? tx, string sql, int libraryId)

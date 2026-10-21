@@ -43,6 +43,11 @@ internal static class IncrementalCatalogWriter
     private const string UpdateFileSql =
         "UPDATE Files SET Size = $size, CreatedAtUtc = $created, ModifiedAtUtc = $modified, Missing = 0 WHERE Id = $id;";
 
+    // Gesichtserkennung (ADR-0035): Inhalt an Ort und Stelle geändert → Datei zur erneuten Analyse freigeben (der Abgleich
+    // über die Box behält bestätigte Zuordnungen). Läuft VOR dem Update, solange die alten Werte noch in der Zeile stehen.
+    private const string InvalidateFaceScanSql =
+        "DELETE FROM FaceScans WHERE FileId = $id AND EXISTS (SELECT 1 FROM Files WHERE Id = $id AND (Size <> $size OR ModifiedAtUtc <> $modified));";
+
     private const string MarkMissingSql = "UPDATE Files SET Missing = 1 WHERE Id = $id AND Missing = 0;";
 
     /// <summary>Fügt einen Batch neuer Dateien samt FTS-Einträgen in einer Transaktion ein.</summary>
@@ -141,10 +146,20 @@ internal static class IncrementalCatalogWriter
         var pId = AddParam(cmd, "$id", SqliteType.Integer);
         cmd.Prepare();
 
+        using var faces = connection.CreateCommand(); // ADR-0035
+        faces.Transaction = tx;
+        faces.CommandText = InvalidateFaceScanSql;
+        var fSize = AddParam(faces, "$size", SqliteType.Integer);
+        var fModified = AddParam(faces, "$modified", SqliteType.Integer);
+        var fId = AddParam(faces, "$id", SqliteType.Integer);
+        faces.Prepare();
+
         var updated = 0;
         foreach (var u in updates)
         {
             ct.ThrowIfCancellationRequested();
+            (fSize.Value, fModified.Value, fId.Value) = (u.Size, u.ModifiedAtUnix, u.Id);
+            faces.ExecuteNonQuery();
             pSize.Value = u.Size;
             pCreated.Value = u.CreatedAtUnix;
             pModified.Value = u.ModifiedAtUnix;

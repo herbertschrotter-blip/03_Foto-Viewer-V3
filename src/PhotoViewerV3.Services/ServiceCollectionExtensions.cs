@@ -6,6 +6,7 @@ using PhotoViewerV3.Services.Catalog;
 using PhotoViewerV3.Services.Categories;
 using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Database.Relocation;
+using PhotoViewerV3.Services.Faces;
 using PhotoViewerV3.Services.Infrastructure;
 using PhotoViewerV3.Services.Library;
 using PhotoViewerV3.Services.Media;
@@ -71,6 +72,9 @@ public static class ServiceCollectionExtensions
 
         // Speicherort von Katalog-DB und Thumbnails ändern (Services/Database/Relocation, ADR-0026)
         services.AddDatabaseRelocation();
+
+        // Gesichtserkennung Teil 1: Modell, ONNX-Analysator, Hintergrund-Index (Services/Faces, ADR-0035)
+        services.AddFaces();
 
         return services;
     }

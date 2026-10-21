@@ -43,6 +43,9 @@
     <!-- Archive (ZIP/RAR/7z/TAR/GZ/BZ2/XZ) — PLAN Kap. 10, ADR-0022; nur im Services-Projekt -->
     <PackageVersion Include="SharpCompress" Version="0.50.6" />
 
+    <!-- Gesichtserkennung (ADR-0035): ONNX Runtime mit DirectML (Grafikkarte, Rückfall CPU); nur im Services-Projekt -->
+    <PackageVersion Include="Microsoft.ML.OnnxRuntime.DirectML" Version="1.24.4" />
+
     <!-- Logging via Serilog -->
     <PackageVersion Include="Serilog.Extensions.Hosting" Version="9.0.0" />
     <PackageVersion Include="Serilog.Sinks.File" Version="6.0.0" />

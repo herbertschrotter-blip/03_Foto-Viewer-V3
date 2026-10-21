@@ -33,7 +33,7 @@ Wenn eine ADR-Entscheidung revidiert wird: **neues ADR anlegen** + altes auf "Su
 | [0012](0012-operation-logging.md) | Operation-Logging (Batches + Operations) | Accepted |
 | [0013](0013-status-ui.md) | Status-UI mit 4 Indikatoren | Accepted |
 | [0014](0014-animated-hover-not-v01.md) | Animated Hover NICHT in V0.1 | Accepted |
-| [0015](0015-face-recognition-not-v01-schema.md) | Face Recognition NICHT im V0.1-Schema | Accepted |
+| [0015](0015-face-recognition-not-v01-schema.md) | Face Recognition NICHT im V0.1-Schema | Accepted (umgesetzt durch 0035) |
 | [0016](0016-formatregister.md) | Formatregister statt fester Formatliste | Accepted |
 | [0017](0017-modul-entkopplung-messenger.md) | Modul-Entkopplung über WeakReferenceMessenger und Modul-Registrierungen | Accepted |
 | [0018](0018-datei-operationen-nur-ueber-service.md) | Datei-Operationen ausschließlich über IFileOperationService | Accepted |
@@ -53,6 +53,7 @@ Wenn eine ADR-Entscheidung revidiert wird: **neues ADR anlegen** + altes auf "Su
 | [0032](0032-archive-automatisch-entpacken.md) | Neue Archive in Eingangsordnern optional automatisch entpacken (nach dem Scan, Standard aus) | Accepted (Einstellung global abgelöst durch 0033) |
 | [0033](0033-auto-entpacken-je-bibliothek.md) | Automatisches Entpacken je Bibliothek (Übernahme der globalen Vorgabe), Schalter für die aktive Bibliothek, vorhandene Archive nachholen | Accepted |
 | [0034](0034-ordner-uebernahme-mit-leerketten-zusammenzug.md) | Ordner in die Bibliothek übernehmen: Struktur bleibt, leere Zwischenordner werden zusammengezogen, ein AdoptFolder-Batch mit Rückgängig; Ordner bewerten; Begriff „Bibliotheksordner“ | Accepted |
+| [0035](0035-gesichtserkennung-buffalo-l-directml.md) | Gesichtserkennung mit InsightFace buffalo_l (SCRFD + ArcFace), Modell per Benutzer-Download mit Prüfsumme, DirectML mit CPU-Rückfall, Hintergrund-Index; Gesichter überstehen „Neu aufbauen“ | Accepted (Teil 1) |
 
 ## Quellen der Entscheidungen
 
