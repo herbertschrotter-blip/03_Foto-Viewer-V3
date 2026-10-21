@@ -3,6 +3,39 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.35] — 2026-10-21
+
+### Neu (ADR-0036) — Gesichtserkennung Teil 2: Lernen & Gruppieren (nur Services, noch nicht verdrahtet)
+- `Services/Faces/Recognition` (rein, WPF-/EF-frei, deterministisch, thread-sicher lesbar, SIMD über `Vector<T>`):
+  - **`IFaceRecognizer.Train`** lernt nur aus **bestätigten** Gesichtern (`FaceSample.ConfirmedPersonId`, Qualität ≥ 0,4);
+    eigene Vorschläge fließen nie ein. Training = vollständiger Neuaufbau (10 000 Beispiele / 200 Personen: 232 ms) — nach
+    einer Korrektur lernt die Person nur aus den verbleibenden Beispielen.
+  - **`IFaceModel.Suggest`**: Ensemble aus k-NN (Mittel der 3 ähnlichsten Beispiele je Person) und linearem Klassifikator
+    je Person (One-vs-Rest, logistische Regression per SGD, Eigenimplementierung); „unbekannt“, wenn keine Person nah
+    genug ist (k-NN < 0,45); Alternativen absteigend; abgelehnte Vorschläge (`FaceRejection`) werden je Gesicht
+    übersprungen → nächstbester Kandidat; schlechte Qualität bekommt abgewertete Vorschläge. `SuggestMany` parallel.
+  - **`IFaceRecognizer.CheckOutlier`**: „Rückfrage empfohlen“ beim Bestätigen, wenn das Gesicht kaum zu den Beispielen
+    der Person passt, deutlich unter ihrem Üblichen liegt oder einer anderen Person deutlich ähnlicher ist.
+  - **`IFaceClusterer.Cluster`**: strenge Gruppen-Vorschläge — k-NN-Graph + agglomerativ mit Average Linkage (Schwelle
+    0,55, exakt über Summenvektoren), Ausschluss ferner Mitglieder, Mindestgröße 3; Mitglieder nach Nähe zum Zentrum
+    sortiert, zweifelhafte mit `IsOutlier` am Ende; Rauschen und übersprungene (Qualität/ungültig) getrennt.
+- Spike 10 (`docs/spikes/10-gesichter-lernen.md`): Bewertung auf synthetischen ArcFace-ähnlichen Daten — Gruppen in allen
+  Welten rein (DBSCAN/Single Linkage: bis 53 gemischte Gruppen), Zuordnung 88/94/95 % bei 1/3/10 Beispielen ohne
+  Fehlzuordnung bekannter Personen, ein falsches unter 20 Beispielen ändert nichts (k = 1: 100 % falsch).
+
+### Tests
+- `tests/PhotoViewerV3.Tests`: 539 (+40): `Faces/Recognition/FaceClustererTests` (13: reine Gruppen, Doppelgänger,
+  Brücken, Sortierung + Ausreißer-Markierung, Rauschen, Qualitätsfilter/ungültige Vektoren, Mindestgröße, Determinismus,
+  viele Personen, Abbruch, Zentrum), `FaceRecognizerTests` (21: 1/3/10 Beispiele, unbekannt, Ablehnung → nächstbester,
+  ein falsches unter 20, Ausreißer-Prüfung und Neu-Lernen nach Entfernen, Qualitätsfilter, kein Lernen aus
+  Unbestätigtem, Determinismus, eine Person, viele Personen, Parallelität, Alterung), `FaceLearningEvaluationTests`
+  (6, Harness; `PV3_FACELEARN_SCALE=full` für die Spike-Tabellen); Generator `SyntheticFaces`.
+
+### Offen
+- Schwellen sind an synthetischen Daten gewählt; Nachjustieren an Herberts echten Fingerabdrücken in Welle 2.
+- Noch keine DB, kein DI-Eintrag, keine Oberfläche (Welle 2). Gruppierung ist O(n²): > 50 000 unbekannte Gesichter
+  abschnittsweise gruppieren. Ablehnungen wirken nur auf das abgelehnte Gesicht.
+
 ## [0.2.34] — 2026-10-21
 
 ### Neu (ADR-0035, PLAN Phase 9 Teil 1)
