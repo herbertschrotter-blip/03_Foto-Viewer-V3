@@ -9,6 +9,7 @@
                  xmlns:gallery="clr-namespace:PhotoViewerV3.Gallery.Views"
                  xmlns:sorter="clr-namespace:PhotoViewerV3.Sorter"
                  xmlns:persons="clr-namespace:PhotoViewerV3.Persons"
+                 xmlns:places="clr-namespace:PhotoViewerV3.Places"
                  xmlns:branding="clr-namespace:PhotoViewerV3.Shell.Branding"
                  Title="{x:Static branding:LumoraBrand.ProductName}"
                  Height="800"
@@ -66,6 +67,14 @@
                                        TargetPageType="{x:Type persons:PersonsPage}">
                     <ui:NavigationViewItem.Icon>
                         <ui:SymbolIcon Symbol="People24" />
+                    </ui:NavigationViewItem.Icon>
+                </ui:NavigationViewItem>
+                <!-- Orte: Weltkarte mit Foto-Gruppen (ADR-0051) -->
+                <ui:NavigationViewItem Content="Orte"
+                                       TargetPageTag="places"
+                                       TargetPageType="{x:Type places:PlacesPage}">
+                    <ui:NavigationViewItem.Icon>
+                        <ui:SymbolIcon Symbol="Map24" />
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
                 <ui:NavigationViewItem Content="Sortieren"

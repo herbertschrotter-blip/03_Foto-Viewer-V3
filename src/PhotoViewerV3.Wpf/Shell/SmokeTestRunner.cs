@@ -69,6 +69,10 @@ public static class SmokeTestRunner
         // „Datum setzen…“ (ADR-0046): vorgegebene Antwort, vor AddCaptureDateUi (TryAdd)
         services.AddSingleton<Smoke.SmokeCaptureDateDialog>();
         services.AddSingleton<Gallery.CaptureDates.ICaptureDateDialogService>(sp => sp.GetRequiredService<Smoke.SmokeCaptureDateDialog>());
+        // Seite „Orte“ (ADR-0051): „Fotos verorten“ mit vorgegebener Antwort, vor AddPlacesUi (TryAdd); Kachelquelle schaltet
+        // MapTileOptions.FromEnvironment im Rauchtest selbst ab (kein Netz)
+        services.AddSingleton<Smoke.SmokePlacesDialogs>();
+        services.AddSingleton<Places.Dialogs.IPlacesDialogs>(sp => sp.GetRequiredService<Smoke.SmokePlacesDialogs>());
         return services;
     }
 

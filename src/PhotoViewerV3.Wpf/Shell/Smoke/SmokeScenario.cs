@@ -234,6 +234,7 @@ internal sealed partial class SmokeScenario
         await StepAsync("Personen-Details und Beziehungen: benennen mit Vor-/Nachname/Beziehung, Vorschlag beim zweiten Mal, Filter „Beziehung“, Umbenennen in den Einstellungen wirkt überall, „Das bin ich“ eindeutig", PersonDetailsAsync).ConfigureAwait(true); // ADR-0045
         await StepAsync("Collage-Ansicht: umschalten, Reihen randvoll ±1 px, Seitenverhältnisse, Doppelklick öffnet richtige Datei, zurück zu Kacheln", CollageAsync).ConfigureAwait(true); // ADR-0044
         await StepAsync("Aufnahmedatum: EXIF-Foto 1975 nachgetragen, Sortierung Aufnahme ≠ Änderung, Datum setzen ca. 1982 + Rückgängig", CaptureDateAsync).ConfigureAwait(true); // ADR-0046
+        await StepAsync("Orte-Karte: Seite ohne Kacheln, 3 Fotos per „Hier verorten“ + 2 per Ablegen verortet, Gruppe zerfällt beim Hineinzoomen, „In der Galerie zeigen“", PlacesMapAsync).ConfigureAwait(true); // ADR-0051
         await StepAsync("Versteckte Bibliothek: anlegen (_hidden simuliert), Fotos im eigenen Katalog im Container, Zusperren nach Untätigkeit + Aushängen (Fake), falsches Kennwort, wieder öffnen, normale Bibliothek unverändert, keine Spuren im AppData", HiddenLibraryAsync).ConfigureAwait(true); // ADR-0049
         // Nach dem Katalogwechsel ist die normale Sitzung neu aufgebaut — die restlichen Schritte laufen mit deren Diensten
         await RunAfterHiddenLibraryAsync(async s =>

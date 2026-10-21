@@ -114,7 +114,7 @@ außerhalb von OneDrive), `-NoZip` lässt das ZIP weg, `-FrameworkDependent` bau
 
 ### Navigation (seit 0.2.44, ADR-0042)
 Die linke Leiste zeigt ganz oben das App-Symbol mit dem Schriftzug „lumora“, darunter den **Bibliotheks-Umschalter** (Name der aktiven Bibliothek; Klick → andere Bibliothek
-wählen oder **Bibliotheken verwalten…**), darunter **Galerie, Ordner, Personen, Sortieren** und unten
+wählen oder **Bibliotheken verwalten…**), darunter **Galerie, Ordner, Personen, Orte, Sortieren** und unten
 **Einstellungen**. Bibliothek, Tags und Kategorien richtet man selten ein — sie sind Reiter der Einstellungen:
 **Bibliotheken & Eingänge · Tags · Kategorien · Gesichter · Archive · Darstellung · Speicher & Wartung · Info**.
 Tags und Kategorien **vergeben** geht wie bisher in der Galerie (Rechtsklick, Strg+T, Strg+K, Lightbox); „Tags
@@ -552,6 +552,28 @@ Vorschläge der Erkennung werden getrennt gezeigt.
   in keiner Bibliothek mehr vorkommen, gelöscht; die Gesichtserkennung wird ausgeschaltet. Fotos, Bewertungen, Tags und
   Kategorien bleiben. Alles bleibt auf diesem PC.
 
+### Orte (seit 0.2.54, ADR-0051)
+Weltkarte mit den verorteten Fotos der aktiven Bibliothek (nur dieser Bereich — eine andere Bibliothek zeigt nur ihre
+Fotos). Oben die Trefferzeile („1.234 verortete Fotos · 56 ohne Ort“) und **Ort suchen …** (Ortsnamen offline; Enter
+springt zum ersten Treffer).
+- **Start:** der Bereich, in dem die Fotos gemacht wurden, mit etwas Rand; ohne verortete Fotos die ganze Welt.
+  Mausrad bzw. **+/−** zoomt um den Mauszeiger, Ziehen verschiebt, Doppelklick ins Leere zoomt hinein, Pfeiltasten
+  verschieben. Knöpfe oben rechts: hinein, hinaus, **alle verorteten Fotos**, **ganze Welt**.
+- **Gruppen:** runde Marker mit dem Vorschaubild des besten Fotos (höchste Bewertung, sonst neuestes) und der Anzahl;
+  je näher gezoomt, desto feiner, bis zu einzelnen Fotos (kleines Vorschaubild). **Klick auf eine Gruppe** zoomt
+  hinein, bis sie zerfällt (Fotos am exakt selben Ort öffnen sich in der Lightbox); **Doppelklick** oder Rechtsklick
+  › **In der Galerie zeigen** zeigt genau diese Fotos in der Galerie. **Klick auf ein Einzelfoto** öffnet die Lightbox
+  (mit den Fotos im Ausschnitt). Oben links: **Im Ausschnitt: n Fotos** → alle sichtbaren in der Galerie.
+- **Verorten:** rechts **Ohne Ort** — Fotos ohne Koordinaten, neueste zuerst (Klick wählt, Strg+Klick ergänzt,
+  Umschalt+Klick wählt einen Bereich, Doppelklick öffnet). Ausgewählte Fotos **auf die Karte ziehen** oder
+  Rechtsklick auf die Karte › **Hier verorten (n Fotos)** → Bestätigung mit dem nächsten Ort und
+  **Änderungsdatum der Dateien beibehalten** (Standard an) → Koordinaten in Katalog und Datei.
+- **Kartenkacheln** kommen von OpenStreetMap (Zuordnung unten rechts) und werden bis 500 MB unter
+  `%LocalAppData%\PhotoViewerV3\cache\maptiles` zwischengespeichert; nur der sichtbare Ausschnitt wird geladen, höchstens
+  zwei Kacheln gleichzeitig. Ohne Netz bleibt die Karte grau bzw. zeigt den Cache („Offline …“), die Gruppen funktionieren
+  weiter. Bei einer versteckten Bibliothek weist eine Leiste darauf hin, dass der Kartenserver den betrachteten
+  Ausschnitt sieht. Abschalten: `PHOTOVIEWERV3_MAP_TILES=off`.
+
 ### Ordnerüberwachung
 Die Bibliotheksordner der aktiven Bibliothek werden im Hintergrund überwacht (`FileSystemWatcher` je Wurzel, rekursiv).
 Neue, gelöschte, umbenannte oder geänderte Fotos und Videos (nur Formate aus dem Formatregister; `.tmp`/`.part`,
@@ -646,6 +668,7 @@ dort, Protokolle und `database-location.json` bleiben hier:
 | `library.db` (+ `-wal`, `-shm`) | SQLite-Katalog: Bibliotheken, Ordner, Dateien, Thumbnails-Status, OperationBatches/FileOperations, Settings, FTS5-Index |
 | `thumbs\{libraryId}\{fileId}_320_still.jpg` | Vorschaubilder (320 px, FileId-basiert, atomar geschrieben) |
 | `logs\photoviewer-YYYYMMDD.log` | Serilog-Protokoll, täglich rollierend, 14 Tage |
+| `cache\maptiles\z\x\y.png` | Kartenkacheln der Seite „Orte“ (OpenStreetMap), höchstens 500 MB, am längsten unbenutzte zuerst gelöscht |
 | `models\buffalo_l\` | Nur nach dem Download in den Einstellungen: Modelle der Gesichtserkennung (`det_10g.onnx`, `w600k_r50.onnx`); bleibt beim Umzug des Katalogs hier |
 
 Die Datenbank wird beim Start per EF-Core-Migration auf den aktuellen Stand gebracht; unterbrochene Thumbnail-Jobs
@@ -662,6 +685,7 @@ werden dabei zurückgesetzt und unfertige Dateivorgänge gemeldet.
 | `PHOTOVIEWERV3_SMOKE_CLEANUP` | `1` → die Testbibliothek am Ende wieder aus dem Katalog entfernen |
 | `PHOTOVIEWERV3_SMOKE_HIDDEN` | Nur im Rauchtest: simuliert den Startschalter `_hidden` für den Schritt „Versteckte Bibliothek“ (Standard an; `0` = aus). Container = Temp-Ordner neben der Testbibliothek, Aushängen nur simuliert |
 | `PHOTOVIEWERV3_FACE_MODELS` | Ordner mit `det_10g.onnx` und `w600k_r50.onnx` statt `models\buffalo_l\` (Entwicklung, Tests; dann kein Download). Tests mit echten Modellen laufen nur mit dieser Variable |
+| `PHOTOVIEWERV3_MAP_TILES` | `off` → keine Kartenkacheln laden (graue Karte, kein Netzzugriff); im Rauchtest immer aus |
 | `PV3_FACE_SAMPLE_DIR` | Nur für die lokale Messung (`FaceRecognitionMeasurementTests`): Ordner mit Fotos, aus dem eine Stichprobe gelesen wird; Ausgabe nur zusammengefasste Zahlen |
 
 Das Ergebnis des Rauchtests steht in `<AppData>\smoke-result.txt` und im Log (Zeilen „Rauchtest …“).

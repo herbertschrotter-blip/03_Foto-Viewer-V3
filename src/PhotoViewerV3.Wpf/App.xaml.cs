@@ -21,6 +21,7 @@ using PhotoViewerV3.Services.Archive;
 using PhotoViewerV3.Services.Watch;
 using PhotoViewerV3.Lightbox;
 using PhotoViewerV3.Persons;
+using PhotoViewerV3.Places;
 using PhotoViewerV3.Services.Faces.Assignment;
 using PhotoViewerV3.Services.Faces.Crops;
 using PhotoViewerV3.Settings;
@@ -166,6 +167,7 @@ public partial class App : Application, ICatalogHostSwitcher
         services.AddPersonsUi(); // Seite „Personen“: Zuordnen, Gruppen, Gesichts-Ausschnitte (Wpf/Persons, ADR-0037)
         services.AddFaceDataSettings(); // „Gesichtsdaten löschen…“ in den Einstellungen (Wpf/Settings/FaceData, 0.2.38)
         services.AddPersonRelationsSettings(); // „Personen & Beziehungen“ in den Einstellungen (Wpf/Settings/PersonRelations, ADR-0045)
+        services.AddPlacesUi(); // Seite „Orte“: Weltkarte mit Foto-Gruppen, Verorten (Wpf/Places, ADR-0051)
 
         services.AddSingleton<MainWindow>();
     }

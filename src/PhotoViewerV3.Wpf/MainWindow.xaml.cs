@@ -10,7 +10,7 @@ using Wpf.Ui.Controls;
 namespace PhotoViewerV3;
 
 /// <summary>
-/// Hauptfenster: NavigationView (Bibliotheks-Umschalter, Galerie, Ordner, Personen, Sortieren, Einstellungen; ADR-0042)
+/// Hauptfenster: NavigationView (Bibliotheks-Umschalter, Galerie, Ordner, Personen, Orte, Sortieren, Einstellungen; ADR-0042, ADR-0051)
 /// + Statusleiste.
 /// Seiten kommen über den NavigationPageProvider aus DI; Navigation läuft über NavigationView.Navigate(tag),
 /// Klicks werden per SelectionChanged an den NavigationService zurückgemeldet.

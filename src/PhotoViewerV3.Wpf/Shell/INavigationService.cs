@@ -5,7 +5,7 @@ namespace PhotoViewerV3.Shell;
 
 /// <summary>
 /// Tags der Navigationsziele. Seiten der linken Leiste (NavigationViewItem.TargetPageTag in MainWindow.xaml): Galerie,
-/// Ordner, Personen, Sortieren, Einstellungen. Die übrigen Tags sind Reiter der Einstellungen (ADR-0042) — der
+/// Ordner, Personen, Orte, Sortieren, Einstellungen. Die übrigen Tags sind Reiter der Einstellungen (ADR-0042) — der
 /// <see cref="INavigationService"/> öffnet dafür die Einstellungen und wählt den Reiter; <see cref="INavigationService.CurrentTag"/>
 /// ist dann <see cref="Settings"/>, der Reiter steht in <see cref="SettingsSectionState.SelectedSection"/>.
 /// </summary>
@@ -14,6 +14,7 @@ public static class NavigationTags
     public const string Gallery = "gallery";
     public const string Folders = "folders";
     public const string Persons = "persons"; // Seite „Personen“ (ADR-0037)
+    public const string Places = "places"; // Seite „Orte“ (ADR-0051)
     public const string Sorter = "sorter";
     public const string Settings = "settings";
 

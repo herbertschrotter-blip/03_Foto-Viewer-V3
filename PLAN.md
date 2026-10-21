@@ -59,6 +59,7 @@ Native Windows-Desktop-Anwendung zum Ansehen, Sortieren und Verschieben von Foto
 - Auto-Extract `.zip`/`.rar`/`.7z` (Phase 8)
 - Animierte Multi-Frame Video-Hover-Thumbs (Phase 8, on-demand)
 - Gesichtserkennung offline (Phase 9)
+- Orte: Weltkarte mit Foto-Gruppen, die beim Zoomen feiner werden, Verorten per Ziehen (Welle 10, ADR-0051)
 
 ---
 
@@ -114,6 +115,7 @@ src/
     Media/                            # MediaFormatRegistry (ADR-0016)
     Messaging/                        # Nachrichten-Records für WeakReferenceMessenger (ADR-0017)
     Operations/                       # FileOperationService, WindowsRecycleBin (ADR-0012/0018)
+    Places/Clustering/                # GeoClusterIndex (Morton-Raster, Gruppen je Zoomstufe), MercatorProjection (ADR-0051)
     Scanning/                         # ScanService, FolderEnumerator, IncrementalScanRunner, RootAvailabilityProbe, MassMissingGuard (ADR-0019)
     Sorter/                           # FileSorterService, FlattenService, SorterPatternEngine, SorterProfileStore
     Thumbnails/                       # ThumbnailService, FfmpegVideoThumbnailer, Renderer-Interfaces
@@ -124,6 +126,7 @@ src/
     Library/                          # Bibliotheks-Seite (Namespace PhotoViewerV3.Libraries)
     Lightbox/                         # LightboxWindow/-ViewModel/-Service, ZoomPanControl (+ Overlay), LibVlcHost, Imaging, Faces (Gesichtsrahmen, Taste F)
     Persons/                          # Seite „Personen“ (ADR-0037): PersonsViewModel, TileListBox, PersonPickerDialog, PersonDetailsDialog (ADR-0045), WicFaceCropRenderer
+    Places/                           # Seite „Orte“ (ADR-0051): MapControl (eigene Kachelkarte), MapViewport, Tiles (OSM, Platten-Cache), „Ohne Ort“, MapPickerWindow
     Settings/                         # Einstellungen, ThemeService, FaceData („Gesichtsdaten löschen…“), PersonRelations („Personen & Beziehungen“, ADR-0045)
     Shell/                            # Navigation, DialogService, StatusBar, Converters, Smoke/ (Rauchtest)
     Sorter/                           # Sortieren-Seite (File Sorter, Flatten & Move)

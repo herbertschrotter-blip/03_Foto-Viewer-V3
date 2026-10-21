@@ -34,6 +34,11 @@ public static class LicenseTexts
         "InsightFace-Modell buffalo_l (Gesichtserkennung) — NUR NICHT-KOMMERZIELLE NUTZUNG\n" +
         "  Nicht Teil von Lumora: wird erst nach Bestätigung vom Benutzer selbst heruntergeladen\n" +
         "  (Einstellungen › Gesichter) und weder im Quellcode noch in der portablen Version mitgeliefert.\n\n" +
+        "OpenStreetMap-Kartenkacheln (Seite „Orte“) — Daten © OpenStreetMap-Mitwirkende, Open Database License (ODbL)\n" +
+        "  Kacheln von tile.openstreetmap.org nach den Kachel-Nutzungsbedingungen der OSM Foundation\n" +
+        "  (operations.osmfoundation.org/policies/tiles): eindeutiger User-Agent, Cache, höchstens zwei gleichzeitige\n" +
+        "  Abrufe, keine Massenabrufe; Zuordnung sichtbar auf der Karte. Die Karte selbst ist eine eigene Kachelkarte\n" +
+        "  in Lumora (kein Mapsui, kein WebView2).\n\n" +
         "FFmpeg (Video-Vorschaubilder) — LGPL/GPL je nach Build\n" +
         "  Nicht Teil von Lumora: wird, falls installiert (z. B. „winget install Gyan.FFmpeg“), als externes\n" +
         "  Programm aufgerufen.";

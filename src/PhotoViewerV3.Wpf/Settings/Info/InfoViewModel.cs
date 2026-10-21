@@ -255,6 +255,7 @@ public sealed partial class InfoViewModel : ObservableObject
             new("Archive", Named("SharpCompress", "SharpCompress.dll")),
             new("Gesichter", $"{Named("ONNX Runtime DirectML", "Microsoft.ML.OnnxRuntime.dll")} · InsightFace buffalo_l (nur nicht-kommerziell)"),
             new("Video", $"{Named("LibVLCSharp", "LibVLCSharp.dll")} · FFmpeg (extern)"),
+            new("Karte", "OpenStreetMap-Kacheln (ODbL, © OpenStreetMap-Mitwirkende) · eigene Kachelkarte"), // ADR-0051
         ];
     }
 }

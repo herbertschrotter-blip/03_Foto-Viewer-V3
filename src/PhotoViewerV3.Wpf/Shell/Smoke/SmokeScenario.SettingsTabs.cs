@@ -51,12 +51,12 @@ internal sealed partial class SmokeScenario
 
     private async Task SettingsTabsAndInfoAsync()
     {
-        // (1) Linke Leiste: Galerie, Ordner, Personen, Sortieren; unten Einstellungen — Bibliothek/Tags/Kategorien sind weg
+        // (1) Linke Leiste: Galerie, Ordner, Personen, Orte, Sortieren; unten Einstellungen — Bibliothek/Tags/Kategorien sind weg
         if (Application.Current.MainWindow is MainWindow main)
         {
             var items = main.MainNav.MenuItems.OfType<NavigationViewItem>().Select(i => i.TargetPageTag).ToList();
             var footer = main.MainNav.FooterMenuItems.OfType<NavigationViewItem>().Select(i => i.TargetPageTag).ToList();
-            Check(items.SequenceEqual([NavigationTags.Gallery, NavigationTags.Folders, NavigationTags.Persons, NavigationTags.Sorter]),
+            Check(items.SequenceEqual([NavigationTags.Gallery, NavigationTags.Folders, NavigationTags.Persons, NavigationTags.Places, NavigationTags.Sorter]),
                 $"Navigation: {string.Join(", ", items)}");
             Check(footer.SequenceEqual([NavigationTags.Settings]), $"Fußleiste: {string.Join(", ", footer)}");
             Check(main.MainNav.PaneHeader is LibrarySwitcher, "Bibliotheks-Umschalter oben in der Leiste");

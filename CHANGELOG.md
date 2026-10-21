@@ -3,6 +3,55 @@
 Alle nennenswerten Änderungen an Lumora (bis 0.2.48 „PhotoViewer V3“). Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.54] — 2026-10-21
+
+### Feature (ADR-0051) — Orte: Weltkarte mit Foto-Gruppen, die beim Zoomen feiner werden
+- **Neue Seite „Orte“** (Navigation zwischen Personen und Sortieren, Symbol Karte): Kopfzeile im Stil der Galerie mit
+  „1.234 verortete Fotos · 56 ohne Ort“ und **Ort suchen …** (Karte springt hin), Karte füllt die Seite, rechts die
+  Seitenleiste **Ohne Ort**.
+- **Start-Ausschnitt** = Bereich, in dem die Fotos des aktuellen Bereichs gemacht wurden, plus Rand (10 %, mind. 80 px,
+  höchstens Zoom 16); ohne verortete Fotos die ganze Welt. Hinauszoomen bis zur Welt; Knöpfe hinein/hinaus/alle
+  Fotos/Welt, Mausrad und +/− um den Mauszeiger, Ziehen, Doppelklick, Pfeiltasten.
+- **Gruppen:** runde Marker mit Vorschaubild des besten Fotos (höchste Bewertung, sonst neuestes) und Anzahl-Plakette,
+  Einzelfoto als kleines Vorschaubild. Klick auf eine Gruppe zoomt hinein, bis sie zerfällt (Fotos am selben Ort →
+  Lightbox); Doppelklick bzw. Rechtsklick › **In der Galerie zeigen** sendet `ShowFilesOnMapSelectionMessage` (Vertrag
+  mit Agent V) und wechselt zur Galerie; Klick auf ein Einzelfoto öffnet die Lightbox; **Im Ausschnitt: n Fotos** zeigt
+  alle sichtbaren in der Galerie.
+- **Clustering** (`Services/Places/Clustering/GeoClusterIndex`): hierarchisches Raster über den Morton-Code
+  (Zellen 64 px je Zoomstufe, Präfixsummen + Segmentbaum, nahe Marker < 56 px zusammengelegt). Gemessen im Debug-Build
+  mit 500 000 Fotos: Aufbau **275 ms** (gehäuft) bzw. **223 ms** (gleichmäßig), Abfrage je Ausschnitt Ø **0,14 ms**,
+  max 6,9 ms. Ein erster Supercluster-Entwurf brauchte 5,0 s und wurde ersetzt.
+- **Verorten:** Fotos aus „Ohne Ort“ (virtualisiert, Mehrfachauswahl mit Strg/Umschalt) auf die Karte ziehen oder
+  Rechtsklick auf die Karte › **Hier verorten (n Fotos)** → Dialog mit Ortsname (`IReverseGeocoder.Nearest`) und
+  **Änderungsdatum der Dateien beibehalten** → `IGeoTagService.SetLocationAsync`. Dazu `IMapPicker` als Kartenfenster
+  **Ort wählen** (Klick setzt die Nadel, Ortssuche) für den Dialog „Ort setzen…“.
+- **Kartenkacheln:** eigene Kachelkarte (`MapControl`, kein Mapsui/WebView2, keine neuen Pakete) mit
+  OpenStreetMap-Kacheln nach den Nutzungsregeln: User-Agent „Lumora/0.2.54 (private use)“, höchstens zwei
+  gleichzeitige Abrufe, nur der sichtbare Ausschnitt, Platten-Cache `%LocalAppData%\PhotoViewerV3\cache\maptiles`
+  (Ablaufzeit aus den HTTP-Kopfzeilen, mind. 7 Tage; 500 MB, LRU) über das neue `ICatalogStoragePaths`, Zuordnung
+  „© OpenStreetMap-Mitwirkende“ unten rechts. Offline: graue Karte bzw. Cache mit Hinweis, Gruppen funktionieren
+  weiter. `PHOTOVIEWERV3_MAP_TILES=off` schaltet die Kacheln ab (Rauchtest und Tests immer ohne Netz).
+- **Bibliotheks-Trennung:** nur die Fotos des aktuellen Bereichs (`IPlacesScope`, heute aktive Bibliothek);
+  Bibliothekswechsel lädt die Karte neu. Hinweis-Leiste im versteckten Modus („der Kartenserver sieht den betrachteten
+  Ausschnitt“, `IMapPrivacyContext`).
+- Info › Verwendete Bausteine: Zeile „Karte“; Lizenzen: OpenStreetMap (ODbL, Kachel-Nutzungsbedingungen).
+- **Bis zum Zusammenbau** (Agent V): Vertragstypen als Platzhalter `Services/Places/PlacesContract.Placeholder.cs`,
+  Dienste als Sitzungsspeicher `Services/Places/Placeholders` (TryAdd) — beim Zusammenbau löschen.
+
+### Tests
+- `tests/PhotoViewerV3.Tests`: 744 (+9, 1 übersprungen ohne Modell) (`Places/GeoClusterIndexTests`): Gruppen zerfallen beim Hineinzoomen, Summen je
+  Stufe, Zerfalls-Zoom, Ausschnitt, bestes Foto, gleicher Ort, Begrenzungsrahmen, Mercator, Messung 500 000 Punkte.
+- `tests/PhotoViewerV3.Wpf.Tests`: 805 (+25, 1 übersprungen), dreimal hintereinander grün (`Places/`): Start-Ausschnitt = Ausdehnung + Rand, Welt ohne Fotos, Zoom um den
+  Mauspunkt; ViewModel mit Fake-Daten (Trefferzeile, Trennung, Bibliothekswechsel, Hineinzoomen, Lightbox, Galerie-
+  Nachricht, Marker behält seinen Index nach dem Neuladen, Änderungen anderer Bibliotheken laden nicht neu, Verorten
+  mit den richtigen Ids, Abbruch, fremde Ids, Ortssuche, Hinweis versteckt); Kachelquelle nur mit
+  Fake-Handler (User-Agent, ≤ 2 parallel, Cache, offline, LRU); echte Seite ohne Netz (Marker gezeichnet, Karte ein
+  Blatt im Automation-Baum, „Ohne Ort“ virtualisiert, Kontextmenü), Dialog und Kartenfenster.
+- Rauchtest: neuer Schritt **„Orte-Karte“** vor „Ordnerüberwachung“ (`SmokeScenario.Places.cs`, Kachelquelle aus):
+  3 Fotos per „Hier verorten“, 2 per Ablegen verortet, Weltansicht eine Gruppe, Klick zerfällt sie, „In der Galerie
+  zeigen“ (Nachricht + Galerie; Trefferzahl wird geprüft, sobald `GalleryGeoFilter` von Agent V da ist); Screenshots
+  `39-orte-karte-hell`, `40-orte-karte-dunkel`. Navigationsprüfung um „Orte“ ergänzt.
+
 ## [0.2.52] — 2026-10-21
 
 ### Feature (ADR-0049) — Versteckte Bibliotheken im verschlüsselten Container
