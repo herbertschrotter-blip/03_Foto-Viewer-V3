@@ -84,7 +84,7 @@ Id, die es nicht mehr gibt, und ginge still verloren (im Test mit Wiederholung, 
 
 ## Referenzen
 
-- Code: `src/PhotoViewerV3.Services/Database/SqliteBusyRetry.cs`, `BusyRetryInterceptor.cs`, `LibraryContextFactory.cs`,
-  `src/PhotoViewerV3.Services/Catalog/CatalogFileTargets.cs`, `src/PhotoViewerV3.Wpf/Shell/StatusBarViewModel.CatalogWriteWait.cs`
-- Tests: `tests/PhotoViewerV3.Tests/Database/CatalogWriteRetryTests.cs`; Rauchtest-Schritt „Katalog gesperrt“
+- Code: `src/Lumora.Services/Database/SqliteBusyRetry.cs`, `BusyRetryInterceptor.cs`, `LibraryContextFactory.cs`,
+  `src/Lumora.Services/Catalog/CatalogFileTargets.cs`, `src/Lumora.Wpf/Shell/StatusBarViewModel.CatalogWriteWait.cs`
+- Tests: `tests/Lumora.Tests/Database/CatalogWriteRetryTests.cs`; Rauchtest-Schritt „Katalog gesperrt“
 - CHANGELOG 0.2.24 (Offen), 0.2.29

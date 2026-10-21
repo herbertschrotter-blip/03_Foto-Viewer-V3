@@ -2,9 +2,9 @@
 
 - **Status:** 🟢 Grün
 - **Datum:** 2026-10-20 (v0.2.30)
-- **Bezogen auf:** `src/PhotoViewerV3.Wpf/Gallery/Data/GalleryPageSource.cs`, `GalleryPageSource.CategorySort.cs`,
+- **Bezogen auf:** `src/Lumora.Wpf/Gallery/Data/GalleryPageSource.cs`, `GalleryPageSource.CategorySort.cs`,
   Migration `AddCategorySortIndex`, [ADR-0031](../adr/0031-kategorie-sortierung-segmentweise.md),
-  Messtest `tests/PhotoViewerV3.Wpf.Tests/Gallery/GallerySearchSortMeasurementTests.cs`
+  Messtest `tests/Lumora.Wpf.Tests/Gallery/GallerySearchSortMeasurementTests.cs`
 
 ## Problem (offene Punkte aus 0.2.23)
 
@@ -16,7 +16,7 @@
 
 - Messtest `GallerySearchSortMeasurementTests` gegen eine echte, per `DatabaseInitializer` migrierte DB und die echte
   `GalleryPageSource` (Raw-SQLite-Verbindung mit den App-PRAGMAs, Seitencache 2 MB, kein `ANALYZE` — wie beim Benutzer).
-  Größe über `PV3_SEARCHSORT_FILES` (Standard 3 000 im normalen Testlauf), `PV3_SEARCHSORT_DIR` behält die DB.
+  Größe über `LUMORA_SEARCHSORT_FILES` (Standard 3 000 im normalen Testlauf), `LUMORA_SEARCHSORT_DIR` behält die DB.
 - Katalog: 500 000 Dateien, 200 je Ordner, Änderungsdatum **quer zur Id** verteilt (Permutation; ungünstigster Fall
   für Lookups in Datums-Reihenfolge). Tags: 40 Hintergrund-Tags, je Datei zwei, dazu „Urlaub“ (jede 100.) und
   „Familie“ (jede 5.) — 1,1 Mio. Zuweisungen. Kategorien: „Qualität“ (Sortier-Kategorie, 4 belegte Werte à 100 000,

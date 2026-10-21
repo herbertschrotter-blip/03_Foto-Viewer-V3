@@ -11,13 +11,13 @@ PLAN.md Kap. 1 sah von Anfang an einen „portablen Ordner via `dotnet publish`�
 lokaler Debug-Build. Für die Ablösung von V2 braucht es ein Paket, das ohne Repo und ohne Entwicklungswerkzeuge auf
 einem Windows-Rechner startet. Die App bringt native Abhängigkeiten mit: SQLite (`e_sqlite3.dll` aus SQLitePCLRaw)
 und LibVLC (`libvlc\win-x64\` mit Plugins, Lua-Skripten und HRTFs, 422 Dateien); FFmpeg wird nur gesucht (PATH, winget-Links), nicht mitgeliefert.
-Die App-Version stand fest als `0.2.0` in `PhotoViewerV3.Wpf.csproj`, während der CHANGELOG längst bei 0.2.2x war.
+Die App-Version stand fest als `0.2.0` in `Lumora.Wpf.csproj`, während der CHANGELOG längst bei 0.2.2x war.
 
 ## Entscheidung
 
 `build/publish.ps1` erzeugt per `dotnet publish` ein **self-contained** Paket für `win-x64` als **Ordner + ZIP** unter
 `artifacts/` — **ohne Single-File, ohne Trimming, ohne ReadyToRun**. Die Version kommt aus dem obersten
-CHANGELOG-Eintrag; `PhotoViewerV3.Wpf.csproj` liest sie beim Build aus derselben Quelle, das Skript prüft die
+CHANGELOG-Eintrag; `Lumora.Wpf.csproj` liest sie beim Build aus derselben Quelle, das Skript prüft die
 Produktversion der veröffentlichten EXE.
 
 ## Begründung
@@ -66,5 +66,5 @@ Produktversion der veröffentlichten EXE.
 
 ## Referenzen
 
-- `build/publish.ps1`, `build/run-smoke.ps1`, `src/PhotoViewerV3.Wpf/PhotoViewerV3.Wpf.csproj` (`Version` aus CHANGELOG)
+- `build/publish.ps1`, `build/run-smoke.ps1`, `src/Lumora.Wpf/Lumora.Wpf.csproj` (`Version` aus CHANGELOG)
 - README.md, Abschnitt „Portable Version bauen“; CHANGELOG 0.2.26

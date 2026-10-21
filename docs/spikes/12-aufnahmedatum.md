@@ -3,8 +3,8 @@
 - **Status:** 🟢 Entschieden — verwalteter Leser, Nachtragen im Hintergrund nach dem Scan, Ausdrucks-Index
 - **Datum:** 2026-10-21 (v0.2.48)
 - **Bezogen auf:** [ADR-0046](../adr/0046-aufnahmedatum.md), PLAN Kap. 4, Harness
-  `tests/PhotoViewerV3.PerfTests/Spikes/Metadata/Spike12CaptureDate.cs`, Messtest
-  `tests/PhotoViewerV3.Wpf.Tests/Gallery/CaptureDateSortMeasurementTests.cs`
+  `tests/Lumora.PerfTests/Spikes/Metadata/Spike12CaptureDate.cs`, Messtest
+  `tests/Lumora.Wpf.Tests/Gallery/CaptureDateSortMeasurementTests.cs`
 
 ## Fragen
 
@@ -15,11 +15,11 @@
 ## Messaufbau
 
 - Herberts Handy-Katalog (lokal, 24 217 Mediendateien in 505 Ordnern; nur gelesen, Ausgabe nur Zahlen). Wegwerf-DB im Temp-Ordner. Rechner: i7-8700K, 6 Kerne / 12 Threads, 32 GB, SSD.
-- Aufruf: `dotnet run -c Debug --project tests/PhotoViewerV3.PerfTests -- spike12-capture-date --root <Ordner>
+- Aufruf: `dotnet run -c Debug --project tests/Lumora.PerfTests -- spike12-capture-date --root <Ordner>
   --limit 2000 --runs 3`.
 - Sortierung: synthetischer Katalog wie Spike #08 (500 000 Dateien, 200 je Ordner, jede 4. ein Video, 70 % mit
   Aufnahmedatum quer zu Id und Änderungsdatum, Tag „Familie“ auf 20 %), kein ANALYZE.
-  `PV3_CAPTURESORT_FILES=500000 dotnet test tests/PhotoViewerV3.Wpf.Tests --filter CaptureDateSortMeasurement`.
+  `LUMORA_CAPTURESORT_FILES=500000 dotnet test tests/Lumora.Wpf.Tests --filter CaptureDateSortMeasurement`.
 
 ## Ergebnis
 

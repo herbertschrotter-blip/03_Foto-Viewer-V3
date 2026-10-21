@@ -2,8 +2,8 @@
 
 - **Status:** 🟢 Grün
 - **Datum:** 2026-10-21 (v0.2.55)
-- **Bezogen auf:** [ADR-0052](../adr/0052-motive-siglip2-lokal.md), `src/PhotoViewerV3.Services/Motifs/**`, Messtests
-  `tests/PhotoViewerV3.Wpf.Tests/Motifs/MotifMeasurementTests.cs`, `MotifModelTests.cs`, `MotifModelExplorationTests.cs`
+- **Bezogen auf:** [ADR-0052](../adr/0052-motive-siglip2-lokal.md), `src/Lumora.Services/Motifs/**`, Messtests
+  `tests/Lumora.Wpf.Tests/Motifs/MotifMeasurementTests.cs`, `MotifModelTests.cs`, `MotifModelExplorationTests.cs`
 
 ## Messaufbau
 
@@ -16,8 +16,8 @@
   wurden nur zusammengefasste Zahlen — keine Dateinamen, Pfade, Bilder. Bildschirmfotos gibt es dort keine.
 - Referenzbilder ohne persönliche Fotos: gezeichnete Hund- und Katzen-Glyphe (Segoe UI Emoji, einfarbig), eine
   Textseite, ein Programmfenster, die Windows-Hintergründe „See bei Sonnenuntergang“, „See bei Tag“, „Blüte (abstrakt)“.
-- Aufruf: `PHOTOVIEWERV3_MOTIF_MODEL=<Ordner>`, `PV3_MOTIF_SAMPLE_DIR=<Fotos>`, optional
-  `PHOTOVIEWERV3_FACE_MODELS=<buffalo_l>` (Gegenprobe Gesichter), `dotnet test tests/PhotoViewerV3.Wpf.Tests --filter
+- Aufruf: `LUMORA_MOTIF_MODEL=<Ordner>`, `LUMORA_MOTIF_SAMPLE_DIR=<Fotos>`, optional
+  `LUMORA_FACE_MODELS=<buffalo_l>` (Gegenprobe Gesichter), `dotnet test tests/Lumora.Wpf.Tests --filter
   MotifMeasurementTests --logger "console;verbosity=detailed"`.
 
 ## Ergebnisse — Zeit (ms)

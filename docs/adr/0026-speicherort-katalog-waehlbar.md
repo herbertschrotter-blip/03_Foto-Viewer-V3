@@ -7,7 +7,7 @@
 
 ## Kontext
 
-Katalog (`library.db` + `-wal`/`-shm`) und Thumbnail-Cache lagen fest unter `%LocalAppData%\PhotoViewerV3`. Bei
+Katalog (`library.db` + `-wal`/`-shm`) und Thumbnail-Cache lagen fest unter `%LocalAppData%\Lumora`. Bei
 500k Dateien wachsen beide auf viele GB; der Benutzer will sie auf ein anderes lokales Laufwerk legen. Der Pfad kann
 nicht in der DB selbst stehen, weil er gebraucht wird, bevor die DB geöffnet wird. Viele Singletons kennen den Pfad
 (`IAppDataPaths`, `LibraryContextFactory`-Connection-String, `GalleryPageSource` mit dauerhaft offener Verbindung,
@@ -16,8 +16,8 @@ mehr in die alte DB schreiben, sonst gehen Änderungen verloren.
 
 ## Entscheidung
 
-1. **Persistenz:** `database-location.json` in der App-Wurzel (`%LocalAppData%\PhotoViewerV3` bzw.
-   `PHOTOVIEWERV3_APPDATA`) mit `DatabaseFolder` (null = Standard) und `PendingDeletes`. `AppDataPaths.Resolve` liest
+1. **Persistenz:** `database-location.json` in der App-Wurzel (`%LocalAppData%\Lumora` bzw.
+   `LUMORA_APPDATA`) mit `DatabaseFolder` (null = Standard) und `PendingDeletes`. `AppDataPaths.Resolve` liest
    sie beim Start; Logs und die Datei selbst bleiben immer in der App-Wurzel. Eine beschädigte Datei oder ein
    gewählter Ordner ohne `library.db` (Laufwerk nicht verbunden) bricht den Start mit Meldung ab — nie still am
    Standardort einen leeren Katalog anlegen.
@@ -104,9 +104,9 @@ mehr in die alte DB schreiben, sonst gehen Änderungen verloren.
 
 ## Referenzen
 
-- `src/PhotoViewerV3.Services/Infrastructure/AppDataPaths.cs`, `DatabaseLocationStore.cs`
-- `src/PhotoViewerV3.Services/Database/Relocation/*` (ab 0.2.21 mit `ThumbnailInventory.cs`), `LibraryContextFactory.cs`
+- `src/Lumora.Services/Infrastructure/AppDataPaths.cs`, `DatabaseLocationStore.cs`
+- `src/Lumora.Services/Database/Relocation/*` (ab 0.2.21 mit `ThumbnailInventory.cs`), `LibraryContextFactory.cs`
   (`IDatabaseAccessGate`, Gate-Interceptor), `Thumbnails/ThumbnailService.cs` (zurückgestellte Anforderungen)
-- `src/PhotoViewerV3.Wpf/Settings/SettingsViewModel.cs`, `Shell/AppRestartService.cs`, `App.xaml.cs`
-- Tests: `tests/PhotoViewerV3.Tests/Database/DatabaseRelocationServiceTests.cs`, `DatabaseLocationStoreTests.cs`,
-  `tests/PhotoViewerV3.Wpf.Tests/Settings/SettingsRelocationTests.cs`
+- `src/Lumora.Wpf/Settings/SettingsViewModel.cs`, `Shell/AppRestartService.cs`, `App.xaml.cs`
+- Tests: `tests/Lumora.Tests/Database/DatabaseRelocationServiceTests.cs`, `DatabaseLocationStoreTests.cs`,
+  `tests/Lumora.Wpf.Tests/Settings/SettingsRelocationTests.cs`

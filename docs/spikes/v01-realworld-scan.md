@@ -17,11 +17,11 @@ Spike #1 hatte mit synthetischen Daten 500k Files in 47 s gemessen. Diese Valida
 
 | Feld | Wert |
 |---|---|
-| Test-Tool | `tests/PhotoViewerV3.PerfTests` Subcommand `spike-v01-scan` |
+| Test-Tool | `tests/Lumora.PerfTests` Subcommand `spike-v01-scan` |
 | Source-Pfad | `D:\OneDrive\Bilder\01 Privat` (OneDrive-synced) |
 | Library-Name | `"Privat"` |
 | Mode | `ScanMode.Fresh` + `--clear` (vorhandene Library-Daten wurden geleert) |
-| DB-Pfad | `C:\Users\herbe\AppData\Local\PhotoViewerV3\library.db` |
+| DB-Pfad | `C:\Users\herbe\AppData\Local\Lumora\library.db` |
 
 ## Hardware-Profil
 
@@ -44,7 +44,7 @@ Spike V01 — End-to-End Scan
   Clear:   True
 
 [1] Initialisiere DB…
-    DB: C:\Users\herbe\AppData\Local\PhotoViewerV3\library.db
+    DB: C:\Users\herbe\AppData\Local\Lumora\library.db
     Neu migriert: 0, Stale-Recovered: 0
 
 [2] Library angelegt: Id=3
@@ -112,17 +112,17 @@ Bei kleinen Datenmengen dominiert der **Setup-Overhead** (Transaction-Begin, Con
 
 ## Code
 
-- [tests/PhotoViewerV3.PerfTests/Spikes/V01Scan/SpikeV01Scan.cs](../../tests/PhotoViewerV3.PerfTests/Spikes/V01Scan/SpikeV01Scan.cs)
-- [src/PhotoViewerV3.Services/Scanning/ScanService.cs](../../src/PhotoViewerV3.Services/Scanning/ScanService.cs)
-- [src/PhotoViewerV3.Services/Scanning/FolderEnumerator.cs](../../src/PhotoViewerV3.Services/Scanning/FolderEnumerator.cs)
-- [src/PhotoViewerV3.Data/RawSql/BulkScanWriter.cs](../../src/PhotoViewerV3.Data/RawSql/BulkScanWriter.cs)
-- [src/PhotoViewerV3.Data/RawSql/FtsIndexer.cs](../../src/PhotoViewerV3.Data/RawSql/FtsIndexer.cs)
+- [tests/Lumora.PerfTests/Spikes/V01Scan/SpikeV01Scan.cs](../../tests/Lumora.PerfTests/Spikes/V01Scan/SpikeV01Scan.cs)
+- [src/Lumora.Services/Scanning/ScanService.cs](../../src/Lumora.Services/Scanning/ScanService.cs)
+- [src/Lumora.Services/Scanning/FolderEnumerator.cs](../../src/Lumora.Services/Scanning/FolderEnumerator.cs)
+- [src/Lumora.Data/RawSql/BulkScanWriter.cs](../../src/Lumora.Data/RawSql/BulkScanWriter.cs)
+- [src/Lumora.Data/RawSql/FtsIndexer.cs](../../src/Lumora.Data/RawSql/FtsIndexer.cs)
 
 ## Reproduzierbarkeit
 
 ```powershell
-cd "D:\OneDrive\Dokumente\02 Arbeit\05 Vorlagen - Scripte\03_Foto-Viewer-V3"
-dotnet run --project tests\PhotoViewerV3.PerfTests --no-build -c Release -- spike-v01-scan --root "PATH_TO_PHOTO_FOLDER" --name "LibraryName" --clear
+cd "D:\Code\Lumora"
+dotnet run --project tests\Lumora.PerfTests --no-build -c Release -- spike-v01-scan --root "PATH_TO_PHOTO_FOLDER" --name "LibraryName" --clear
 ```
 
 Achtung: `--root` muss auf einen Pfad zeigen, der vom Wpf-Process-Identitäts-Kontext lesbar ist (nicht im UWP-AppContainer-Schatten). Beim Spike-Run aus normaler PowerShell — kein Sandboxing.

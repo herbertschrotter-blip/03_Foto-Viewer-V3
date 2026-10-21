@@ -26,7 +26,7 @@ Bibliotheken dürfen nichts außerhalb ihres Katalogs ablegen.
    die Freitext-Suche; nach 2 min Ruhe freigegeben). Download nur nach Bestätigung (Dateien, Quelle, Größen, Lizenz,
    ≈ 690 MB) in `<AppData>\models\siglip2-base-patch16-224\`, **SHA-256 je Datei fest im Code** (LFS-Prüfsummen der
    Hugging-Face-API, kleine Dateien gegen die Git-Prüfsumme abgeglichen), nie im Repo oder der portablen Version.
-   `PHOTOVIEWERV3_MOTIF_MODEL` zeigt für Entwicklung/Tests auf einen anderen Ordner.
+   `LUMORA_MOTIF_MODEL` zeigt für Entwicklung/Tests auf einen anderen Ordner.
 2. **Vorverarbeitung exakt nach `preprocessor_config.json`**: 224 × 224 ohne Seitenverhältnis/Zuschnitt, Pillow-BILINEAR
    nachgebildet (Dreiecksfilter mit Träger × Skalierung, 22-Bit-Festkomma, erst waagrecht in ein 8-Bit-Zwischenbild,
    dann senkrecht — `SiglipPreprocessor`), dann (x/255 − 0,5)/0,5. Eingang ist das fertige Vorschaubild (kurze Kante bis

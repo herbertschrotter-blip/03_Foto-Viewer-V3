@@ -2,9 +2,9 @@
 
 - **Status:** 🟢 Grün
 - **Datum:** 2026-10-21 (v0.2.34)
-- **Bezogen auf:** [ADR-0035](../adr/0035-gesichtserkennung-buffalo-l-directml.md), `src/PhotoViewerV3.Services/Faces/**`,
-  `src/PhotoViewerV3.Wpf/Faces/WicFaceImageLoader.cs`, Messtest
-  `tests/PhotoViewerV3.Wpf.Tests/Faces/FaceRecognitionMeasurementTests.cs`
+- **Bezogen auf:** [ADR-0035](../adr/0035-gesichtserkennung-buffalo-l-directml.md), `src/Lumora.Services/Faces/**`,
+  `src/Lumora.Wpf/Faces/WicFaceImageLoader.cs`, Messtest
+  `tests/Lumora.Wpf.Tests/Faces/FaceRecognitionMeasurementTests.cs`
 
 ## Messaufbau
 
@@ -18,8 +18,8 @@
 - Laden einmal vorab gemessen (danach warmer Dateicache), Erkennen/Fingerabdruck je Ausführung über alle 1 000 Fotos
   (nach einem Aufwärmlauf). „Durchsatz“ = Wanduhr je Foto wie im Index (Laden auf Pool-Threads vorab, Analyse
   nacheinander), je 150 Fotos.
-- Aufruf: `PHOTOVIEWERV3_FACE_MODELS=<buffalo_l>`, `PV3_FACE_SAMPLE_DIR=<Ordner>`, `PV3_FACE_SAMPLE_PAIRS=500`,
-  `dotnet test tests/PhotoViewerV3.Wpf.Tests --filter FaceRecognitionMeasurementTests --logger "console;verbosity=detailed"`.
+- Aufruf: `LUMORA_FACE_MODELS=<buffalo_l>`, `LUMORA_FACE_SAMPLE_DIR=<Ordner>`, `LUMORA_FACE_SAMPLE_PAIRS=500`,
+  `dotnet test tests/Lumora.Wpf.Tests --filter FaceRecognitionMeasurementTests --logger "console;verbosity=detailed"`.
 
 ## Ergebnisse — Zeit je Foto (ms)
 

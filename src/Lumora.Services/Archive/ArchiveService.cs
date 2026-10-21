@@ -23,14 +23,14 @@ namespace Lumora.Services.Archive;
 /// <item>Runden-System wie V2 <c>Invoke-ArchiveExtraction</c>: Archive, die beim Entpacken entstehen, werden in
 /// weiteren Runden (max. <see cref="ArchiveExtractOptions.MaxNestedDepth"/>) neben sich entpackt und danach gelöscht
 /// (sie sind Zwischenprodukte dieses Laufs, keine Benutzerdateien).</item>
-/// <item>Dateien entstehen als „.pv3part“ und werden erst fertig umbenannt — eine Ordnerüberwachung sieht keine
+/// <item>Dateien entstehen als „.lumorapart“ und werden erst fertig umbenannt — eine Ordnerüberwachung sieht keine
 /// halben Fotos.</item>
 /// </list>
 /// Alles läuft auf dem Thread-Pool; Fortschritt kommt pro Datei und etwa je MB.
 /// </summary>
 public sealed class ArchiveService : IArchiveService
 {
-    private const string PartSuffix = ".pv3part";
+    private const string PartSuffix = ".lumorapart";
     private const int CopyBufferSize = 256 * 1024;
     private const long ProgressByteStep = 1024 * 1024;
 
@@ -295,7 +295,7 @@ public sealed class ArchiveService : IArchiveService
         return _formats.IsMedia(ext) || (options.ExtractNested && IsArchive(entry.Key));
     }
 
-    /// <summary>Schreibt einen Eintrag atomar (.pv3part → Zielname) und liefert die geschriebenen Bytes.</summary>
+    /// <summary>Schreibt einen Eintrag atomar (.lumorapart → Zielname) und liefert die geschriebenen Bytes.</summary>
     private static long WriteEntry(Func<Stream> open, string destination, EntrySnapshot entry, bool overwrite, CancellationToken ct, Action<long> onBytes)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
@@ -368,7 +368,7 @@ public sealed class ArchiveService : IArchiveService
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // Rest bleibt liegen — als .pv3part erkennbar.
+            // Rest bleibt liegen — als .lumorapart erkennbar.
         }
     }
 

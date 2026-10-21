@@ -85,8 +85,8 @@ nicht, was gerade gefiltert ist. Mockup 06 („Galerie-Kopfzeile“) wurde am 20
 ## Referenzen
 
 - Mockup: `mockups/06-galerie-kopfzeile.html` (Reiter „Galerie-Kopfzeile“), abgenommen 2026-10-21
-- Code: `src/PhotoViewerV3.Wpf/Gallery/Data/GalleryFilterState.cs`, `Gallery/Data/GalleryPageSource.FileFilter.cs`,
+- Code: `src/Lumora.Wpf/Gallery/Data/GalleryFilterState.cs`, `Gallery/Data/GalleryPageSource.FileFilter.cs`,
   `Gallery/ViewModels/GalleryViewModel.Filters.cs`, `Gallery/ViewModels/GalleryViewModel.SortBar.cs`,
   `Gallery/Controls/GalleryToolbar.xaml`
-- Tests: `tests/PhotoViewerV3.Wpf.Tests/Gallery/GalleryFilterCombinationTests.cs`, `GalleryToolbarLayoutTests.cs`;
+- Tests: `tests/Lumora.Wpf.Tests/Gallery/GalleryFilterCombinationTests.cs`, `GalleryToolbarLayoutTests.cs`;
   Rauchtest-Schritt „Kombinierte Filter“

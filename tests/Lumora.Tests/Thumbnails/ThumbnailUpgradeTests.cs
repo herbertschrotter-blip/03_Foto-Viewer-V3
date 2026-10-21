@@ -351,7 +351,7 @@ public sealed class ThumbnailUpgradeTests
     [Fact]
     public void IsLocallyAvailable_erkennt_fehlende_Dateien_und_Ordner()
     {
-        var dir = Path.Combine(Path.GetTempPath(), "pv3-local-" + Guid.NewGuid().ToString("N"));
+        var dir = Path.Combine(Path.GetTempPath(), "lumora-local-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
         try
         {

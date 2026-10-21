@@ -2,8 +2,8 @@
 
 - **Status:** 🟢 Grün
 - **Datum:** 2026-10-19 (v0.2.13)
-- **Bezogen auf:** `src/PhotoViewerV3.Wpf/Gallery/Controls/GalleryToolbar.xaml`, `ToolbarFlowPanel.cs`,
-  Mockup `mockups/04-fluent-light.html` (Filter-Pills), Test `tests/PhotoViewerV3.Wpf.Tests/Gallery/GalleryToolbarLayoutTests.cs`
+- **Bezogen auf:** `src/Lumora.Wpf/Gallery/Controls/GalleryToolbar.xaml`, `ToolbarFlowPanel.cs`,
+  Mockup `mockups/04-fluent-light.html` (Filter-Pills), Test `tests/Lumora.Wpf.Tests/Gallery/GalleryToolbarLayoutTests.cs`
 
 ## Problem
 
@@ -36,7 +36,7 @@ schmaler Rest (Platzhalter abgeschnitten), darunter lief die Zeile rechts über.
 | Ordner-Seite (560 px Inhalt) | 560 px | 2 | 467 px | 352 px | — |
 
 Der Platzhalter braucht inkl. Suchsymbol und Innenabstand rund 215 px; in keiner Breite ragt ein Element über den Rand.
-Die Tests erzeugen die Bilder bei jedem Lauf neu unter `tests/PhotoViewerV3.Wpf.Tests/bin/…/toolbar-shots/`
+Die Tests erzeugen die Bilder bei jedem Lauf neu unter `tests/Lumora.Wpf.Tests/bin/…/toolbar-shots/`
 (dunkles Theme, 96 DPI); die Breite des Navigationsbereichs ist im Test nachgebildet. Gegenprobe in der echten App
 (Rauchtest, Fenster 1280 × 800, helles Theme, Status „Nicht archiviert“ aktiv): Filter, Status, Tags und Suche stehen in
 einer Zeile, das Eingabefeld ist rund 245 px breit, der Platzhalter vollständig sichtbar — die echte Inhaltsbreite liegt

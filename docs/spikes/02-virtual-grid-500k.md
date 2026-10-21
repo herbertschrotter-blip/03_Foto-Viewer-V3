@@ -1,6 +1,6 @@
 # Spike #02 — Virtual Grid mit 500k Items
 
-> **Stand v0.2.0:** Der Spike-Ordner `Spike02/` ist aufgelöst — der Code wurde zur produktiven Galerie weiterentwickelt und liegt jetzt unter `src/PhotoViewerV3.Wpf/Gallery/` (Data, ViewModels, Views; Namespace `PhotoViewerV3.Gallery.*`). Die Code-Links unten zeigen auf die heutigen Pfade; die Messwerte beschreiben den Stand des Spikes.
+> **Stand v0.2.0:** Der Spike-Ordner `Spike02/` ist aufgelöst — der Code wurde zur produktiven Galerie weiterentwickelt und liegt jetzt unter `src/Lumora.Wpf/Gallery/` (Data, ViewModels, Views; Namespace `Lumora.Gallery.*`). Die Code-Links unten zeigen auf die heutigen Pfade; die Messwerte beschreiben den Stand des Spikes.
 
 - **Status:** ✅ Grün — Architektur bestätigt, freigegeben für V0.1-Implementierung der Gallery-UI
 - **Datum gestartet:** 2026-05-10
@@ -24,7 +24,7 @@ Beweisen, dass das paged virtualisierte Grid die UI auch bei 500k Files responsi
 ## Aufbau
 
 ### Datenquelle
-- Bestehende Spike-DB aus Spike #1: `%LocalAppData%\PhotoViewerV3\spike-01\library-spike.db`
+- Bestehende Spike-DB aus Spike #1: `%LocalAppData%\Lumora\spike-01\library-spike.db`
 - 500.000 Files in 10.000 Folders mit allen Indizes + FTS5
 - 80 % Images / 20 % Videos, 5 % Favoriten
 
@@ -140,25 +140,25 @@ Pflicht-Implementierung in V0.1 (sonst gelb-Wert würde rot werden):
 Voraussetzung: Spike-#1-DB existiert. Falls noch nicht vorhanden, aus eigener (nicht-AppContainer-isolierter) PowerShell:
 
 ```powershell
-cd "D:\OneDrive\Dokumente\02 Arbeit\05 Vorlagen - Scripte\03_Foto-Viewer-V3"
-dotnet run --project tests\PhotoViewerV3.PerfTests -c Release -- spike01-sqlite-bulk --rows 500000 --folders 10000
+cd "D:\Code\Lumora"
+dotnet run --project tests\Lumora.PerfTests -c Release -- spike01-sqlite-bulk --rows 500000 --folders 10000
 ```
 
 Dann WPF starten und auf "Spike: Gallery" klicken:
 
 ```powershell
-dotnet run --project src\PhotoViewerV3.Wpf -c Debug
+dotnet run --project src\Lumora.Wpf -c Debug
 ```
 
-(oder F5 in Visual Studio mit `PhotoViewerV3.Wpf` als Startup-Projekt)
+(oder F5 in Visual Studio mit `Lumora.Wpf` als Startup-Projekt)
 
 ## Code
 
-Heutige Pfade (seit v0.2.0 produktive Galerie unter `Wpf/Gallery`, Namespace `PhotoViewerV3.Gallery.*`):
+Heutige Pfade (seit v0.2.0 produktive Galerie unter `Wpf/Gallery`, Namespace `Lumora.Gallery.*`):
 
-- [src/PhotoViewerV3.Wpf/Gallery/Data/GalleryFileDto.cs](../../src/PhotoViewerV3.Wpf/Gallery/Data/GalleryFileDto.cs)
-- [src/PhotoViewerV3.Wpf/Gallery/Data/GalleryPageSource.cs](../../src/PhotoViewerV3.Wpf/Gallery/Data/GalleryPageSource.cs)
-- [src/PhotoViewerV3.Wpf/Gallery/ViewModels/GalleryViewModel.cs](../../src/PhotoViewerV3.Wpf/Gallery/ViewModels/GalleryViewModel.cs)
-- [src/PhotoViewerV3.Wpf/Gallery/Views/GalleryView.xaml](../../src/PhotoViewerV3.Wpf/Gallery/Views/GalleryView.xaml)
-- [src/PhotoViewerV3.Wpf/Gallery/GalleryServiceCollectionExtensions.cs](../../src/PhotoViewerV3.Wpf/Gallery/GalleryServiceCollectionExtensions.cs) (DI-Registrierung `AddGallery()`)
-- [src/PhotoViewerV3.Wpf/MainWindow.xaml](../../src/PhotoViewerV3.Wpf/MainWindow.xaml) (NavigationView-Eintrag „Galerie“)
+- [src/Lumora.Wpf/Gallery/Data/GalleryFileDto.cs](../../src/Lumora.Wpf/Gallery/Data/GalleryFileDto.cs)
+- [src/Lumora.Wpf/Gallery/Data/GalleryPageSource.cs](../../src/Lumora.Wpf/Gallery/Data/GalleryPageSource.cs)
+- [src/Lumora.Wpf/Gallery/ViewModels/GalleryViewModel.cs](../../src/Lumora.Wpf/Gallery/ViewModels/GalleryViewModel.cs)
+- [src/Lumora.Wpf/Gallery/Views/GalleryView.xaml](../../src/Lumora.Wpf/Gallery/Views/GalleryView.xaml)
+- [src/Lumora.Wpf/Gallery/GalleryServiceCollectionExtensions.cs](../../src/Lumora.Wpf/Gallery/GalleryServiceCollectionExtensions.cs) (DI-Registrierung `AddGallery()`)
+- [src/Lumora.Wpf/MainWindow.xaml](../../src/Lumora.Wpf/MainWindow.xaml) (NavigationView-Eintrag „Galerie“)

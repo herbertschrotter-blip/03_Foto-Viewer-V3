@@ -10,7 +10,7 @@ Scope für V0.1 ist groß (8–10 Wochen, ~70–110 PT): SQLite + EF Core + Raw 
 
 ## Entscheidung
 
-**Multi-Project Solution ab Tag 1**: `PhotoViewerV3.Domain`, `PhotoViewerV3.Data`, `PhotoViewerV3.Services`, `PhotoViewerV3.Wpf`, `PhotoViewerV3.Tools` (optional), Tests separat.
+**Multi-Project Solution ab Tag 1**: `Lumora.Domain`, `Lumora.Data`, `Lumora.Services`, `Lumora.Wpf`, `Lumora.Tools` (optional), Tests separat.
 
 ## Begründung
 

@@ -29,7 +29,7 @@ entpacken und danach scannen. Offen war außerdem, ob ein Archiv ein Katalog-Ein
    überspringen/überschreiben/umbenennen; nur Medien oder alles; verschachtelte Archive in Runden bis Tiefe 3 (V2-Vorbild),
    die dabei entstandenen Zwischen-Archive werden danach gelöscht (sie sind Produkte dieses Laufs, keine Benutzerdateien);
    Zip-Slip-Schutz (kein Laufwerk, kein `..`, Ziel muss unterhalb des Zielordners liegen, ungültige Zeichen werden ersetzt);
-   Dateien entstehen als `.pv3part` und werden erst fertig umbenannt; Abbruch und Fortschritt (Dateien/Bytes).
+   Dateien entstehen als `.lumorapart` und werden erst fertig umbenannt; Abbruch und Fortschritt (Dateien/Bytes).
    Passwortgeschützte Archive werden mit `ArchiveEncryptedException` abgelehnt — kein Passwort-Dialog.
 4. **Nach dem Entpacken** stößt der Service den Incremental-Scan der Bibliothek an (`IScanService`, ADR-0019), damit
    die Dateien im Katalog erscheinen, und verschiebt das Archiv auf Wunsch über `IFileOperationService.RecycleAsync`
@@ -63,7 +63,7 @@ entpacken und danach scannen. Offen war außerdem, ob ein Archiv ein Katalog-Ein
 - Ein weiteres NuGet-Paket (SharpCompress) im Services-Projekt.
 - RAR/7z lassen sich im Test nicht erzeugen — die Tests erzeugen ZIP (inkl. handgebautem verschlüsseltem ZIP), TAR
   und TAR.GZ selbst; RAR (normal, solide, passwortgeschützt, mit verschlüsselten Köpfen) und 7z liegen als Mini-Archive
-  unter `tests/PhotoViewerV3.Tests/Archive/TestData/` (erzeugt mit WinRAR bzw. Windows-bsdtar).
+  unter `tests/Lumora.Tests/Archive/TestData/` (erzeugt mit WinRAR bzw. Windows-bsdtar).
 - Versionswahl: SharpCompress 1.0.0 ist auf NuGet zurückgezogen (unlisted) und wertete PAX-Header in TAR nicht aus;
   verwendet wird die neueste gelistete Version 0.50.6 (API `ArchiveFactory.OpenArchive`/`ReaderFactory.OpenReader`).
   Ein Test mit 140 Zeichen langem TAR-Namen sichert das ab.
@@ -86,8 +86,8 @@ entpacken und danach scannen. Offen war außerdem, ob ein Archiv ein Katalog-Ein
 
 ## Referenzen
 
-- `src/PhotoViewerV3.Services/Archive/` (IArchiveService, ArchiveService, Modelle, Nachricht),
-  `src/PhotoViewerV3.Wpf/Gallery/Archives/` (Entpacken-Dialog), `src/PhotoViewerV3.Wpf/Lightbox/ArchiveContentView.xaml`
-- Tests: `tests/PhotoViewerV3.Tests/Archive/`, `tests/PhotoViewerV3.Wpf.Tests/Archive/`, Rauchtest-Schritt „Archiv“
+- `src/Lumora.Services/Archive/` (IArchiveService, ArchiveService, Modelle, Nachricht),
+  `src/Lumora.Wpf/Gallery/Archives/` (Entpacken-Dialog), `src/Lumora.Wpf/Lightbox/ArchiveContentView.xaml`
+- Tests: `tests/Lumora.Tests/Archive/`, `tests/Lumora.Wpf.Tests/Archive/`, Rauchtest-Schritt „Archiv“
 - V2-Vorbild: `../03_Foto-Viewer-V2/Lib/Utils/Lib_ArchiveExtractor.ps1`
 - [PLAN.md](../../PLAN.md) Kap. 1 (Auto-Extract), Kap. 10 (SharpCompress)

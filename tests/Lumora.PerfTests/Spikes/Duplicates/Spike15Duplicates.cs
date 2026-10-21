@@ -40,7 +40,7 @@ internal static class Spike15Duplicates
         var limit = int.TryParse(Arg(args, "--limit"), out var l) ? l : 300;
         var hashLimit = int.TryParse(Arg(args, "--hash-limit"), out var h) ? h : 1500;
         var rows = int.TryParse(Arg(args, "--rows"), out var r) ? r : 500_000;
-        var work = Arg(args, "--work") ?? Path.Combine(Path.GetTempPath(), "pv3-spike15-" + Guid.NewGuid().ToString("N"));
+        var work = Arg(args, "--work") ?? Path.Combine(Path.GetTempPath(), "lumora-spike15-" + Guid.NewGuid().ToString("N"));
         if (Arg(args, "--explain") is { } explainDb)
         {
             Explain(explainDb);

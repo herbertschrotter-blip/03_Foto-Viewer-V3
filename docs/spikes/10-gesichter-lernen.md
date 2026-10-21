@@ -2,8 +2,8 @@
 
 - **Status:** 🟢 Grün auf synthetischen Daten — Nachjustieren an echten Fingerabdrücken in Welle 2 offen
 - **Datum:** 2026-10-21 (v0.2.35)
-- **Bezogen auf:** [ADR-0036](../adr/0036-gesichter-lernen-und-gruppieren.md), `src/PhotoViewerV3.Services/Faces/Recognition/`,
-  Harness `tests/PhotoViewerV3.Tests/Faces/Recognition/FaceLearningEvaluationTests.cs`
+- **Bezogen auf:** [ADR-0036](../adr/0036-gesichter-lernen-und-gruppieren.md), `src/Lumora.Services/Faces/Recognition/`,
+  Harness `tests/Lumora.Tests/Faces/Recognition/FaceLearningEvaluationTests.cs`
 
 ## Fragen
 
@@ -21,8 +21,8 @@
   Gruppen-Richtungen; Doppelgänger haben Zentren-Kosinus ρ = 0,62 (Geschwister-Welt 0,75/0,85); 20 % der Personen
   altern (Zentrum dreht sich über die Zeit um bis zu 50°); 5 % der Gesichter haben schlechte Qualität (Kosinus 0,3–0,55,
   Qualität 0,05–0,35).
-- Harness-Größe über `PV3_FACELEARN_SCALE` (`small` = Standard im normalen Testlauf mit lockeren Untergrenzen,
-  `full` = diese Tabellen), `PV3_FACELEARN_OUT` = Datei für die Tabellen. Messlauf: `dotnet test -c Release`
+- Harness-Größe über `LUMORA_FACELEARN_SCALE` (`small` = Standard im normalen Testlauf mit lockeren Untergrenzen,
+  `full` = diese Tabellen), `LUMORA_FACELEARN_OUT` = Datei für die Tabellen. Messlauf: `dotnet test -c Release`
   (Debug-Builds rechnen ohne JIT-Optimierung 4–7× langsamer).
 - Rechner: Herberts PC (i7-8700K, 6 Kerne / 12 Threads, 32 GB). Zeiten = Median aus 3 Läufen nach Aufwärmen.
 

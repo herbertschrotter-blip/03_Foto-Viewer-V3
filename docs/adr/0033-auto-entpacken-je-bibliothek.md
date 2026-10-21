@@ -80,9 +80,9 @@ die schon vor dem Einschalten im Katalog standen, dauerhaft liegen — ohne Weg,
 
 ## Referenzen
 
-- `src/PhotoViewerV3.Services/Archive/ArchiveAutoExtractSettingsStore.cs`, `ArchiveAutoExtractService.cs`,
+- `src/Lumora.Services/Archive/ArchiveAutoExtractSettingsStore.cs`, `ArchiveAutoExtractService.cs`,
   `IArchiveAutoExtractService.cs`, `ArchiveAutoExtractModels.cs`
-- `src/PhotoViewerV3.Wpf/Settings/SettingsViewModel.cs`, `SettingsPage.xaml` (Abschnitt „Archive“),
+- `src/Lumora.Wpf/Settings/SettingsViewModel.cs`, `SettingsPage.xaml` (Abschnitt „Archive“),
   `Shell/Smoke/SmokeScenario.AutoExtract.cs` (Rauchtest-Schritt „Auto-Entpacken“)
-- Tests: `tests/PhotoViewerV3.Tests/Archive/ArchiveAutoExtractPerLibraryTests.cs`, `ArchiveAutoExtractServiceTests.cs`,
-  `tests/PhotoViewerV3.Wpf.Tests/Settings/SettingsAutoExtractTests.cs`
+- Tests: `tests/Lumora.Tests/Archive/ArchiveAutoExtractPerLibraryTests.cs`, `ArchiveAutoExtractServiceTests.cs`,
+  `tests/Lumora.Wpf.Tests/Settings/SettingsAutoExtractTests.cs`

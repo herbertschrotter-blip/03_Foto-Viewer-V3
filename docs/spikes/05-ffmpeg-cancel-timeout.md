@@ -105,8 +105,8 @@ Freigabe für:
 Voraussetzung: FFmpeg im PATH (z.B. `winget install Gyan.FFmpeg`) und Sintel-Sample aus Spike #3.
 
 ```powershell
-cd "D:\OneDrive\Dokumente\02 Arbeit\05 Vorlagen - Scripte\03_Foto-Viewer-V3"
-dotnet run --project tests\PhotoViewerV3.PerfTests -c Release -- spike05-ffmpeg-cancel
+cd "D:\Code\Lumora"
+dotnet run --project tests\Lumora.PerfTests -c Release -- spike05-ffmpeg-cancel
 ```
 
 Optional:
@@ -114,5 +114,5 @@ Optional:
 
 ## Code
 
-- [tests/PhotoViewerV3.PerfTests/Spikes/Ffmpeg/FfmpegProcessRunner.cs](../../tests/PhotoViewerV3.PerfTests/Spikes/Ffmpeg/FfmpegProcessRunner.cs)
-- [tests/PhotoViewerV3.PerfTests/Spikes/Ffmpeg/Spike05FfmpegBenchmark.cs](../../tests/PhotoViewerV3.PerfTests/Spikes/Ffmpeg/Spike05FfmpegBenchmark.cs)
+- [tests/Lumora.PerfTests/Spikes/Ffmpeg/FfmpegProcessRunner.cs](../../tests/Lumora.PerfTests/Spikes/Ffmpeg/FfmpegProcessRunner.cs)
+- [tests/Lumora.PerfTests/Spikes/Ffmpeg/Spike05FfmpegBenchmark.cs](../../tests/Lumora.PerfTests/Spikes/Ffmpeg/Spike05FfmpegBenchmark.cs)

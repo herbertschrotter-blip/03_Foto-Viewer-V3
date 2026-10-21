@@ -34,7 +34,7 @@ public sealed class PlacesWicTests
     [InlineData(true)]
     public void Lumoras_GPS_liest_WIC(bool startWithWicExif)
     {
-        var dir = Path.Combine(Path.GetTempPath(), "pv3-wicgps-" + Guid.NewGuid().ToString("N"));
+        var dir = Path.Combine(Path.GetTempPath(), "lumora-wicgps-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
         try
         {

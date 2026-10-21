@@ -7,7 +7,7 @@ namespace Lumora.Tests.Places;
 /// <summary>GPS lesen je Format (ADR-0050): EXIF in JPEG/TIFF/PNG/WebP/HEIC, Videos (©xyz, Apple ISO 6709), XMP-Begleitdatei.</summary>
 public sealed class MediaGpsReaderTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "pv3-gps-" + Guid.NewGuid().ToString("N"));
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "lumora-gps-" + Guid.NewGuid().ToString("N"));
 
     public MediaGpsReaderTests() => Directory.CreateDirectory(_dir);
 

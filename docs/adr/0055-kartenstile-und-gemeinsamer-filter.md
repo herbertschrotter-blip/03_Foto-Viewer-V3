@@ -31,7 +31,7 @@ Sortierung und Ansicht, die Herbert seitengebunden haben will. Keine neuen Paket
    Schlüssel (`IMapStyleService`) oder Farbschema (`IMapThemeSource` ← `ApplicationThemeManager.Changed`) neu auf und
    tauscht die Netz-Quelle `HttpMapTileSource` (verallgemeinerte OSM-Quelle aus ADR-0051) aus; `MapTileProvider` verwirft
    dann Speicher-Kacheln (Generationszähler) und fordert den zuletzt sichtbaren Ausschnitt neu an. Abgeschaltet (Tests,
-   Rauchtest, `PHOTOVIEWERV3_MAP_TILES=off`) wird der Stil aufgelöst (Namensnennung, Hinweis), aber nie abgerufen.
+   Rauchtest, `LUMORA_MAP_TILES=off`) wird der Stil aufgelöst (Namensnennung, Hinweis), aber nie abgerufen.
 3. **Cache je Stil** `<CacheRoot>\maptiles\<stil>\z\x\y.png` (`osm`, `carto-*`, `maptiler-satellite`), LRU-Grenze 500 MB
    über alle Stile wie bisher. Quellen mit Alterungsgrenze (CARTO 30 Tage; MapTiler „nur temporärer persönlicher Cache“
    → ebenfalls 30 Tage): Abrufzeit = Erstellungszeit der Datei, ältere Kacheln werden beim Lesen gelöscht und neu geholt,
@@ -117,10 +117,10 @@ Sortierung und Ansicht, die Herbert seitengebunden haben will. Keine neuen Paket
 
 ## Referenzen
 
-- Code: `src/PhotoViewerV3.Wpf/Places/Map/Tiles/MapStyles.cs`, `HttpMapTileSource.cs`, `MapTileDiskCache.cs`,
+- Code: `src/Lumora.Wpf/Places/Map/Tiles/MapStyles.cs`, `HttpMapTileSource.cs`, `MapTileDiskCache.cs`,
   `Places/Styles/*`, `Settings/Sections/SettingsMapSection.xaml`, `Gallery/Controls/GalleryFilterCard.xaml`,
   `GallerySearchBox.xaml`, `Gallery/ViewModels/SharedGalleryFilter.cs`, `GalleryViewModel.Pages.cs`,
   `Gallery/Data/GalleryPageSource.Shared.cs`, `Places/Data/PlacesCatalogReader.cs`, `Places/ViewModels/PlacesViewModel.Styles.cs`
-- Tests: `tests/PhotoViewerV3.Wpf.Tests/Places/MapStyleTests.cs`, `MapStyleSettingsTests.cs`,
+- Tests: `tests/Lumora.Wpf.Tests/Places/MapStyleTests.cs`, `MapStyleSettingsTests.cs`,
   `Gallery/SharedGalleryFilterTests.cs`; Rauchtest `Shell/Smoke/SmokeScenario.PlacesShared.cs`
 - CARTO: carto.com/basemaps, carto.com/legal/basemap-terms · MapTiler: maptiler.com/terms/cloud, maptiler.com/copyright

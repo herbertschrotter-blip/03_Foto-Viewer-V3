@@ -88,7 +88,7 @@ entfernen lassen, ohne die Fotos anzufassen.
 
 ## Referenzen
 
-- Code: `src/PhotoViewerV3.Wpf/Gallery/Data/GalleryPageSource.Persons.cs`, `Gallery/ViewModels/GalleryViewModel.Persons.cs`,
+- Code: `src/Lumora.Wpf/Gallery/Data/GalleryPageSource.Persons.cs`, `Gallery/ViewModels/GalleryViewModel.Persons.cs`,
   `Gallery/People/`, `Lightbox/Faces/`, `Lightbox/Controls/FaceBoxesLayer.cs`, `Settings/FaceData/`,
-  `src/PhotoViewerV3.Services/Faces/Erase/FaceDataEraser.cs`, Migration `20261021062846_AddFacePersonIndex`
-- Tests: `tests/PhotoViewerV3.Wpf.Tests/Persons/`, `tests/PhotoViewerV3.Tests/Faces/FaceDataEraserTests.cs`
+  `src/Lumora.Services/Faces/Erase/FaceDataEraser.cs`, Migration `20261021062846_AddFacePersonIndex`
+- Tests: `tests/Lumora.Wpf.Tests/Persons/`, `tests/Lumora.Tests/Faces/FaceDataEraserTests.cs`

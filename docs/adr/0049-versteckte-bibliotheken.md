@@ -11,7 +11,7 @@
 
 Herbert möchte einzelne Bibliotheken so führen, dass ohne Wissen niemand ihre Existenz bemerkt: Originale liegen in
 einem verschlüsselten Container (VeraCrypt-Datei oder BitLocker-VHDX), den er selbst einhängt. Lumora hatte bis 0.2.51
-genau EINEN Katalog (DB, `thumbs\`, Gesichtsausschnitte, Protokolle) unter `%LocalAppData%\PhotoViewerV3` bzw. im
+genau EINEN Katalog (DB, `thumbs\`, Gesichtsausschnitte, Protokolle) unter `%LocalAppData%\Lumora` bzw. im
 Ordner aus `database-location.json`; alle Dienste sind Singletons mit eingebrannten Pfaden, Nachrichten laufen über den
 globalen `WeakReferenceMessenger.Default`, protokolliert wird über den globalen Serilog-Logger. Ein versteckter Katalog
 muss deshalb vollständig getrennt laufen — ohne Neustart, ohne Spuren außerhalb des Containers.
@@ -95,7 +95,7 @@ muss deshalb vollständig getrennt laufen — ohne Neustart, ohne Spuren außerh
 ### Neutral
 - `App.ConfigureServices` nimmt jetzt die Katalog-Sitzung (`CatalogSessionSetup`) entgegen; neue Registrierungen wie
   bisher dort. Hintergrunddienste starten in `App.StartBackgroundServicesAsync` (für jede Sitzung).
-- Der Rauchtest simuliert `_hidden` (`PHOTOVIEWERV3_SMOKE_HIDDEN`, Standard an; „0“ = aus), nutzt einen Temp-Ordner als
+- Der Rauchtest simuliert `_hidden` (`LUMORA_SMOKE_HIDDEN`, Standard an; „0“ = aus), nutzt einen Temp-Ordner als
   Container und Fake-Aushängen; die Schritte nach dem Wechsel laufen mit den Diensten der neuen Sitzung.
 
 ## Alternativen
@@ -110,9 +110,9 @@ muss deshalb vollständig getrennt laufen — ohne Neustart, ohne Spuren außerh
 
 ## Referenzen
 
-- Code: `src/PhotoViewerV3.Services/HiddenLibraries/*`, `src/PhotoViewerV3.Services/Infrastructure/CatalogContext.cs`,
-  `src/PhotoViewerV3.Wpf/Shell/HiddenLibraries/*`, `src/PhotoViewerV3.Wpf/App.xaml.cs`
-- Tests: `tests/PhotoViewerV3.Tests/HiddenLibraries/*`, `tests/PhotoViewerV3.Wpf.Tests/HiddenLibraries/*`,
+- Code: `src/Lumora.Services/HiddenLibraries/*`, `src/Lumora.Services/Infrastructure/CatalogContext.cs`,
+  `src/Lumora.Wpf/Shell/HiddenLibraries/*`, `src/Lumora.Wpf/App.xaml.cs`
+- Tests: `tests/Lumora.Tests/HiddenLibraries/*`, `tests/Lumora.Wpf.Tests/HiddenLibraries/*`,
   Rauchtest-Schritt in `Shell/Smoke/SmokeScenario.HiddenLibrary.cs`
 - OWASP Password Storage Cheat Sheet (PBKDF2-HMAC-SHA256: 600 000 Iterationen); VeraCrypt-Dokumentation
   „Command Line Usage“ (`/volume`, `/letter`, `/dismount`, `/quit`, `/silent`)

@@ -24,7 +24,7 @@ zyklische Referenzen, Merge-Konflikte in `App.xaml.cs` und schwer testbare Koppl
    `CatalogUpdateService`, `LibraryService`) bzw. der Ordnerbaum; Nachrichten können von Worker-Threads kommen —
    UI-Empfänger dispatchen selbst auf den UI-Thread.
 2. **Jedes Modul registriert seine Dienste in einer eigenen Datei `XyzServiceCollectionExtensions.cs`**:
-   `AddLibrary`, `AddOperations`, `AddCatalog`, `AddSorter` in Services (gebündelt in `AddPhotoViewerServices`),
+   `AddLibrary`, `AddOperations`, `AddCatalog`, `AddSorter` in Services (gebündelt in `AddLumoraServices`),
    `AddLightbox`, `AddShell`, `AddGallery`, `AddSorterUi` im Wpf-Projekt (je eine Zeile in `App.xaml.cs`).
    Module kennen einander nur über Services-Interfaces und Nachrichten, nie über fremde ViewModels; Dienste, die ein
    Testlauf ersetzen soll, werden per `TryAdd` registriert, damit der Rauchtest seine Fakes vorher setzen kann.
@@ -70,8 +70,8 @@ zyklische Referenzen, Merge-Konflikte in `App.xaml.cs` und schwer testbare Koppl
 
 ## Referenzen
 
-- [src/PhotoViewerV3.Services/Messaging/Messages.cs](../../src/PhotoViewerV3.Services/Messaging/Messages.cs)
-- [src/PhotoViewerV3.Services/Scanning/ScanMessages.cs](../../src/PhotoViewerV3.Services/Scanning/ScanMessages.cs)
-- [src/PhotoViewerV3.Services/ServiceCollectionExtensions.cs](../../src/PhotoViewerV3.Services/ServiceCollectionExtensions.cs)
-- [src/PhotoViewerV3.Wpf/App.xaml.cs](../../src/PhotoViewerV3.Wpf/App.xaml.cs)
+- [src/Lumora.Services/Messaging/Messages.cs](../../src/Lumora.Services/Messaging/Messages.cs)
+- [src/Lumora.Services/Scanning/ScanMessages.cs](../../src/Lumora.Services/Scanning/ScanMessages.cs)
+- [src/Lumora.Services/ServiceCollectionExtensions.cs](../../src/Lumora.Services/ServiceCollectionExtensions.cs)
+- [src/Lumora.Wpf/App.xaml.cs](../../src/Lumora.Wpf/App.xaml.cs)
 - [CLAUDE.md](../../CLAUDE.md) (Code-Profil „Schichten / Kopplung“)

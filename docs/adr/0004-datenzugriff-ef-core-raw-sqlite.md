@@ -37,7 +37,7 @@ WAL-Mode + Single-Writer-Pattern (Channel oder `SemaphoreSlim`).
 
 ### Neutral
 - `Microsoft.Data.Sqlite` ist bereits transitiv über EF Core dabei, wird trotzdem explizit referenziert
-- Raw-SQL-Code lebt in `PhotoViewerV3.Data/RawSql/`
+- Raw-SQL-Code lebt in `Lumora.Data/RawSql/`
 
 ## Alternativen
 

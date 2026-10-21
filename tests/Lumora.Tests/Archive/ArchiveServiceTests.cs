@@ -73,7 +73,7 @@ public sealed class ArchiveServiceTests
         File.ReadAllBytes(Path.Combine(target, "a.jpg")).Should().Equal(Jpeg(3000));
         File.Exists(Path.Combine(target, "sub", "deep", "b.mp4")).Should().BeTrue();
         File.ReadAllText(Path.Combine(target, "notes.txt")).Should().Be("hallo");
-        Directory.EnumerateFiles(target, "*.pv3part", SearchOption.AllDirectories).Should().BeEmpty();
+        Directory.EnumerateFiles(target, "*.lumorapart", SearchOption.AllDirectories).Should().BeEmpty();
         File.GetLastWriteTimeUtc(Path.Combine(target, "a.jpg")).Year.Should().Be(2024);
 
         // Fortschritt: Start mit 0, Ende mit allen Dateien und Bytes (Progress<T> meldet asynchron → kurz warten).
@@ -225,7 +225,7 @@ public sealed class ArchiveServiceTests
         result.Canceled.Should().BeTrue();
         result.FilesExtracted.Should().BeLessThan(20);
         var target = Path.Combine(fx.OutsideDir, "gross");
-        Directory.EnumerateFiles(target, "*.pv3part").Should().BeEmpty();
+        Directory.EnumerateFiles(target, "*.lumorapart").Should().BeEmpty();
         Directory.EnumerateFiles(target, "*.jpg").Should().HaveCount(result.FilesExtracted);
     }
 

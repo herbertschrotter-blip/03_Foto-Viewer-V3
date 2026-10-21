@@ -61,7 +61,7 @@ mit zwei leeren `IEnumerable<string>` wählt.
 
 ## Referenzen
 
-- [src/PhotoViewerV3.Services/Media/IMediaFormatRegistry.cs](../../src/PhotoViewerV3.Services/Media/IMediaFormatRegistry.cs)
-- [src/PhotoViewerV3.Services/Media/MediaFormatRegistry.cs](../../src/PhotoViewerV3.Services/Media/MediaFormatRegistry.cs)
-- [src/PhotoViewerV3.Services/Thumbnails/ThumbnailService.cs](../../src/PhotoViewerV3.Services/Thumbnails/ThumbnailService.cs) (FFmpeg-Fallback bei `wic_decode_failed`)
+- [src/Lumora.Services/Media/IMediaFormatRegistry.cs](../../src/Lumora.Services/Media/IMediaFormatRegistry.cs)
+- [src/Lumora.Services/Media/MediaFormatRegistry.cs](../../src/Lumora.Services/Media/MediaFormatRegistry.cs)
+- [src/Lumora.Services/Thumbnails/ThumbnailService.cs](../../src/Lumora.Services/Thumbnails/ThumbnailService.cs) (FFmpeg-Fallback bei `wic_decode_failed`)
 - [ADR-0006](0006-bild-und-video-pipeline.md), [CHANGELOG 0.2.0](../../CHANGELOG.md)

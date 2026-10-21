@@ -61,7 +61,7 @@
 | Path | Profile | Erreichbar | Dauer | Grund |
 |---|---|---|---|---|
 | `C:\Windows\system32` (Cold-Start) | `LocalSsd` | true | **180 ms** | MSFT_PhysicalDisk MediaType=4 (SSD): Samsung SSD 960 PRO 1TB |
-| `D:\OneDrive\…\03_Foto-Viewer-V3` | `LocalHddOrUsb` | true | **56 ms** | Win32_DiskDrive Model-Heuristik: `Microsoft Storage Space Device (SCSI)` → konservativ HDD |
+| `D:\Code\Lumora` | `LocalHddOrUsb` | true | **56 ms** | Win32_DiskDrive Model-Heuristik: `Microsoft Storage Space Device (SCSI)` → konservativ HDD |
 | `D:\OneDrive` | `LocalHddOrUsb` | true | **57 ms** | dito |
 | `C:\Users\herbe` (Warm-Cache) | `LocalSsd` | true | **59 ms** | MSFT_PhysicalDisk MediaType=4 (SSD): Samsung SSD 960 PRO 1TB |
 | `\\nonexistent-spike-host\share` (offline) | `NetworkShare` | false | **2.511 ms** | UNC-Prefix, Root NICHT erreichbar (Timeout 2,5 s) |
@@ -107,13 +107,13 @@ Freigabe für:
 ## Reproduzierbarkeit
 
 ```powershell
-cd "D:\OneDrive\Dokumente\02 Arbeit\05 Vorlagen - Scripte\03_Foto-Viewer-V3"
-dotnet run --project tests\PhotoViewerV3.PerfTests -c Release -- spike06-storage-detection [--path C:\foo --path D:\bar ...]
+cd "D:\Code\Lumora"
+dotnet run --project tests\Lumora.PerfTests -c Release -- spike06-storage-detection [--path C:\foo --path D:\bar ...]
 ```
 
 Default-Pfade: `C:\Windows\system32`, current dir, `%OneDrive%`, `%UserProfile%`, `\\nonexistent-spike-host\share`.
 
 ## Code
 
-- [tests/PhotoViewerV3.PerfTests/Spikes/Storage/StorageProfileDetector.cs](../../tests/PhotoViewerV3.PerfTests/Spikes/Storage/StorageProfileDetector.cs)
-- [tests/PhotoViewerV3.PerfTests/Spikes/Storage/Spike06StorageDetection.cs](../../tests/PhotoViewerV3.PerfTests/Spikes/Storage/Spike06StorageDetection.cs)
+- [tests/Lumora.PerfTests/Spikes/Storage/StorageProfileDetector.cs](../../tests/Lumora.PerfTests/Spikes/Storage/StorageProfileDetector.cs)
+- [tests/Lumora.PerfTests/Spikes/Storage/Spike06StorageDetection.cs](../../tests/Lumora.PerfTests/Spikes/Storage/Spike06StorageDetection.cs)

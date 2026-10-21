@@ -95,9 +95,9 @@
 
 ## Referenzen
 
-- `src/PhotoViewerV3.Services/Thumbnails/ThumbnailSizing.cs`, `ThumbnailService.cs`, `ThumbnailService.Maintenance.cs`,
+- `src/Lumora.Services/Thumbnails/ThumbnailSizing.cs`, `ThumbnailService.cs`, `ThumbnailService.Maintenance.cs`,
   `FfmpegStreamInfo.cs`, `FfmpegVideoThumbnailer.cs`
-- `src/PhotoViewerV3.Wpf/Thumbnails/WicImageThumbnailRenderer.cs`,
-  `src/PhotoViewerV3.Wpf/Gallery/ViewModels/GalleryViewModel.ThumbnailDecode.cs`
-- Tests: `tests/PhotoViewerV3.Tests/Thumbnails/ThumbnailUpgradeTests.cs`, `ThumbnailSizingTests.cs`,
-  `tests/PhotoViewerV3.Wpf.Tests/Gallery/GalleryThumbnailDecodeTests.cs`; Rauchtest-Schritt „Vorschaubild-Größe und Bildmaße“
+- `src/Lumora.Wpf/Thumbnails/WicImageThumbnailRenderer.cs`,
+  `src/Lumora.Wpf/Gallery/ViewModels/GalleryViewModel.ThumbnailDecode.cs`
+- Tests: `tests/Lumora.Tests/Thumbnails/ThumbnailUpgradeTests.cs`, `ThumbnailSizingTests.cs`,
+  `tests/Lumora.Wpf.Tests/Gallery/GalleryThumbnailDecodeTests.cs`; Rauchtest-Schritt „Vorschaubild-Größe und Bildmaße“

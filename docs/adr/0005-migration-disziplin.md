@@ -38,7 +38,7 @@ Während V0.1-Entwicklung wird Schema sich häufig ändern (Schemaentwicklung im
 
 ### Neutral
 - Backup wird nicht automatisch gelöscht (versioniert behalten)
-- Entwickler-CLI `PhotoViewerV3.Tools migrate / verify-db / rebuild-fts` ist optional nice-to-have, nicht zwingend V0.1
+- Entwickler-CLI `Lumora.Tools migrate / verify-db / rebuild-fts` ist optional nice-to-have, nicht zwingend V0.1
 
 ## Alternativen
 

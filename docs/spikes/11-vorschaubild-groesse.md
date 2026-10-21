@@ -3,7 +3,7 @@
 - **Status:** 🟢 Entschieden — kurze Kante 400 px, lange höchstens 1200 px, JPEG-Qualität 82
 - **Datum:** 2026-10-21 (v0.2.45)
 - **Bezogen auf:** [ADR-0043](../adr/0043-vorschaubilder-kurze-kante-und-bildmasse.md), PLAN Kap. 13,
-  Harness `tests/PhotoViewerV3.PerfTests/Spikes/Wic/Spike11ThumbnailSize.cs`
+  Harness `tests/Lumora.PerfTests/Spikes/Wic/Spike11ThumbnailSize.cs`
 
 ## Frage
 
@@ -22,7 +22,7 @@ Kompromiss.
 - Gemessen je Datei und Variante: Dateikopf lesen, auf Zielgröße dekodieren (WIC-Skalierung), EXIF-Drehung, JPEG
   schreiben — derselbe Weg wie `WicImageThumbnailRenderer`. Vorher ein Aufwärm-Lesen (Dateicache), Reihenfolge der
   Varianten je Datei abwechselnd. Ein Thread; Hochrechnung auf 4 Worker.
-- Aufruf: `dotnet run -c Release --project tests/PhotoViewerV3.PerfTests -- spike11-thumb-size --dir <Ordner> --out <Temp>`.
+- Aufruf: `dotnet run -c Release --project tests/Lumora.PerfTests -- spike11-thumb-size --dir <Ordner> --out <Temp>`.
 - Rechner: Herberts PC (i7-8700K, 6 Kerne / 12 Threads, 32 GB). Während der Messung liefen andere Builds — Zeiten
   schwanken je Lauf um ± 20 %; die Größen sind exakt reproduzierbar.
 

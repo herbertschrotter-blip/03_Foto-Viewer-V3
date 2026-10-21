@@ -4,7 +4,7 @@
   APP1-Schreiben
 - **Datum:** 2026-10-21 (v0.2.53)
 - **Bezogen auf:** [ADR-0050](../adr/0050-orte.md), PLAN Kap. 4, Harness
-  `tests/PhotoViewerV3.PerfTests/Spikes/Metadata/Spike13Places.cs`, Tests `tests/PhotoViewerV3.Tests/Places/*`
+  `tests/Lumora.PerfTests/Spikes/Metadata/Spike13Places.cs`, Tests `tests/Lumora.Tests/Places/*`
 
 ## Fragen
 
@@ -17,7 +17,7 @@
 
 - Herberts Handy-Katalog (lokal, 24 217 Mediendateien; **nur gelesen**, Ausgabe nur Zahlen — keine Datei-, Ordner- oder
   Ortsnamen). Wegwerf-DB im Temp-Ordner. Rechner: i7-8700K, 6 Kerne / 12 Threads, 32 GB, SSD.
-- Aufruf: `dotnet run -c Debug --project tests/PhotoViewerV3.PerfTests -- spike13-places --root <Ordner> --limit 2000`.
+- Aufruf: `dotnet run -c Debug --project tests/Lumora.PerfTests -- spike13-places --root <Ordner> --limit 2000`.
 - Schreiben nur an **synthetischen** JPEGs (50 × 4 MB, im Temp-Ordner) — nie an echten Fotos.
 
 ## Ergebnis

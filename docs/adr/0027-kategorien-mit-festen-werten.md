@@ -134,16 +134,16 @@ Offene Punkte aus 0.2.20, Umsetzung Claude (Agent, ohne Rückfragemöglichkeit �
 
 ## Referenzen
 
-- 0.2.23: `src/PhotoViewerV3.Wpf/Gallery/Categories/ICategoryPickerService.cs`, `CategoryPickerDialog.xaml(.cs)`,
+- 0.2.23: `src/Lumora.Wpf/Gallery/Categories/ICategoryPickerService.cs`, `CategoryPickerDialog.xaml(.cs)`,
   `Gallery/ViewModels/GalleryViewModel.Categories.cs` (Strg+K, `SortByCategory`), `Gallery/Data/GalleryPageSource.cs`
   (`BuildFilesSource`, `BuildCategoryOrderBy`, `ExplainAsync`), `Gallery/ListView/GalleryListView.xaml.cs` (`OnSorting`),
   `Lightbox/LightboxViewModel.Categories.cs`, `Lightbox/LightboxWindow.xaml(.cs)`; Tests
-  `tests/PhotoViewerV3.Wpf.Tests/Categories/CategoryPickerTests.cs`, `GalleryPageSourceCategoryTests.cs`,
-  `tests/PhotoViewerV3.Tests/Categories/CategoryServiceTests.cs`, Rauchtest-Schritt „Kategorien“
-- `src/PhotoViewerV3.Domain/Entities/Category*.cs`, `FileCategoryValue.cs`, `Data/EntitiesMapping/CategoryConfiguration.cs`,
+  `tests/Lumora.Wpf.Tests/Categories/CategoryPickerTests.cs`, `GalleryPageSourceCategoryTests.cs`,
+  `tests/Lumora.Tests/Categories/CategoryServiceTests.cs`, Rauchtest-Schritt „Kategorien“
+- `src/Lumora.Domain/Entities/Category*.cs`, `FileCategoryValue.cs`, `Data/EntitiesMapping/CategoryConfiguration.cs`,
   Migration `20261020095203_AddCategories`
-- `src/PhotoViewerV3.Services/Categories/*`, `Scanning/UserDataCarryOver.cs`
-- `src/PhotoViewerV3.Wpf/Settings/CategoryManagement/*`, `Gallery/Categories/*`, `Gallery/ViewModels/GalleryViewModel.Categories.cs`,
+- `src/Lumora.Services/Categories/*`, `Scanning/UserDataCarryOver.cs`
+- `src/Lumora.Wpf/Settings/CategoryManagement/*`, `Gallery/Categories/*`, `Gallery/ViewModels/GalleryViewModel.Categories.cs`,
   `Gallery/ListView/GalleryListModels.cs` (Spalten-Token), `Gallery/Data/GalleryPageSource.cs` (Filter-SQL)
-- Tests: `tests/PhotoViewerV3.Tests/Categories/CategoryServiceTests.cs`, `tests/PhotoViewerV3.Wpf.Tests/Categories/*`,
+- Tests: `tests/Lumora.Tests/Categories/CategoryServiceTests.cs`, `tests/Lumora.Wpf.Tests/Categories/*`,
   Rauchtest-Schritt „Kategorien“

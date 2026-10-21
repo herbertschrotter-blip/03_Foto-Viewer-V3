@@ -71,7 +71,7 @@ zusätzliche FTS-Spalte.
 
 ## Referenzen
 
-- Code: `src/PhotoViewerV3.Services/Tags/`, `src/PhotoViewerV3.Data/EntitiesMapping/TagConfiguration.cs`,
-  `FileTagConfiguration.cs`, Migration `AddTags`, `src/PhotoViewerV3.Wpf/Gallery/Data/GalleryPageSource.cs`
-  (`BuildSearchClause`, `BuildTagClause`), `src/PhotoViewerV3.Wpf/Gallery/Tags/`, `src/PhotoViewerV3.Wpf/Settings/TagManagement/`
-- Tests: `tests/PhotoViewerV3.Tests/Tags/TagServiceTests.cs`, `tests/PhotoViewerV3.Wpf.Tests/Tags/`
+- Code: `src/Lumora.Services/Tags/`, `src/Lumora.Data/EntitiesMapping/TagConfiguration.cs`,
+  `FileTagConfiguration.cs`, Migration `AddTags`, `src/Lumora.Wpf/Gallery/Data/GalleryPageSource.cs`
+  (`BuildSearchClause`, `BuildTagClause`), `src/Lumora.Wpf/Gallery/Tags/`, `src/Lumora.Wpf/Settings/TagManagement/`
+- Tests: `tests/Lumora.Tests/Tags/TagServiceTests.cs`, `tests/Lumora.Wpf.Tests/Tags/`

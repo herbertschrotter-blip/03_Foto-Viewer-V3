@@ -152,22 +152,22 @@ Freigabe für:
 ## Reproduzierbarkeit
 
 ```powershell
-dotnet build .\PhotoViewerV3.slnx -c Release
-dotnet run --project .\tests\PhotoViewerV3.PerfTests --no-build -c Release -- spike01-sqlite-bulk --rows 500000 --folders 10000
+dotnet build .\Lumora.slnx -c Release
+dotnet run --project .\tests\Lumora.PerfTests --no-build -c Release -- spike01-sqlite-bulk --rows 500000 --folders 10000
 ```
 
 Optionen:
 - `--rows N` (Default 500.000)
 - `--folders N` (Default 10.000)
-- `--db PATH` (Default `%LocalAppData%\PhotoViewerV3\spike-01\library-spike.db`)
+- `--db PATH` (Default `%LocalAppData%\Lumora\spike-01\library-spike.db`)
 - `--validate-generator` (zusätzliche Generator-Sanity-Checks vor DB-Insert)
 
 Deterministische Seeds: Folder-Seed `20260510`, File-Seed `20260511`. Gleicher Run reproduziert identische Daten.
 
 ## Code
 
-- [tests/PhotoViewerV3.PerfTests/Spikes/Spike01SqliteBulk.cs](../../tests/PhotoViewerV3.PerfTests/Spikes/Spike01SqliteBulk.cs)
-- [tests/PhotoViewerV3.PerfTests/Spikes/SyntheticData/SyntheticDataGenerator.cs](../../tests/PhotoViewerV3.PerfTests/Spikes/SyntheticData/SyntheticDataGenerator.cs)
-- [tests/PhotoViewerV3.PerfTests/Spikes/Schema/SchemaBuilder.cs](../../tests/PhotoViewerV3.PerfTests/Spikes/Schema/SchemaBuilder.cs)
-- [tests/PhotoViewerV3.PerfTests/Spikes/Bulk/BulkInserter.cs](../../tests/PhotoViewerV3.PerfTests/Spikes/Bulk/BulkInserter.cs)
-- [tests/PhotoViewerV3.PerfTests/Spikes/Queries/QueryBenchmarks.cs](../../tests/PhotoViewerV3.PerfTests/Spikes/Queries/QueryBenchmarks.cs)
+- [tests/Lumora.PerfTests/Spikes/Spike01SqliteBulk.cs](../../tests/Lumora.PerfTests/Spikes/Spike01SqliteBulk.cs)
+- [tests/Lumora.PerfTests/Spikes/SyntheticData/SyntheticDataGenerator.cs](../../tests/Lumora.PerfTests/Spikes/SyntheticData/SyntheticDataGenerator.cs)
+- [tests/Lumora.PerfTests/Spikes/Schema/SchemaBuilder.cs](../../tests/Lumora.PerfTests/Spikes/Schema/SchemaBuilder.cs)
+- [tests/Lumora.PerfTests/Spikes/Bulk/BulkInserter.cs](../../tests/Lumora.PerfTests/Spikes/Bulk/BulkInserter.cs)
+- [tests/Lumora.PerfTests/Spikes/Queries/QueryBenchmarks.cs](../../tests/Lumora.PerfTests/Spikes/Queries/QueryBenchmarks.cs)

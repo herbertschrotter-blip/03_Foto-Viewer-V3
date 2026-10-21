@@ -123,8 +123,8 @@ Parallel nutzt die Galerie/Lightbox (anderer Agent) dieselben Daten über eine v
 
 ## Referenzen
 
-- Code: `src/PhotoViewerV3.Services/Faces/Assignment/` (`IFaceRecognitionService`, `FaceRecognitionService`,
-  `FaceAssignmentStore`, `FaceAssignmentModels`), `src/PhotoViewerV3.Services/Faces/Crops/`,
-  `src/PhotoViewerV3.Wpf/Persons/`
-- Tests: `tests/PhotoViewerV3.Tests/Faces/Assignment/`, `tests/PhotoViewerV3.Wpf.Tests/Persons/`; Rauchtest-Schritt
+- Code: `src/Lumora.Services/Faces/Assignment/` (`IFaceRecognitionService`, `FaceRecognitionService`,
+  `FaceAssignmentStore`, `FaceAssignmentModels`), `src/Lumora.Services/Faces/Crops/`,
+  `src/Lumora.Wpf/Persons/`
+- Tests: `tests/Lumora.Tests/Faces/Assignment/`, `tests/Lumora.Wpf.Tests/Persons/`; Rauchtest-Schritt
   „Personen“ (`Shell/Smoke/SmokeScenario.Persons.cs`)

@@ -126,27 +126,27 @@ Freigabe für:
    - Mit echtem WIC-PNG- oder gar `BitmapEncoder.Save(Stream)` ohne Re-Encoding (z.B. WebP via `BitmapEncoder.WebP`) wäre nochmal Reserve drin — aber dies ist V0.2+-Optimierung
 
 6. **Spike-Run lief in meiner Tool-Sandbox** (Claude Code Desktop UWP-AppContainer).
-   - Die generierten JPGs landen im virtualisierten Pfad `%LocalAppData%\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Local\PhotoViewerV3\spike-04\synth-jpgs\`, nicht im echten `%LocalAppData%\…\spike-04\`.
+   - Die generierten JPGs landen im virtualisierten Pfad `%LocalAppData%\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Local\Lumora\spike-04\synth-jpgs\`, nicht im echten `%LocalAppData%\…\spike-04\`.
    - Auf Performance-Messung hat das **keinen Einfluss** (Decode/Encode-Speed identisch).
    - Falls Benchmark gegen echte User-Bibliotheks-JPGs ausgeführt wird, bitte aus eigener (nicht-AppContainer-isolierter) PowerShell starten oder eigenen `--dir`-Pfad mit `D:\…`-Prefix übergeben.
 
 ## Reproduzierbarkeit
 
 ```powershell
-cd "D:\OneDrive\Dokumente\02 Arbeit\05 Vorlagen - Scripte\03_Foto-Viewer-V3"
-dotnet run --project tests\PhotoViewerV3.PerfTests -c Release -- spike04-wic-benchmark --count 100
+cd "D:\Code\Lumora"
+dotnet run --project tests\Lumora.PerfTests -c Release -- spike04-wic-benchmark --count 100
 ```
 
 Optionen:
 - `--count N` (Default 1000)
 - `--thumb-width PX` (Default 320)
 - `--workers N` (Default CPU-2)
-- `--dir PATH` (Default `%LocalAppData%\PhotoViewerV3\spike-04\`)
+- `--dir PATH` (Default `%LocalAppData%\Lumora\spike-04\`)
 
 Synthetic-Generate-Phase ist idempotent — vorhandene `synth_*.jpg` werden wiederverwendet.
 
 ## Code
 
-- [tests/PhotoViewerV3.PerfTests/Spikes/Wic/SyntheticJpgGenerator.cs](../../tests/PhotoViewerV3.PerfTests/Spikes/Wic/SyntheticJpgGenerator.cs)
-- [tests/PhotoViewerV3.PerfTests/Spikes/Wic/WicDecoder.cs](../../tests/PhotoViewerV3.PerfTests/Spikes/Wic/WicDecoder.cs) — drei Decoder-Pfade + `DecodeAndSaveAtomic`
-- [tests/PhotoViewerV3.PerfTests/Spikes/Wic/Spike04WicBenchmark.cs](../../tests/PhotoViewerV3.PerfTests/Spikes/Wic/Spike04WicBenchmark.cs)
+- [tests/Lumora.PerfTests/Spikes/Wic/SyntheticJpgGenerator.cs](../../tests/Lumora.PerfTests/Spikes/Wic/SyntheticJpgGenerator.cs)
+- [tests/Lumora.PerfTests/Spikes/Wic/WicDecoder.cs](../../tests/Lumora.PerfTests/Spikes/Wic/WicDecoder.cs) — drei Decoder-Pfade + `DecodeAndSaveAtomic`
+- [tests/Lumora.PerfTests/Spikes/Wic/Spike04WicBenchmark.cs](../../tests/Lumora.PerfTests/Spikes/Wic/Spike04WicBenchmark.cs)

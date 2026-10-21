@@ -50,7 +50,7 @@ Transaktion“ — statt „persistente Sicherung mit Wiederaufnahme“:
   selben Block sind Löschen (ohne zeilenweises FTS-`'delete'`, der `'rebuild'` am Ende ersetzt den ganzen Index) und
   Zurückschreiben. Gemessen (synthetisch, schlechtester Fall: jede Datei mit Bewertung, jede zehnte mit zwei Tags):
   siehe CHANGELOG 0.2.24 (`ClearAndRescanUserDataTests.Mengen_Messung_synthetischer_Katalog`,
-  `PV3_CARRYOVER_ROWS=500000`).
+  `LUMORA_CARRYOVER_ROWS=500000`).
 - **Suchindex:** Die CLAUDE.md-Regel „vor DELETE `'delete'` mit den alten Werten“ dient der Konsistenz zwischen
   `Files` und `FilesFts`. Hier wird der Index in derselben Transaktion komplett per `'rebuild'` aus `Files` neu
   aufgebaut (wie der Fresh-Scan es schon immer tat); beim Commit ist er konsistent, bei einem Rollback unverändert.
@@ -101,8 +101,8 @@ Transaktion“ — statt „persistente Sicherung mit Wiederaufnahme“:
 
 ## Referenzen
 
-- [src/PhotoViewerV3.Services/Scanning/FullScanCatalogWriter.cs](../../src/PhotoViewerV3.Services/Scanning/FullScanCatalogWriter.cs)
-- [src/PhotoViewerV3.Services/Scanning/UserDataCarryOver.cs](../../src/PhotoViewerV3.Services/Scanning/UserDataCarryOver.cs)
-- [src/PhotoViewerV3.Services/Scanning/ScanService.cs](../../src/PhotoViewerV3.Services/Scanning/ScanService.cs) (`RunFullScanAsync`)
-- [tests/PhotoViewerV3.Tests/Scanning/ClearAndRescanFailureTests.cs](../../tests/PhotoViewerV3.Tests/Scanning/ClearAndRescanFailureTests.cs)
+- [src/Lumora.Services/Scanning/FullScanCatalogWriter.cs](../../src/Lumora.Services/Scanning/FullScanCatalogWriter.cs)
+- [src/Lumora.Services/Scanning/UserDataCarryOver.cs](../../src/Lumora.Services/Scanning/UserDataCarryOver.cs)
+- [src/Lumora.Services/Scanning/ScanService.cs](../../src/Lumora.Services/Scanning/ScanService.cs) (`RunFullScanAsync`)
+- [tests/Lumora.Tests/Scanning/ClearAndRescanFailureTests.cs](../../tests/Lumora.Tests/Scanning/ClearAndRescanFailureTests.cs)
   (Abbruch je Phase, Ausnahme je Phase, simulierter Absturz mit Wiederaufnahme, Kategorien)

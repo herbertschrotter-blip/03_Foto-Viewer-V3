@@ -83,8 +83,8 @@ dieses Präfix (Fremdschlüssel, Kategorie-Filter, Suche nach Kategorie-Namen) m
 
 ## Referenzen
 
-- Code: `src/PhotoViewerV3.Wpf/Gallery/Data/GalleryPageSource.CategorySort.cs`, Migration
-  `src/PhotoViewerV3.Data/Migrations/*_AddCategorySortIndex.cs`
-- Tests: `tests/PhotoViewerV3.Wpf.Tests/Categories/GalleryCategorySortPagingTests.cs`,
-  `GalleryPageSourceCategoryTests.cs`, `tests/PhotoViewerV3.Tests/Categories/CategorySortIndexMigrationTests.cs`
+- Code: `src/Lumora.Wpf/Gallery/Data/GalleryPageSource.CategorySort.cs`, Migration
+  `src/Lumora.Data/Migrations/*_AddCategorySortIndex.cs`
+- Tests: `tests/Lumora.Wpf.Tests/Categories/GalleryCategorySortPagingTests.cs`,
+  `GalleryPageSourceCategoryTests.cs`, `tests/Lumora.Tests/Categories/CategorySortIndexMigrationTests.cs`
 - Messung: [docs/spikes/08-suche-sortierung.md](../spikes/08-suche-sortierung.md)

@@ -4,7 +4,7 @@
 - **Datum:** 2026-05-10
 - **Entscheider:** Herbert Schrotter, Claude, GPT-5
 - **Ergänzt durch:** [ADR-0020](0020-bibliothek-mehrere-wurzeln-rollen.md) — eine Bibliothek hat mehrere Wurzeln (eine Archiv-Wurzel, beliebig viele Eingänge); `RootPath` bleibt als Anzeigefeld der Archiv-Wurzel
-- **Ergänzt durch:** [ADR-0026](0026-speicherort-katalog-waehlbar.md) — Ordner von DB und Thumbnails in den Einstellungen wählbar (Standard bleibt `%LocalAppData%\PhotoViewerV3`)
+- **Ergänzt durch:** [ADR-0026](0026-speicherort-katalog-waehlbar.md) — Ordner von DB und Thumbnails in den Einstellungen wählbar (Standard bleibt `%LocalAppData%\Lumora`)
 
 ## Kontext
 
@@ -12,7 +12,7 @@ Wie wird die Bibliothek-Verwaltung modelliert? Eine Library zur Zeit oder mehrer
 
 ## Entscheidung
 
-**MVP nutzt genau eine aktive Library**, DB unter `%LocalAppData%\PhotoViewerV3\library.db`. **Schema enthält `Libraries`-Tabelle und `LibraryId`-FKs auf allen User-Daten** (Files, Folders, Plans, Settings), auch wenn V0.1 keine Multi-Library-UI hat.
+**MVP nutzt genau eine aktive Library**, DB unter `%LocalAppData%\Lumora\library.db`. **Schema enthält `Libraries`-Tabelle und `LibraryId`-FKs auf allen User-Daten** (Files, Folders, Plans, Settings), auch wenn V0.1 keine Multi-Library-UI hat.
 
 ## Begründung
 
@@ -38,7 +38,7 @@ Wie wird die Bibliothek-Verwaltung modelliert? Eine Library zur Zeit oder mehrer
 ## Alternativen
 
 - **Mehrere Libraries direkt im MVP** → verworfen weil: UI-Komplexität (Switcher, Default-Library, leere States), V0.1 lieber fokussiert.
-- **Lightroom-Stil portable Catalog neben Root-Ordner** (`<Root>\.photoviewerv3\library.db`) → verworfen weil: Pfad-/Laufwerks-/Rechteprobleme, OneDrive-Sync-Risiko, NAS-Schreibrechte-Probleme, Backup-Komplexität.
+- **Lightroom-Stil portable Catalog neben Root-Ordner** (`<Root>\.lumora\library.db`) → verworfen weil: Pfad-/Laufwerks-/Rechteprobleme, OneDrive-Sync-Risiko, NAS-Schreibrechte-Probleme, Backup-Komplexität.
 - **DB neben ausführbarer Datei** → verworfen weil: nicht pro Windows-User isoliert, Portable-Modus nicht intuitiv.
 
 ## Referenzen

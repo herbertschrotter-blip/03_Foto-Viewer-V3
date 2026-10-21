@@ -223,7 +223,7 @@ public sealed class InfoViewModelTests
         actions.Shown[0].Details.Should().Contain("WPF-UI").And.Contain("SharpCompress").And.Contain("ONNX Runtime")
             .And.Contain("NUR NICHT-KOMMERZIELLE NUTZUNG").And.Contain("LGPL");
 
-        var empty = Directory.CreateTempSubdirectory("pv3-info-");
+        var empty = Directory.CreateTempSubdirectory("lumora-info-");
         try
         {
             var without = Create(actions, new InMemoryLibraries(), empty.FullName);

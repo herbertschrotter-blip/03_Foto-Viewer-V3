@@ -72,8 +72,8 @@ Der einzige Weg, Dateien zu verschieben, umzubenennen oder zu löschen, ist `IFi
 
 ## Referenzen
 
-- [src/PhotoViewerV3.Services/Operations/IFileOperationService.cs](../../src/PhotoViewerV3.Services/Operations/IFileOperationService.cs)
-- [src/PhotoViewerV3.Services/Operations/FileOperationService.cs](../../src/PhotoViewerV3.Services/Operations/FileOperationService.cs)
-- [src/PhotoViewerV3.Services/Operations/WindowsRecycleBin.cs](../../src/PhotoViewerV3.Services/Operations/WindowsRecycleBin.cs)
-- [src/PhotoViewerV3.Services/Sorter/SorterMoveExecutor.cs](../../src/PhotoViewerV3.Services/Sorter/SorterMoveExecutor.cs) (Sorter/Flatten nutzen den Service)
+- [src/Lumora.Services/Operations/IFileOperationService.cs](../../src/Lumora.Services/Operations/IFileOperationService.cs)
+- [src/Lumora.Services/Operations/FileOperationService.cs](../../src/Lumora.Services/Operations/FileOperationService.cs)
+- [src/Lumora.Services/Operations/WindowsRecycleBin.cs](../../src/Lumora.Services/Operations/WindowsRecycleBin.cs)
+- [src/Lumora.Services/Sorter/SorterMoveExecutor.cs](../../src/Lumora.Services/Sorter/SorterMoveExecutor.cs) (Sorter/Flatten nutzen den Service)
 - [ADR-0012](0012-operation-logging.md), [CLAUDE.md](../../CLAUDE.md) (Regel „Datei-Operationen immer mit OperationBatch“)

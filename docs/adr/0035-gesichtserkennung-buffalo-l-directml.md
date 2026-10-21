@@ -61,7 +61,7 @@ freigegeben und dürfen weder ins Repo noch ins portable Paket.
    bleiben, also auch FaceRejections und `CoverFaceId`; kein Foto muss neu analysiert werden. Bleibt eine negative FileId
    übrig, scheitert der Commit an den Fremdschlüsseln und der alte Katalog bleibt unverändert (ADR-0028).
 8. **Modell per Benutzer-Download** (`IFaceModelProvider`): Ordner `<AppData>\models\buffalo_l\` (bleibt beim Umzug der
-   Katalog-DB in der App-Wurzel); `PHOTOVIEWERV3_FACE_MODELS` überschreibt ihn für Entwicklung und Tests. Fehlt das
+   Katalog-DB in der App-Wurzel); `LUMORA_FACE_MODELS` überschreibt ihn für Entwicklung und Tests. Fehlt das
    Modell, zeigen die Einstellungen „Modell herunterladen… (275 MB, InsightFace buffalo_l, nur nicht-kommerzielle
    Nutzung)“. Erst nach Bestätigung im Dialog (AppDialogWindow über `IDialogService`, mit Quelle, Zielordner und
    Lizenzhinweis) lädt die App das Archiv von GitHub (Release v0.7), prüft SHA-256
@@ -79,7 +79,7 @@ ist als Vorschlag an Herbert offen.
 ## Lizenz
 
 InsightFace-Code steht unter MIT, die vortrainierten Modelle (buffalo_l) sind **nur für nicht-kommerzielle
-Forschungszwecke** freigegeben. PhotoViewer V3 ist ein privates Projekt; die Modelle werden nicht weitergegeben, sondern
+Forschungszwecke** freigegeben. Lumora ist ein privates Projekt; die Modelle werden nicht weitergegeben, sondern
 vom Benutzer selbst bezogen. Für eine kommerzielle Nutzung wären andere Modelle nötig (neue Kennung, Neuindizierung).
 
 ## Konsequenzen

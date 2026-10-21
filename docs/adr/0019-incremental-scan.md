@@ -83,9 +83,9 @@ halb eingehängtes Laufwerk darf nicht zehntausende Dateien stillschweigend als 
 
 ## Referenzen
 
-- [src/PhotoViewerV3.Services/Scanning/IncrementalScanRunner.cs](../../src/PhotoViewerV3.Services/Scanning/IncrementalScanRunner.cs)
-- [src/PhotoViewerV3.Services/Scanning/RootAvailabilityProbe.cs](../../src/PhotoViewerV3.Services/Scanning/RootAvailabilityProbe.cs)
-- [src/PhotoViewerV3.Services/Scanning/MassMissingGuard.cs](../../src/PhotoViewerV3.Services/Scanning/MassMissingGuard.cs)
-- [src/PhotoViewerV3.Services/Scanning/ScanModels.cs](../../src/PhotoViewerV3.Services/Scanning/ScanModels.cs) (`ScanMode`, `ScanOutcome`, `ScanResult`)
-- [src/PhotoViewerV3.Wpf/Library/LibraryViewModel.cs](../../src/PhotoViewerV3.Wpf/Library/LibraryViewModel.cs) (Dialoge des Guards)
+- [src/Lumora.Services/Scanning/IncrementalScanRunner.cs](../../src/Lumora.Services/Scanning/IncrementalScanRunner.cs)
+- [src/Lumora.Services/Scanning/RootAvailabilityProbe.cs](../../src/Lumora.Services/Scanning/RootAvailabilityProbe.cs)
+- [src/Lumora.Services/Scanning/MassMissingGuard.cs](../../src/Lumora.Services/Scanning/MassMissingGuard.cs)
+- [src/Lumora.Services/Scanning/ScanModels.cs](../../src/Lumora.Services/Scanning/ScanModels.cs) (`ScanMode`, `ScanOutcome`, `ScanResult`)
+- [src/Lumora.Wpf/Library/LibraryViewModel.cs](../../src/Lumora.Wpf/Library/LibraryViewModel.cs) (Dialoge des Guards)
 - [PLAN.md Kap. 12](../../PLAN.md), [Spike #06 Storage Detection](../spikes/06-storage-detection.md)

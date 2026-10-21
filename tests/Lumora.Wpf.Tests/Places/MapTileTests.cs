@@ -13,7 +13,7 @@ namespace Lumora.Wpf.Tests.Places;
 /// </summary>
 public sealed class MapTileTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "pv3-maptiles-" + Guid.NewGuid().ToString("N"));
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "lumora-maptiles-" + Guid.NewGuid().ToString("N"));
 
     public void Dispose()
     {

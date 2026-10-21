@@ -71,7 +71,7 @@ Spalte an `Files`. `Libraries.RootPath` bleibt als Anzeige-/Kompatibilitätsfeld
 
 ## Referenzen
 
-- `src/PhotoViewerV3.Domain/Entities/LibraryRoot.cs`, `Data/Migrations/*_AddLibraryRoots.cs`
+- `src/Lumora.Domain/Entities/LibraryRoot.cs`, `Data/Migrations/*_AddLibraryRoots.cs`
 - `Services/Library/LibraryService.cs` (Wurzelverwaltung), `Services/Scanning/ScanService.cs` (Scan je Wurzel),
   `Services/Operations/FileOperationService.cs` (Ziel unter irgendeiner Wurzel, Ordner anlegen/umbenennen)
 - `Wpf/Gallery/ArchiveTarget/**` (Dialog „Ins Archiv…“), `Wpf/Gallery/Data/GalleryPageSource.cs` (Status-Filter)

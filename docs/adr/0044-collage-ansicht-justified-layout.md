@@ -99,9 +99,9 @@ müssen Blätter im Automation-Baum bleiben (v0.2.0-Hänger).
 
 ## Referenzen
 
-- `src/PhotoViewerV3.Wpf/Gallery/Controls/JustifiedTilePanel.cs`, `JustifiedTilePanel.Layout.cs`
-- `src/PhotoViewerV3.Wpf/Gallery/Views/GalleryCollageTemplates.xaml`, `GalleryView.xaml(.cs)` (`ApplyGalleryViewMode`)
-- `src/PhotoViewerV3.Wpf/Gallery/ViewModels/GalleryViewModel.Collage.cs`, `GalleryItem.Collage.cs`,
+- `src/Lumora.Wpf/Gallery/Controls/JustifiedTilePanel.cs`, `JustifiedTilePanel.Layout.cs`
+- `src/Lumora.Wpf/Gallery/Views/GalleryCollageTemplates.xaml`, `GalleryView.xaml(.cs)` (`ApplyGalleryViewMode`)
+- `src/Lumora.Wpf/Gallery/ViewModels/GalleryViewModel.Collage.cs`, `GalleryItem.Collage.cs`,
   `GalleryViewModel.ThumbnailDecode.cs` (`FromCollageRow`, `IsCoveredBy`)
 - Tests: `JustifiedRowLayoutTests`, `JustifiedTilePanelTests`, `CollageThumbnailDecodeTests`; Rauchtest-Schritt
   „Collage-Ansicht“ (`Shell/Smoke/SmokeScenario.Collage.cs`)

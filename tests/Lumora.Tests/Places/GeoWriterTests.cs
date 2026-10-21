@@ -13,7 +13,7 @@ namespace Lumora.Tests.Places;
 public sealed class GeoWriterTests : IDisposable
 {
     private static readonly GeoCoordinate Graz = new(47.0707, 15.4395);
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "pv3-geowrite-" + Guid.NewGuid().ToString("N"));
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "lumora-geowrite-" + Guid.NewGuid().ToString("N"));
 
     public GeoWriterTests() => Directory.CreateDirectory(_dir);
 

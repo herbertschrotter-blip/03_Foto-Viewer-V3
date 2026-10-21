@@ -101,8 +101,8 @@ Fingerabdrücken nachjustiert.
 
 ## Referenzen
 
-- Code: `src/PhotoViewerV3.Services/Faces/Recognition/` (`FaceRecognizer`, `FaceModel`, `LinearPersonClassifier`,
+- Code: `src/Lumora.Services/Faces/Recognition/` (`FaceRecognizer`, `FaceModel`, `LinearPersonClassifier`,
   `FaceClusterer`, `FaceLearningOptions`, `FaceLearningModels`, `VectorMath`)
-- Tests: `tests/PhotoViewerV3.Tests/Faces/Recognition/` (`FaceRecognizerTests`, `FaceClustererTests`,
+- Tests: `tests/Lumora.Tests/Faces/Recognition/` (`FaceRecognizerTests`, `FaceClustererTests`,
   `FaceLearningEvaluationTests`, Generator `SyntheticFaces`)
 - Messung: [docs/spikes/10-gesichter-lernen.md](../spikes/10-gesichter-lernen.md)

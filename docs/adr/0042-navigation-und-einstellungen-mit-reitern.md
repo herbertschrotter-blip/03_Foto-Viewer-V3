@@ -43,7 +43,7 @@ Strg+K, Lightbox). Ein Eingang wird oft hinzugefügt — bisher nur über die Se
    `IInboxActions.AddInboxToActiveLibraryAsync` (implementiert vom `LibraryViewModel`) — derselbe Ablauf wie der Knopf
    in den Einstellungen; Fehler als Dialog. Ein dort gestarteter Scan bleibt auf der Seite „Ordner“.
 6. **Info** (`Settings/Info`): Version = InformationalVersion der App = **oberster Eintrag `## [x.y.z]` der
-   CHANGELOG.md** (setzt `PhotoViewerV3.Wpf.csproj` beim Build — unverändert seit 0.2.x, jetzt mit Test), Build-Datum
+   CHANGELOG.md** (setzt `Lumora.Wpf.csproj` beim Build — unverändert seit 0.2.x, jetzt mit Test), Build-Datum
    = Änderungszeit der App-DLL, Debug/Release per `#if DEBUG`; Karten Entwicklung (ohne E-Mail-Adresse), Dieses System
    (.NET, Windows-Build, Grafikkarte über `user32!EnumDisplayDevices`, Ausführung der Gesichtserkennung, Modellzustand,
    Katalogzahlen), Speicherorte (Explorer), Verwendete Bausteine (Versionen per `FileVersionInfo` der DLLs neben der
@@ -94,8 +94,8 @@ Strg+K, Lightbox). Ein Eingang wird oft hinzugefügt — bisher nur über die Se
 ## Referenzen
 
 - Mockup 06 (Reiter „Navigation & Einstellungen“), abgenommen 2026-10-21
-- Code: `src/PhotoViewerV3.Wpf/Shell/{INavigationService,NavigationService,SettingsSectionState,LibrarySwitcher*}.cs`,
+- Code: `src/Lumora.Wpf/Shell/{INavigationService,NavigationService,SettingsSectionState,LibrarySwitcher*}.cs`,
   `Settings/SettingsPage.xaml(.cs)`, `Settings/Sections/*`, `Settings/Info/*`, `Library/LibraryViewModel.Inbox.cs`,
   `Folders/FolderTreeViewModel.AddInbox.cs`
-- Tests: `tests/PhotoViewerV3.Wpf.Tests/Shell/NavigationAndSettingsTabsTests.cs`, `Settings/InfoViewModelTests.cs`;
+- Tests: `tests/Lumora.Wpf.Tests/Shell/NavigationAndSettingsTabsTests.cs`, `Settings/InfoViewModelTests.cs`;
   Rauchtest-Schritt „Einstellungen-Reiter und Info“ (`Shell/Smoke/SmokeScenario.SettingsTabs.cs`)

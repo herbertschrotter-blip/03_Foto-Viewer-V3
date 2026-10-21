@@ -106,9 +106,9 @@ Galerie (anderer Agent) mit Abfragen über `Faces.State IN (0,1)`/`(0,1,2)`.
 
 ## Referenzen
 
-- Code: `src/PhotoViewerV3.Services/Faces/FaceAutoIgnore.cs`, `Faces/Assignment/IFaceIgnoreService.cs`,
+- Code: `src/Lumora.Services/Faces/FaceAutoIgnore.cs`, `Faces/Assignment/IFaceIgnoreService.cs`,
   `Faces/Assignment/FaceRecognitionService.Ignore.cs`, `Faces/Indexing/FaceIndexStore.cs`,
-  `src/PhotoViewerV3.Wpf/Persons/ViewModels/PersonsViewModel.Ignored.cs`, `Wpf/Faces/FaceSettingsViewModel.MinSize.cs`
-- Tests: `tests/PhotoViewerV3.Tests/Faces/Assignment/FaceIgnoreServiceTests.cs`,
-  `tests/PhotoViewerV3.Wpf.Tests/Persons/PersonsIgnoredViewModelTests.cs`, `PersonsSuggestionsListUiTests.cs`;
+  `src/Lumora.Wpf/Persons/ViewModels/PersonsViewModel.Ignored.cs`, `Wpf/Faces/FaceSettingsViewModel.MinSize.cs`
+- Tests: `tests/Lumora.Tests/Faces/Assignment/FaceIgnoreServiceTests.cs`,
+  `tests/Lumora.Wpf.Tests/Persons/PersonsIgnoredViewModelTests.cs`, `PersonsSuggestionsListUiTests.cs`;
   Rauchtest-Block „Ignorierte Gesichter“ im Schritt „Personen“ (`Shell/Smoke/SmokeScenario.PersonsIgnored.cs`)

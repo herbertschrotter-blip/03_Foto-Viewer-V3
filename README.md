@@ -2,7 +2,7 @@
 
 **Lumora** — aus *Lumen* (Licht) und *Memoria* (Erinnerung) — ist eine native Windows-Desktop-App (C# / .NET 10 / WPF mit WPF-UI 4, SQLite) zum Ansehen, Bewerten, Sortieren und Verschieben
 großer Foto- und Video-Bibliotheken (50 000–500 000 Dateien). Nachfolger der PowerShell-Web-App V2
-(`../03_Foto-Viewer-V2`), die bis zur Ablösung im Alltag weiterläuft. Stand: **0.2.0** (siehe [CHANGELOG.md](CHANGELOG.md)).
+(`../03_Foto-Viewer-V2`), die bis zur Ablösung im Alltag weiterläuft. Stand: **0.4.4** (siehe [CHANGELOG.md](CHANGELOG.md)).
 
 Bis 0.2.48 hieß die App „PhotoViewer V3“. Seit 0.2.49 heißt sie sichtbar **Lumora**, die Programmdatei `Lumora.exe`
 (Schriftzug und App-Symbol: [Mockup 07](mockups/07-lumora-schriftzug.html), [ADR-0047](docs/adr/0047-produktname-lumora.md)).

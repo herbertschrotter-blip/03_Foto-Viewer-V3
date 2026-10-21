@@ -5,7 +5,7 @@ namespace Lumora.Tests.Watch;
 
 public sealed class WatchPathFilterTests
 {
-    private readonly WatchPathFilter _filter = new(new MediaFormatRegistry(), Path.Combine(Path.GetTempPath(), "pv3-thumbs-root"));
+    private readonly WatchPathFilter _filter = new(new MediaFormatRegistry(), Path.Combine(Path.GetTempPath(), "lumora-thumbs-root"));
 
     [Theory]
     [InlineData(@"C:\lib\2024\IMG_0001.jpg", true)]
@@ -28,7 +28,7 @@ public sealed class WatchPathFilterTests
     [Fact]
     public void Own_thumbnail_cache_is_ignored()
     {
-        var thumb = Path.Combine(Path.GetTempPath(), "pv3-thumbs-root", "1", "17_320_still.jpg");
+        var thumb = Path.Combine(Path.GetTempPath(), "lumora-thumbs-root", "1", "17_320_still.jpg");
         _filter.IsRelevant(WatcherChangeTypes.Created, thumb).Should().BeFalse();
     }
 

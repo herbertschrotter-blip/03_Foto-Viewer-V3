@@ -1,6 +1,6 @@
 # Spike #03 — LibVLCSharp WPF Lightbox
 
-> **Stand v0.2.0:** Spike-Code in v0.2.0 entfernt (`Spike03/` mit `SpikeMediaDownloader`, `SpikeLightboxViewModel`, `SpikeLightboxView`, Spike-`LightboxWindow`); produktive Umsetzung: `src/PhotoViewerV3.Wpf/Lightbox` (`LibVlcHost`, `LightboxService`, `LightboxViewModel`, `LightboxWindow`). Die Code-Links unten zeigen auf die produktiven Dateien.
+> **Stand v0.2.0:** Spike-Code in v0.2.0 entfernt (`Spike03/` mit `SpikeMediaDownloader`, `SpikeLightboxViewModel`, `SpikeLightboxView`, Spike-`LightboxWindow`); produktive Umsetzung: `src/Lumora.Wpf/Lightbox` (`LibVlcHost`, `LightboxService`, `LightboxViewModel`, `LightboxWindow`). Die Code-Links unten zeigen auf die produktiven Dateien.
 
 - **Status:** ✅ Grün — Cutline gerettet, MP4-Lightbox bleibt in V0.1
 - **Datum gestartet:** 2026-05-11
@@ -31,10 +31,10 @@ Beweisen, dass `LibVLCSharp.WPF` in einem .NET-10 / WPF-UI-FluentWindow-Setup st
 ### Stack
 - `LibVLCSharp.WPF` 3.9.3 (managed wrapper)
 - `VideoLAN.LibVLC.Windows` 3.0.21 (native DLLs, ~50 MB)
-- Eingebettet im bestehenden `PhotoViewerV3.Wpf` (kein separates Projekt)
+- Eingebettet im bestehenden `Lumora.Wpf` (kein separates Projekt)
 
 ### Komponenten
-- **`SpikeMediaDownloader`** (Service) — lädt Big-Buck-Bunny einmalig nach `%LocalAppData%\PhotoViewerV3\spike-data\BigBuckBunny.mp4`, prüft Größe + SHA als Sanity-Check, gibt lokalen Pfad zurück
+- **`SpikeMediaDownloader`** (Service) — lädt Big-Buck-Bunny einmalig nach `%LocalAppData%\Lumora\spike-data\BigBuckBunny.mp4`, prüft Größe + SHA als Sanity-Check, gibt lokalen Pfad zurück
 - **`SpikeLightboxViewModel`** — `LibVLC` + `MediaPlayer` Lifecycle, Play-State, Position, Duration, Telemetrie (Time-to-First-Frame, Memory)
 - **`SpikeLightboxView`** (UserControl im NavigationView) — `VideoView`-Host, Transport-Bar (Play/Pause/Seek), "Lightbox-Window öffnen"-Button
 - **`LightboxWindow`** (separates `FluentWindow`) — eigenes Fenster mit `VideoView`, F=Fullscreen, Esc=Close, Multi-Monitor-fähig
@@ -116,8 +116,8 @@ Freigabe für:
 ## Reproduzierbarkeit
 
 ```powershell
-cd "D:\OneDrive\Dokumente\02 Arbeit\05 Vorlagen - Scripte\03_Foto-Viewer-V3"
-dotnet run --project src\PhotoViewerV3.Wpf -c Debug
+cd "D:\Code\Lumora"
+dotnet run --project src\Lumora.Wpf -c Debug
 ```
 
 Oder F5 in VS. Dann links auf "Spike: Lightbox" → "Sample laden (Sintel, ~4 MB)" → "Öffnen + Play".
@@ -126,7 +126,7 @@ Oder F5 in VS. Dann links auf "Spike: Lightbox" → "Sample laden (Sintel, ~4 MB
 
 Der Spike-Code (`Spike03/`) wurde in v0.2.0 entfernt; die Erkenntnisse leben in der produktiven Lightbox weiter:
 
-- [src/PhotoViewerV3.Wpf/Lightbox/LibVlcHost.cs](../../src/PhotoViewerV3.Wpf/Lightbox/LibVlcHost.cs) (`Core.Initialize()` einmal, LibVLC-Singleton)
-- [src/PhotoViewerV3.Wpf/Lightbox/LightboxViewModel.cs](../../src/PhotoViewerV3.Wpf/Lightbox/LightboxViewModel.cs) (MediaPlayer pro Fenster, Media pro Datei)
-- [src/PhotoViewerV3.Wpf/Lightbox/LightboxWindow.xaml](../../src/PhotoViewerV3.Wpf/Lightbox/LightboxWindow.xaml) (FluentWindow, VideoView-Host, F/F11 Vollbild, Esc)
-- [src/PhotoViewerV3.Wpf/Lightbox/LightboxService.cs](../../src/PhotoViewerV3.Wpf/Lightbox/LightboxService.cs) (ein Fenster pro Sitzung)
+- [src/Lumora.Wpf/Lightbox/LibVlcHost.cs](../../src/Lumora.Wpf/Lightbox/LibVlcHost.cs) (`Core.Initialize()` einmal, LibVLC-Singleton)
+- [src/Lumora.Wpf/Lightbox/LightboxViewModel.cs](../../src/Lumora.Wpf/Lightbox/LightboxViewModel.cs) (MediaPlayer pro Fenster, Media pro Datei)
+- [src/Lumora.Wpf/Lightbox/LightboxWindow.xaml](../../src/Lumora.Wpf/Lightbox/LightboxWindow.xaml) (FluentWindow, VideoView-Host, F/F11 Vollbild, Esc)
+- [src/Lumora.Wpf/Lightbox/LightboxService.cs](../../src/Lumora.Wpf/Lightbox/LightboxService.cs) (ein Fenster pro Sitzung)

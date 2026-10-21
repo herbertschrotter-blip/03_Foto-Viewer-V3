@@ -39,7 +39,7 @@ internal static class Spike12CaptureDate
         var root = Arg(args, "--root");
         var limit = int.TryParse(Arg(args, "--limit"), out var l) ? l : 2000;
         var runs = int.TryParse(Arg(args, "--runs"), out var r) ? r : 3;
-        var work = Arg(args, "--work") ?? Path.Combine(Path.GetTempPath(), "pv3-spike12-" + Guid.NewGuid().ToString("N"));
+        var work = Arg(args, "--work") ?? Path.Combine(Path.GetTempPath(), "lumora-spike12-" + Guid.NewGuid().ToString("N"));
         if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
         {
             Console.Error.WriteLine("Usage: spike12-capture-date --root PATH [--limit 2000] [--runs 3] [--work PATH]");

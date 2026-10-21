@@ -44,11 +44,11 @@ Hinweis, dass der Kartenserver den Ausschnitt sieht), Galerie-Kacheln/Marker kei
    `MapPickerWindow` (Klick setzt Nadel, Ortssuche).
 5. **Kacheln:** `OsmTileSource` mit User-Agent „Lumora/&lt;Version&gt; (private use)“, Semaphore 2, Platten-Cache
    `<CacheRoot>\maptiles\z\x\y.png` über **`ICatalogStoragePaths`** (neu, `Services/Infrastructure`, heute
-   `%LocalAppData%\PhotoViewerV3\cache`; Agent U biegt ihn im versteckten Modus um, leer = nur Speicher). Ablaufzeit aus
+   `%LocalAppData%\Lumora\cache`; Agent U biegt ihn im versteckten Modus um, leer = nur Speicher). Ablaufzeit aus
    `Cache-Control`/`Expires`, mindestens 7 Tage; abgelaufene Kacheln sofort zeigen und einmal neu holen; Grenze 500 MB,
    darüber LRU nach Zugriffszeit auf 90 %. `MapTileProvider` lädt nur die gerade sichtbaren Kacheln (Warteschlange wird
    bei jeder Bewegung ersetzt), Speicher-LRU 384 Kacheln. Netzfehler → 30 s nur Cache („Offline — Karte aus dem
-   Cache“), Gruppen funktionieren weiter. Abschaltbar mit `PHOTOVIEWERV3_MAP_TILES=off`; im Rauchtest und in Tests immer
+   Cache“), Gruppen funktionieren weiter. Abschaltbar mit `LUMORA_MAP_TILES=off`; im Rauchtest und in Tests immer
    aus (keine OSM-Abrufe). Zuordnung „© OpenStreetMap-Mitwirkende“ unten rechts, immer sichtbar.
 6. **Trennung & Datenschutz:** Punkte, Medien und Zählungen nur aus `IPlacesScope.GetLibraryIdsAsync` (heute aktive
    Bibliothek; Agent T stellt auf Verknüpfungsgruppen um), Bibliothekswechsel lädt neu und setzt den Start-Ausschnitt
@@ -98,5 +98,5 @@ Hinweis, dass der Kartenserver den Ausschnitt sieht), Galerie-Kacheln/Marker kei
 
 ## Referenzen
 
-- Code: `src/PhotoViewerV3.Services/Places/Clustering`, `src/PhotoViewerV3.Wpf/Places`, `Shell/Smoke/SmokeScenario.Places.cs`
+- Code: `src/Lumora.Services/Places/Clustering`, `src/Lumora.Wpf/Places`, `Shell/Smoke/SmokeScenario.Places.cs`
 - OSM-Kachel-Nutzungsbedingungen: operations.osmfoundation.org/policies/tiles · Lizenz: openstreetmap.org/copyright

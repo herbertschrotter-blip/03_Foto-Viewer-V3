@@ -82,12 +82,12 @@ automatischen Scans der Ordnerüberwachung (eigene Kennung je Dienst) für ihr e
 
 ## Referenzen
 
-- `src/PhotoViewerV3.Services/Scanning/ScanGate.cs`, `src/PhotoViewerV3.Services/Watch/OwnChangeRegistry.cs`,
-  `src/PhotoViewerV3.Services/Operations/FileOperationService.cs`, `src/PhotoViewerV3.Services/Watch/LibraryWatchService.cs`
-- Tests: `tests/PhotoViewerV3.Tests/Operations/FileOperationScanGateTests.cs`,
-  `tests/PhotoViewerV3.Tests/Watch/LibraryWatchServiceTests.OwnChanges.cs`, `tests/PhotoViewerV3.Tests/Watch/OwnChangeRegistryTests.cs`,
-  `tests/PhotoViewerV3.Wpf.Tests/ArchiveTarget/ArchiveMoveServiceGateTests.cs`
+- `src/Lumora.Services/Scanning/ScanGate.cs`, `src/Lumora.Services/Watch/OwnChangeRegistry.cs`,
+  `src/Lumora.Services/Operations/FileOperationService.cs`, `src/Lumora.Services/Watch/LibraryWatchService.cs`
+- Tests: `tests/Lumora.Tests/Operations/FileOperationScanGateTests.cs`,
+  `tests/Lumora.Tests/Watch/LibraryWatchServiceTests.OwnChanges.cs`, `tests/Lumora.Tests/Watch/OwnChangeRegistryTests.cs`,
+  `tests/Lumora.Wpf.Tests/ArchiveTarget/ArchiveMoveServiceGateTests.cs`
 - CHANGELOG 0.2.14 („Offen“, „Geprüft, nicht umgesetzt“), 0.2.17 und 0.2.22 (Wartezustände:
-  `src/PhotoViewerV3.Services/Scanning/ScanGateWait.cs`, `src/PhotoViewerV3.Services/Messaging/ScanGateMessages.cs`,
-  `src/PhotoViewerV3.Wpf/Shell/ScanGateWaitIndicator.cs`; Tests `tests/PhotoViewerV3.Tests/Watch/ScanGateWaitTests.cs`,
-  `tests/PhotoViewerV3.Wpf.Tests/Shell/ScanGateWaitViewModelTests.cs`)
+  `src/Lumora.Services/Scanning/ScanGateWait.cs`, `src/Lumora.Services/Messaging/ScanGateMessages.cs`,
+  `src/Lumora.Wpf/Shell/ScanGateWaitIndicator.cs`; Tests `tests/Lumora.Tests/Watch/ScanGateWaitTests.cs`,
+  `tests/Lumora.Wpf.Tests/Shell/ScanGateWaitViewModelTests.cs`)

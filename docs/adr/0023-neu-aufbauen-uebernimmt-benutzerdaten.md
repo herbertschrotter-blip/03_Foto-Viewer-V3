@@ -78,7 +78,7 @@ eine registrierte SQLite-Funktion). Keine Plausibilitätsprüfung über Größe/
 
 ## Referenzen
 
-- [src/PhotoViewerV3.Services/Scanning/UserDataCarryOver.cs](../../src/PhotoViewerV3.Services/Scanning/UserDataCarryOver.cs)
-- [src/PhotoViewerV3.Services/Scanning/ScanService.cs](../../src/PhotoViewerV3.Services/Scanning/ScanService.cs) (`RunFullScanAsync`)
-- [tests/PhotoViewerV3.Tests/Scanning/ClearAndRescanUserDataTests.cs](../../tests/PhotoViewerV3.Tests/Scanning/ClearAndRescanUserDataTests.cs)
-  (Mengen-Messung mit `PV3_CARRYOVER_ROWS=500000`)
+- [src/Lumora.Services/Scanning/UserDataCarryOver.cs](../../src/Lumora.Services/Scanning/UserDataCarryOver.cs)
+- [src/Lumora.Services/Scanning/ScanService.cs](../../src/Lumora.Services/Scanning/ScanService.cs) (`RunFullScanAsync`)
+- [tests/Lumora.Tests/Scanning/ClearAndRescanUserDataTests.cs](../../tests/Lumora.Tests/Scanning/ClearAndRescanUserDataTests.cs)
+  (Mengen-Messung mit `LUMORA_CARRYOVER_ROWS=500000`)

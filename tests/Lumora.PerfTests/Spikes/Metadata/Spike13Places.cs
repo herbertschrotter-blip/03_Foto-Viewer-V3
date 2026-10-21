@@ -40,7 +40,7 @@ internal static class Spike13Places
     {
         var root = Arg(args, "--root");
         var limit = int.TryParse(Arg(args, "--limit"), out var l) ? l : 2000;
-        var work = Arg(args, "--work") ?? Path.Combine(Path.GetTempPath(), "pv3-spike13-" + Guid.NewGuid().ToString("N"));
+        var work = Arg(args, "--work") ?? Path.Combine(Path.GetTempPath(), "lumora-spike13-" + Guid.NewGuid().ToString("N"));
         if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
         {
             Console.Error.WriteLine("Usage: spike13-places --root PATH [--limit 2000] [--work PATH]");

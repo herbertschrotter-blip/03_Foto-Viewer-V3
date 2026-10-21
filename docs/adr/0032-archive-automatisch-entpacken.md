@@ -108,9 +108,9 @@ zusammenspielt und wie verschachtelte Archive keine Endlosschleife auslösen.
 
 ## Referenzen
 
-- `src/PhotoViewerV3.Services/Archive/ArchiveAutoExtractService.cs`, `IArchiveAutoExtractService.cs`,
+- `src/Lumora.Services/Archive/ArchiveAutoExtractService.cs`, `IArchiveAutoExtractService.cs`,
   `ArchiveAutoExtractModels.cs`, `ArchiveAutoExtractSettingsStore.cs`, `ArchiveMessages.cs` (`ArchiveExtractedMessage`,
-  `ArchiveAutoExtractStatusMessage`), `ArchiveService.cs`; `src/PhotoViewerV3.Services/Watch/OwnChangeRegistry.cs` (`AddTree`)
-- `src/PhotoViewerV3.Wpf/Settings/SettingsPage.xaml` (Abschnitt „Archive“), `Shell/StatusBarViewModel.cs`, `Shell/StatusBar.xaml`, `App.xaml.cs`
-- Tests: `tests/PhotoViewerV3.Tests/Archive/ArchiveAutoExtractServiceTests.cs`, `Watch/OwnChangeRegistryTests.cs`,
-  `tests/PhotoViewerV3.Wpf.Tests/Settings/SettingsAutoExtractTests.cs`
+  `ArchiveAutoExtractStatusMessage`), `ArchiveService.cs`; `src/Lumora.Services/Watch/OwnChangeRegistry.cs` (`AddTree`)
+- `src/Lumora.Wpf/Settings/SettingsPage.xaml` (Abschnitt „Archive“), `Shell/StatusBarViewModel.cs`, `Shell/StatusBar.xaml`, `App.xaml.cs`
+- Tests: `tests/Lumora.Tests/Archive/ArchiveAutoExtractServiceTests.cs`, `Watch/OwnChangeRegistryTests.cs`,
+  `tests/Lumora.Wpf.Tests/Settings/SettingsAutoExtractTests.cs`

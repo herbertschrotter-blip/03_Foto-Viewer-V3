@@ -3,6 +3,21 @@
 Alle nennenswerten Änderungen an Lumora (bis 0.2.48 „PhotoViewer V3“). Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.4.4] — 2026-10-21
+
+### Docs — Auch die Doku und die Kurzform „pv3“ heißen Lumora (Nachtrag zu ADR-0056)
+- ADRs 0001–0055, ADR-Übersicht und Spikes: alle Erwähnungen von PhotoViewer/PhotoViewerV3, `PHOTOVIEWERV3_*`,
+  `photoviewer-*.log`, `PV3_*` und des alten OneDrive-Repo-Pfads nennen jetzt Lumora bzw. `D:\Code\Lumora` (Herbert:
+  „alles ersetzen“) — Befehle und Links der Spikes funktionieren wieder. Ausnahmen: ADR-0047 und ADR-0056 (sie
+  beschreiben die Umbenennung selbst) samt ihren Übersichtszeilen; „PhotoViewer V2“ bleibt (anderes Programm).
+- Code: Teildateien beim Entpacken heißen `.lumorapart` statt `.pv3part`; Temp-Ordner der Tests `lumora-*` statt `pv3-*`.
+  Alte, bei einem Abbruch liegengebliebene `.pv3part`-Dateien bleiben wie bisher liegen.
+- README: „Stand“ auf 0.4.4.
+
+### Offen
+- Ein Services-Test schlug in 2 von 9 Läufen fehl (nicht reproduzierbar, Testname nicht erfasst; danach 7 Läufe
+  grün, auch unter Last parallel zu den WPF-Tests). Beim nächsten roten Lauf den Namen festhalten.
+
 ## [0.4.3] — 2026-10-21
 
 ### Change (ADR-0056) — Auch technische Namen heißen Lumora

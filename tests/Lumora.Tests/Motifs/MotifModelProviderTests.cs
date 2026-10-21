@@ -14,7 +14,7 @@ namespace Lumora.Tests.Motifs;
 /// </summary>
 public sealed class MotifModelProviderTests : IDisposable
 {
-    private readonly string _folder = Path.Combine(Path.GetTempPath(), "pv3-motif-model-" + Guid.NewGuid().ToString("N"));
+    private readonly string _folder = Path.Combine(Path.GetTempPath(), "lumora-motif-model-" + Guid.NewGuid().ToString("N"));
 
     [Fact]
     public void Feste_Liste_enthaelt_die_freigegebenen_Dateien_mit_Pruefsummen()

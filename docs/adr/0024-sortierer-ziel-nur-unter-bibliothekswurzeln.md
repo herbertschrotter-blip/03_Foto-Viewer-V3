@@ -57,8 +57,8 @@ erreichbaren Wurzel **derselben** Bibliothek liegen; Ziele außerhalb aller Wurz
 
 ## Referenzen
 
-- `src/PhotoViewerV3.Services/Sorter/SorterRoots.cs` (`SorterTargetCheck`), `SorterCatalog.RequireLocationAsync`,
+- `src/Lumora.Services/Sorter/SorterRoots.cs` (`SorterTargetCheck`), `SorterCatalog.RequireLocationAsync`,
   `FileSorterService.BuildPlan`, `FlattenService.BuildPlan`
-- `src/PhotoViewerV3.Wpf/Sorter/ViewModels/SorterRootSelection.cs`, `Sorter/Views/SorterLocationView.xaml`
-- Tests: `tests/PhotoViewerV3.Tests/Sorter/SorterRootsTests.cs`, `tests/PhotoViewerV3.Wpf.Tests/Sorter/SorterRootSelectionTests.cs`
+- `src/Lumora.Wpf/Sorter/ViewModels/SorterRootSelection.cs`, `Sorter/Views/SorterLocationView.xaml`
+- Tests: `tests/Lumora.Tests/Sorter/SorterRootsTests.cs`, `tests/Lumora.Wpf.Tests/Sorter/SorterRootSelectionTests.cs`
 - CHANGELOG 0.2.16

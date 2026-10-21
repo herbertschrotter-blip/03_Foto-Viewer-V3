@@ -15,7 +15,7 @@ namespace Lumora.Wpf.Tests.Places;
 public sealed class MapStyleTests : IDisposable
 {
     private static readonly DateTime Now = new(2026, 10, 21, 12, 0, 0, DateTimeKind.Utc);
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "pv3-mapstyles-" + Guid.NewGuid().ToString("N"));
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "lumora-mapstyles-" + Guid.NewGuid().ToString("N"));
 
     public void Dispose()
     {

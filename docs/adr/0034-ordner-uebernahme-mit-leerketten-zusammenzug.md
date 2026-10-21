@@ -98,8 +98,8 @@ Außerdem waren die Begriffe „Archiv“ (Archiv-Wurzel) und „Archive“ (ZIP
 
 ## Referenzen
 
-- `src/PhotoViewerV3.Services/Operations/FolderAdoptionPlanner.cs`, `FolderAdoptionSourceReader.cs`,
-  `FolderAdoptionService.cs`, `FileOperationService.Adopt.cs`; `src/PhotoViewerV3.Services/Catalog/FolderMetadataService.cs`
-- `src/PhotoViewerV3.Wpf/Folders/Adoption/` (Dialog), `Folders/FolderActions.cs`
-- Tests: `tests/PhotoViewerV3.Tests/Operations/FolderAdoptionPlannerTests.cs`, `FolderAdoptionExecutionTests.cs`,
-  `tests/PhotoViewerV3.Wpf.Tests/ArchiveTarget/FolderAdoptionDialogTests.cs`; Rauchtest-Schritt „Ordner übernehmen“
+- `src/Lumora.Services/Operations/FolderAdoptionPlanner.cs`, `FolderAdoptionSourceReader.cs`,
+  `FolderAdoptionService.cs`, `FileOperationService.Adopt.cs`; `src/Lumora.Services/Catalog/FolderMetadataService.cs`
+- `src/Lumora.Wpf/Folders/Adoption/` (Dialog), `Folders/FolderActions.cs`
+- Tests: `tests/Lumora.Tests/Operations/FolderAdoptionPlannerTests.cs`, `FolderAdoptionExecutionTests.cs`,
+  `tests/Lumora.Wpf.Tests/ArchiveTarget/FolderAdoptionDialogTests.cs`; Rauchtest-Schritt „Ordner übernehmen“

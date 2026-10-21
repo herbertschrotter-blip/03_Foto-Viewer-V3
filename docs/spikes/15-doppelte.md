@@ -2,8 +2,8 @@
 
 - **Status:** 🟢 Grün
 - **Datum:** 2026-10-21 (v0.3.1)
-- **Bezogen auf:** [ADR-0053](../adr/0053-doppelte-erkennen.md), `src/PhotoViewerV3.Services/Duplicates/**`, Harness
-  `tests/PhotoViewerV3.PerfTests/Spikes/Duplicates/Spike15Duplicates.cs`
+- **Bezogen auf:** [ADR-0053](../adr/0053-doppelte-erkennen.md), `src/Lumora.Services/Duplicates/**`, Harness
+  `tests/Lumora.PerfTests/Spikes/Duplicates/Spike15Duplicates.cs`
 
 ## Messaufbau
 
@@ -11,7 +11,7 @@
   Messung lief Herberts Lumora — Werte schwanken.
 - Echte Fotos: privater Handy-Katalog (24 217 Dateien inkl. Videos, nur gelesen). Ausgegeben wurden nur zusammengefasste
   Zahlen — keine Dateinamen, Pfade oder Bilder.
-- Aufruf: `PhotoViewerV3.PerfTests spike15-duplicates --root <Ordner> --limit 400 --hash-limit 1500` (echte Fotos +
+- Aufruf: `Lumora.PerfTests spike15-duplicates --root <Ordner> --limit 400 --hash-limit 1500` (echte Fotos +
   Gruppieren + SQL) bzw. ohne `--root` (nur synthetisch). `--explain <DB>` zeigt die Abfragepläne.
 
 ## Ergebnisse — echte Fotos
