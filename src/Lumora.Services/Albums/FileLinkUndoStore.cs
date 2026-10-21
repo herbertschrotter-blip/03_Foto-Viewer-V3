@@ -6,7 +6,7 @@ namespace Lumora.Services.Albums;
 
 /// <summary>
 /// Verknüpfungen über das Entfernen einer Files-Zeile hinweg (ADR-0054, ADR-0012). Wer eine Files-Zeile löscht, nimmt
-/// per Fremdschlüssel-Kaskade auch ihre Album- und Ordner-Verknüpfungen mit. Datei-Operationen (Papierkorb, aus der
+/// per Fremdschlüssel-Kaskade auch ihre Album- und Ordner-Verknüpfungen (seit ADR-0058 auch manuelle Story-Einträge) mit. Datei-Operationen (Papierkorb, aus der
 /// Bibliothek heraus verschieben, Reste einer Ordner-Übernahme) sichern sie VORHER mit <see cref="CaptureAsync"/> in
 /// <c>FileLinkUndo</c> zur protokollierten <c>FileOperation</c> — mit Pfad, Größe und Änderungszeit der Datei.
 /// „Rückgängig“ (neue Files-Zeile) stellt sie über die Operation wieder her; kehrt die Datei sonst zurück (Windows
@@ -21,7 +21,10 @@ internal static class FileLinkUndoStore
         FROM AlbumItems a JOIN Files f ON f.Id = a.FileId JOIN Folders d ON d.Id = f.FolderId WHERE a.FileId = $file
         UNION ALL
         SELECT $op, 1, l.FolderId, l.AddedAtUtc, d.Path || '\' || f.Name, f.Size, f.ModifiedAtUtc
-        FROM FolderLinks l JOIN Files f ON f.Id = l.FileId JOIN Folders d ON d.Id = f.FolderId WHERE l.FileId = $file;
+        FROM FolderLinks l JOIN Files f ON f.Id = l.FileId JOIN Folders d ON d.Id = f.FolderId WHERE l.FileId = $file
+        UNION ALL -- Storys (ADR-0058): nur manuelle Einträge (hinzugefügt = 2, Ausschluss = 3); automatische berechnet die Erkennung neu
+        SELECT $op, CASE WHEN s.Origin = 1 THEN 2 ELSE 3 END, s.StoryId, s.AddedAtUtc, d.Path || '\' || f.Name, f.Size, f.ModifiedAtUtc
+        FROM StoryItems s JOIN Files f ON f.Id = s.FileId JOIN Folders d ON d.Id = f.FolderId WHERE s.FileId = $file AND s.Origin <> 0;
         """;
 
     // Album nur, wenn es noch existiert und zur Gruppe der Bibliothek der (neuen) Datei gehört (ADR-0048).
@@ -44,6 +47,28 @@ internal static class FileLinkUndoStore
                       WHERE d.Id = u.TargetId AND f.Id = $file AND f.FolderId <> d.Id);
         """;
 
+    // Storys (ADR-0058): manueller Eintrag nur, wenn die Story noch existiert und zur Gruppe der Bibliothek der Datei gehört.
+    // Tagesabschnitt = Kalendertag in Ortszeit (Zeitversatz der Datei, sonst Zeitzone des Rechners wie StoryClock), Zähler
+    // und Zeitraum der Story gleich mitziehen (wie StorySql.RefreshAggregates).
+    private const string RestoreStoriesSql = """
+        INSERT OR IGNORE INTO StoryItems (StoryId, FileId, Day, Origin, AddedAtUtc)
+        SELECT u.TargetId, f.Id, (l.Local - ((l.Local % 86400) + 86400) % 86400) / 86400, CASE u.Kind WHEN 2 THEN 1 ELSE -1 END, u.AddedAtUtc
+        FROM FileLinkUndo u
+        CROSS JOIN Files f ON f.Id = $file
+        CROSS JOIN (SELECT COALESCE(COALESCE(x.CapturedAt, x.ModifiedAtUtc) + x.CapturedAtOffset * 60,
+                                    CAST(strftime('%s', COALESCE(x.CapturedAt, x.ModifiedAtUtc), 'unixepoch', 'localtime') AS INTEGER)) AS Local
+                    FROM Files x WHERE x.Id = $file) l
+        WHERE u.FileOperationId = $op AND u.Kind IN (2, 3)
+          AND EXISTS (SELECT 1 FROM Stories st JOIN Libraries lib ON lib.GroupId = st.GroupId WHERE st.Id = u.TargetId AND lib.Id = f.LibraryId);
+        UPDATE Stories SET FileCount = a.c, VideoCount = a.v, StartAt = a.s, EndAt = a.e, FirstDay = a.fd, LastDay = a.ld
+        FROM (SELECT si.StoryId AS Id, COUNT(*) AS c, SUM(x.MediaType = 1) AS v, MIN(COALESCE(x.CapturedAt, x.ModifiedAtUtc)) AS s,
+                     MAX(COALESCE(x.CapturedAt, x.ModifiedAtUtc)) AS e, MIN(si.Day) AS fd, MAX(si.Day) AS ld
+              FROM StoryItems si JOIN Files x ON x.Id = si.FileId
+              WHERE si.Origin >= 0 AND si.StoryId IN (SELECT TargetId FROM FileLinkUndo WHERE FileOperationId = $op AND Kind IN (2, 3))
+              GROUP BY si.StoryId) a
+        WHERE Stories.Id = a.Id;
+        """;
+
     private const string DeleteSql = "DELETE FROM FileLinkUndo WHERE FileOperationId = $op;";
 
     /// <summary>Sichert die Verknüpfungen der Datei zur Operation (vor dem Löschen der Files-Zeile); liefert ihre Zahl.</summary>
@@ -55,6 +80,7 @@ internal static class FileLinkUndoStore
     {
         var restored = await ctx.Database.ExecuteSqlRawAsync(RestoreAlbumsSql, [Param("$op", operationId), Param("$file", newFileId)], ct).ConfigureAwait(false);
         restored += await ctx.Database.ExecuteSqlRawAsync(RestoreFoldersSql, [Param("$op", operationId), Param("$file", newFileId)], ct).ConfigureAwait(false);
+        restored += await ctx.Database.ExecuteSqlRawAsync(RestoreStoriesSql, [Param("$op", operationId), Param("$file", newFileId)], ct).ConfigureAwait(false); // ADR-0058
         await ctx.Database.ExecuteSqlRawAsync(DeleteSql, [Param("$op", operationId)], ct).ConfigureAwait(false);
         return restored;
     }
@@ -64,6 +90,7 @@ internal static class FileLinkUndoStore
     {
         var restored = Execute(connection, tx, RestoreAlbumsSql, operationId, newFileId);
         restored += Execute(connection, tx, RestoreFoldersSql, operationId, newFileId);
+        restored += Execute(connection, tx, RestoreStoriesSql, operationId, newFileId); // ADR-0058
         Execute(connection, tx, DeleteSql, operationId, null);
         return restored;
     }

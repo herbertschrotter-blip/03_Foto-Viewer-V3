@@ -338,6 +338,8 @@ public partial class App : Application, ICatalogHostSwitcher
 
         // Foto-Güte (ADR-0057): Schärfe, Belichtung und Bildwirkung im Hintergrund — Grundlage für Highlights der Storys
         _host.Services.GetRequiredService<Lumora.Services.Quality.IFileQualityIndexService>().Start();
+        // Storys (ADR-0058): Erkennung im Hintergrund nach Scan, Aufnahmedatum-/Orts-Nachtrag und Gesichtern
+        _host.Services.GetRequiredService<Lumora.Services.Stories.IStoryIndexService>().Start();
     }
 
     // ----- Katalogwechsel (ADR-0049) -----

@@ -120,6 +120,8 @@ src/
     Places/Clustering/                # GeoClusterIndex (Morton-Raster, Gruppen je Zoomstufe), MercatorProjection (ADR-0051)
     Scanning/                         # ScanService, FolderEnumerator, IncrementalScanRunner, RootAvailabilityProbe, MassMissingGuard (ADR-0019)
     Sorter/                           # FileSorterService, FlattenService, SorterPatternEngine, SorterProfileStore
+    Stories/                          # Storys (ADR-0058): StoryDetector (rein), StoryReconciler (Signatur + gemeinsame Dateien), StoryTitleBuilder (sachliche Überschriften), StoryIndexService (Hintergrund, voll/inkrementell), StoryService (IStoryService für die Story-Seite), StorySettingsStore (stories.*), BasicHighlightSelector (Ersatz bis ADR-0057)
+    Quality/                          # IHighlightSelector — Vertrag zwischen Foto-Güte (ADR-0057) und Storys
     Thumbnails/                       # ThumbnailService, FfmpegVideoThumbnailer, Renderer-Interfaces
   Lumora.Wpf/                     # net10.0-windows → alle; App.xaml.cs = Host + DI, MainWindow = NavigationView
     Faces/                            # WicFaceImageLoader (IFaceImageLoader), Einstellungs-Abschnitt Gesichtserkennung
@@ -296,6 +298,24 @@ FilesFts           -- FTS5 virtual table (Files.Name, Extension)
   — ein Wert gilt nur, solange Größe/Änderungszeit der Files-Zeile gleich sind und `Version` passt; kein weiterer Index.
   Settings: `quality.aestheticVectors` (zwischengespeicherte Text-Vektoren der Bildwirkung). „Neu aufbauen“ rechnet die
   Werte neu (keine Übernahme).
+- Storys — umgesetzt in 0.4.8 (Migration `AddStories`, ADR-0058, nur CREATE TABLE):
+  `Stories (Id AUTOINCREMENT, GroupId (ohne Fremdschlüssel, in LibraryGroupStore.TermTables), Kind 0 Ereignis | 1 Reise |
+  2 Rückblick | 3 Person | 4 Ort | 5 eigene, Signature (stabiler Schlüssel der Erkennung, z. B. E:<Start>, T:<Tag>-<Tag>,
+  P:<Person>:<Jahr>-<Jahr>, O:<Ort>, R:D:yyyy-MM-dd, C:<Guid>), StartAt/EndAt (Unix-Sekunden UTC), FirstDay/LastDay
+  (Kalendertag in Ortszeit, Tage seit 1970-01-01), DatePrecision (2/3 = Story aus ungefähren Daten), PlaceId NULL
+  (GeoNames-Id), PersonId NULL → Persons ON DELETE CASCADE, PlaceIds NULL („id,id,…“ in Reihenfolge des Auftretens),
+  VisitCount NULL, IsAway, CustomTitle NULL, CoverFileId NULL → Files ON DELETE SET NULL, CoverIsManual, IsPinned,
+  PinnedAtUtc NULL, IsHidden, IsSeen, SeenAtUtc NULL, FileCount, VideoCount, CreatedAtUtc, UpdatedAtUtc;
+  UX_Stories_Group_Signature (GroupId, Signature) eindeutig, IX_Stories_Group_Kind_Start, IX_Stories_Person,
+  IX_Stories_CoverFile)`. `StoryItems (StoryId → Stories, FileId → Files — beide ON DELETE CASCADE, PK (StoryId, FileId),
+  Day (Tagesabschnitt, Kalendertag Ortszeit), Origin 0 automatisch | 1 vom Benutzer hinzugefügt | −1 vom Benutzer
+  entfernt (Ausschluss, zählt nicht), AddedAtUtc; IX_StoryItems_File)`. Überschriften werden nicht gespeichert.
+  `FileLinkUndo.Kind` zusätzlich 2 = Story-Eintrag hinzugefügt, 3 = Story-Ausschluss (manuelle Einträge über
+  Datei-Operationen hinweg). „Neu aufbauen“ trägt alle StoryItems und Titelbilder über Ordnerpfad + Name mit
+  (`UserDataCarryOver.Stories.cs`). Settings: `stories.events|memories|persons|places` (an/aus, Standard an),
+  `stories.pauseHours` (6), `stories.minFiles` (12), `stories.home` (auto | place:<id> | geo:<lat>,<lon>),
+  `stories.minPersonFiles` (30), `stories.highlightShare` (0,15). Rückblicke werden je Tag berechnet und erst beim
+  Öffnen als Story (Kind 2) gespeichert.
 
 ### Pflicht-Indizes V0.1
 ```sql

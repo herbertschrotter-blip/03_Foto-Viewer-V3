@@ -97,7 +97,9 @@ public sealed partial class UserDataCarryOver
                OR EXISTS (SELECT 1 FROM FileEmbeddings e WHERE e.FileId = f.Id)
                OR EXISTS (SELECT 1 FROM AlbumItems ai WHERE ai.FileId = f.Id)
                OR EXISTS (SELECT 1 FROM FolderLinks fl WHERE fl.FileId = f.Id)
-               OR EXISTS (SELECT 1 FROM Albums a WHERE a.CoverFileId = f.Id))
+               OR EXISTS (SELECT 1 FROM Albums a WHERE a.CoverFileId = f.Id)
+               OR EXISTS (SELECT 1 FROM StoryItems si WHERE si.FileId = f.Id) -- Storys (ADR-0058)
+               OR EXISTS (SELECT 1 FROM Stories st WHERE st.CoverFileId = f.Id))
         ORDER BY f.Missing, f.Id;
         """;
 
@@ -219,6 +221,7 @@ public sealed partial class UserDataCarryOver
         carry.ParkFaces(); // Gesichter + FaceScans (ADR-0035, UserDataCarryOver.Faces.cs)
         carry.ParkMotifs(); // Bild-Vektoren + Motiv-Treffer (ADR-0052, UserDataCarryOver.Motifs.cs)
         carry.ParkAlbums(); // Alben, Ordner-Verknüpfungen, Titelbilder (ADR-0054, UserDataCarryOver.Albums.cs)
+        carry.ParkStories(); // Story-Einträge und Titelbilder (ADR-0058, UserDataCarryOver.Stories.cs)
         carry.CaptureDuration = sw.Elapsed;
         return carry;
     }
@@ -255,6 +258,7 @@ public sealed partial class UserDataCarryOver
         var faces = RestoreFaces(); // ADR-0035
         RestoreMotifs(); // ADR-0052
         RestoreAlbums(); // ADR-0054
+        RestoreStories(); // ADR-0058
 
         return new RestoreReport(CapturedFiles, mapped, CapturedFiles - mapped, files, tags, sw.Elapsed, categories, faces, captureDates, geo);
     }

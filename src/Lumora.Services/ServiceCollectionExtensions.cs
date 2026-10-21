@@ -21,6 +21,7 @@ using Lumora.Services.Places;
 using Lumora.Services.Quality;
 using Lumora.Services.Scanning;
 using Lumora.Services.Sorter;
+using Lumora.Services.Stories;
 using Lumora.Services.Tags;
 using Lumora.Services.Thumbnails;
 using Lumora.Services.Watch;
@@ -101,6 +102,8 @@ public static class ServiceCollectionExtensions
         services.AddAlbums();
         // Foto-Güte und Highlights: Schärfe, Belichtung, Bildwirkung, Auswahl für Storys (Services/Quality, ADR-0057)
         services.AddQuality();
+        // Storys: Ereignisse, Reisen, Rückblicke, Personen, Orte automatisch; Highlights über IHighlightSelector (Services/Stories, ADR-0058)
+        services.AddStories();
 
         return services;
     }

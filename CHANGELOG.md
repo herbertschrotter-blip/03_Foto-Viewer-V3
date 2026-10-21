@@ -3,6 +3,46 @@
 Alle nennenswerten Änderungen an Lumora (bis 0.2.48 „PhotoViewer V3“). Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.4.8] — 2026-10-22
+
+### Feature (ADR-0058) — Storys: automatische Erkennung im Katalog (Welle 6, ohne Oberfläche)
+- **Schema** (Migration `AddStories`, nur neue Tabellen): `Stories` je Bibliotheks-Gruppe mit stabiler `Signature`,
+  Zeitraum, Orten/Person/Ort, Benutzer-Zustand (eigener Titel, Titelbild + „manuell“, angeheftet, ausgeblendet, gesehen)
+  und Zählern; `StoryItems` mit Tagesabschnitt und `Origin` (automatisch / hinzugefügt / Ausschluss).
+- **Erkennung** im Hintergrund (`StoryIndexService`): **Ereignisse** (Pause > 6 h oder Ortswechsel > 30 km trennt,
+  Mindestgröße 12), **Reisen** (aufeinanderfolgende Tage weg von zu Hause, Zuhause automatisch = häufigster Ort),
+  Ausflüge (ein Tag weg), Gruppen ungefährer Daten („Juli 2025“), **Personen-Storys** (Jahre bzw. Spannen mit ≥ 30
+  bestätigten Fotos, ausgeblendete Personen nicht), **Orte-Storys** (Besuche in ≥ 3 Jahren). Nach Start, Scan,
+  Aufnahmedatum-, Orts- und Gesichts-Änderungen; dateibezogen nur die betroffenen Zeiträume, Orte und Personen; ruht
+  während Aufnahmedaten/Orte nachgetragen werden. Eine Neuberechnung findet Storys über Signatur bzw. gemeinsame
+  Dateien wieder und behält angeheftet/ausgeblendet/Titel/Titelbild/manuelle Zu- und Abgänge.
+- **Rückblicke** „Heute vor N Jahren“ und „<Monat> in früheren Jahren“ dynamisch je Tag, gespeichert erst beim Öffnen.
+- **Überschriften** nur sachlich, beim Lesen gebaut: „Samstag, 6. September 2025“, „12.–19. Juli 2025“,
+  „28. Juli – 9. August 2024“, „Grado · Triest · Aquileia — Italien“, „Grado, Triest und 2 weitere“, „Anna · 2019“,
+  „Grado · 2014–2025“; ungefähre Daten nur Monat/Jahr.
+- **Dienst `IStoryService`** für die kommende Story-Seite: Übersicht (Rückblicke, Angeheftet, Neu, Ereignisse & Reisen
+  mit Jahren, Personen, Orte, eigene, Ausgeblendete), Details mit Tagesabschnitten, Highlights, Aktionen (anheften,
+  ausblenden, gesehen, Titel, Titelbild, Dateien hinzufügen/entfernen, „Story aus Auswahl“, „Als Album speichern“,
+  neu berechnen); Einstellungen `stories.*`; Nachrichten `StoriesChangedMessage`, `StoryIndexStatusMessage`.
+- **Vertrag `IHighlightSelector`** (`Services/Quality/`) mit einfacher Ersatz-Auswahl `BasicHighlightSelector`
+  (Favorit, Bewertung, Bildgröße, über die Zeit verteilt) — die Foto-Güte (ADR-0057) ersetzt sie.
+- **Bibliotheks-Trennung**: Storys je Gruppe (`TermTables`, `DeleteGroupIfEmpty`), Verknüpfen führt gleiche Signaturen
+  zusammen, Lösen kopiert samt Zustand. **„Neu aufbauen“** trägt Einträge und Titelbilder mit; **Datei-Operationen**
+  sichern manuelle Einträge in `FileLinkUndo` (neue Arten 2/3), „Rückgängig“ stellt sie wieder her.
+- Messung (Spike 17, 500 000 Dateien): volle Erkennung ohne Änderung 2,0–2,3 s, allererste 4,6–5,0 s (+ 2 s Titelbilder),
+  inkrementell ≈ 0,1 s, Übersicht 52–56 ms.
+- Rauchtest: neuer Schritt „Storys“ vor „Versteckte Bibliothek“ (42 Schritte).
+
+### Offen
+- Die Story-Seite, Diashow und Einstellungen › Storys (Mockup 09) baut Agent U gegen `IStoryService`.
+- Entfernte Dateien: Zähler/Zeitraum der Storys folgen erst mit dem nächsten Hintergrund-Durchgang (Sekunden); jede
+  Entfernung rechnet die Gruppe ganz neu (≈ 2 s bei 500 000 Dateien, gesammelt über 2 s).
+- Personen auf der Personen-Seite zusammenführen löscht die Personen-Storys der aufgelösten Person samt Zustand
+  (Kaskade); beim Verknüpfen ziehen sie mit (`StoryGroupStore.MovePersonStories`) — dieselbe Zeile gehört später in
+  `MergePersonsAsync`.
+- Lösen: gesicherte manuelle Story-Einträge entfernter Dateien (`FileLinkUndo` Art 2/3) zeigen weiter auf die Story der
+  alten Gruppe (wie bei den Alben).
+
 ## [0.4.7] — 2026-10-22
 
 ### Feature (ADR-0057) — Foto-Güte und Highlights (Welle 6, Grundlage für Storys)

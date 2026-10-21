@@ -180,6 +180,7 @@ internal static class LibraryLinkStore
         // ---- Motiv-Begriffe (0.2.56)
         var motifTermsMerged = LinkMotifTerms(connection, tx, targetGroup, sourceGroup);
         Albums.AlbumGroupStore.Link(connection, tx, targetGroup, sourceGroup, sourceLibraryName); // Alben (ADR-0054)
+        Stories.StoryGroupStore.Link(connection, tx, targetGroup, sourceGroup); // Storys (ADR-0058): gleiche Signatur = eine Story
 
         // ---- Bibliotheken und Gruppe
         Execute(connection, tx, "UPDATE Libraries SET GroupId = $t WHERE GroupId = $s;", p);
@@ -257,6 +258,7 @@ internal static class LibraryLinkStore
             WHERE Id = $t;
             """, p);
         var sourceIsMe = Scalar(connection, tx, "SELECT IsMe FROM Persons WHERE Id = $s;", p) == 1;
+        Stories.StoryGroupStore.MovePersonStories(connection, tx, sourceId, targetId); // Storys (ADR-0058): Zustand nicht per Kaskade verlieren
         Execute(connection, tx, "DELETE FROM Persons WHERE Id = $s;", p);
         if (sourceIsMe)
         {
@@ -388,6 +390,7 @@ internal static class LibraryLinkStore
             Execute(connection, tx, "INSERT OR IGNORE INTO Settings (Key, Value) VALUES ($k, 'true');", ("$k", MotifSeededKey(toGroup)));
         }
 
+        Stories.StoryGroupStore.CopyForLibrary(connection, tx, fromGroup, toGroup, libraryId); // Storys (ADR-0058), braucht noch _CopyMap (Personen)
         Execute(connection, tx, "DROP TABLE temp._CopyMap;");
         Albums.AlbumGroupStore.CopyForLibrary(connection, tx, fromGroup, toGroup, libraryId); // Alben (ADR-0054)
         return new LibraryUnlinkResult(toGroup, tags, categories, relations, persons, motifTerms);

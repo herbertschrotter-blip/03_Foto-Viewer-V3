@@ -16,7 +16,7 @@ internal static class LibraryGroupStore
     /// Tabellen mit benutzerdefinierten Begriffen je Gruppe (CategoryValues hängen an Categories). MotifTerms (0.2.56) hat
     /// zusätzlich eine Anker-Bibliothek für den Fremdschlüssel (<see cref="ReanchorMotifTerms"/>).
     /// </summary>
-    public static readonly string[] TermTables = ["Tags", "Categories", "PersonRelations", "Persons", "MotifTerms", "Albums" /* ADR-0054 */];
+    public static readonly string[] TermTables = ["Tags", "Categories", "PersonRelations", "Persons", "MotifTerms", "Albums" /* ADR-0054 */, "Stories" /* ADR-0058 */];
 
     /// <summary>Settings-Merker „Start-Liste der Motive angelegt“ je Gruppe (ADR-0052, seit 0.2.56 je Gruppe).</summary>
     public static string MotifSeededKey(int groupId) => "motifs.seeded.g" + groupId.ToString(CultureInfo.InvariantCulture);
@@ -179,6 +179,7 @@ internal static class LibraryGroupStore
         Execute(connection, tx, "DELETE FROM MotifTerms WHERE GroupId = $g;", ("$g", groupId)); // Treffer per Kaskade (0.2.56)
         Execute(connection, tx, "DELETE FROM Settings WHERE Key = $k;", ("$k", MotifSeededKey(groupId)));
         Albums.AlbumGroupStore.DeleteGroup(connection, tx, groupId); // Alben (ADR-0054), Verknüpfungen per Kaskade
+        Stories.StoryGroupStore.DeleteGroup(connection, tx, groupId); // Storys (ADR-0058), Einträge per Kaskade
         Execute(connection, tx, "DELETE FROM LibraryGroups WHERE Id = $g;", ("$g", groupId));
         if (ReadViewAllLinked(connection, tx) == groupId)
         {

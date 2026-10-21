@@ -1041,6 +1041,131 @@ namespace Lumora.Data.Migrations
                     b.ToTable("Settings", (string)null);
                 });
 
+            modelBuilder.Entity("Lumora.Domain.Entities.Story", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("CoverFileId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("CoverIsManual")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CustomTitle")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("DatePrecision")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("EndAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("FileCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("FirstDay")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("GroupId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsAway")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsHidden")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsPinned")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsSeen")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("LastDay")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("PersonId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("PinnedAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("PlaceId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("PlaceIds")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("SeenAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Signature")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("StartAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("VideoCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("VisitCount")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CoverFileId")
+                        .HasDatabaseName("IX_Stories_CoverFile");
+
+                    b.HasIndex("PersonId")
+                        .HasDatabaseName("IX_Stories_Person");
+
+                    b.HasIndex("GroupId", "Signature")
+                        .IsUnique()
+                        .HasDatabaseName("UX_Stories_Group_Signature");
+
+                    b.HasIndex("GroupId", "Kind", "StartAt")
+                        .HasDatabaseName("IX_Stories_Group_Kind_Start");
+
+                    b.ToTable("Stories", (string)null);
+                });
+
+            modelBuilder.Entity("Lumora.Domain.Entities.StoryItem", b =>
+                {
+                    b.Property<int>("StoryId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("FileId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("AddedAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Day")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Origin")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("StoryId", "FileId");
+
+                    b.HasIndex("FileId")
+                        .HasDatabaseName("IX_StoryItems_File");
+
+                    b.ToTable("StoryItems", (string)null);
+                });
+
             modelBuilder.Entity("Lumora.Domain.Entities.Tag", b =>
                 {
                     b.Property<int>("Id")
@@ -1344,6 +1469,34 @@ namespace Lumora.Data.Migrations
                         .WithMany()
                         .HasForeignKey("RelationId")
                         .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("Lumora.Domain.Entities.Story", b =>
+                {
+                    b.HasOne("Lumora.Domain.Entities.MediaFile", null)
+                        .WithMany()
+                        .HasForeignKey("CoverFileId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Lumora.Domain.Entities.Person", null)
+                        .WithMany()
+                        .HasForeignKey("PersonId")
+                        .OnDelete(DeleteBehavior.Cascade);
+                });
+
+            modelBuilder.Entity("Lumora.Domain.Entities.StoryItem", b =>
+                {
+                    b.HasOne("Lumora.Domain.Entities.MediaFile", null)
+                        .WithMany()
+                        .HasForeignKey("FileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Lumora.Domain.Entities.Story", null)
+                        .WithMany()
+                        .HasForeignKey("StoryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }
