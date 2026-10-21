@@ -99,21 +99,28 @@ public sealed partial class PersonsViewModel
 
     private IReadOnlyList<long> SelectedGroupFaces() => GroupMembers.Where(t => t.IsSelected).Select(t => t.FaceId).ToList();
 
-    /// <summary>„Als neue Person benennen…“: Name abfragen, Ausreißer-Prüfung, anlegen, bestätigen.</summary>
+    /// <summary>
+    /// „Als neue Person benennen…“: Vor-/Nachname, Rufname, Beziehung, Geburtsdatum abfragen (0.2.47, ADR-0045),
+    /// Ausreißer-Prüfung, anlegen, bestätigen. Gibt es den Anzeigenamen schon, werden die Gesichter nach Rückfrage der
+    /// vorhandenen Person hinzugefügt (ihre Details bleiben unverändert).
+    /// </summary>
     [RelayCommand(CanExecute = nameof(CanActOnGroup))]
     private async Task NameGroupAsync()
     {
         var ids = SelectedGroupFaces();
-        var name = await _dialogs.PromptNameAsync(
+        var input = await PromptPersonAsync(
             "Als neue Person benennen",
-            $"Name für die {N(ids.Count)} ausgewählten Gesichter:",
-            string.Empty).ConfigureAwait(true);
-        if (string.IsNullOrWhiteSpace(name))
+            $"Wer ist auf den {N(ids.Count)} ausgewählten Gesichtern? Angezeigt wird der Rufname, sonst Vor- und Nachname.",
+            "Benennen",
+            null,
+            null,
+            ExistingPersonHintForGroup).ConfigureAwait(true);
+        if (input is null || input.DisplayName.Length == 0)
         {
             return;
         }
 
-        name = name.Trim();
+        var name = input.DisplayName;
         await RunAsync("Benennen", async () =>
         {
             var existing = await _service.FindPersonByNameAsync(name).ConfigureAwait(true);
@@ -123,7 +130,7 @@ public sealed partial class PersonsViewModel
                 return;
             }
 
-            var count = await ConfirmWithCheckAsync(ids, existing, name, () => _service.CreatePersonAsync(name)).ConfigureAwait(true);
+            var count = await ConfirmWithCheckAsync(ids, existing, name, () => CreatePersonAsync(input)).ConfigureAwait(true);
             if (count > 0)
             {
                 ShowInfo($"{N(count)} Gesichter als „{name}“ benannt. Ähnliche Gesichter werden jetzt vorgeschlagen.");

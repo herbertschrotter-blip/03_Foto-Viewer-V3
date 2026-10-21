@@ -348,6 +348,11 @@ public sealed partial class GalleryViewModel
             list.Add((GalleryFilterConditionKind.Persons, PersonConditionLabel(), null));
         }
 
+        if (RelationConditionLabel is { } relationLabel) // Beziehung (0.2.47, GalleryViewModel.Relations.cs)
+        {
+            list.Add((GalleryFilterConditionKind.Relations, relationLabel, null));
+        }
+
         foreach (var group in CategoryFilterGroups.Where(g => g.IsActive))
         {
             var values = group.Entries.Where(e => e.IsSelected).Select(e => e.IsNone ? "ohne Wert" : $"„{e.Name}“");
@@ -453,6 +458,8 @@ public sealed partial class GalleryViewModel
                 return ClearTagFilterAsync();
             case GalleryFilterConditionKind.Persons:
                 return ClearPersonFilterAsync();
+            case GalleryFilterConditionKind.Relations:
+                return ClearRelationFilterAsync();
             case GalleryFilterConditionKind.Category when condition.CategoryId is { } categoryId:
                 var group = CategoryFilterGroups.FirstOrDefault(g => g.CategoryId == categoryId);
                 if (group is null || !group.IsActive)

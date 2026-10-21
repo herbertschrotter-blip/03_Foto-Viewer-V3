@@ -16,7 +16,7 @@ public partial class PersonFilterDropDown : UserControl
     private void OnCloseClick(object sender, RoutedEventArgs e) => FilterPopup.IsOpen = false;
 
     private void OnSearchTextChanged(object sender, TextChangedEventArgs e)
-        => FlyoutListFilter.Apply<PersonFilterEntry>(PersonList, SearchBox.Text, p => p.Name);
+        => FlyoutListFilter.Apply<PersonFilterEntry>(PersonList, SearchBox.Text, p => p.SearchText); // Name, Rufname, Beziehung (0.2.47)
 
     private void OnPopupClosed(object? sender, EventArgs e)
     {

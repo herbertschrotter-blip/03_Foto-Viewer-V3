@@ -48,11 +48,11 @@ public sealed partial class PersonPickerDialog : AppFluentWindow
         return window.Result;
     }
 
-    /// <summary>Filter: Namen, die den Text enthalten (ohne Groß-/Kleinschreibung).</summary>
+    /// <summary>Filter: Personen, deren Name (Vor-/Nachname, Rufname, Beziehung) den Text enthält (ohne Groß-/Kleinschreibung).</summary>
     internal static IReadOnlyList<PersonSummary> Filter(IReadOnlyList<PersonSummary> persons, string text)
         => string.IsNullOrWhiteSpace(text)
             ? persons
-            : persons.Where(p => p.Name.Contains(text.Trim(), StringComparison.CurrentCultureIgnoreCase)).ToList();
+            : persons.Where(p => p.SearchText.Contains(text.Trim(), StringComparison.CurrentCultureIgnoreCase)).ToList(); // auch Vor-/Nachname, Rufname, Beziehung (0.2.47)
 
     private void ApplyFilter(string text)
     {

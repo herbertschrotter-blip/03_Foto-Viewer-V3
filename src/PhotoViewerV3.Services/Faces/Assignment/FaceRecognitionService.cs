@@ -605,7 +605,11 @@ public sealed partial class FaceRecognitionService : IFaceRecognitionService, ID
                 throw new PersonNameTakenException(trimmed, existing);
             }
 
-            return FaceAssignmentStore.Execute(connection, tx, "UPDATE Persons SET Name = $n WHERE Id = $p;", ("$n", trimmed), ("$p", personId));
+            // Einzelname (alte Schnittstelle): Vor-/Nachname am ersten Leerzeichen, Rufname entfällt (ADR-0045).
+            var (first, last) = Domain.Entities.PersonNames.Split(trimmed);
+            return FaceAssignmentStore.Execute(connection, tx,
+                "UPDATE Persons SET Name = $n, FirstName = $f, LastName = $l, Nickname = NULL WHERE Id = $p;",
+                ("$n", trimmed), ("$f", first), ("$l", last), ("$p", personId));
         }, ct).ConfigureAwait(false);
         await NotifyAsync(retrain: false, ct).ConfigureAwait(false);
     }
@@ -637,6 +641,7 @@ public sealed partial class FaceRecognitionService : IFaceRecognitionService, ID
                 """, p);
             FaceAssignmentStore.Execute(connection, tx,
                 "UPDATE Persons SET CoverFaceId = COALESCE(CoverFaceId, (SELECT CoverFaceId FROM Persons WHERE Id = $s)) WHERE Id = $t;", p);
+            MergeDetails(connection, tx, sourceId, targetId); // Beziehung, Geburtsdatum, „Das bin ich“ (ADR-0045)
             return FaceAssignmentStore.Execute(connection, tx, "DELETE FROM Persons WHERE Id = $s;", p);
         }, ct).ConfigureAwait(false);
         _logger.LogInformation("Person {Source} in {Target} zusammengeführt", sourceId, targetId);
@@ -1096,7 +1101,9 @@ public sealed partial class FaceRecognitionService : IFaceRecognitionService, ID
 
     private static string NormalizeName(string name)
     {
-        var trimmed = (name ?? string.Empty).Trim();
+        // Mehrfache Leerzeichen zu einem: Name = Anzeigename aus Vor-/Nachname (ADR-0045) und die Prüfung auf vergebene
+        // Namen vergleicht dieselbe Schreibweise, die gespeichert wird.
+        var trimmed = System.Text.RegularExpressions.Regex.Replace((name ?? string.Empty).Trim(), @"\s+", " ");
         if (trimmed.Length == 0)
         {
             throw new ArgumentException("Der Name darf nicht leer sein.", nameof(name));

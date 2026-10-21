@@ -60,8 +60,10 @@ public sealed partial class SettingsViewModel : ObservableObject
         IArchiveAutoExtractService? autoExtract = null,
         ILibraryService? libraries = null,
         FaceSettingsViewModel? faces = null,
-        PhotoViewerV3.Settings.FaceData.FaceDataSettingsViewModel? faceData = null)
+        PhotoViewerV3.Settings.FaceData.FaceDataSettingsViewModel? faceData = null,
+        PhotoViewerV3.Settings.PersonRelations.PersonRelationsSettingsViewModel? relations = null)
     {
+        Relations = relations; // „Personen & Beziehungen“ (0.2.47, ADR-0045)
         _factory = factory;
         _paths = paths;
         _videoRenderer = videoRenderer;
@@ -78,6 +80,9 @@ public sealed partial class SettingsViewModel : ObservableObject
         Faces = faces;
         FaceData = faceData;
     }
+
+    /// <summary>Karte „Personen &amp; Beziehungen“ im Reiter Gesichter (0.2.47, ADR-0045); null = ausgeblendet.</summary>
+    public PhotoViewerV3.Settings.PersonRelations.PersonRelationsSettingsViewModel? Relations { get; }
 
     /// <summary>„Gesichtsdaten löschen…“ im Abschnitt Gesichtserkennung (0.2.38); null = ausgeblendet (Tests ohne den Dienst).</summary>
     public PhotoViewerV3.Settings.FaceData.FaceDataSettingsViewModel? FaceData { get; }
@@ -378,6 +383,10 @@ public sealed partial class SettingsViewModel : ObservableObject
         LoadWatchSettings();
         await LoadAutoExtractSettingsAsync().ConfigureAwait(true);
         Faces?.Load();
+        if (Relations is not null)
+        {
+            await Relations.LoadAsync().ConfigureAwait(true); // Beziehungen (0.2.47)
+        }
 
         await RefreshCacheStatsAsync().ConfigureAwait(true);
     }

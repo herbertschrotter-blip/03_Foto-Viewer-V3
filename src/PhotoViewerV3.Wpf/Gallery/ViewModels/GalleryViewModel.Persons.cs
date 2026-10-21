@@ -38,7 +38,7 @@ public sealed partial class GalleryViewModel
 
     /// <summary>Verknüpfung im Personen-Filter (ODER / UND / ohne Person / unbenannte Gesichter).</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasPersonFilter), nameof(PersonFilterText), nameof(EmptyMessagePersons))]
+    [NotifyPropertyChangedFor(nameof(HasPersonFilter), nameof(HasPeopleFilter), nameof(PersonFilterText), nameof(EmptyMessagePersons))]
     private GalleryPersonMode _personFilterMode = GalleryPersonMode.Any;
 
     /// <summary>„Auch Vorschläge“: vorgeschlagene (unbestätigte) Personen zählen mit. Standard aus.</summary>
@@ -54,31 +54,47 @@ public sealed partial class GalleryViewModel
     {
         get
         {
-            var suffix = PersonFilterIncludeSuggestions && HasPersonFilter ? " + Vorschläge" : string.Empty;
-            switch (PersonFilterMode)
+            // Seit 0.2.47 hängt der Beziehungs-Teil an („Personen: Anna · Beziehung Schwester“, GalleryViewModel.Relations.cs).
+            var person = PersonPartText();
+            var relations = RelationFilterEntries.Where(e => e.IsSelected).Select(e => e.Name).ToList();
+            var relation = relations.Count == 0 ? null : "Beziehung " + string.Join(" oder ", relations);
+            return (person, relation) switch
             {
-                case GalleryPersonMode.NoPerson:
-                    return "Personen: ohne Person" + suffix;
-                case GalleryPersonMode.UnnamedFaces:
-                    return "Personen: unbenannte Gesichter" + suffix;
-                case GalleryPersonMode.AnyFace:
-                    return "Personen: alle Fotos mit Gesichtern"; // „auch Vorschläge“ ändert hier nichts (0.2.39)
-            }
-
-            var names = PersonFilterEntries.Where(e => e.IsSelected).Select(e => e.Name).ToList();
-            if (names.Count == 0)
-            {
-                return "Personen";
-            }
-
-            var mode = names.Count > 1 ? (PersonFilterMode == GalleryPersonMode.All ? " (UND)" : " (ODER)") : string.Empty;
-            return $"Personen: {string.Join(", ", names)}{mode}{suffix}";
+                (null, null) => "Personen",
+                (null, { } r) => $"Personen: {r}{(PersonFilterIncludeSuggestions ? " + Vorschläge" : string.Empty)}",
+                ({ } p, null) => $"Personen: {p}",
+                ({ } p, { } r) => $"Personen: {p} · {r}",
+            };
         }
+    }
+
+    /// <summary>Personen-Teil der Beschriftung ohne „Personen: “; null ohne Personen-Teil.</summary>
+    private string? PersonPartText()
+    {
+        var suffix = PersonFilterIncludeSuggestions && HasPersonFilter ? " + Vorschläge" : string.Empty;
+        switch (PersonFilterMode)
+        {
+            case GalleryPersonMode.NoPerson:
+                return "ohne Person" + suffix;
+            case GalleryPersonMode.UnnamedFaces:
+                return "unbenannte Gesichter" + suffix;
+            case GalleryPersonMode.AnyFace:
+                return "alle Fotos mit Gesichtern"; // „auch Vorschläge“ ändert hier nichts (0.2.39)
+        }
+
+        var names = PersonFilterEntries.Where(e => e.IsSelected).Select(e => e.Name).ToList();
+        if (names.Count == 0)
+        {
+            return null;
+        }
+
+        var mode = names.Count > 1 ? (PersonFilterMode == GalleryPersonMode.All ? " (UND)" : " (ODER)") : string.Empty;
+        return $"{string.Join(", ", names)}{mode}{suffix}";
     }
 
     /// <summary>Leertext bei aktivem Personen-Filter (null ohne Filter) — <see cref="EmptyMessage"/> fragt ihn ab.</summary>
     public string? EmptyMessagePersons => !HasPersonFilter
-        ? null
+        ? HasRelationFilter ? "Keine Fotos mit einer Person dieser Beziehung." : null
         : PersonFilterMode switch
         {
             GalleryPersonMode.NoPerson => "Auf allen Fotos ist mindestens eine Person bestätigt.",
@@ -101,7 +117,8 @@ public sealed partial class GalleryViewModel
     partial void OnPersonFilterIncludeSuggestionsChanged(bool value)
     {
         OnPropertyChanged(nameof(PersonFilterText));
-        if (!_suppressReload && _isInitialized && HasPersonFilter && PersonFilterMode != GalleryPersonMode.AnyFace)
+        if (!_suppressReload && _isInitialized
+            && ((HasPersonFilter && PersonFilterMode != GalleryPersonMode.AnyFace) || HasRelationFilter)) // Beziehung zählt Vorschläge mit (0.2.47)
         {
             FireAndForget(ChangeQueryAsync);
         }
@@ -115,6 +132,7 @@ public sealed partial class GalleryViewModel
         return _suppressReload || !_isInitialized ? Task.CompletedTask : ChangeQueryAsync();
     }
 
+    /// <summary>Personen-Teil aufheben (× an „Person …“ in „Es gilt“); der Beziehungs-Teil bleibt (0.2.47).</summary>
     [RelayCommand]
     private Task ClearPersonFilterAsync()
     {
@@ -124,11 +142,18 @@ public sealed partial class GalleryViewModel
         }
 
         var had = HasPersonFilter;
-        ResetPersonFilter();
+        ResetPersonPart();
         return had ? ChangeQueryAsync() : Task.CompletedTask;
     }
 
+    /// <summary>Personen- und Beziehungs-Teil zurücksetzen (Bibliothekswechsel, „Filter zurücksetzen“).</summary>
     private void ResetPersonFilter()
+    {
+        ResetRelationFilter(); // 0.2.47, GalleryViewModel.Relations.cs — zuerst, damit „auch Vorschläge“ mit zurückgeht
+        ResetPersonPart();
+    }
+
+    private void ResetPersonPart()
     {
         var suppress = _suppressReload;
         _suppressReload = true;
@@ -140,7 +165,10 @@ public sealed partial class GalleryViewModel
             }
 
             PersonFilterMode = GalleryPersonMode.Any;
-            PersonFilterIncludeSuggestions = false;
+            if (!HasRelationFilter)
+            {
+                PersonFilterIncludeSuggestions = false; // gilt sonst für die stehen bleibende Beziehung weiter (0.2.47)
+            }
         }
         finally
         {
@@ -153,6 +181,7 @@ public sealed partial class GalleryViewModel
     private void NotifyPersonFilterChanged()
     {
         OnPropertyChanged(nameof(HasPersonFilter));
+        OnPropertyChanged(nameof(HasPeopleFilter)); // Chip-Hervorhebung (0.2.47)
         OnPropertyChanged(nameof(PersonFilterText));
         OnPropertyChanged(nameof(EmptyMessagePersons));
         OnPropertyChanged(nameof(EmptyMessage));
@@ -164,7 +193,8 @@ public sealed partial class GalleryViewModel
         var filter = new GalleryPersonFilter(
             PersonFilterEntries.Where(e => e.IsSelected).Select(e => e.PersonId).ToList(),
             PersonFilterMode,
-            PersonFilterIncludeSuggestions);
+            PersonFilterIncludeSuggestions,
+            SelectedRelationIds()); // Beziehung (0.2.47, GalleryViewModel.Relations.cs)
         return filter.IsActive ? filter : null;
     }
 
@@ -192,8 +222,10 @@ public sealed partial class GalleryViewModel
                     continue;
                 }
 
-                PersonFilterEntries.Add(new PersonFilterEntry(row.Id, row.Name, row.FileCount) { IsSelected = selected.Contains(row.Id) });
+                PersonFilterEntries.Add(new PersonFilterEntry(row.Id, row.Name, row.FileCount, row.SearchText) { IsSelected = selected.Contains(row.Id) });
             }
+
+            await LoadRelationsAsync(); // Abschnitt „Beziehung“ (0.2.47)
 
             OnPropertyChanged(nameof(HasPersons));
             NotifyPersonFilterChanged();
@@ -267,10 +299,10 @@ public sealed partial class GalleryViewModel
         }
 
         // Vor dem Neuladen merken: eine gelöschte, gewählte Person verschwindet aus der Liste, der Filter wirkte aber noch.
-        var hadFilter = HasPersonFilter;
+        var hadFilter = HasPersonFilter || HasRelationFilter;
         await LoadPersonsAsync();
         await ApplyPersonsToItemsAsync(_currentItems.Keys.ToList(), CancellationToken.None);
-        if ((hadFilter || HasPersonFilter) && m.LibraryId == _libraryId)
+        if ((hadFilter || HasPersonFilter || HasRelationFilter) && m.LibraryId == _libraryId)
         {
             ScheduleReload();
         }

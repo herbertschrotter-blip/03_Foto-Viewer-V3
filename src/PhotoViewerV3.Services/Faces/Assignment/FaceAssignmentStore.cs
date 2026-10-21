@@ -195,7 +195,7 @@ internal static class FaceAssignmentStore
     /// <summary>Personen mit Zählern der Bibliothek; <paramref name="personId"/> = nur diese eine.</summary>
     public static List<PersonOverview> ReadPersons(SqliteConnection connection, int? libraryId, int? personId = null)
     {
-        using var cmd = Command(connection, null, """
+        using var cmd = Command(connection, null, $"""
             SELECT p.Id, p.Name, p.IsHidden,
                 (SELECT COUNT(*) FROM Faces x JOIN Files f ON f.Id = x.FileId
                     WHERE x.PersonId = p.Id AND x.State = 2 AND f.LibraryId = $lib),
@@ -206,8 +206,9 @@ internal static class FaceAssignmentStore
                 (SELECT x.Id FROM Faces x JOIN Files f ON f.Id = x.FileId
                     WHERE x.PersonId = p.Id AND x.State = 2 AND f.LibraryId = $lib ORDER BY x.Quality DESC, x.Id LIMIT 1),
                 (SELECT COUNT(*) FROM Faces x JOIN Files f ON f.Id = x.FileId
-                    WHERE x.SuggestedPersonId = p.Id AND x.State = 1 AND f.LibraryId = $lib)
-            FROM Persons p
+                    WHERE x.SuggestedPersonId = p.Id AND x.State = 1 AND f.LibraryId = $lib),
+                {PersonDetailsStore.DetailColumns}
+            FROM Persons p LEFT JOIN PersonRelations r ON r.Id = p.RelationId
             WHERE $person IS NULL OR p.Id = $person
             ORDER BY p.Name COLLATE NOCASE, p.Id;
             """, ("$lib", (object?)libraryId ?? -1), ("$person", (object?)personId ?? DBNull.Value));
@@ -217,7 +218,10 @@ internal static class FaceAssignmentStore
         {
             long? cover = reader.IsDBNull(5) ? reader.IsDBNull(6) ? null : reader.GetInt64(6) : reader.GetInt64(5);
             var summary = new PersonSummary(
-                reader.GetInt32(0), reader.GetString(1), reader.GetInt32(3), reader.GetInt32(4), cover, reader.GetBoolean(2));
+                reader.GetInt32(0), reader.GetString(1), reader.GetInt32(3), reader.GetInt32(4), cover, reader.GetBoolean(2))
+            {
+                Details = PersonDetailsStore.ReadDetails(reader, reader.GetInt32(0), 8), // ADR-0045
+            };
             list.Add(new PersonOverview(summary, reader.GetInt32(7)));
         }
 
@@ -280,12 +284,11 @@ internal static class FaceAssignmentStore
     public static bool PersonExists(SqliteConnection connection, SqliteTransaction? tx, int personId)
         => Scalar(connection, tx, "SELECT COUNT(*) FROM Persons WHERE Id = $p;", ("$p", personId)) > 0;
 
+    /// <summary>Neue Person aus einem Einzelnamen: Vor-/Nachname am ersten Leerzeichen geteilt (ADR-0045).</summary>
     public static int InsertPerson(SqliteConnection connection, SqliteTransaction tx, string name)
     {
-        Execute(connection, tx,
-            "INSERT INTO Persons (Name, CreatedAtUtc, CoverFaceId, IsHidden) VALUES ($n, $now, NULL, 0);",
-            ("$n", name), ("$now", DateTimeOffset.UtcNow.ToUnixTimeSeconds()));
-        return (int)Scalar(connection, tx, "SELECT last_insert_rowid();");
+        var (first, last) = Domain.Entities.PersonNames.Split(name);
+        return PersonDetailsStore.InsertPerson(connection, tx, new PersonDetailsInput(first, last), relationId: null);
     }
 
     // ---- Dateien und Gesichter für die Oberfläche ----------------------------------------------------------------

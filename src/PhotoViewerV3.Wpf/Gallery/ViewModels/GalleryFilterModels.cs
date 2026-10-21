@@ -15,6 +15,9 @@ public enum GalleryFilterConditionKind
     Tags,
     Persons,
     Category,
+
+    /// <summary>Beziehung der Personen auf dem Foto (0.2.47, ADR-0045).</summary>
+    Relations,
 }
 
 /// <summary>

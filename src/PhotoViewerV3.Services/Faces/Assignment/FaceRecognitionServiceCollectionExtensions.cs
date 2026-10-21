@@ -19,6 +19,7 @@ public static class FaceRecognitionServiceCollectionExtensions
         services.TryAddSingleton<FaceRecognitionService>();
         services.TryAddSingleton<IFaceRecognitionService>(sp => sp.GetRequiredService<FaceRecognitionService>());
         services.TryAddSingleton<IFaceIgnoreService>(sp => sp.GetRequiredService<FaceRecognitionService>()); // ADR-0040
+        services.TryAddSingleton<IPersonDetailsService>(sp => sp.GetRequiredService<FaceRecognitionService>()); // ADR-0045
         services.TryAddSingleton<FaceCropService>();
         services.TryAddSingleton<IFaceCropService>(sp => sp.GetRequiredService<FaceCropService>());
         return services;

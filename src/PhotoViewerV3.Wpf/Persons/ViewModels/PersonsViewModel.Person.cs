@@ -11,7 +11,7 @@ namespace PhotoViewerV3.Persons.ViewModels;
 public sealed partial class PersonsViewModel
 {
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(PersonTitle), nameof(PersonDetails), nameof(HiddenToggleText))]
+    [NotifyPropertyChangedFor(nameof(PersonTitle), nameof(PersonDetails), nameof(HiddenToggleText), nameof(PersonInfoText))]
     private PersonSummary? _currentPerson;
 
     public string PersonTitle => CurrentPerson?.Name ?? string.Empty;
@@ -89,7 +89,7 @@ public sealed partial class PersonsViewModel
             RunPendingRefresh();
         }
 
-        RenamePersonCommand.NotifyCanExecuteChanged();
+        EditPersonCommand.NotifyCanExecuteChanged();
         MergePersonCommand.NotifyCanExecuteChanged();
         ToggleHiddenCommand.NotifyCanExecuteChanged();
         DeletePersonCommand.NotifyCanExecuteChanged();
@@ -261,37 +261,7 @@ public sealed partial class PersonsViewModel
         });
     }
 
-    [RelayCommand(CanExecute = nameof(CanActOnPerson))]
-    private async Task RenamePersonAsync()
-    {
-        if (CurrentPerson is not { } person)
-        {
-            return;
-        }
-
-        var name = await _dialogs.PromptNameAsync("Person umbenennen", "Neuer Name:", person.Name).ConfigureAwait(true);
-        if (string.IsNullOrWhiteSpace(name) || name.Trim() == person.Name)
-        {
-            return;
-        }
-
-        await RunAsync("Umbenennen", async () =>
-        {
-            var existing = await _service.FindPersonByNameAsync(name).ConfigureAwait(true);
-            if (existing is { } other && other != person.Id)
-            {
-                if (await _dialogs.ConfirmAsync("Name vergeben", $"Es gibt schon eine Person „{name.Trim()}“. Beide zusammenführen?", "Zusammenführen").ConfigureAwait(true))
-                {
-                    await _service.MergePersonsAsync(person.Id, other).ConfigureAwait(true);
-                    await LoadPersonAsync(other, keepState: false).ConfigureAwait(true);
-                }
-
-                return;
-            }
-
-            await _service.RenamePersonAsync(person.Id, name).ConfigureAwait(true);
-        }).ConfigureAwait(true);
-    }
+    // „Bearbeiten…“ (früher „Umbenennen…“): PersonsViewModel.Details.cs (0.2.47, ADR-0045)
 
     /// <summary>„Zusammenführen mit…“: diese Person geht in der gewählten auf (alle Gesichter, Vorschläge, Ablehnungen).</summary>
     [RelayCommand(CanExecute = nameof(CanActOnPerson))]

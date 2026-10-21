@@ -42,13 +42,28 @@ public static class GalleryPersonModeExtensions
 /// Personen-Filter (0.2.38): nur bestätigte Gesichter (<c>Faces.State = 2</c> mit <c>PersonId</c>) zählen als Person;
 /// mit <paramref name="IncludeSuggestions"/> zählen auch Vorschläge (<c>State = 1</c> mit <c>SuggestedPersonId</c>).
 /// </summary>
-public sealed record GalleryPersonFilter(IReadOnlyList<int> PersonIds, GalleryPersonMode Mode, bool IncludeSuggestions = false)
+/// <remarks>
+/// Seit 0.2.47 (ADR-0045) zusätzlich <paramref name="RelationIds"/>: Foto zeigt eine Person mit einer der Beziehungen
+/// (ODER zwischen den Beziehungen, UND mit dem Personen-Teil und allen anderen Filtern).
+/// </remarks>
+public sealed record GalleryPersonFilter(
+    IReadOnlyList<int> PersonIds,
+    GalleryPersonMode Mode,
+    bool IncludeSuggestions = false,
+    IReadOnlyList<int>? RelationIds = null)
 {
-    public bool IsActive => Mode.IgnoresPersonSelection() || PersonIds.Count > 0;
+    public bool IsActive => HasPersonPart || HasRelationPart;
+
+    /// <summary>Der Personen-Teil (Modus bzw. gewählte Personen) wirkt.</summary>
+    public bool HasPersonPart => Mode.IgnoresPersonSelection() || PersonIds.Count > 0;
+
+    /// <summary>Der Beziehungs-Teil wirkt (0.2.47).</summary>
+    public bool HasRelationPart => RelationIds is { Count: > 0 };
 }
 
 /// <summary>Eintrag des Personen-Filters: Person mit Anzahl Dateien der Bibliothek, auf denen sie bestätigt ist.</summary>
-public sealed record GalleryPersonCount(int Id, string Name, bool IsHidden, int FileCount);
+/// <param name="SearchText">Suchbegriffe für das Flyout: Anzeigename, Vor-/Nachname, Rufname, Beziehung (0.2.47).</param>
+public sealed record GalleryPersonCount(int Id, string Name, bool IsHidden, int FileCount, string? SearchText = null);
 
 /// <summary>Bestätigte Person bzw. Vorschlag auf einer Datei (Listenspalte, Kachel).</summary>
 public sealed record GalleryFacePersonRow(int FileId, bool IsConfirmed, int PersonId, string Name);
@@ -71,10 +86,15 @@ public sealed partial class GalleryPageSource
     /// Such-Zweig für Personennamen (Teilstring, NOCASE-Spalte, LIKE wie Tags): Personen-Ids aus der kleinen
     /// Persons-Tabelle, bestätigte Gesichter über <c>IX_Faces_Person_State_File</c>.
     /// </summary>
+    /// <remarks>Seit 0.2.47 (ADR-0045) auch Vorname, Nachname, Rufname und Beziehung — Persons ist klein, LIKE '%…%' ohne Index.</remarks>
     private const string PersonSearchUnion = """
         UNION
         SELECT fp.FileId FROM Faces fp
-        WHERE fp.PersonId IN (SELECT pp.Id FROM Persons pp WHERE pp.Name LIKE $tagLike ESCAPE '\') AND fp.State = 2
+        WHERE fp.PersonId IN (SELECT pp.Id FROM Persons pp
+                              WHERE pp.Name LIKE $tagLike ESCAPE '\' OR pp.FirstName LIKE $tagLike ESCAPE '\'
+                                 OR pp.LastName LIKE $tagLike ESCAPE '\' OR pp.Nickname LIKE $tagLike ESCAPE '\'
+                                 OR pp.RelationId IN (SELECT pr.Id FROM PersonRelations pr WHERE pr.Name LIKE $tagLike ESCAPE '\'))
+          AND fp.State = 2
         """;
 
     /// <summary>
@@ -89,8 +109,9 @@ public sealed partial class GalleryPageSource
                 SELECT p.Id, p.Name, p.IsHidden,
                        (SELECT COUNT(DISTINCT fa.FileId)
                           FROM Faces fa JOIN Files f ON f.Id = fa.FileId
-                         WHERE fa.PersonId = p.Id AND fa.State = 2 AND f.LibraryId = $libId) AS FileCount
-                FROM Persons p
+                         WHERE fa.PersonId = p.Id AND fa.State = 2 AND f.LibraryId = $libId) AS FileCount,
+                       p.FirstName, p.LastName, p.Nickname, r.Name
+                FROM Persons p LEFT JOIN PersonRelations r ON r.Id = p.RelationId
                 ORDER BY p.Name COLLATE NOCASE, p.Id;
                 """;
             cmd.Parameters.AddWithValue("$libId", libraryId);
@@ -99,7 +120,10 @@ public sealed partial class GalleryPageSource
             while (reader.Read())
             {
                 ct.ThrowIfCancellationRequested();
-                result.Add(new GalleryPersonCount(reader.GetInt32(0), reader.GetString(1), reader.GetInt32(2) == 1, reader.GetInt32(3)));
+                // Suchbegriffe: Anzeigename, Vorname, Nachname, Rufname, Beziehung (0.2.47)
+                var search = string.Join(" ", new[] { 1, 4, 5, 6, 7 }
+                    .Where(i => !reader.IsDBNull(i)).Select(reader.GetString).Where(t => t.Length > 0));
+                result.Add(new GalleryPersonCount(reader.GetInt32(0), reader.GetString(1), reader.GetInt32(2) == 1, reader.GetInt32(3), search));
             }
 
             return result;
@@ -190,8 +214,13 @@ public sealed partial class GalleryPageSource
     /// Parameter $person{i} und $personCount.
     /// </summary>
     private static string BuildPersonClause(GalleryQuery query)
+        => query.PersonFilter is not { IsActive: true } filter
+            ? string.Empty
+            : (BuildPersonPartClause(filter) + " " + BuildRelationClause(filter)).Trim(); // Beziehung: GalleryPageSource.Relations.cs
+
+    private static string BuildPersonPartClause(GalleryPersonFilter filter)
     {
-        if (query.PersonFilter is not { IsActive: true } filter)
+        if (!filter.HasPersonPart)
         {
             return string.Empty;
         }
@@ -228,7 +257,13 @@ public sealed partial class GalleryPageSource
 
     private static void BindPersonParams(SqliteCommand cmd, GalleryQuery query)
     {
-        if (query.PersonFilter is not { IsActive: true } filter || filter.Mode.IgnoresPersonSelection())
+        if (query.PersonFilter is not { IsActive: true } filter)
+        {
+            return;
+        }
+
+        BindRelationParams(cmd, filter); // 0.2.47, GalleryPageSource.Relations.cs
+        if (filter.Mode.IgnoresPersonSelection() || filter.PersonIds.Count == 0)
         {
             return;
         }

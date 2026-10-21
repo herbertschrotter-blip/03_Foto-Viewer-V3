@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using PhotoViewerV3.Persons.Dialogs;
 using PhotoViewerV3.Services.Faces.Assignment;
 
 namespace PhotoViewerV3.Persons;
@@ -24,6 +25,12 @@ public enum OutlierDecision
 public interface IPersonsDialogService
 {
     Task<string?> PromptNameAsync(string title, string message, string initialValue);
+
+    /// <summary>
+    /// Person benennen/bearbeiten (0.2.47, ADR-0045): Vor-/Nachname, Rufname, Beziehung mit Vorschlägen, Geburtsdatum,
+    /// „Das bin ich“; null = abgebrochen.
+    /// </summary>
+    Task<PersonDetailsInput?> EditPersonAsync(PersonEditRequest request);
 
     Task<bool> ConfirmAsync(string title, string message, string confirmText, bool isDestructive = false);
 

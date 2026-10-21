@@ -29,6 +29,7 @@ public sealed class LibraryContext : DbContext
     public DbSet<CategoryValue> CategoryValues => Set<CategoryValue>();
     public DbSet<FileCategoryValue> FileCategoryValues => Set<FileCategoryValue>();
     public DbSet<Person> Persons => Set<Person>();
+    public DbSet<PersonRelation> PersonRelations => Set<PersonRelation>(); // ADR-0045
     public DbSet<Face> Faces => Set<Face>();
     public DbSet<FaceRejection> FaceRejections => Set<FaceRejection>();
     public DbSet<FaceScan> FaceScans => Set<FaceScan>();

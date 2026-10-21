@@ -7,6 +7,7 @@
              xmlns:settings="clr-namespace:PhotoViewerV3.Settings"
              xmlns:faces="clr-namespace:PhotoViewerV3.Faces"
              xmlns:facedata="clr-namespace:PhotoViewerV3.Settings.FaceData"
+             xmlns:local="clr-namespace:PhotoViewerV3.Settings.Sections"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance settings:SettingsViewModel}"
              d:DesignWidth="1000"
@@ -136,6 +137,10 @@
                     </StackPanel>
                 </StackPanel>
             </Border>
+
+            <!-- Personen & Beziehungen (0.2.47, ADR-0045): eigener DataContext = SettingsViewModel.Relations -->
+            <local:SettingsRelationsSection DataContext="{Binding Relations}"
+                                            Visibility="{Binding Converter={StaticResource NullToVis}}" />
         </StackPanel>
     </ScrollViewer>
 </UserControl>

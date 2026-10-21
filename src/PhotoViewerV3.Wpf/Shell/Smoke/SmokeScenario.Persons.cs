@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using PhotoViewerV3.Domain.Enums;
 using PhotoViewerV3.Lightbox;
 using PhotoViewerV3.Persons;
+using PhotoViewerV3.Persons.Dialogs;
 using PhotoViewerV3.Persons.ViewModels;
 using PhotoViewerV3.Services.Faces;
 using PhotoViewerV3.Services.Faces.Assignment;
@@ -271,6 +272,21 @@ internal sealed class SmokePersonsDialogs : IPersonsDialogService
     {
         _logger.LogInformation("Rauchtest-Dialog „{Title}“ → {Name}", title, NextName ?? "(Abbruch)");
         return Task.FromResult(NextName);
+    }
+
+    /// <summary>Nächste Antwort des Personen-Dialogs (0.2.47); ohne sie gilt <see cref="NextName"/> (am ersten Leerzeichen geteilt).</summary>
+    public PersonDetailsInput? NextInput { get; set; }
+
+    /// <summary>Zuletzt gestellte Anfrage des Personen-Dialogs (Vorschläge, Hinweise).</summary>
+    public PersonEditRequest? LastEditRequest { get; private set; }
+
+    public Task<PersonDetailsInput?> EditPersonAsync(PersonEditRequest request)
+    {
+        LastEditRequest = request;
+        var input = NextInput ?? (NextName is { } name ? PersonDetailsInput.FromName(name) : null);
+        NextInput = null;
+        _logger.LogInformation("Rauchtest-Dialog „{Title}“ → {Name}", request.Title, input?.DisplayName ?? "(Abbruch)");
+        return Task.FromResult(input);
     }
 
     public Task<bool> ConfirmAsync(string title, string message, string confirmText, bool isDestructive = false)

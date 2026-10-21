@@ -228,6 +228,7 @@ internal sealed partial class SmokeScenario
         await StepAsync("Kombinierte Filter: Bilder + Favoriten + Tag + Bewertung, × je Bedingung, Filter zurücksetzen (Ordnerauswahl bleibt)", CombinedFiltersAsync).ConfigureAwait(true); // 0.2.43
         await StepAsync("Einstellungen-Reiter und Info: Navigation ohne Bibliothek/Tags/Kategorien, alle Reiter, Info-Version = CHANGELOG, Umschalter, Eingang auf der Ordner-Seite", SettingsTabsAndInfoAsync).ConfigureAwait(true);
         await StepAsync("Vorschaubild-Größe und Bildmaße: kurze Kante min(400, Original), EXIF-6 gedreht, Files.Width/Height, Kachel × Skalierung", ThumbnailSizeAsync).ConfigureAwait(true); // ADR-0043
+        await StepAsync("Personen-Details und Beziehungen: benennen mit Vor-/Nachname/Beziehung, Vorschlag beim zweiten Mal, Filter „Beziehung“, Umbenennen in den Einstellungen wirkt überall, „Das bin ich“ eindeutig", PersonDetailsAsync).ConfigureAwait(true); // ADR-0045
         await StepAsync("Ordnerüberwachung: Datei kopieren → automatischer Diff-Scan → Galerie", WatchAsync).ConfigureAwait(true);
         if (_cleanup)
         {

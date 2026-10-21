@@ -484,13 +484,72 @@ namespace PhotoViewerV3.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
+                    b.Property<int?>("BirthDay")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("BirthMonth")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("BirthYear")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int?>("CoverFaceId")
                         .HasColumnType("INTEGER");
 
                     b.Property<long>("CreatedAtUtc")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("FirstName")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("")
+                        .UseCollation("NOCASE");
+
                     b.Property<bool>("IsHidden")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsMe")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("LastName")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("")
+                        .UseCollation("NOCASE");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
+
+                    b.Property<string>("Nickname")
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
+
+                    b.Property<int?>("RelationId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsMe")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Persons_IsMe")
+                        .HasFilter("\"IsMe\" = 1");
+
+                    b.HasIndex("RelationId")
+                        .HasDatabaseName("IX_Persons_Relation");
+
+                    b.ToTable("Persons", (string)null);
+                });
+
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.PersonRelation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("Name")
@@ -500,7 +559,11 @@ namespace PhotoViewerV3.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Persons", (string)null);
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasDatabaseName("IX_PersonRelations_Name");
+
+                    b.ToTable("PersonRelations", (string)null);
                 });
 
             modelBuilder.Entity("PhotoViewerV3.Domain.Entities.Setting", b =>
@@ -683,6 +746,14 @@ namespace PhotoViewerV3.Data.Migrations
                         .HasForeignKey("TagId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.Person", b =>
+                {
+                    b.HasOne("PhotoViewerV3.Domain.Entities.PersonRelation", null)
+                        .WithMany()
+                        .HasForeignKey("RelationId")
+                        .OnDelete(DeleteBehavior.SetNull);
                 });
 #pragma warning restore 612, 618
         }

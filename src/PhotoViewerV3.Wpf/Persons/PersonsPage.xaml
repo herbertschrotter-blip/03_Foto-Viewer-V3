@@ -171,6 +171,28 @@
             </DataTemplate.Triggers>
         </DataTemplate>
 
+        <!-- Abschnitt der nach Beziehung gruppierten Übersicht (0.2.47): Kacheln umbrechend, ohne eigene Bildlaufleiste
+             (die Seite scrollt als Ganzes), Kacheln bleiben Blatt-Peers (TileListBox) -->
+        <Style x:Key="GroupedListStyle" TargetType="controls:TileListBox">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="SelectionMode" Value="Single" />
+            <Setter Property="ItemsPanel">
+                <Setter.Value>
+                    <ItemsPanelTemplate>
+                        <WrapPanel ItemWidth="160" ItemHeight="196" />
+                    </ItemsPanelTemplate>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="controls:TileListBox">
+                        <ItemsPresenter />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="ListStyle" TargetType="controls:TileListBox" BasedOn="{StaticResource {x:Type ListBox}}">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
@@ -245,17 +267,55 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
-            <DockPanel Grid.Row="0" Margin="0,0,0,4">
-                <CheckBox DockPanel.Dock="Right" Content="Ausgeblendete zeigen" IsChecked="{Binding ShowHidden}" />
-                <ui:TextBlock FontTypography="Subtitle" Text="Benannte Personen" VerticalAlignment="Center" />
-                <TextBlock Margin="12,0,0,0" Text="{Binding PersonsSummary}" FontSize="12" VerticalAlignment="Center"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-            </DockPanel>
+            <StackPanel Grid.Row="0" Margin="0,0,0,4">
+                <DockPanel>
+                    <CheckBox DockPanel.Dock="Right" Content="Ausgeblendete zeigen" IsChecked="{Binding ShowHidden}" />
+                    <ui:TextBlock FontTypography="Subtitle" Text="Benannte Personen" VerticalAlignment="Center" />
+                    <TextBlock Margin="12,0,0,0" Text="{Binding PersonsSummary}" FontSize="12" VerticalAlignment="Center"
+                               AutomationProperties.AutomationId="PersonsSummary"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                </DockPanel>
+                <!-- Suche, Sortierung, Gruppierung nach Beziehung (0.2.47, ADR-0045) -->
+                <WrapPanel Margin="0,6,0,0">
+                    <ui:TextBox Width="280" Margin="0,0,12,4"
+                                PlaceholderText="Person suchen (Name, Rufname, Beziehung)"
+                                Icon="{ui:SymbolIcon Search24}"
+                                ClearButtonEnabled="True"
+                                Text="{Binding PersonSearch, UpdateSourceTrigger=PropertyChanged}"
+                                AutomationProperties.Name="Person suchen" />
+                    <TextBlock Text="Sortieren" VerticalAlignment="Center" Margin="0,0,6,4" />
+                    <ComboBox MinWidth="150" Margin="0,0,12,4"
+                              ItemsSource="{x:Static vm:PersonsViewModel.SortOptions}" DisplayMemberPath="Label"
+                              SelectedItem="{Binding SelectedSort, Mode=TwoWay}"
+                              AutomationProperties.Name="Personen sortieren" />
+                    <CheckBox Content="Nach Beziehung gruppieren" VerticalAlignment="Center" Margin="0,0,0,4"
+                              IsChecked="{Binding GroupByRelation}"
+                              AutomationProperties.Name="Nach Beziehung gruppieren" />
+                </WrapPanel>
+            </StackPanel>
             <controls:TileListBox Grid.Row="1" x:Name="PersonsList" Style="{StaticResource ListStyle}"
                                   AutomationProperties.AutomationId="PersonsList" AutomationProperties.Name="Benannte Personen"
                                   ItemsSource="{Binding Persons}" ItemTemplate="{StaticResource PersonTile}"
                                   ItemContainerStyle="{StaticResource OpenTileContainer}" ItemsPanel="{StaticResource PersonPanel}"
+                                  Visibility="{Binding GroupByRelation, Converter={StaticResource InverseBoolToVis}}"
                                   gallery:VirtualizingTilePanel.VisibleRangeChanged="OnVisibleRangeChanged" />
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                          Visibility="{Binding GroupByRelation, Converter={StaticResource BoolToVis}}"
+                          AutomationProperties.AutomationId="PersonsByRelation">
+                <ItemsControl ItemsSource="{Binding RelationGroups}" Margin="4">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:PersonRelationGroupViewModel}">
+                            <StackPanel Margin="0,0,0,8">
+                                <TextBlock Text="{Binding Header}" FontWeight="SemiBold" Margin="4,4,0,2" />
+                                <controls:TileListBox Style="{StaticResource GroupedListStyle}"
+                                                      AutomationProperties.Name="{Binding Title}"
+                                                      ItemsSource="{Binding Persons}" ItemTemplate="{StaticResource PersonTile}"
+                                                      ItemContainerStyle="{StaticResource OpenTileContainer}" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
 
             <DockPanel Grid.Row="2" Margin="0,12,0,4">
                 <ui:Button DockPanel.Dock="Right" Margin="8,0,0,0" Appearance="Transparent" Icon="{ui:SymbolIcon EyeOff24}"
@@ -285,13 +345,17 @@
             <DockPanel Grid.Row="0" Margin="0,0,0,8">
                 <ui:Button DockPanel.Dock="Left" Icon="{ui:SymbolIcon ArrowLeft24}" Content="Zurück" Command="{Binding BackCommand}" Margin="0,0,12,0" />
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                    <ui:Button Content="Umbenennen…" Icon="{ui:SymbolIcon Rename24}" Margin="4,0,0,0" Command="{Binding RenamePersonCommand}" />
+                    <ui:Button Content="Bearbeiten…" Icon="{ui:SymbolIcon Edit24}" Margin="4,0,0,0" Command="{Binding EditPersonCommand}"
+                               ToolTip="Vorname, Nachname, Rufname, Beziehung, Geburtsdatum, „Das bin ich“" />
                     <ui:Button Content="Zusammenführen mit…" Icon="{ui:SymbolIcon PeopleSwap24}" Margin="4,0,0,0" Command="{Binding MergePersonCommand}" />
                     <ui:Button Content="{Binding HiddenToggleText}" Icon="{ui:SymbolIcon EyeOff24}" Margin="4,0,0,0" Command="{Binding ToggleHiddenCommand}" />
                     <ui:Button Content="Löschen…" Icon="{ui:SymbolIcon Delete24}" Margin="4,0,0,0" Appearance="Danger" Command="{Binding DeletePersonCommand}" />
                 </StackPanel>
                 <StackPanel VerticalAlignment="Center">
                     <ui:TextBlock FontTypography="Subtitle" Text="{Binding PersonTitle}" AutomationProperties.AutomationId="PersonTitle" />
+                    <TextBlock Text="{Binding PersonInfoText}" FontSize="13" TextWrapping="Wrap"
+                               AutomationProperties.AutomationId="PersonInfo"
+                               Visibility="{Binding PersonInfoText, Converter={StaticResource NullToVis}}" />
                     <TextBlock Text="{Binding PersonDetails}" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                 </StackPanel>
             </DockPanel>

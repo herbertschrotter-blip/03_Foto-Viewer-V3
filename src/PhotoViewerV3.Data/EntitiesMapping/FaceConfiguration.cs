@@ -20,6 +20,31 @@ internal sealed class PersonConfiguration : IEntityTypeConfiguration<Person>
 
         // CoverFaceId bewusst OHNE Fremdschlüssel: Persons → Faces und Faces → Persons wären ein Zyklus.
         b.Property(x => x.CoverFaceId);
+
+        // Personen-Details (0.2.47, ADR-0045, Migration AddPersonDetails). Name bleibt der synchron gehaltene Anzeigename.
+        b.Property(x => x.FirstName).IsRequired().HasDefaultValue(string.Empty).UseCollation("NOCASE");
+        b.Property(x => x.LastName).IsRequired().HasDefaultValue(string.Empty).UseCollation("NOCASE");
+        b.Property(x => x.Nickname).UseCollation("NOCASE");
+        b.Property(x => x.IsMe).IsRequired().HasDefaultValue(false);
+        b.HasOne<PersonRelation>()
+            .WithMany()
+            .HasForeignKey(x => x.RelationId)
+            .OnDelete(DeleteBehavior.SetNull); // Beziehung gelöscht → Person behält leere Beziehung
+        b.HasIndex(x => x.RelationId).HasDatabaseName("IX_Persons_Relation");
+        // Höchstens eine Person „Das bin ich“ (Teilindex nur über IsMe = 1).
+        b.HasIndex(x => x.IsMe).IsUnique().HasFilter("\"IsMe\" = 1").HasDatabaseName("IX_Persons_IsMe");
+    }
+}
+
+internal sealed class PersonRelationConfiguration : IEntityTypeConfiguration<PersonRelation>
+{
+    public void Configure(EntityTypeBuilder<PersonRelation> b)
+    {
+        b.ToTable("PersonRelations");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Id).ValueGeneratedOnAdd();
+        b.Property(x => x.Name).IsRequired().UseCollation("NOCASE");
+        b.HasIndex(x => x.Name).IsUnique().HasDatabaseName("IX_PersonRelations_Name"); // NOCASE: „schwester“ = „Schwester“
     }
 }
 

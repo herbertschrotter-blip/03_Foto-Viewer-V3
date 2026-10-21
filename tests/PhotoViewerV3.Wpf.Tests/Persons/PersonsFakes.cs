@@ -1,6 +1,7 @@
 using System.Drawing;
 using PhotoViewerV3.Domain.Enums;
 using PhotoViewerV3.Persons;
+using PhotoViewerV3.Persons.Dialogs;
 using PhotoViewerV3.Services.Faces.Assignment;
 using PhotoViewerV3.Services.Faces.Recognition;
 
@@ -167,6 +168,17 @@ internal sealed class FakePersonsDialogs : IPersonsDialogService
     public List<(IReadOnlyList<PersonSummary> Persons, int? Suggested, int? Excluded)> Picks { get; } = [];
 
     public Task<string?> PromptNameAsync(string title, string message, string initialValue) => Task.FromResult(NextName);
+
+    /// <summary>Nächste Antwort des Personen-Dialogs (0.2.47); ohne sie gilt <see cref="NextName"/>.</summary>
+    public PersonDetailsInput? NextInput { get; set; }
+
+    public List<PersonEditRequest> EditRequests { get; } = [];
+
+    public Task<PersonDetailsInput?> EditPersonAsync(PersonEditRequest request)
+    {
+        EditRequests.Add(request);
+        return Task.FromResult(NextInput ?? (NextName is { } name ? PersonDetailsInput.FromName(name) : null));
+    }
 
     public Task<bool> ConfirmAsync(string title, string message, string confirmText, bool isDestructive = false)
     {

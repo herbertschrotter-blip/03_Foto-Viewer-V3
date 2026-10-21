@@ -3,6 +3,64 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.47] — 2026-10-21
+
+### Feature (ADR-0045) — Personen mit Vor-/Nachname, Rufname, eigener Beziehung, Geburtsdatum und „Das bin ich“
+- **Schema** (Migration `AddPersonDetails`): `Persons` + `FirstName`, `LastName`, `Nickname`, `RelationId` →
+  neue Tabelle `PersonRelations (Id, Name NOCASE, eindeutig)` ON DELETE SET NULL, `BirthYear/BirthMonth/BirthDay`,
+  `IsMe`; Indizes `IX_Persons_Relation`, `IX_PersonRelations_Name`, eindeutiger Teilindex `IX_Persons_IsMe WHERE IsMe = 1`.
+  `RelationId` per `ALTER TABLE … ADD COLUMN … REFERENCES` (kein Neuaufbau von `Persons`, Zuordnungen und Ablehnungen
+  bleiben); kein Rückweg (`Down` wirft, Sicherung vor der Migration). **Bestand**: Name am ersten Leerzeichen geteilt
+  (erstes Wort = Vorname, exakter Rest = Nachname), `Name` bleibt → verlustfrei.
+- **`Persons.Name` = Anzeigename** (Rufname, sonst „Vorname Nachname“, `Domain/Entities/PersonNames`), bei jedem
+  Schreiben nachgezogen und weiter eindeutig — Galerie-Liste („Personen“), Kachel, Lightbox-Rahmen und Personen-Flyout
+  zeigen ihn ohne Änderung. Alte Einzelnamen-Wege (Lightbox „Neue Person…“) teilen genauso; mehrfache Leerzeichen
+  werden dort zu einem.
+- **Dienst** `IPersonDetailsService` im `FaceRecognitionService` (partial `.Details.cs`, gleicher Single-Writer, gleiche
+  `PersonsChangedMessage`): anlegen/bearbeiten mit Details, Beziehung als Freitext (vorhandene ohne Groß-/Kleinschreibung
+  wiederverwendet, erste Schreibweise bleibt), Beziehungen umbenennen/zusammenführen/löschen, „Das bin ich“ eindeutig.
+  Personen zusammenführen übernimmt fehlende Beziehung/Geburtsdatum und „Das bin ich“. `PersonSummary.Details`
+  (init-Eigenschaft), `PersonBirthDate` (Jahr / Jahr + Monat / vollständig, Alter als Spanne).
+- **Dialog „Person benennen/bearbeiten“** (`Persons/Dialogs/PersonDetailsDialog`, Logik `PersonDetailsEditor`):
+  Vorname, Nachname, Rufname, Beziehung (editierbares Auswahlfeld mit Vorschlägen), Geburtsdatum (Tag/Monat optional,
+  Prüfung mit Meldung), „Das bin ich“ (nennt die bisherige), Vorschau des Anzeigenamens, Hinweis auf vergebenen Namen.
+  Gilt für „Als neue Person benennen…“ und **Bearbeiten…** (statt „Umbenennen…“; vergebener Name → zusammenführen,
+  Eingaben bleiben). Vorhandene Person beim Benennen funktioniert wie bisher.
+- **Personen-Seite**: Suche (Name, Vor-/Nachname, Rufname, Beziehung), Sortieren nach Anzeigename / Nachname / Anzahl
+  Fotos, **Nach Beziehung gruppieren** (Abschnitte, „Ohne Beziehung“ am Ende, Kacheln bleiben Blatt-Peers), Kachel mit
+  Beziehung, Detailzeile „Schwester · geboren März 1975 (51 Jahre) · Das bin ich“. Personenauswahl findet auch
+  Nachname und Beziehung.
+- **Galerie**: Suche findet Vorname, Nachname, Rufname und Beziehung; Personen-Flyout sucht über dieselben Felder und hat
+  den Abschnitt **Beziehung** (ODER untereinander, UND mit Personen und allen Filtern, „auch Vorschläge“ gilt mit;
+  `GalleryPersonFilter.RelationIds`, `GalleryPageSource.Relations.cs`); „Es gilt“ zeigt „Beziehung „Schwester““ mit
+  eigenem ×, „Leeren“ im Flyout leert beides.
+- **Einstellungen › Gesichter › Personen & Beziehungen** (`Settings/PersonRelations`, `SettingsRelationsSection`):
+  umbenennen (vorhandener Name → Rückfrage zusammenführen), zusammenführen mit, löschen (Personen behalten leere
+  Beziehung).
+- Doku: ADR-0045, PLAN Kap. 3/4, README (Personen-Details, Filter „Beziehung“, Einstellungen).
+
+### Tests
+- `tests/PhotoViewerV3.Tests`: 660 (+14, 1 übersprungen ohne Modell): `Faces/PersonDetailsMigrationTests` (Bestand
+  geteilt und verlustfrei, Zuordnungen/Ablehnungen bleiben, Indizes, Fremdschlüssel SET NULL, Beziehungsname eindeutig;
+  Anzeigename-Regeln; Geburtsdatum ungefähr mit Altersspanne und Prüfungen), `Faces/Assignment/PersonDetailsServiceTests`
+  (anlegen mit allen Feldern, Beziehung wiederverwendet mit erster Schreibweise, bearbeiten/umbenennen, „Das bin ich“
+  eindeutig auch per Index, Beziehungen umbenennen/zusammenführen/löschen, Personen zusammenführen übernimmt Details).
+- `tests/PhotoViewerV3.Wpf.Tests`: 679 (+12, 1 übersprungen), dreimal hintereinander grün:
+  `Persons/PersonDetailsViewModelTests` (Dialog-Logik, benennen mit Details, bearbeiten, zusammenführen behält Eingaben,
+  sortieren/suchen/gruppieren, Einstellungen umbenennen → zusammenführen, löschen), `Persons/GalleryPageSourceRelationTests`
+  (Suche nach Nachname/Rufname/Beziehung, Filter Beziehung ODER/UND/mit Vorschlägen, Zähler, Anzeigename in der Spalte),
+  `Persons/PersonDetailsUiTests` (Dialog im Fenster ohne Binding-Fehler, Seite gruppiert mit Blatt-Kacheln).
+- Rauchtest 32/32 OK, 0 Binding-Fehler — neuer Schritt **„Personen-Details und Beziehungen“** vor „Ordnerüberwachung“
+  (`Shell/Smoke/SmokeScenario.PersonDetails.cs`): benennen mit Vor-/Nachname/Beziehung/Geburtsdatum, Vorschlag beim
+  zweiten Mal („schwester“ → „Schwester“), Rufname, gruppierte Übersicht, Detailzeile, „Das bin ich“ eindeutig, Filter
+  „Beziehung“ (Es gilt, UND mit Person, × an der Person lässt die Beziehung stehen), Umbenennen in den Einstellungen wirkt
+  in Galerie und Personen-Seite, Suche nach Beziehung. Screenshots `35-personen-nach-beziehung`,
+  `36-personen-detail-beziehung`, `37-galerie-filter-beziehung`, `38-einstellungen-beziehungen`.
+
+### Offen
+- Lightbox „Neue Person…“ fragt weiter nur einen Namen (Details danach auf der Personen-Seite).
+- Alter auf einem Foto (Aufnahmedatum − Geburtsdatum) und der Assistent folgen später.
+
 ## [0.2.45] — 2026-10-21
 
 ### Fix (ADR-0043) — Scharfe Vorschaubilder, Bildmaße im Katalog

@@ -61,6 +61,7 @@ Wenn eine ADR-Entscheidung revidiert wird: **neues ADR anlegen** + altes auf "Su
 | [0041](0041-galerie-filter-unabhaengig-kombinierbar.md) | Galerie-Filter unabhängig kombinierbar: Dateiart, nur Favoriten, Ablage und Mindest-Bewertung als eigene Teile (`GalleryFilterState`), mit Tags/Personen/Kategorien/Suche/Ordner per UND; „Es gilt“-Zeile, Filter zurücksetzen (Ordnerauswahl bleibt), Sortierung Feld + Richtung getrennt | Accepted |
 | [0042](0042-navigation-und-einstellungen-mit-reitern.md) | Schlankere Navigation (Bibliotheks-Umschalter, Galerie, Ordner, Personen, Sortieren), Einstellungen mit Reitern (Bibliotheken & Eingänge, Tags, Kategorien als eingebettete Seiten; Reiter-Tags im `INavigationService`), „Eingang hinzufügen…“ auf der Ordner-Seite, Info mit Version = oberster CHANGELOG-Eintrag | Accepted |
 | [0043](0043-vorschaubilder-kurze-kante-und-bildmasse.md) | Vorschaubilder nach kurzer Kante 400 px (lange ≤ 1200, Q82), in der Galerie passend zu Kachel × Bildschirm-Skalierung dekodiert; alte Größe bis zum Ersatz gezeigt, Pflege im Hintergrund; Bildmaße (nach EXIF-Drehung) in `Files.Width/Height` | Accepted |
+| [0045](0045-personen-details-und-beziehungen.md) | Personen mit Vor-/Nachname, Rufname, eigener Beziehung (Tabelle `PersonRelations`, Freitext mit Vorschlägen, verwaltbar), Geburtsdatum auch ungefähr, „Das bin ich“ (eindeutiger Teilindex); `Persons.Name` bleibt synchroner Anzeigename; Filter „Beziehung“ in der Galerie | Accepted |
 
 ## Quellen der Entscheidungen
 

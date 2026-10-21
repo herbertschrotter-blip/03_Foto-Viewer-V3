@@ -9,12 +9,16 @@ namespace PhotoViewerV3.Gallery.People;
 /// </summary>
 public sealed partial class PersonFilterEntry : ObservableObject
 {
-    public PersonFilterEntry(int personId, string name, int fileCount)
+    public PersonFilterEntry(int personId, string name, int fileCount, string? searchText = null)
     {
         PersonId = personId;
         Name = name;
         FileCount = fileCount;
+        SearchText = string.IsNullOrWhiteSpace(searchText) ? name : searchText;
     }
+
+    /// <summary>Suchbegriffe für die Suche im Flyout: Anzeigename, Vor-/Nachname, Rufname, Beziehung (0.2.47).</summary>
+    public string SearchText { get; }
 
     public int PersonId { get; }
 

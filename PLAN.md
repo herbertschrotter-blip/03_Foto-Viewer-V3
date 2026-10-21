@@ -123,8 +123,8 @@ src/
     Gallery/                          # Galerie: Data (GalleryPageSource, .Persons = Personen-Filter/-Suche/-Spalte), ViewModels, Views, Controls, Converters, Services, People (Personen-Filter-Dropdown)
     Library/                          # Bibliotheks-Seite (Namespace PhotoViewerV3.Libraries)
     Lightbox/                         # LightboxWindow/-ViewModel/-Service, ZoomPanControl (+ Overlay), LibVlcHost, Imaging, Faces (Gesichtsrahmen, Taste F)
-    Persons/                          # Seite „Personen“ (ADR-0037): PersonsViewModel, TileListBox, PersonPickerDialog, WicFaceCropRenderer
-    Settings/                         # Einstellungen, ThemeService, FaceData („Gesichtsdaten löschen…“)
+    Persons/                          # Seite „Personen“ (ADR-0037): PersonsViewModel, TileListBox, PersonPickerDialog, PersonDetailsDialog (ADR-0045), WicFaceCropRenderer
+    Settings/                         # Einstellungen, ThemeService, FaceData („Gesichtsdaten löschen…“), PersonRelations („Personen & Beziehungen“, ADR-0045)
     Shell/                            # Navigation, DialogService, StatusBar, Converters, Smoke/ (Rauchtest)
     Sorter/                           # Sortieren-Seite (File Sorter, Flatten & Move)
     Thumbnails/                       # WicImageThumbnailRenderer (WIC lebt im Wpf-Projekt, Interface in Services)
@@ -208,6 +208,12 @@ FilesFts           -- FTS5 virtual table (Files.Name, Extension)
   Personen-Filter/-Suche/-Spalte, ADR-0038)`,
   `FaceRejections (FaceId → Faces, PersonId → Persons, PK beide, CASCADE)`,
   `FaceScans (FileId PK → Files CASCADE, ModelVersion, ScannedAtUtc, FaceCount, ErrorCode)` — Merker des Hintergrund-Index.
+  Seit 0.2.47 (Migration `AddPersonDetails`, ADR-0045): `Persons` + `FirstName`/`LastName` (NOT NULL DEFAULT '', NOCASE),
+  `Nickname` (NULL, NOCASE), `RelationId` → `PersonRelations` ON DELETE SET NULL, `BirthYear`/`BirthMonth`/`BirthDay`
+  (NULL, auch nur Jahr bzw. Jahr + Monat), `IsMe` (eindeutiger Teilindex `IX_Persons_IsMe WHERE IsMe = 1`),
+  `IX_Persons_Relation`; `Name` bleibt der synchron gehaltene Anzeigename (Rufname, sonst „Vorname Nachname“), Bestand am
+  ersten Leerzeichen geteilt. `PersonRelations (Id, Name NOCASE, IX_PersonRelations_Name eindeutig)` — selbst getippte
+  Beziehungen, global wie Tags.
   „Neu aufbauen“ parkt Faces/FaceScans in seiner Transaktion und setzt sie über Ordnerpfad + Name auf die neuen FileIds
   (`UserDataCarryOver.Faces.cs`); Face-Ids bleiben.
 

@@ -33,9 +33,12 @@ public sealed class PersonTileViewModel(PersonOverview overview) : FaceImageTile
 
     public bool IsHidden => Overview.Person.IsHidden;
 
+    /// <summary>Beziehung (0.2.47, ADR-0045); null = keine.</summary>
+    public string? RelationName => Overview.Person.Details?.RelationName;
+
     public override long? ImageFaceId => Overview.Person.CoverFaceId;
 
-    /// <summary>„12 Fotos · 3 Vorschläge“.</summary>
+    /// <summary>„Schwester · 12 Fotos · 3 Vorschläge“.</summary>
     public string Details
     {
         get
@@ -44,6 +47,11 @@ public sealed class PersonTileViewModel(PersonOverview overview) : FaceImageTile
             if (Overview.SuggestionCount > 0)
             {
                 text += $" · {Overview.SuggestionCount.ToString("N0", CultureInfo.CurrentCulture)} Vorschl{(Overview.SuggestionCount == 1 ? "ag" : "äge")}";
+            }
+
+            if (RelationName is { } relation)
+            {
+                text = relation + " · " + text;
             }
 
             return IsHidden ? text + " · ausgeblendet" : text;

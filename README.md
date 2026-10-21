@@ -362,7 +362,8 @@ Dateien haben danach keinen Wert in dieser Kategorie). Neben jedem Wert steht, w
 ### Einstellungen
 Reiter oben (ADR-0042):
 - **Bibliotheken & Eingänge**, **Tags**, **Kategorien** — siehe die Abschnitte oben.
-- **Gesichter** — Gesichtserkennung, Grafikkarte, Mindestgröße, Modell, Index neu aufbauen, Gesichtsdaten löschen.
+- **Gesichter** — Gesichtserkennung, Grafikkarte, Mindestgröße, Modell, Index neu aufbauen, Gesichtsdaten löschen;
+  Karte **Personen & Beziehungen** (Beziehungen umbenennen, zusammenführen, löschen).
 - **Archive** — automatisch entpacken (je Bibliothek), vorhandene Archive nachholen.
 - **Darstellung** — Farbschema (Hell/Dunkel/System folgt Windows live).
 - **Speicher & Wartung** — Speicherorte mit „Ordner öffnen“ und **Ändern…** (siehe „Speicherort des Katalogs“),
@@ -424,7 +425,9 @@ Gelernt wird **nur aus dem, was du bestätigst** — eigene Vorschläge lernen n
 2. **Gruppen benennen:** Unter „Unbenannte Gruppen“ stehen Gesichter, die vermutlich dieselbe Person zeigen (größte
    zuerst). Eine Gruppe öffnen: die Gesichter sind nach Ähnlichkeit sortiert; **zweifelhafte stehen am Ende, sind rot
    markiert („Ausreißer?“) und abgewählt**. Klick wählt ein Gesicht ab oder an, Doppelklick öffnet das Foto.
-   - **Als neue Person benennen…** — Name eingeben; nur die ausgewählten Gesichter werden bestätigt.
+   - **Als neue Person benennen…** — Vorname, Nachname, optional Rufname, Beziehung, Geburtsdatum und „Das bin ich“
+     eingeben (siehe „Personen-Details“); nur die ausgewählten Gesichter werden bestätigt. Gibt es den Namen schon,
+     fragt PhotoViewer, ob die Gesichter zu dieser Person sollen.
    - **Zu Person hinzufügen…** — Person aus der Liste wählen (ähnelt die Gruppe einer bekannten Person, ist sie
      vorgewählt).
    - **Kein Gesicht / ignorieren** — die ausgewählten Gesichter (Fehlerkennungen); sie erscheinen nirgends mehr.
@@ -441,7 +444,7 @@ Gelernt wird **nur aus dem, was du bestätigst** — eigene Vorschläge lernen n
    heißt „das ist nicht diese Person“ — sie wird für dieses Gesicht nie wieder vorgeschlagen, der nächstbeste Kandidat
    rückt sofort nach.
 4. **Korrigieren:** Reiter **Bestätigt** → falsche Gesichter auswählen → **Aus Person entfernen** (danach wird ohne sie
-   neu gelernt), **Als Titelbild**. Oben: **Umbenennen…**, **Zusammenführen mit…** (z. B. zwei Einträge derselben
+   neu gelernt), **Als Titelbild**. Oben: **Bearbeiten…** (alle Details), **Zusammenführen mit…** (z. B. zwei Einträge derselben
    Person), **Ausblenden** (aus der Übersicht; „Ausgeblendete zeigen“ holt sie zurück), **Löschen…** (die Gesichter
    bleiben und sind wieder unbenannt).
 5. **Ignorierte Gesichter:** Übersicht → **Ignorierte Gesichter (N)** zeigt alle ignorierten Gesichter der aktiven
@@ -449,10 +452,29 @@ Gelernt wird **nur aus dem, was du bestätigst** — eigene Vorschläge lernen n
    mit **„zu klein“** und ihrer Größe in Pixeln markiert. Auswählen → **Zurückholen** (wieder unbenannt; Vorschläge und
    Gruppen werden neu berechnet), Doppelklick öffnet das Foto. Ein zurückgeholtes kleines Gesicht bleibt, bis die
    Mindestgröße geändert wird.
+6. **Übersicht ordnen:** über den Personen **Person suchen** (Vor-/Nachname, Rufname, Beziehung), **Sortieren** nach
+   Anzeigename, Nachname oder Anzahl Fotos und **Nach Beziehung gruppieren** (Abschnitte je Beziehung, „Ohne Beziehung“
+   am Ende). Die Kachel zeigt die Beziehung vor der Fotozahl.
 - Personen gelten für alle Bibliotheken, Zähler und Vorschläge für die aktive. Neue Gesichter aus dem laufenden Index
   erscheinen in den Gruppen nach **Aktualisieren**.
 - Die Gesichts-Ausschnitte (128 × 128) liegen im Vorschaubild-Ordner (`thumbs\<Bibliothek>\faces\`) und werden nur für
   sichtbare Kacheln erzeugt.
+
+### Personen-Details und Beziehungen
+Eine Person hat **Vorname**, **Nachname** und optional einen **Rufnamen** („Opa Franz“). Angezeigt wird überall der
+Rufname, sonst „Vorname Nachname“ — dieser Anzeigename ist eindeutig (zwei gleichnamige Personen unterscheidet ein
+Rufname). Personen aus älteren Versionen wurden am ersten Leerzeichen geteilt (erstes Wort = Vorname, Rest = Nachname);
+Bearbeiten korrigiert das (ADR-0045).
+- **Beziehung** aus deiner Sicht tippst du selbst („Schwester“, „Cousin mütterlicherseits“, „Taufpate“); schon
+  verwendete werden beim Tippen vorgeschlagen, Groß-/Kleinschreibung zählt nicht (es bleibt die Schreibweise der ersten
+  Verwendung). Verwalten unter **Einstellungen › Gesichter › Personen & Beziehungen**: **Umbenennen…** (wirkt bei allen
+  Personen, in Suche und Filter; ein schon vorhandener Name bietet das Zusammenführen an), **Zusammenführen mit**
+  (z. B. Tippfehler), **Löschen…** (die Personen behalten eine leere Beziehung).
+- **Geburtsdatum** optional und auch ungefähr: nur Jahr, Monat und Jahr oder vollständig. Die Detailansicht zeigt das
+  Alter heute („geboren März 1975 (51 Jahre)“, bei nur Jahr „etwa 45–46 Jahre“).
+- **Das bin ich** markiert höchstens eine Person (eine neue Markierung nimmt sie der bisherigen, der Dialog sagt, wem).
+  Vorbereitung für spätere Fragen wie „Fotos mit meiner Schwester aus meiner Kindheit“.
+- Die Lightbox („Neue Person…“) fragt weiter nur einen Namen; Details danach auf der Personen-Seite mit **Bearbeiten…**.
 
 ### Personen in Galerie und Lightbox
 Sobald Gesichter erkannt oder Personen benannt sind (ADR-0038). Als Person zählt nur ein **bestätigtes** Gesicht;
@@ -462,7 +484,11 @@ Vorschläge der Erkennung werden getrennt gezeigt.
   unbenannt), **nur Fotos ohne Person**, **nur Fotos mit unbenannten Gesichtern** und die Option **auch Vorschläge**
   (Standard aus). Als „Kein Gesicht“ ignorierte Erkennungen zählen in keinem Filter. Ausgeblendete Personen stehen nicht
   in der Liste.
-- **Suche** findet auch Personennamen (Teil des Namens genügt, ohne Groß-/Kleinschreibung) — wie Tags und Kategorien.
+- **Suche** findet auch Personennamen (Teil des Namens genügt, ohne Groß-/Kleinschreibung) — wie Tags und Kategorien;
+  seit 0.2.47 auch Vorname, Nachname, Rufname und Beziehung („schwester“ zeigt alle Fotos deiner Schwestern).
+- **Beziehung** im Personen-Filter: Abschnitt „Beziehung“ mit Häkchen je Beziehung (mit Fotozahl); mehrere gelten mit
+  ODER, zusammen mit gewählten Personen und allen anderen Filtern mit UND. Unter „Es gilt“ steht z. B. „Beziehung
+  „Schwester““ mit eigenem ×; die Suche im Flyout findet Personen auch über Nachname, Rufname und Beziehung.
 - **Listenansicht**: Spalte **Personen** (Kopfzeile rechts klicken → einblenden): bestätigte Namen, Vorschläge kursiv und
   grau mit „?“; Klick auf die Kopfzeile sortiert innerhalb der Seite.
 - **Kachel**: kleines Personen-Symbol mit Anzahl, wenn bestätigte Personen auf dem Foto sind (Tooltip: Namen), daneben

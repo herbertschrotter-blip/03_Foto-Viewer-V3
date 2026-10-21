@@ -16,6 +16,9 @@ public sealed class PersonsDialogService(IDialogService dialogs) : IPersonsDialo
     public Task<string?> PromptNameAsync(string title, string message, string initialValue)
         => dialogs.PromptTextAsync(title, message, initialValue, "Übernehmen");
 
+    public Task<PersonDetailsInput?> EditPersonAsync(PersonEditRequest request)
+        => Task.FromResult(PersonDetailsDialog.Show(Owner, request));
+
     public Task<bool> ConfirmAsync(string title, string message, string confirmText, bool isDestructive = false)
         => dialogs.ConfirmAsync(title, message, confirmText, isDestructive);
 

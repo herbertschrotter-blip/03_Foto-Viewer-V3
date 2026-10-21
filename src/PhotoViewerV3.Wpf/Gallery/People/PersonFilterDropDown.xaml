@@ -13,7 +13,9 @@
         Gesicht, Suche über die Personen, je Person ein Häkchen mit Zähler, „Auch Vorschläge mitzählen“, „Leeren“, „Fertig“.
         Nur bestätigte Gesichter zählen als Person, solange „Auch Vorschläge“ aus ist. Bei Modi ohne Personenwahl ist die
         Liste gedimmt (die Häkchen bleiben erhalten). DataContext = GalleryViewModel (PersonFilterEntries, PersonFilterMode,
-        PersonFilterIncludeSuggestions, PersonFilterValueText, HasPersonFilter, ApplyPersonFilterCommand, ClearPersonFilterCommand).
+        PersonFilterIncludeSuggestions, PersonFilterValueText, HasPeopleFilter, ApplyPersonFilterCommand, ClearPeopleFilterCommand).
+        Seit 0.2.47 (ADR-0045): Suche findet Vor-/Nachname, Rufname und Beziehung; Abschnitt „Beziehung“ (RelationFilterEntries,
+        ApplyRelationFilterCommand) — UND-verknüpft mit den Personen und allen anderen Filtern.
     -->
     <UserControl.Resources>
         <ResourceDictionary>
@@ -31,7 +33,7 @@
                       AutomationProperties.AutomationId="GalleryPersonFilterButton"
                       AutomationProperties.Name="{Binding PersonFilterValueText, StringFormat='Personen-Filter: {0}'}"
                       ToolTip="{Binding PersonFilterText}"
-                      gc:FilterChip.IsActive="{Binding HasPersonFilter}"
+                      gc:FilterChip.IsActive="{Binding HasPeopleFilter}"
                       IsChecked="{Binding IsOpen, ElementName=FilterPopup, Mode=TwoWay}">
             <StackPanel Orientation="Horizontal">
                 <ui:SymbolIcon Symbol="People24" FontSize="13" Margin="0,0,6,0" />
@@ -98,7 +100,7 @@
                         <Border Style="{StaticResource GalleryFlyoutDivider}" />
                         <ui:TextBox x:Name="SearchBox"
                                     Margin="0,0,0,6"
-                                    PlaceholderText="Person suchen"
+                                    PlaceholderText="Person suchen (Name, Rufname, Beziehung)"
                                     Icon="{ui:SymbolIcon Search24}"
                                     ClearButtonEnabled="True"
                                     AutomationProperties.Name="Person suchen"
@@ -111,13 +113,44 @@
                     </StackPanel>
 
                     <StackPanel DockPanel.Dock="Bottom">
+                        <!-- Beziehung (0.2.47, ADR-0045): eine der gewählten Beziehungen, UND mit den Personen oben -->
+                        <StackPanel Visibility="{Binding HasRelations, Converter={StaticResource BoolToVis}}">
+                            <Border Style="{StaticResource GalleryFlyoutDivider}" />
+                            <TextBlock Text="BEZIEHUNG" Style="{StaticResource GalleryFlyoutHeading}" />
+                            <ScrollViewer MaxHeight="120" VerticalScrollBarVisibility="Auto">
+                                <ItemsControl x:Name="RelationList" ItemsSource="{Binding RelationFilterEntries}"
+                                              AutomationProperties.Name="Beziehungen">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type local:RelationFilterEntry}">
+                                            <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                      Margin="0,1,10,1"
+                                                      AutomationProperties.Name="{Binding Name, StringFormat='Beziehung {0}'}"
+                                                      Command="{Binding DataContext.ApplyRelationFilterCommand, ElementName=Root}">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                                                    <TextBlock Text="{Binding CountText}" Margin="6,0,0,0" FontSize="11" VerticalAlignment="Center"
+                                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                                                </StackPanel>
+                                            </CheckBox>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                            <TextBlock Text="Fotos mit einer Person dieser Beziehung — zusammen mit den Personen oben"
+                                       Style="{StaticResource GalleryFlyoutHint}" TextWrapping="Wrap" />
+                        </StackPanel>
                         <CheckBox Margin="0,6,0,0"
                                   Content="Auch Vorschläge mitzählen"
                                   ToolTip="Vorgeschlagene, noch nicht bestätigte Personen zählen mit"
                                   IsChecked="{Binding PersonFilterIncludeSuggestions, Mode=TwoWay}"
                                   AutomationProperties.Name="Auch Vorschläge mitzählen" />
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
-                            <ui:Button Content="Leeren" ToolTip="Personen-Filter aufheben" Command="{Binding ClearPersonFilterCommand}" Click="OnCloseClick" Margin="0,0,6,0" />
+                            <ui:Button Content="Leeren" ToolTip="Personen- und Beziehungs-Filter aufheben" Command="{Binding ClearPeopleFilterCommand}" Click="OnCloseClick" Margin="0,0,6,0" />
                             <ui:Button Content="Fertig" Appearance="Primary" Click="OnCloseClick" />
                         </StackPanel>
                     </StackPanel>

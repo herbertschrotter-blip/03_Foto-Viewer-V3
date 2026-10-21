@@ -29,6 +29,12 @@ public partial class SettingsFacesSection : UserControl
     public SettingsFacesSection() => InitializeComponent();
 }
 
+/// <summary>Einstellungen › Gesichter › Karte „Personen &amp; Beziehungen“ (0.2.47, ADR-0045); DataContext = PersonRelationsSettingsViewModel.</summary>
+public partial class SettingsRelationsSection : UserControl
+{
+    public SettingsRelationsSection() => InitializeComponent();
+}
+
 /// <summary>Ordnerüberwachung als Karte unter der Bibliotheksliste in Einstellungen › Bibliotheken &amp; Eingänge.</summary>
 public partial class SettingsWatchSection : UserControl
 {

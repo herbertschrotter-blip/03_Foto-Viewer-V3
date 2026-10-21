@@ -70,9 +70,11 @@ public sealed partial class PersonsViewModel : ObservableObject, IDisposable
         INavigationService navigation,
         ILogger<PersonsViewModel> logger,
         IMessenger? messenger = null,
-        IFaceIgnoreService? ignore = null)
+        IFaceIgnoreService? ignore = null,
+        IPersonDetailsService? details = null)
     {
         _ignore = ignore;
+        _details = details ?? service as IPersonDetailsService; // ADR-0045; im Programm derselbe Dienst
         _service = service;
         _index = index;
         _images = images;
@@ -119,7 +121,7 @@ public sealed partial class PersonsViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(NameGroupCommand), nameof(AddGroupToPersonCommand), nameof(IgnoreGroupSelectionCommand),
         nameof(ConfirmSelectedSuggestionsCommand), nameof(RejectSelectedSuggestionsCommand), nameof(ConfirmVisibleSuggestionsCommand),
         nameof(RejectVisibleSuggestionsCommand), nameof(RemoveSelectedConfirmedCommand), nameof(SetCoverCommand),
-        nameof(RenamePersonCommand), nameof(MergePersonCommand), nameof(ToggleHiddenCommand), nameof(DeletePersonCommand),
+        nameof(EditPersonCommand), nameof(MergePersonCommand), nameof(ToggleHiddenCommand), nameof(DeletePersonCommand),
         nameof(ConfirmAllSuggestionsCommand), nameof(RejectAllSuggestionsCommand), nameof(IgnoreWholeGroupCommand), nameof(RestoreIgnoredCommand))]
     private bool _isBusy;
 
@@ -223,13 +225,28 @@ public sealed partial class PersonsViewModel : ObservableObject, IDisposable
 
     private void ApplyPersons()
     {
-        var visible = _allPersons.Where(p => ShowHidden || !p.Person.IsHidden).ToList();
-        Persons.ReplaceAll(visible.Select(p => new PersonTileViewModel(p)));
+        // Suche, Sortierung und Gruppierung nach Beziehung: PersonsViewModel.Details.cs (0.2.47)
+        var visible = FilterAndSortPersons();
+        // Schon geladene Titelbilder übernehmen (Suche/Sortierung/Gruppierung legen die Kacheln neu an)
+        var images = Persons.Where(t => t.Image is not null && t.ImageFaceId is not null)
+            .GroupBy(t => t.ImageFaceId!.Value).ToDictionary(g => g.Key, g => g.First().Image);
+        var tiles = visible.Select(p => new PersonTileViewModel(p)).ToList();
+        foreach (var tile in tiles)
+        {
+            if (tile.ImageFaceId is { } faceId && images.TryGetValue(faceId, out var image))
+            {
+                tile.Image = image;
+            }
+        }
+
+        Persons.ReplaceAll(tiles);
         HasPersons = Persons.Count > 0;
         var hidden = _allPersons.Count(p => p.Person.IsHidden);
         PersonsSummary = _allPersons.Count == 0
             ? "Noch keine Personen — unten eine Gruppe öffnen und benennen."
-            : $"{N(_allPersons.Count)} Person{(_allPersons.Count == 1 ? string.Empty : "en")}" + (hidden > 0 ? $", davon {N(hidden)} ausgeblendet" : string.Empty);
+            : $"{N(_allPersons.Count)} Person{(_allPersons.Count == 1 ? string.Empty : "en")}" + (hidden > 0 ? $", davon {N(hidden)} ausgeblendet" : string.Empty)
+              + (string.IsNullOrWhiteSpace(PersonSearch) ? string.Empty : $" · {N(Persons.Count)} gefunden");
+        BuildRelationGroups(tiles);
         RequestVisible(PersonsListKind.Persons);
     }
 

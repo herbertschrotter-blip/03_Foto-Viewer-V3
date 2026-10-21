@@ -35,7 +35,17 @@ public sealed record FacePersonInfo(
 /// <param name="FileCount">Fotos mit mindestens einem bestätigten Gesicht der Person.</param>
 /// <param name="CoverFaceId">Titelbild: gesetztes Gesicht, sonst das bestätigte Gesicht mit der besten Qualität; null ohne Gesichter.</param>
 /// <param name="IsHidden">In Listen ausgeblendet.</param>
-public sealed record PersonSummary(int Id, string Name, int FaceCount, int FileCount, long? CoverFaceId, bool IsHidden);
+public sealed record PersonSummary(int Id, string Name, int FaceCount, int FileCount, long? CoverFaceId, bool IsHidden)
+{
+    /// <summary>
+    /// Vor-/Nachname, Rufname, Beziehung, Geburtsdatum, „Das bin ich“ (0.2.47, ADR-0045). <see cref="Name"/> ist der
+    /// Anzeigename daraus. Null nur bei Testdaten ohne Details.
+    /// </summary>
+    public PersonDetails? Details { get; init; }
+
+    /// <summary>Suchbegriffe (Anzeigename, Vor-/Nachname, Rufname, Beziehung).</summary>
+    public string SearchText => Details?.SearchText ?? Name;
+}
 
 /// <summary>
 /// Personen oder Zuordnungen der Bibliothek haben sich geändert (Bestätigen, Ablehnen, Umbenennen, neue Vorschläge …).
