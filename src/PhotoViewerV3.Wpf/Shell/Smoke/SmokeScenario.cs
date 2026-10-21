@@ -223,6 +223,7 @@ internal sealed partial class SmokeScenario
         await StepAsync("Ordner übernehmen: Eingang mit Kette leer/leer/inhalt und Verzweigung → Bibliothek, Struktur geprüft, Quelle im Papierkorb, Eingang ausgetragen, Bewertung/Tag wandert mit, Rückgängig (dazu Bewertung/Tags für alle Dateien eines Ordners)", FolderAdoptionAsync).ConfigureAwait(true);
         await StepAsync("Gesichter: Index mit Fake-Analyzer → FaceScans/Faces geschrieben, Statusleiste, Pause/Fortsetzen", FacesAsync).ConfigureAwait(true);
         await StepAsync("Personen: Gruppe benennen (Ausreißer abgewählt), Vorschlag bestätigen/ablehnen, Zusammenführen", PersonsAsync).ConfigureAwait(true);
+        await StepAsync("Personen in Galerie/Lightbox: Filter, Suche, Spalte, Rahmen, bestätigen, Gesichtsdaten löschen", PersonsGalleryAsync).ConfigureAwait(true);
         await StepAsync("Ordnerüberwachung: Datei kopieren → automatischer Diff-Scan → Galerie", WatchAsync).ConfigureAwait(true);
         if (_cleanup)
         {

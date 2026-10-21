@@ -7,6 +7,7 @@
              xmlns:shell="clr-namespace:PhotoViewerV3.Shell"
              xmlns:local="clr-namespace:PhotoViewerV3.Settings"
              xmlns:faces="clr-namespace:PhotoViewerV3.Faces"
+             xmlns:facedata="clr-namespace:PhotoViewerV3.Settings.FaceData"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance local:SettingsViewModel}"
              d:DesignWidth="1000"
@@ -254,7 +255,7 @@
                     <ui:TextBlock Style="{StaticResource SectionTitle}" Text="Gesichtserkennung" />
                     <TextBlock Margin="0,0,0,8" FontSize="12" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Text="Erkennt im Hintergrund Gesichter in den Fotos der aktiven Bibliothek und speichert je Gesicht einen Fingerabdruck im Katalog — vollständig auf diesem PC, nichts verlässt den Rechner. Videos werden noch nicht analysiert; Personen benennen und Fotos nach Personen filtern folgen in einer späteren Version." />
+                               Text="Erkennt im Hintergrund Gesichter in den Fotos der aktiven Bibliothek und speichert je Gesicht einen Fingerabdruck im Katalog — vollständig auf diesem PC, nichts verlässt den Rechner. Videos werden noch nicht analysiert. Erkannte Gesichter benennst du in der Lightbox (Taste F); die Galerie filtert und sucht nach Personen." />
                     <ui:ToggleSwitch Content="Gesichter im Hintergrund erkennen"
                                      IsChecked="{Binding IsEnabled, Mode=TwoWay}"
                                      AutomationProperties.Name="Gesichter im Hintergrund erkennen" />
@@ -313,6 +314,36 @@
                             </Style>
                         </TextBlock.Style>
                     </TextBlock>
+
+                    <!-- Gesichtsdaten löschen (0.2.38, Wpf/Settings/FaceData): eigener DataContext = SettingsViewModel.FaceData -->
+                    <StackPanel Margin="0,14,0,0"
+                                DataContext="{Binding DataContext.FaceData, RelativeSource={RelativeSource AncestorType={x:Type local:SettingsPage}}}"
+                                Visibility="{Binding Converter={StaticResource NullToVis}}">
+                        <ui:Button Icon="{ui:SymbolIcon Delete24}"
+                                   Content="Gesichtsdaten löschen…"
+                                   Command="{Binding EraseCommand}"
+                                   AutomationProperties.Name="Gesichtsdaten löschen" />
+                        <TextBlock Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   Text="Löscht für die aktive Bibliothek Personen, Gesichter, Fingerabdrücke, Ablehnungen und den Gesichter-Cache — die Fotos bleiben. Danach ist die Gesichtserkennung aus." />
+                        <TextBlock Margin="0,2,0,0" FontSize="12" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   Text="{x:Static facedata:FaceDataSettingsViewModel.PrivacyText}" />
+                        <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
+                                   Text="{Binding Message}"
+                                   Visibility="{Binding Message, Converter={StaticResource NullToVis}}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding MessageIsError}" Value="True">
+                                            <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </StackPanel>
                 </StackPanel>
             </Border>
 

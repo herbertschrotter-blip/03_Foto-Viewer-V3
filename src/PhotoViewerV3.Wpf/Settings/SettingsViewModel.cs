@@ -59,7 +59,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         ILogger<SettingsViewModel> logger,
         IArchiveAutoExtractService? autoExtract = null,
         ILibraryService? libraries = null,
-        FaceSettingsViewModel? faces = null)
+        FaceSettingsViewModel? faces = null,
+        PhotoViewerV3.Settings.FaceData.FaceDataSettingsViewModel? faceData = null)
     {
         _factory = factory;
         _paths = paths;
@@ -75,7 +76,11 @@ public sealed partial class SettingsViewModel : ObservableObject
         _autoExtract = autoExtract;
         _libraries = libraries;
         Faces = faces;
+        FaceData = faceData;
     }
+
+    /// <summary>„Gesichtsdaten löschen…“ im Abschnitt Gesichtserkennung (0.2.38); null = ausgeblendet (Tests ohne den Dienst).</summary>
+    public PhotoViewerV3.Settings.FaceData.FaceDataSettingsViewModel? FaceData { get; }
 
     /// <summary>Abschnitt „Gesichtserkennung“ (ADR-0035); null = Abschnitt ausgeblendet (Tests ohne den Dienst).</summary>
     public FaceSettingsViewModel? Faces { get; }

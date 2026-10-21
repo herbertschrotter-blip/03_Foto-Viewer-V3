@@ -69,6 +69,15 @@
             <tags:TagChipsControl Tags="{Binding Tags}" Compact="False" VerticalAlignment="Center" />
         </DataTemplate>
 
+        <DataTemplate x:Key="PersonsCell" DataType="{x:Type vm:GalleryItem}">
+            <!-- Personen (0.2.38): bestätigte Namen normal, Vorschläge kursiv und grau mit „?“ -->
+            <TextBlock VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding Persons.ToolTip}">
+                <Run Text="{Binding Persons.ConfirmedText, Mode=OneWay}" /><Run Text="{Binding Persons.Separator, Mode=OneWay}" /><Run Text="{Binding Persons.SuggestionsText, Mode=OneWay}"
+                     FontStyle="Italic"
+                     Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+            </TextBlock>
+        </DataTemplate>
+
         <DataTemplate x:Key="StatusCell" DataType="{x:Type vm:GalleryItem}">
             <!-- Status (ADR-0020): fehlt / Eingang / Archiv; „fehlt“ in Warnfarbe -->
             <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center">

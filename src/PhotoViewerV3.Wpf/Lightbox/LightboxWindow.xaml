@@ -94,7 +94,14 @@
                                          Source="{Binding ImageSource}"
                                          ZoomPercent="{Binding ZoomPercent, Mode=OneWayToSource}"
                                          IsFit="{Binding IsZoomFit, Mode=OneWayToSource}"
-                                         Visibility="{Binding IsImage, Converter={StaticResource BoolToVis}}" />
+                                         Visibility="{Binding IsImage, Converter={StaticResource BoolToVis}}">
+                    <!-- Gesichtsrahmen (Taste F, 0.2.38): wandern mit Zoom/Schwenk, Klick öffnet das Benennen-Menü -->
+                    <controls:ZoomPanControl.Overlay>
+                        <controls:FaceBoxesLayer x:Name="FaceBoxes"
+                                                 Controller="{Binding Faces}"
+                                                 Visibility="{Binding Faces.ShowBoxes, Converter={StaticResource BoolToVis}}" />
+                    </controls:ZoomPanControl.Overlay>
+                </controls:ZoomPanControl>
 
                 <!-- VideoView = HwndHost. Overlays darüber MÜSSEN im Content liegen (Airspace). -->
                 <vlc:VideoView x:Name="VideoView"
@@ -181,7 +188,7 @@
                                    LineHeight="18"
                                    TextWrapping="Wrap"
                                    Foreground="{DynamicResource LightboxTextSecondaryBrush}"
-                                   Text="← → Blättern · Pos1/Ende Anfang/Ende · Bild↑/↓ ±10&#x0a;+ − Zoom · 1 = 100 % · 0 = Einpassen · Doppelklick Fit ↔ 100 %&#x0a;Leertaste Play/Pause · M Stumm&#x0a;Strg+D Favorit · Strg+1…5 Bewertung · Strg+0 löscht&#x0a;Strg+T Tags · Strg+K Kategorien&#x0a;I Info · F/F11 Vollbild · Entf Papierkorb · Esc Schließen" />
+                                   Text="← → Blättern · Pos1/Ende Anfang/Ende · Bild↑/↓ ±10&#x0a;+ − Zoom · 1 = 100 % · 0 = Einpassen · Doppelklick Fit ↔ 100 %&#x0a;Leertaste Play/Pause · M Stumm&#x0a;Strg+D Favorit · Strg+1…5 Bewertung · Strg+0 löscht&#x0a;Strg+T Tags · Strg+K Kategorien&#x0a;F Gesichter · I Info · F11 Vollbild · Entf Papierkorb · Esc Schließen" />
                     </StackPanel>
                 </ScrollViewer>
             </Border>

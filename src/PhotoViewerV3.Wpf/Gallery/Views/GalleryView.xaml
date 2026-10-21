@@ -249,6 +249,19 @@
                                        Text="{Binding SizeDisplay}"
                                        FontSize="10"
                                        Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                            <!-- Personen (0.2.38): Symbol mit Anzahl bestätigter Personen, Hover zeigt die Namen -->
+                            <StackPanel DockPanel.Dock="Right"
+                                        Orientation="Horizontal"
+                                        Margin="6,0,0,0"
+                                        VerticalAlignment="Center"
+                                        Background="Transparent"
+                                        ToolTip="{Binding Persons.ToolTip}"
+                                        Visibility="{Binding Persons.HasConfirmed, Converter={StaticResource BoolToVis}}">
+                                <ui:SymbolIcon Symbol="Person16" FontSize="11" Margin="0,0,2,0"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                <TextBlock Text="{Binding Persons.ConfirmedCount}" FontSize="10"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                            </StackPanel>
                             <!-- Tag-Punkte (Hover zeigt den Namen) -->
                             <tags:TagChipsControl DockPanel.Dock="Right"
                                                   Tags="{Binding Tags}"

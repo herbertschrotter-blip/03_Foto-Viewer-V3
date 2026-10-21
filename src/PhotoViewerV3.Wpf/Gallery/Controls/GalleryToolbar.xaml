@@ -8,6 +8,7 @@
              xmlns:conv="clr-namespace:PhotoViewerV3.Gallery.Converters"
              xmlns:tags="clr-namespace:PhotoViewerV3.Gallery.Tags"
              xmlns:cats="clr-namespace:PhotoViewerV3.Gallery.Categories"
+             xmlns:people="clr-namespace:PhotoViewerV3.Gallery.People"
              xmlns:vm="clr-namespace:PhotoViewerV3.Gallery.ViewModels"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=vm:GalleryViewModel, IsDesignTimeCreatable=False}"
@@ -133,6 +134,9 @@
             <!-- Tag-Filter (ODER/UND/ohne Tag), ADR-0021 -->
             <tags:TagFilterDropDown />
 
+            <!-- Personen-Filter (ODER/UND/ohne Person/unbenannte Gesichter, 0.2.38) — sobald Personen oder Gesichter da sind -->
+            <people:PersonFilterDropDown Visibility="{Binding ShowPersonFilter, Converter={StaticResource BoolToVis}}" />
+
             <!-- Kategorien-Filter (je Kategorie Werte + „ohne Wert“), ADR-0027 — nur wenn Kategorien angelegt sind -->
             <cats:CategoryFilterDropDown Visibility="{Binding HasCategories, Converter={StaticResource BoolToVis}}" />
 
@@ -177,7 +181,7 @@
                             AutomationProperties.AutomationId="GallerySearchBox"
                             AutomationProperties.Name="Suche"
                             Icon="{ui:SymbolIcon Search24}"
-                            PlaceholderText="Name, Endung oder Tag…"
+                            PlaceholderText="Name, Tag oder Person…"
                             ToolTip="Suche nach Dateiname, Endung, Tag-Name oder Kategorie-Wert (Enter sucht, Esc leert)"
                             ClearButtonEnabled="False"
                             Text="{Binding SearchTerm, UpdateSourceTrigger=PropertyChanged}">

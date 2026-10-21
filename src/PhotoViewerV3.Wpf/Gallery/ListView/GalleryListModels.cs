@@ -24,6 +24,9 @@ public enum GalleryListColumnKey
     Favorite,
     Tags,
     Status,
+
+    /// <summary>Bestätigte Personen (und Vorschläge kursiv mit „?“), 0.2.38 — nur innerhalb der Page sortierbar.</summary>
+    Persons,
 }
 
 /// <summary>Stammdaten einer Spalte: Überschrift, Startbreite, serverseitige Sortierung (auf/ab) oder null = nur innerhalb der Page.</summary>
@@ -51,6 +54,7 @@ public static class GalleryListColumns
         new(GalleryListColumnKey.Rating, "Bewertung", 100, null, null),
         new(GalleryListColumnKey.Favorite, "Favorit", 70, null, null),
         new(GalleryListColumnKey.Tags, "Tags", 180, null, null),
+        new(GalleryListColumnKey.Persons, "Personen", 180, null, null),
         new(GalleryListColumnKey.Status, "Status", 80, null, null),
     ];
 

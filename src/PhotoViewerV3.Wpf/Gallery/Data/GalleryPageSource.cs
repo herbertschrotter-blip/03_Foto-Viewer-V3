@@ -35,8 +35,12 @@ public sealed record GalleryQuery(
     IReadOnlyList<int>? TagIds = null,
     GalleryTagMode TagMode = GalleryTagMode.Any,
     IReadOnlyList<GalleryCategoryFilter>? CategoryFilters = null,
-    GalleryCategorySort? CategorySort = null)
+    GalleryCategorySort? CategorySort = null,
+    GalleryPersonFilter? PersonFilter = null)
 {
+    /// <summary>True, wenn ein Personen-Filter wirkt (0.2.38, <c>GalleryPageSource.Persons.cs</c>).</summary>
+    public bool HasPersonFilter => PersonFilter is { IsActive: true };
+
     /// <summary>Sicherer FTS5-MATCH-Ausdruck (quotierte Präfix-Phrasen) oder null ohne suchbaren Inhalt.</summary>
     public string? MatchExpression => FtsQueryBuilder.FromUserInput(SearchTerm);
 
@@ -443,6 +447,7 @@ public sealed partial class GalleryPageSource : IDisposable
               {BuildFilterClause(query.Filter)}
               {BuildTagClause(query)}
               {BuildCategoryClause(query)}
+              {BuildPersonClause(query)}
               {folderClause}
             ORDER BY {orderBy}
             LIMIT $limit OFFSET $offset;
@@ -458,6 +463,7 @@ public sealed partial class GalleryPageSource : IDisposable
               {BuildFilterClause(query.Filter)}
               {BuildTagClause(query)}
               {BuildCategoryClause(query)}
+              {BuildPersonClause(query)}
               {folderClause};
             """;
     }
@@ -470,8 +476,8 @@ public sealed partial class GalleryPageSource : IDisposable
     /// Durchlauf aller Dateien der Library. Tags, Werte und Kategorien laufen alle als <c>… IN (Ids aus der kleinen
     /// Namenstabelle)</c>, damit SQLite die Zuordnungen über ihren Index liest (<c>IX_FileTags_Tag</c>,
     /// <c>IX_FileCategoryValues_Value</c>, <c>IX_FileCategoryValues_Category_Value_File</c>) statt alle Zuordnungen zu
-    /// durchlaufen (vor 0.2.30 las der Tag-Zweig per Join alle <c>FileTags</c>-Zeilen, Plan <c>SCAN ft</c>). Ohne Suche
-    /// einfach <c>Files f</c>.
+    /// durchlaufen (vor 0.2.30 las der Tag-Zweig per Join alle <c>FileTags</c>-Zeilen, Plan <c>SCAN ft</c>). Seit 0.2.38
+    /// auch Personennamen (bestätigte Gesichter, <see cref="PersonSearchUnion"/>). Ohne Suche einfach <c>Files f</c>.
     /// </summary>
     private static string BuildFilesSource(GalleryQuery query) => query.HasSearch
         ? """
@@ -484,7 +490,9 @@ public sealed partial class GalleryPageSource : IDisposable
            WHERE fcv.ValueId IN (SELECT v.Id FROM CategoryValues v WHERE v.Name LIKE $tagLike ESCAPE '\')
            UNION
            SELECT fcn.FileId FROM FileCategoryValues fcn
-           WHERE fcn.CategoryId IN (SELECT k.Id FROM Categories k WHERE k.Name LIKE $tagLike ESCAPE '\')) hit
+           WHERE fcn.CategoryId IN (SELECT k.Id FROM Categories k WHERE k.Name LIKE $tagLike ESCAPE '\')
+          """ + PersonSearchUnion + """
+          ) hit
           CROSS JOIN Files f ON f.Id = hit.Id
           """
         : "Files f";
@@ -609,6 +617,8 @@ public sealed partial class GalleryPageSource : IDisposable
                 cmd.Parameters.AddWithValue("$tagCount", tagIds.Distinct().Count());
             }
         }
+
+        BindPersonParams(cmd, query); // Personen-Filter (0.2.38)
 
         var categoryFilters = query.ActiveCategoryFilters;
         for (var i = 0; i < categoryFilters.Count; i++)

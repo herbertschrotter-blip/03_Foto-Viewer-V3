@@ -8,6 +8,7 @@ using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Database.Relocation;
 using PhotoViewerV3.Services.Faces;
 using PhotoViewerV3.Services.Faces.Assignment;
+using PhotoViewerV3.Services.Faces.Erase;
 using PhotoViewerV3.Services.Infrastructure;
 using PhotoViewerV3.Services.Library;
 using PhotoViewerV3.Services.Media;
@@ -76,6 +77,7 @@ public static class ServiceCollectionExtensions
 
         // Gesichtserkennung Teil 1: Modell, ONNX-Analysator, Hintergrund-Index (Services/Faces, ADR-0035)
         services.AddFaces();
+        services.AddFaceDataEraser(); // „Gesichtsdaten löschen“ je Bibliothek (Services/Faces/Erase, 0.2.38)
 
         // Gesichtserkennung Teil 3: Zuordnung, Vorschläge, Gruppen, Gesichts-Ausschnitte (Services/Faces/Assignment, ADR-0037)
         services.AddFaceRecognition();

@@ -57,6 +57,13 @@ internal sealed class FaceConfiguration : IEntityTypeConfiguration<Face>
         b.HasIndex(x => x.PersonId).HasDatabaseName("IX_Faces_Person");
         b.HasIndex(x => x.State).HasDatabaseName("IX_Faces_State");
         b.HasIndex(x => x.SuggestedPersonId).HasDatabaseName("IX_Faces_SuggestedPerson");
+
+        // Personen in Galerie, Suche, Liste (0.2.38, Migration AddFacePersonIndex): abdeckende Indizes, weil State,
+        // PersonId und SuggestedPersonId im Datensatz HINTER dem 2-KB-Fingerabdruck liegen — ohne sie liest jede
+        // Prüfung die Überlaufseiten des Fingerabdrucks.
+        b.HasIndex(x => new { x.PersonId, x.State, x.FileId }).HasDatabaseName("IX_Faces_Person_State_File");
+        b.HasIndex(x => new { x.SuggestedPersonId, x.State, x.FileId }).HasDatabaseName("IX_Faces_SuggestedPerson_State_File");
+        b.HasIndex(x => new { x.FileId, x.State, x.PersonId, x.SuggestedPersonId }).HasDatabaseName("IX_Faces_File_State_Person");
     }
 }
 

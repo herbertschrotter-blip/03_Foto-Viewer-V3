@@ -195,6 +195,9 @@ public partial class GalleryListView : UserControl
                 return new DataGridTemplateColumn { CellTemplate = (DataTemplate)Resources["TagsCell"], SortMemberPath = nameof(GalleryItem.TagsText) };
             case GalleryListColumnKey.Status:
                 return new DataGridTemplateColumn { CellTemplate = (DataTemplate)Resources["StatusCell"], SortMemberPath = nameof(GalleryItem.StatusText) };
+            case GalleryListColumnKey.Persons:
+                // 0.2.38: bestätigte Namen, Vorschläge kursiv/grau mit „?“; Sortierung nur innerhalb der Page.
+                return new DataGridTemplateColumn { CellTemplate = (DataTemplate)Resources["PersonsCell"], SortMemberPath = nameof(GalleryItem.PersonsSortKey) };
             default:
                 throw new ArgumentOutOfRangeException(nameof(def), def.Key, "Unbekannte Spalte");
         }

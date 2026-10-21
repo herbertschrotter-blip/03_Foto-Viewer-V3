@@ -19,6 +19,7 @@ using PhotoViewerV3.Services.Faces.Assignment;
 using PhotoViewerV3.Services.Faces.Crops;
 using PhotoViewerV3.Settings;
 using PhotoViewerV3.Settings.CategoryManagement;
+using PhotoViewerV3.Settings.FaceData;
 using PhotoViewerV3.Settings.TagManagement;
 using PhotoViewerV3.Shell;
 using PhotoViewerV3.Sorter;
@@ -125,6 +126,7 @@ public partial class App : Application
         services.AddCategoryManagement(); // Seite „Kategorien“ (Wpf/Settings/CategoryManagement, ADR-0027)
         services.AddFacesUi(); // Gesichtserkennung: WIC-Lader + Einstellungs-Abschnitt (Wpf/Faces, ADR-0035)
         services.AddPersonsUi(); // Seite „Personen“: Zuordnen, Gruppen, Gesichts-Ausschnitte (Wpf/Persons, ADR-0037)
+        services.AddFaceDataSettings(); // „Gesichtsdaten löschen…“ in den Einstellungen (Wpf/Settings/FaceData, 0.2.38)
 
         services.AddSingleton<MainWindow>();
     }

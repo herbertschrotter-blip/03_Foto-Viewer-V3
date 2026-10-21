@@ -313,6 +313,11 @@ public sealed partial class GalleryViewModel : ObservableObject
                 return "Keine Dateien mit diesem Kategorien-Filter.";
             }
 
+            if (EmptyMessagePersons is { } personsMessage)
+            {
+                return personsMessage;
+            }
+
             if (FolderId is not null)
             {
                 return "In diesem Ordner liegen keine Dateien, die zum Filter passen.";
@@ -380,6 +385,7 @@ public sealed partial class GalleryViewModel : ObservableObject
             return;
         }
 
+        await LoadPersonsAsync(); // Personen-Filter mit Zählern der Bibliothek (0.2.38)
         await ReloadTotalAndPageAsync(restoreSelection: false);
         await RefreshCanUndoAsync();
     }
@@ -404,6 +410,7 @@ public sealed partial class GalleryViewModel : ObservableObject
             ClearSelectionState();
             ResetTagFilter();
             ResetCategoryFilter();
+            ResetPersonFilter();
         }
         finally
         {
@@ -488,6 +495,7 @@ public sealed partial class GalleryViewModel : ObservableObject
             this, static (r, m) => r.RunOnUi(() => r.HandleTagsChangedAsync(m)));
         _messenger.Register<GalleryViewModel, CategoriesChangedMessage>(
             this, static (r, m) => r.RunOnUi(() => r.HandleCategoriesChangedAsync(m)));
+        RegisterPersonMessages(); // Personen (0.2.38, GalleryViewModel.Persons.cs)
     }
 
     /// <summary>Wurzeln geändert (ADR-0020): Archiv-Wurzel bzw. Anzeigepfad kann wechseln, Status-Filter liefert andere Treffer → Library neu laden.</summary>
@@ -783,6 +791,7 @@ public sealed partial class GalleryViewModel : ObservableObject
         // Tags der Page in einem Batch nachladen (ADR-0021) — unabhängig von den Thumbnails.
         FireAndForget(() => ApplyTagsToItemsAsync(rows.Select(r => r.Id).ToList(), ct));
         FireAndForget(() => ApplyCategoriesToItemsAsync(rows.Select(r => r.Id).ToList(), ct)); // ADR-0027
+        FireAndForget(() => ApplyPersonsToItemsAsync(rows.Select(r => r.Id).ToList(), ct)); // Personen (0.2.38)
 
         SetLoadStatus($"{TotalCount:N0} Treffer · Seite {DisplayPageIndex} von {PageCount:N0} · {LastPageLoadMs:N1} ms");
         _logger.LogInformation(
@@ -852,7 +861,7 @@ public sealed partial class GalleryViewModel : ObservableObject
     private GalleryQuery BuildQuery()
     {
         var term = string.IsNullOrWhiteSpace(SearchTerm) ? null : SearchTerm.Trim();
-        return new GalleryQuery(_libraryId, Filter, term, FolderId, IncludeSubfolders, SelectedSort.Sort, SelectedTagIds(), TagFilterMode, SelectedCategoryFilters(), SelectedSort.Category);
+        return new GalleryQuery(_libraryId, Filter, term, FolderId, IncludeSubfolders, SelectedSort.Sort, SelectedTagIds(), TagFilterMode, SelectedCategoryFilters(), SelectedSort.Category, SelectedPersonFilter());
     }
 
     /// <summary>

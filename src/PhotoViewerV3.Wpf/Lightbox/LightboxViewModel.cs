@@ -78,7 +78,9 @@ public sealed partial class LightboxViewModel : ObservableObject, IDisposable
         ITagService? tags = null,
         ITagPickerService? tagPicker = null,
         ICategoryService? categories = null,
-        ICategoryPickerService? categoryPicker = null)
+        ICategoryPickerService? categoryPicker = null,
+        PhotoViewerV3.Services.Faces.Assignment.IFaceRecognitionService? faceRecognition = null,
+        PhotoViewerV3.Shell.IDialogService? dialogs = null)
     {
         _vlc = vlc;
         _contextFactory = contextFactory;
@@ -96,6 +98,7 @@ public sealed partial class LightboxViewModel : ObservableObject, IDisposable
             static (recipient, message) => ((LightboxViewModel)recipient).OnFilesChanged(message));
         InitTags(tags, tagPicker); // Tags anzeigen/bearbeiten (LightboxViewModel.Tags.cs, ADR-0021)
         InitCategories(categories, categoryPicker); // Kategorie-Werte anzeigen/zuweisen (LightboxViewModel.Categories.cs, ADR-0027)
+        InitFaces(faceRecognition, dialogs); // Gesichtsrahmen, Taste F (LightboxViewModel.Faces.cs, 0.2.38)
     }
 
     // ----- Anbindung an das Fenster (View-Mechanik) -----
@@ -271,6 +274,7 @@ public sealed partial class LightboxViewModel : ObservableObject, IDisposable
         UpdateHeader();
         _ = LoadCurrentTagsAsync();
         _ = LoadCurrentCategoriesAsync();
+        UpdateFacesForCurrent(); // 0.2.38
         _ = ShowCurrentAsync();
     }
 
@@ -1461,6 +1465,7 @@ public sealed partial class LightboxViewModel : ObservableObject, IDisposable
         _disposed = true;
         _showVersion++;
         WeakReferenceMessenger.Default.UnregisterAll(this);
+        Faces.Dispose(); // 0.2.38
         _statusCts?.Cancel();
 
         var media = _media;

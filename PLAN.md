@@ -107,7 +107,7 @@ src/
   PhotoViewerV3.Services/                # → Domain + Data, WPF-frei; AddPhotoViewerServices()
     Catalog/                          # CatalogUpdateService (Favorit/Bewertung)
     Database/                         # LibraryContextFactory (+ IDatabaseAccessGate), DatabaseInitializer, SqlitePragmaInterceptor
-    Faces/                            # Gesichtserkennung (ADR-0035): FaceEmbeddingCodec, Detection (SCRFD), Alignment, Onnx (DirectML/CPU), Models (Download), Indexing (Hintergrund-Index); Recognition/ = Lern-/Gruppierlogik (ADR-0036); Assignment/ = Zuordnungsdienst, Crops/ = Gesichts-Ausschnitte (ADR-0037)
+    Faces/                            # Gesichtserkennung (ADR-0035): FaceEmbeddingCodec, Detection (SCRFD), Alignment, Onnx (DirectML/CPU), Models (Download), Indexing (Hintergrund-Index); Recognition/ = Lern-/Gruppierlogik (ADR-0036); Assignment/ = Zuordnungsdienst, Crops/ = Gesichts-Ausschnitte (ADR-0037); Erase/ = „Gesichtsdaten löschen“ je Bibliothek (ADR-0038)
       Relocation/                     # DatabaseRelocationService, StorageProbe, ThumbnailInventory — Katalog + Thumbnails umziehen (ADR-0026)
     Infrastructure/                   # AppDataPaths, DatabaseLocationStore (database-location.json, ADR-0026)
     Library/                          # LibraryService, LibraryCatalogCleanup
@@ -120,11 +120,11 @@ src/
   PhotoViewerV3.Wpf/                     # net10.0-windows → alle; App.xaml.cs = Host + DI, MainWindow = NavigationView
     Faces/                            # WicFaceImageLoader (IFaceImageLoader), Einstellungs-Abschnitt Gesichtserkennung
     Folders/                          # Ordnerbaum-Seite
-    Gallery/                          # Galerie: Data (GalleryPageSource), ViewModels, Views, Controls, Converters, Services
+    Gallery/                          # Galerie: Data (GalleryPageSource, .Persons = Personen-Filter/-Suche/-Spalte), ViewModels, Views, Controls, Converters, Services, People (Personen-Filter-Dropdown)
     Library/                          # Bibliotheks-Seite (Namespace PhotoViewerV3.Libraries)
-    Lightbox/                         # LightboxWindow/-ViewModel/-Service, ZoomPanControl, LibVlcHost, Imaging
+    Lightbox/                         # LightboxWindow/-ViewModel/-Service, ZoomPanControl (+ Overlay), LibVlcHost, Imaging, Faces (Gesichtsrahmen, Taste F)
     Persons/                          # Seite „Personen“ (ADR-0037): PersonsViewModel, TileListBox, PersonPickerDialog, WicFaceCropRenderer
-    Settings/                         # Einstellungen, ThemeService
+    Settings/                         # Einstellungen, ThemeService, FaceData („Gesichtsdaten löschen…“)
     Shell/                            # Navigation, DialogService, StatusBar, Converters, Smoke/ (Rauchtest)
     Sorter/                           # Sortieren-Seite (File Sorter, Flatten & Move)
     Thumbnails/                       # WicImageThumbnailRenderer (WIC lebt im Wpf-Projekt, Interface in Services)
@@ -202,7 +202,10 @@ FilesFts           -- FTS5 virtual table (Files.Name, Extension)
   `Faces (Id, FileId → Files ON DELETE CASCADE, BoxX/BoxY/BoxW/BoxH relativ 0..1, Landmarks BLOB 10 float32, DetScore,
   Size, Sharpness, Quality, Embedding BLOB 512 float32 = 2048 Bytes L2-normiert, ModelVersion, PersonId / SuggestedPersonId
   → Persons ON DELETE SET NULL, State 0 unbestätigt | 1 Vorschlag | 2 bestätigt | 3 ignoriert, SuggestionScore, CreatedAtUtc;
-  IX_Faces_File, IX_Faces_Person, IX_Faces_State, IX_Faces_SuggestedPerson)`,
+  IX_Faces_File, IX_Faces_Person, IX_Faces_State, IX_Faces_SuggestedPerson; seit 0.2.38 Migration `AddFacePersonIndex`
+  zusätzlich abdeckend IX_Faces_Person_State_File (PersonId, State, FileId), IX_Faces_SuggestedPerson_State_File
+  (SuggestedPersonId, State, FileId), IX_Faces_File_State_Person (FileId, State, PersonId, SuggestedPersonId) für
+  Personen-Filter/-Suche/-Spalte, ADR-0038)`,
   `FaceRejections (FaceId → Faces, PersonId → Persons, PK beide, CASCADE)`,
   `FaceScans (FileId PK → Files CASCADE, ModelVersion, ScannedAtUtc, FaceCount, ErrorCode)` — Merker des Hintergrund-Index.
   „Neu aufbauen“ parkt Faces/FaceScans in seiner Transaktion und setzt sie über Ordnerpfad + Name auf die neuen FileIds
@@ -307,7 +310,7 @@ Status (Stand 0.2.0): ✅ umgesetzt · 🟡 teilweise · ⬜ offen
 | 🟡 | **V0.2** | LibVLC-Lightbox produktiv ✅, Move/Rename ✅, OperationBatches voll ✅ (ADR-0018), Recovery-UI 🟡 (Statusleisten-Hinweis + Undo), Thumbnail-Priorities komplett ⬜ (zwei Worker-Pools, keine 4-Prio-Queue); dazu Incremental-Scan ✅ (ADR-0019), Bibliotheksverwaltung ✅, Ordnerbaum ✅, Einstellungen ✅ | 25–40 PT |
 | ⬜ | **V0.3** | Plan-Ordner: Plans/PlanFolders/PlanAssignments + Drag&Drop + Preflight + Apply Move-only + Block-Undo | 25–40 PT |
 | 🟡 | **V0.4 / Phase 8** | FTS5 erweitert (Tags) ⬜, Tags/Albums-UI ⬜, Rating ✅ (vorgezogen), Animated Hover ⬜, File-Sorter ✅ (vorgezogen: Regex-Profile, Multi-Level, Import/Export; Drag&Drop-Editor ⬜), Archive im Katalog + Entpacken ✅ (vorgezogen, ADR-0022; Auto-Extract nach dem Scan ✅, ADR-0032), pHash Duplikate ⬜, Flatten & Move ✅ (vorgezogen) | 40–60 PT |
-| 🟡 | **V0.5 / Phase 9** | Face Recognition: Teil 1 ✅ (0.2.34, ADR-0035: InsightFace buffalo_l = SCRFD + ArcFace via ONNX Runtime/DirectML, Modell per Benutzer-Download, Schema `AddFaces`, Hintergrund-Index mit Statusleiste, Einstellungen), Lern-/Gruppierlogik ✅ (0.2.35, ADR-0036), Zuordnungsdienst + Personen-Seite ✅ (0.2.37, ADR-0037: Benennen, Vorschläge, Gruppen mit abgewählten Ausreißern), Filter/Lightbox/Liste nach Personen ⬜ | 30–50 PT |
+| 🟡 | **V0.5 / Phase 9** | Face Recognition: Teil 1 ✅ (0.2.34, ADR-0035: InsightFace buffalo_l = SCRFD + ArcFace via ONNX Runtime/DirectML, Modell per Benutzer-Download, Schema `AddFaces`, Hintergrund-Index mit Statusleiste, Einstellungen), Lern-/Gruppierlogik ✅ (0.2.35, ADR-0036), Zuordnungsdienst + Personen-Seite ✅ (0.2.37, ADR-0037: Benennen, Vorschläge, Gruppen mit abgewählten Ausreißern), Filter/Suche/Liste/Kachel/Lightbox-Rahmen nach Personen + „Gesichtsdaten löschen“ ✅ (0.2.38, ADR-0038) | 30–50 PT |
 
 **Gesamt-V0.1 brutto:** 70–108 PT = **8–10 Wochen** für 1 erfahrenen Entwickler bei 5 PT/Woche.
 

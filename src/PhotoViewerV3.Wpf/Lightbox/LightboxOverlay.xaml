@@ -186,6 +186,14 @@
                         </Button>
                     </StackPanel>
 
+                    <!-- Gesichtsrahmen (0.2.38) -->
+                    <Button Style="{StaticResource LightboxOverlayButton}"
+                            Command="{Binding ToggleFacesCommand}"
+                            ToolTip="Gesichter (F)"
+                            AutomationProperties.Name="Gesichter anzeigen"
+                            Visibility="{Binding IsImage, Converter={StaticResource BoolToVis}}">
+                        <ui:SymbolIcon Symbol="PersonSquare24" FontSize="18" Filled="{Binding Faces.IsVisible}" />
+                    </Button>
                     <Button Style="{StaticResource LightboxOverlayButton}"
                             Command="{Binding ToggleInfoCommand}"
                             ToolTip="Info-Panel (I)">
@@ -213,7 +221,7 @@
                     </Button>
                     <Button Style="{StaticResource LightboxOverlayButton}"
                             Command="{Binding ToggleFullscreenCommand}"
-                            ToolTip="Vollbild (F / F11)">
+                            ToolTip="Vollbild (F11)">
                         <Grid>
                             <ui:SymbolIcon Symbol="FullScreenMaximize24"
                                            FontSize="18"

@@ -170,6 +170,9 @@ public partial class LightboxWindow : AppFluentWindow
                 _viewModel.PageBackCommand.Execute(null);
                 break;
             case Key.F:
+                // 0.2.38: F schaltet die Gesichtsrahmen (vorher Vollbild — das bleibt auf F11).
+                _ = _viewModel.ToggleFacesCommand.ExecuteAsync(null);
+                break;
             case Key.F11:
                 ToggleFullscreen();
                 break;

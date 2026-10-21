@@ -3,6 +3,74 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.38] — 2026-10-21
+
+### Zusammenführung mit 0.2.37
+- Provisorischer Vertrag `_P2Contract.cs`, Ersatzdienst `InterimFaceRecognitionService`, dessen Registrierung
+  `AddLightboxFaces()` und die zugehörige Testklasse entfernt — die Lightbox nutzt den echten Zuordnungsdienst (ADR-0037).
+  `FaceRecognitionForwarder` bleibt nur für Test-Fakes. `InvalidateAll()`/`IFaceCropService.DeleteAll()` passen ohne
+  Anpassung. README: Abschnitt „Gesichtserkennung“ verweist auf „Personen“ und „Personen in Galerie und Lightbox“.
+- Rauchtest „Personen in Galerie/Lightbox“: wartet vor den per SQL vorgeschriebenen Zuordnungen, bis der Zuordnungsdienst
+  ruht (er rechnete nach dem Schritt „Personen“ noch Vorschläge nach und überschrieb Berts Vorschlag), berechnet „nur Fotos
+  ohne Person“ aus dem DB-Stand und setzt den Personen-Filter auch nach einem Fehlschlag zurück (sonst scheiterte die
+  Ordnerüberwachung mit). Rauchtest 28/28 (2×), Services 594, WPF 284 (3×), Gesichter mit echtem Modell 96/96.
+
+### Neu (ADR-0038) — Gesichtserkennung Teil 4: Personen in Galerie, Suche, Liste und Lightbox
+- **Galerie-Filter „Personen“** (Kopfzeile neben „Tags“, sichtbar sobald Personen oder Gesichter da sind): Häkchen je
+  Person mit Anzahl Fotos der aktiven Bibliothek, **ODER**/**UND**, **nur Fotos ohne Person**, **nur Fotos mit
+  unbenannten Gesichtern**, Option **auch Vorschläge** (Standard aus). Als Person zählt nur ein bestätigtes Gesicht
+  (`Faces.State = 2`); ausgeblendete Personen stehen nicht in der Liste. Direkt in SQL (`GalleryPageSource.Persons.cs`),
+  wirkt in Zählung, Seite und Kategorie-Sortierung.
+- **Suche** findet Personennamen (Teilstring, ohne Groß-/Kleinschreibung) als weiterer UNION-Zweig wie Tags/Kategorien;
+  Platzhalter „Name, Tag oder Person…“.
+- **Listenansicht**: Spalte **Personen** (bestätigte Namen; Vorschläge kursiv/grau mit „?“), sortierbar innerhalb der
+  Seite (bestätigt → nur Vorschläge → leer). Gespeicherte Spaltenauswahl bleibt; einblenden über die Kopfzeile.
+- **Kachel**: Personen-Symbol mit Anzahl bestätigter Personen, Tooltip mit Namen (Kacheln bleiben Automation-Blätter).
+- **Lightbox**: Taste **F** bzw. Knopf „Gesichter“ zeigt Rahmen über den Gesichtern (grün Name, gelb „Vorschlag: X?“,
+  weiß „Unbekannt“), die mit Zoom/Schwenk mitwandern (`ZoomPanControl.Overlay` + `IZoomPanOverlay`, `FaceBoxesLayer`).
+  Klick → Menü **Ist X** / **Nicht X** / **Ist …** (Person wählen oder Namen eingeben; vorhandener Name wird zugeordnet,
+  sonst neue Person) / **Kein Gesicht**; danach Rahmen neu (auch auf `PersonsChangedMessage`/`FacesChangedMessage`).
+  Logik in `LightboxFacesViewModel` über `IFaceRecognitionService`. **Vollbild nur noch F11** (F war Vollbild).
+- **Einstellungen → Gesichtserkennung → „Gesichtsdaten löschen…“** (`IFaceDataEraser`, Bestätigung im AppDialogWindow):
+  schaltet den Index aus und löscht für die aktive Bibliothek in einer Transaktion Gesichter samt Fingerabdrücken,
+  FaceScans, Ablehnungen, den Gesichter-Cache `thumbs\{id}\faces\` und Personen, die danach nirgends mehr vorkommen
+  (Personen ohne Gesicht in dieser Bibliothek bleiben); Nachkontrolle nach 1,5 s gegen einen späten Schreib-Stapel des
+  Index. Fotos, Bewertungen, Tags, Kategorien bleiben. Hinweis „Alles bleibt auf diesem PC“.
+- **Migration `AddFacePersonIndex`**: abdeckende Indizes `IX_Faces_Person_State_File`, `IX_Faces_SuggestedPerson_State_File`,
+  `IX_Faces_File_State_Person` (State/PersonId liegen hinter dem 2-KB-Fingerabdruck). Bestehende Daten bleiben.
+- Nach dem Löschen werden `IFaceRecognitionService.InvalidateAll()` und `IFaceCropService.DeleteAll()` (P1, optional
+  injiziert) aufgerufen.
+- **Übergang bis zum Merge mit P1**: provisorische Vertragstypen `Services/Faces/Assignment/_P2Contract.cs`
+  (`IFaceRecognitionService` inkl. `InvalidateAll`, `FacePersonInfo`, `PersonSummary`, `PersonsChangedMessage`,
+  `Services.Faces.Crops.IFaceCropService`) — die Integration löscht nur diese Datei. Der Ersatzdienst
+  `Wpf/Lightbox/Faces/InterimFaceRecognitionService` implementiert das Interface nicht selbst, sondern wird über
+  `FaceRecognitionForwarder` (DispatchProxy) angeboten und nur per `TryAdd` registriert (`AddLightboxFaces()`); er
+  kompiliert damit auch gegen P1s vollständiges Interface, P1s Registrierung gewinnt. Ebenso die Test-Fakes.
+
+### Messung (200 000 Dateien, 98 000 Gesichter, 200 Personen, ohne ANALYZE)
+- Zählen: ODER 22 ms, ODER + Vorschläge 21 ms, UND 18 ms, ohne Person 72 ms (182 000 Treffer), unbenannte Gesichter
+  59 ms, Suche nach Personennamen 8 ms; Namen für 500 Dateien 2–11 ms; Personen-Liste mit Zählern 93 ms. Alle Pläne über
+  abdeckende Indizes (`SEARCH … USING COVERING INDEX`, kein `SCAN` über Faces).
+
+### Tests
+- `tests/PhotoViewerV3.Tests`: 580 (+2, 1 übersprungen ohne Modell): `Faces/FaceDataEraserTests` (nur die Bibliothek,
+  Personen-Regeln, Titelbild, Cache, Index aus, Nachrichten; leere Bibliothek).
+- `tests/PhotoViewerV3.Wpf.Tests`: 274 (+25, 1 übersprungen), dreimal hintereinander grün: `Persons/GalleryPageSourcePersonTests`
+  (ODER/UND/ohne Person/unbenannt mit und ohne Vorschläge, Suche, Kategorie-Sortierung, Namen je Datei, Zähler,
+  EXPLAIN QUERY PLAN), `Persons/LightboxFacesViewModelTests` + `FaceBoxesLayerTests` (Rahmen, Beschriftung, Menü
+  bestätigen/ablehnen/ignorieren/neue Person, Nachrichten, Rahmen folgen dem Zoom), `Persons/GalleryPersonsColumnTests`,
+  `Persons/FaceDataSettingsTests` (Bestätigung, Text, Fehler) und `InterimFaceRecognitionServiceTests`; Fake
+  `FakeFaceRecognitionService`.
+- Rauchtest 27/27 OK, 0 WPF-Binding-Fehler — neuer Schritt **„Personen in Galerie/Lightbox“** vor „Ordnerüberwachung“
+  (`Shell/Smoke/SmokeScenario.PersonsGallery.cs`): Personen/Zuordnungen per SQL auf die Gesichter des Smoke-Fake-Analysators,
+  Filter, Suche, Listenspalte, Kachel-Daten, Lightbox-Rahmen mit „Ist X“ über den registrierten Zuordnungsdienst,
+  „Gesichtsdaten löschen“. Screenshots `22-galerie-personen-filter` … `25-einstellungen-gesichtsdaten-geloescht`.
+
+### Offen
+- Ort des Gesichter-Caches (`FaceDataCache.FolderName = "faces"`) mit P1 abstimmen.
+- „Nur Fotos ohne Person“/„unbenannte Gesichter“ prüfen je Datei (bei 500 000 Fotos ≈ 0,2 s Zählung).
+- Ordnerbaum-Kontextmenü „… für alle Dateien“: geprüft, keine Kollision; Personen dort bewusst nicht ergänzt.
+
 ## [0.2.37] — 2026-10-21
 
 ### Neu (ADR-0037) — Gesichtserkennung Teil 3: Personen-Seite, Benennen, Vorschläge bestätigen

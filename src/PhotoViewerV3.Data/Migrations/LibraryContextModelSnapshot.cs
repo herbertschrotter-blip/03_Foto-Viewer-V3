@@ -142,6 +142,15 @@ namespace PhotoViewerV3.Data.Migrations
                     b.HasIndex("SuggestedPersonId")
                         .HasDatabaseName("IX_Faces_SuggestedPerson");
 
+                    b.HasIndex("PersonId", "State", "FileId")
+                        .HasDatabaseName("IX_Faces_Person_State_File");
+
+                    b.HasIndex("SuggestedPersonId", "State", "FileId")
+                        .HasDatabaseName("IX_Faces_SuggestedPerson_State_File");
+
+                    b.HasIndex("FileId", "State", "PersonId", "SuggestedPersonId")
+                        .HasDatabaseName("IX_Faces_File_State_Person");
+
                     b.ToTable("Faces", (string)null);
                 });
 

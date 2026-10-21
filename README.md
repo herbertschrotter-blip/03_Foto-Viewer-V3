@@ -236,7 +236,8 @@ Gesetzte Kategorie-Werte stehen außerdem in der Titelleiste (z. B. „Projekt: 
 | ← / → | Vorheriges / nächstes Medium |
 | Pos1 / Ende | Erstes / letztes Medium |
 | Bild↑ / Bild↓ | 10 Medien zurück / vor |
-| F, F11 | Vollbild ein/aus |
+| F | Gesichtsrahmen ein/aus (Foto; siehe „Personen in Galerie und Lightbox“) |
+| F11 | Vollbild ein/aus |
 | Esc | Vollbild verlassen, sonst Lightbox schließen |
 | I | Info-Panel ein/aus |
 | + / − | Vergrößern / verkleinern (Bild) |
@@ -348,10 +349,10 @@ einen anderen Ordner (ADR-0026); **Standardort** holt sie nach `%LocalAppData%\P
 - Ist der gewählte Ordner beim Start nicht erreichbar (USB-Laufwerk abgezogen), startet PhotoViewer nicht und nennt die
   Datei `database-location.json`, deren Löschen zum Standardort zurückführt.
 
-### Gesichtserkennung (Teil 1)
+### Gesichtserkennung
 Erkennt im Hintergrund Gesichter in den Fotos der aktiven Bibliothek und speichert je Gesicht Position, Qualität und
-einen Fingerabdruck (512 Werte) im Katalog (ADR-0035) — vollständig auf diesem PC. Personen benennen, Vorschläge und
-Filter nach Personen folgen in Teil 2.
+einen Fingerabdruck (512 Werte) im Katalog (ADR-0035) — vollständig auf diesem PC. Benennen und Vorschläge: Abschnitt
+„Personen“; Filter, Suche und Lightbox-Rahmen: „Personen in Galerie und Lightbox“.
 - **Einstellungen → Gesichtserkennung**: „Gesichter im Hintergrund erkennen“ (Standard **aus**), „Grafikkarte
   verwenden“ (Standard an; DirectML, bei Problemen automatisch Prozessor), Modellstatus, **Index neu aufbauen**
   (analysiert alle Fotos erneut; bestätigte Zuordnungen bleiben).
@@ -395,6 +396,26 @@ Gelernt wird **nur aus dem, was du bestätigst** — eigene Vorschläge lernen n
   erscheinen in den Gruppen nach **Aktualisieren**.
 - Die Gesichts-Ausschnitte (128 × 128) liegen im Vorschaubild-Ordner (`thumbs\<Bibliothek>\faces\`) und werden nur für
   sichtbare Kacheln erzeugt.
+
+### Personen in Galerie und Lightbox
+Sobald Gesichter erkannt oder Personen benannt sind (ADR-0038). Als Person zählt nur ein **bestätigtes** Gesicht;
+Vorschläge der Erkennung werden getrennt gezeigt.
+- **Filter „Personen“** (Galerie-Kopfzeile, neben „Tags“): Häkchen je Person mit Anzahl Fotos dieser Bibliothek,
+  Verknüpfung **ODER** / **UND**, **nur Fotos ohne Person**, **nur Fotos mit unbenannten Gesichtern** und die Option
+  **auch Vorschläge** (Standard aus). Ausgeblendete Personen stehen nicht in der Liste.
+- **Suche** findet auch Personennamen (Teil des Namens genügt, ohne Groß-/Kleinschreibung) — wie Tags und Kategorien.
+- **Listenansicht**: Spalte **Personen** (Kopfzeile rechts klicken → einblenden): bestätigte Namen, Vorschläge kursiv und
+  grau mit „?“; Klick auf die Kopfzeile sortiert innerhalb der Seite.
+- **Kachel**: kleines Personen-Symbol mit Anzahl, wenn bestätigte Personen auf dem Foto sind (Tooltip: Namen).
+- **Lightbox**: Taste **F** (oder Knopf „Gesichter“) zeigt Rahmen über den erkannten Gesichtern — grün mit Namen,
+  gelb „Vorschlag: X?“, weiß „Unbekannt“; die Rahmen zoomen und schwenken mit. Klick auf einen Rahmen: **Ist X**
+  (Vorschlag bestätigen), **Nicht X** (Vorschlag ablehnen), **Ist …** (Person wählen oder Namen eingeben — ein
+  vorhandener Name wird zugeordnet, sonst entsteht eine neue Person), **Kein Gesicht** (Rahmen verschwindet). Vollbild
+  liegt jetzt nur noch auf **F11**.
+- **Einstellungen → Gesichtserkennung → Gesichtsdaten löschen…**: nach Bestätigung werden für die aktive Bibliothek
+  alle Gesichter mit Fingerabdrücken, Zuordnungen, abgelehnte Vorschläge, der Gesichter-Cache und Personen, die danach
+  in keiner Bibliothek mehr vorkommen, gelöscht; die Gesichtserkennung wird ausgeschaltet. Fotos, Bewertungen, Tags und
+  Kategorien bleiben. Alles bleibt auf diesem PC.
 
 ### Ordnerüberwachung
 Die Bibliotheksordner der aktiven Bibliothek werden im Hintergrund überwacht (`FileSystemWatcher` je Wurzel, rekursiv).

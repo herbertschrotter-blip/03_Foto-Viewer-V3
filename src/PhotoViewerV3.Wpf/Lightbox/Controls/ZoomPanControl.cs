@@ -113,6 +113,43 @@ public sealed class ZoomPanControl : Grid, IZoomPanTarget
         set => SetValue(IsFitProperty, value);
     }
 
+    private FrameworkElement? _overlay;
+
+    /// <summary>
+    /// Ebene über dem Bild (0.2.38: Gesichtsrahmen). Liegt im Control, damit Mausrad und Ziehen außerhalb ihrer
+    /// treffbaren Elemente beim Control ankommen; implementiert sie <see cref="IZoomPanOverlay"/>, bekommt sie nach jedem
+    /// Zoom/Schwenk das Bildrechteck.
+    /// </summary>
+    public FrameworkElement? Overlay
+    {
+        get => _overlay;
+        set
+        {
+            if (ReferenceEquals(_overlay, value))
+            {
+                return;
+            }
+
+            if (_overlay is not null)
+            {
+                Children.Remove(_overlay);
+            }
+
+            _overlay = value;
+            if (value is not null)
+            {
+                Children.Add(value);
+            }
+
+            UpdateOverlay();
+        }
+    }
+
+    /// <summary>Sichtbares Bildrechteck in Koordinaten des Controls (leer ohne Bild) — für Tests und Ebenen.</summary>
+    public Rect ImageRect => HasImage ? new Rect(_translateX, _translateY, _pixelWidth * _scale, _pixelHeight * _scale) : Rect.Empty;
+
+    private void UpdateOverlay() => (_overlay as IZoomPanOverlay)?.UpdateImageRect(ImageRect);
+
     private bool HasImage => _pixelWidth > 0 && _pixelHeight > 0;
 
     private double ActualSizeScale => 1.0 / _dpiScale;
@@ -258,6 +295,7 @@ public sealed class ZoomPanControl : Grid, IZoomPanTarget
             _pixelWidth = 0;
             _pixelHeight = 0;
             _image.Visibility = Visibility.Collapsed;
+            UpdateOverlay();
             return;
         }
 
@@ -346,6 +384,7 @@ public sealed class ZoomPanControl : Grid, IZoomPanTarget
         _scaleTransform.ScaleY = _scale;
         _translateTransform.X = _translateX;
         _translateTransform.Y = _translateY;
+        UpdateOverlay();
 
         var actual = ActualSizeScale;
         RenderOptions.SetBitmapScalingMode(
