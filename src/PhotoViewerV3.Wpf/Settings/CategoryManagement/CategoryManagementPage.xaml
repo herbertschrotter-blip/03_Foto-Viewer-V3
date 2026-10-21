@@ -28,7 +28,7 @@
 
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <StackPanel Margin="24,12,24,16" MaxWidth="960" HorizontalAlignment="Left">
-            <ui:TextBlock FontTypography="Title" Text="Kategorien" Margin="0,0,0,4" />
+            <!-- Reiter „Kategorien“ der Einstellungen (ADR-0042): Überschrift = Reiter -->
             <TextBlock FontSize="12" Margin="0,0,0,12" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                        Text="Eigene Kategorien mit festen Werten (z. B. „Projekt“: Nord, Süd). Jede Datei hat je Kategorie höchstens einen Wert. Zuweisen in der Galerie über das Kontextmenü; jede Kategorie ist ein Filter in der Kopfzeile und eine Spalte der Listenansicht." />

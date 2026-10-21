@@ -6,373 +6,109 @@
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:shell="clr-namespace:PhotoViewerV3.Shell"
              xmlns:local="clr-namespace:PhotoViewerV3.Settings"
-             xmlns:faces="clr-namespace:PhotoViewerV3.Faces"
-             xmlns:facedata="clr-namespace:PhotoViewerV3.Settings.FaceData"
+             xmlns:sections="clr-namespace:PhotoViewerV3.Settings.Sections"
+             xmlns:info="clr-namespace:PhotoViewerV3.Settings.Info"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance local:SettingsViewModel}"
              d:DesignWidth="1000"
              d:DesignHeight="800">
+    <!-- Einstellungen mit Reitern oben (ADR-0042, Mockup 06). Reiter-Tags = NavigationTags.SettingsSections; der gewählte
+         Reiter wird im Code-Behind mit SettingsSectionState abgeglichen (Navigation von außen, z. B. „Tags verwalten…“).
+         Bibliotheken & Eingänge, Tags und Kategorien sind die bisherigen Seiten (aus DI, eigener DataContext); die übrigen
+         Reiter zeigen das SettingsViewModel (geerbt), Info ein eigenes InfoViewModel. -->
     <UserControl.Resources>
-        <shell:BoolToVisibilityConverter x:Key="BoolToVis" />
-        <shell:BoolToVisibilityConverter x:Key="InvBoolToVis" Invert="True" />
-        <shell:NullToVisibilityConverter x:Key="NullToVis" />
-
-        <Style x:Key="SectionCard" TargetType="Border">
-            <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="8" />
-            <Setter Property="Padding" Value="16,12" />
-            <Setter Property="Margin" Value="0,0,0,12" />
-        </Style>
-        <Style x:Key="SectionTitle" TargetType="ui:TextBlock">
-            <Setter Property="FontTypography" Value="BodyStrong" />
-            <Setter Property="Margin" Value="0,0,0,8" />
-        </Style>
-        <Style x:Key="Label" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="12" />
+        <!-- Reiterleiste im WPF-UI-Stil („Pivot“): Text, gewählter Reiter fett mit Akzent-Strich unten -->
+        <Style x:Key="PivotItem" TargetType="TabItem">
             <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
-            <Setter Property="VerticalAlignment" Value="Center" />
-            <Setter Property="Margin" Value="0,0,12,0" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Grid Margin="0,0,4,0" Background="Transparent">
+                            <Border x:Name="Hover" CornerRadius="4,4,0,0" Background="Transparent" />
+                            <ContentPresenter ContentSource="Header" Margin="12,8,12,10" RecognizesAccessKey="True"
+                                              TextElement.Foreground="{TemplateBinding Foreground}" />
+                            <Border x:Name="Indicator" Height="3" CornerRadius="2" VerticalAlignment="Bottom" Margin="12,0,12,-1"
+                                    Background="{DynamicResource AccentFillColorDefaultBrush}" Visibility="Hidden" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Hover" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Indicator" Property="Visibility" Value="Visible" />
+                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                                <Setter Property="FontWeight" Value="SemiBold" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
-        <Style x:Key="ValueText" TargetType="TextBlock">
-            <Setter Property="VerticalAlignment" Value="Center" />
-            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-            <Setter Property="TextWrapping" Value="NoWrap" />
+        <Style x:Key="PivotTabs" TargetType="TabControl">
+            <Setter Property="ItemContainerStyle" Value="{StaticResource PivotItem}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabControl">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <Border Margin="24,0,24,0" BorderThickness="0,0,0,1"
+                                    BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}">
+                                <TabPanel IsItemsHost="True" KeyboardNavigation.TabIndex="1" />
+                            </Border>
+                            <ContentPresenter Grid.Row="1" ContentSource="SelectedContent" />
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
     </UserControl.Resources>
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-        <StackPanel Margin="24,12,24,16" MaxWidth="960" HorizontalAlignment="Left">
-            <ui:TextBlock FontTypography="Title" Text="Einstellungen" Margin="0,0,0,12" />
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
 
+        <ui:TextBlock Grid.Row="0" FontTypography="Title" Text="Einstellungen" Margin="24,12,24,12" />
+
+        <TabControl x:Name="Tabs" Grid.Row="2" Style="{StaticResource PivotTabs}"
+                    AutomationProperties.Name="Bereiche der Einstellungen">
+            <TabItem x:Name="LibraryTab" Header="Bibliotheken &amp; Eingänge" Tag="{x:Static shell:NavigationTags.Library}" />
+            <TabItem x:Name="TagsTab" Header="Tags" Tag="{x:Static shell:NavigationTags.Tags}" />
+            <TabItem x:Name="CategoriesTab" Header="Kategorien" Tag="{x:Static shell:NavigationTags.Categories}" />
+            <TabItem Header="Gesichter" Tag="{x:Static shell:NavigationTags.SettingsFaces}">
+                <sections:SettingsFacesSection />
+            </TabItem>
+            <TabItem Header="Archive" Tag="{x:Static shell:NavigationTags.SettingsArchives}">
+                <sections:SettingsArchivesSection />
+            </TabItem>
+            <TabItem Header="Darstellung" Tag="{x:Static shell:NavigationTags.SettingsAppearance}">
+                <sections:SettingsAppearanceSection />
+            </TabItem>
+            <TabItem Header="Speicher &amp; Wartung" Tag="{x:Static shell:NavigationTags.SettingsStorage}">
+                <sections:SettingsStorageSection />
+            </TabItem>
+            <TabItem Header="Info" Tag="{x:Static shell:NavigationTags.SettingsInfo}">
+                <info:InfoSection x:Name="InfoView" />
+            </TabItem>
+        </TabControl>
+
+        <!-- Meldungen des SettingsViewModel (alle Reiter außer den eingebetteten Seiten, die eigene haben) -->
+        <StackPanel Grid.Row="1" Margin="24,0,24,0">
             <ui:InfoBar Title="Fehler" Severity="Error" Message="{Binding ErrorMessage}"
                         IsOpen="{Binding IsErrorOpen, Mode=TwoWay}" Margin="0,0,0,12" />
             <ui:InfoBar Severity="Success" Message="{Binding InfoMessage}"
                         IsOpen="{Binding IsInfoOpen, Mode=TwoWay}" Margin="0,0,0,12" />
-
-            <!-- Darstellung -->
-            <Border Style="{StaticResource SectionCard}">
-                <StackPanel>
-                    <ui:TextBlock Style="{StaticResource SectionTitle}" Text="Darstellung" />
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Style="{StaticResource Label}" Text="Farbschema" />
-                        <RadioButton Content="Hell" GroupName="Theme" IsChecked="{Binding IsThemeLight, Mode=TwoWay}" Margin="0,0,16,0" />
-                        <RadioButton Content="Dunkel" GroupName="Theme" IsChecked="{Binding IsThemeDark, Mode=TwoWay}" Margin="0,0,16,0" />
-                        <RadioButton Content="System" GroupName="Theme" IsChecked="{Binding IsThemeSystem, Mode=TwoWay}" />
-                    </StackPanel>
-                </StackPanel>
-            </Border>
-
-            <!-- Speicherorte -->
-            <Border Style="{StaticResource SectionCard}">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-                    <ui:TextBlock Grid.Row="0" Grid.ColumnSpan="3" Style="{StaticResource SectionTitle}" Text="Speicherorte" />
-
-                    <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource Label}" Text="Datenbank" />
-                    <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource ValueText}" ToolTip="{Binding DatabasePath}"><Run Text="{Binding DatabasePath, Mode=OneWay}" /><Run Text=" · " Foreground="{DynamicResource TextFillColorTertiaryBrush}" /><Run Text="{Binding DatabaseSizeText, Mode=OneWay}" Foreground="{DynamicResource TextFillColorTertiaryBrush}" /></TextBlock>
-                    <StackPanel Grid.Row="1" Grid.Column="2" Orientation="Horizontal" Margin="12,2">
-                        <ui:Button Content="Ordner öffnen" Icon="{ui:SymbolIcon FolderOpen24}"
-                                   Command="{Binding OpenDatabaseFolderCommand}" />
-                        <ui:Button Content="Ändern…" Icon="{ui:SymbolIcon FolderArrowRight24}" Margin="8,0,0,0"
-                                   Command="{Binding MoveDatabaseCommand}"
-                                   AutomationProperties.Name="Speicherort der Datenbank ändern" />
-                    </StackPanel>
-
-                    <!-- Umzug (ADR-0026): Hinweis, Fortschritt, zurück zum Standardort -->
-                    <Grid Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,2,12,6">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
-                                    Visibility="{Binding IsRelocating, Converter={StaticResource BoolToVis}}">
-                            <ui:ProgressRing IsIndeterminate="True" Width="14" Height="14" Margin="0,0,8,0" />
-                            <TextBlock Style="{StaticResource ValueText}" Text="{Binding RelocationStatus}" />
-                        </StackPanel>
-                        <TextBlock FontSize="12" TextWrapping="Wrap" MaxWidth="640" HorizontalAlignment="Left" VerticalAlignment="Center"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                   Visibility="{Binding IsRelocating, Converter={StaticResource InvBoolToVis}}"
-                                   Text="Die Vorschaubilder ziehen mit um. Nach dem Umzug startet PhotoViewer neu; die alten Dateien werden beim Start gelöscht." />
-                        <ui:Button Grid.Column="1" Content="Standardort" Icon="{ui:SymbolIcon ArrowReset24}" Margin="12,0,0,0"
-                                   Command="{Binding ResetDatabaseLocationCommand}"
-                                   Visibility="{Binding UsesCustomLocation, Converter={StaticResource BoolToVis}}"
-                                   ToolTip="Katalog und Vorschaubilder zurück nach %LocalAppData%\PhotoViewerV3"
-                                   AutomationProperties.Name="Datenbank zurück an den Standardort" />
-                    </Grid>
-
-                    <TextBlock Grid.Row="3" Grid.Column="0" Style="{StaticResource Label}" Text="Protokolle" />
-                    <TextBlock Grid.Row="3" Grid.Column="1" Style="{StaticResource ValueText}" Text="{Binding LogsPath}" ToolTip="{Binding LogsPath}" />
-                    <ui:Button Grid.Row="3" Grid.Column="2" Content="Öffnen" Icon="{ui:SymbolIcon FolderOpen24}"
-                               Command="{Binding OpenLogsFolderCommand}" Margin="12,2" />
-                </Grid>
-            </Border>
-
-            <!-- Vorschaubilder -->
-            <Border Style="{StaticResource SectionCard}">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-                    <ui:TextBlock Grid.Row="0" Grid.ColumnSpan="3" Style="{StaticResource SectionTitle}" Text="Vorschaubilder (Thumbnail-Cache)" />
-
-                    <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource Label}" Text="Ordner" />
-                    <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource ValueText}" Text="{Binding ThumbnailsPath}" ToolTip="{Binding ThumbnailsPath}" />
-                    <ui:Button Grid.Row="1" Grid.Column="2" Content="Öffnen" Icon="{ui:SymbolIcon FolderOpen24}"
-                               Command="{Binding OpenThumbnailsFolderCommand}" Margin="12,2" />
-
-                    <TextBlock Grid.Row="2" Grid.Column="0" Style="{StaticResource Label}" Text="Belegt" />
-                    <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal">
-                        <ui:ProgressRing IsIndeterminate="True" Width="14" Height="14" Margin="0,0,8,0"
-                                         Visibility="{Binding IsCacheBusy, Converter={StaticResource BoolToVis}}" />
-                        <TextBlock Style="{StaticResource ValueText}" Text="{Binding ThumbnailCacheText}" />
-                    </StackPanel>
-                    <ui:Button Grid.Row="2" Grid.Column="2" Content="Cache leeren" Icon="{ui:SymbolIcon Broom24}"
-                               Command="{Binding ClearThumbnailCacheCommand}" Margin="12,2" />
-                </Grid>
-            </Border>
-
-            <!-- FFmpeg -->
-            <Border Style="{StaticResource SectionCard}">
-                <StackPanel>
-                    <ui:TextBlock Style="{StaticResource SectionTitle}" Text="Video-Vorschau (FFmpeg)" />
-                    <StackPanel Orientation="Horizontal">
-                        <ui:SymbolIcon Symbol="CheckmarkCircle24" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center"
-                                       Foreground="{DynamicResource SystemFillColorSuccessBrush}"
-                                       Visibility="{Binding IsFfmpegAvailable, Converter={StaticResource BoolToVis}}" />
-                        <ui:SymbolIcon Symbol="Warning24" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center"
-                                       Foreground="{DynamicResource SystemFillColorCautionBrush}"
-                                       Visibility="{Binding IsFfmpegAvailable, Converter={StaticResource InvBoolToVis}}" />
-                        <TextBlock Text="{Binding FfmpegText}" TextWrapping="Wrap" VerticalAlignment="Center" MaxWidth="760" />
-                    </StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="26,8,0,0"
-                                Visibility="{Binding IsFfmpegAvailable, Converter={StaticResource InvBoolToVis}}">
-                        <Border Background="{DynamicResource ControlFillColorDefaultBrush}"
-                                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-                                BorderThickness="1" CornerRadius="4" Padding="10,4" VerticalAlignment="Center">
-                            <TextBlock Text="{Binding FfmpegCommandText}" FontFamily="Consolas" />
-                        </Border>
-                        <ui:Button Content="Kopieren" Icon="{ui:SymbolIcon Copy24}" Command="{Binding CopyFfmpegCommandCommand}" Margin="8,0,0,0" />
-                    </StackPanel>
-                </StackPanel>
-            </Border>
-
-            <!-- Formate -->
-            <Border Style="{StaticResource SectionCard}">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-                    <ui:TextBlock Grid.Row="0" Grid.ColumnSpan="2" Style="{StaticResource SectionTitle}" Text="Unterstützte Formate" />
-                    <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource Label}" Text="Bilder" VerticalAlignment="Top" Margin="0,2,12,6" />
-                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding ImageFormatsText}" TextWrapping="Wrap" Margin="0,0,0,6" />
-                    <TextBlock Grid.Row="2" Grid.Column="0" Style="{StaticResource Label}" Text="Videos" VerticalAlignment="Top" Margin="0,2,12,0" />
-                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding VideoFormatsText}" TextWrapping="Wrap" />
-                </Grid>
-            </Border>
-
-            <!-- Ordnerüberwachung (Services/Watch) -->
-            <Border Style="{StaticResource SectionCard}">
-                <StackPanel>
-                    <ui:TextBlock Style="{StaticResource SectionTitle}" Text="Ordnerüberwachung" />
-                    <ui:ToggleSwitch Content="Bibliotheksordner überwachen"
-                                     IsChecked="{Binding IsWatchEnabled, Mode=TwoWay}"
-                                     AutomationProperties.Name="Bibliotheksordner überwachen" />
-                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0" IsEnabled="{Binding IsWatchEnabled}">
-                        <TextBlock Style="{StaticResource Label}" Text="Ruhezeit" />
-                        <ui:NumberBox Value="{Binding WatchQuietSeconds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                      Minimum="{Binding WatchQuietMinSeconds, Mode=OneTime}"
-                                      Maximum="{Binding WatchQuietMaxSeconds, Mode=OneTime}"
-                                      SmallChange="1" LargeChange="5" MaxDecimalPlaces="0"
-                                      SpinButtonPlacementMode="Inline" Width="140"
-                                      AutomationProperties.Name="Ruhezeit in Sekunden" />
-                        <TextBlock Style="{StaticResource Label}" Text="Sekunden (1–60)" Margin="8,0,0,0" />
-                    </StackPanel>
-                    <TextBlock Margin="0,8,0,0" FontSize="12" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Text="Änderungen in den Bibliotheksordnern (neue, gelöschte, umbenannte Fotos und Videos) lösen nach der Ruhezeit ohne weitere Änderungen automatisch „Aktualisieren“ aus. Läuft bereits ein Scan, wird danach erneut geprüft. Meldet der Scan eine Bestätigung (viele fehlende Dateien) oder eine Bibliothek offline, bleibt die Automatik bis zum nächsten manuellen „Aktualisieren“ angehalten." />
-                </StackPanel>
-            </Border>
-
-            <!-- Archive automatisch entpacken (Services/Archive, ADR-0032; je aktiver Bibliothek, ADR-0033) -->
-            <Border Style="{StaticResource SectionCard}" IsEnabled="{Binding IsAutoExtractAvailable}">
-                <StackPanel>
-                    <ui:TextBlock Style="{StaticResource SectionTitle}" Text="Archive (ZIP, RAR, 7z …)" />
-                    <TextBlock Margin="0,0,0,8" FontSize="12" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Text="{Binding AutoExtractLibraryText}" />
-                    <ui:ToggleSwitch Content="Neue Archive in Eingangsordnern automatisch entpacken"
-                                     IsChecked="{Binding IsAutoExtractEnabled, Mode=TwoWay}"
-                                     AutomationProperties.Name="Neue Archive in Eingangsordnern automatisch entpacken" />
-                    <CheckBox Margin="0,8,0,0" Content="Archiv nach fehlerfreiem Entpacken in den Papierkorb verschieben"
-                              IsChecked="{Binding IsAutoExtractRecycle, Mode=TwoWay}"
-                              IsEnabled="{Binding IsAutoExtractEnabled}"
-                              AutomationProperties.Name="Archiv nach dem Entpacken in den Papierkorb verschieben" />
-                    <TextBlock Margin="0,8,0,0" FontSize="12" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Text="Findet „Aktualisieren“ oder die Ordnerüberwachung ein neues Archiv in einem Eingangsordner, wird es nach dem Scan vollständig in einen Ordner mit dem Archivnamen daneben entpackt (verschachtelte Archive bis Tiefe 3) und die Bibliothek erneut aktualisiert. Archive im Bibliotheksordner, Archive in bereits entpackten Ordnern und Archive, deren Zielordner schon existiert, bleiben unberührt. Passwortgeschützte oder beschädigte Archive bleiben liegen und werden in der Statusleiste gemeldet." />
-                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                        <ui:Button Content="Vorhandene Archive in Eingängen jetzt entpacken…"
-                                   Command="{Binding ExtractExistingArchivesCommand}"
-                                   AutomationProperties.Name="Vorhandene Archive in Eingängen jetzt entpacken" />
-                    </StackPanel>
-                    <TextBlock Margin="0,4,0,0" FontSize="12" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Text="Archive, die schon vor dem Einschalten im Katalog standen, entpackt die Automatik nicht. Dieser Knopf holt das für die aktive Bibliothek nach (nur bei eingeschalteter Einstellung; Archive, deren Zielordner schon existiert, zählen nicht)." />
-                </StackPanel>
-            </Border>
-
-            <!-- Gesichtserkennung (Services/Faces + Wpf/Faces, ADR-0035) -->
-            <Border Style="{StaticResource SectionCard}"
-                    DataContext="{Binding Faces}"
-                    Visibility="{Binding Converter={StaticResource NullToVis}}"
-                    AutomationProperties.Name="Gesichtserkennung">
-                <StackPanel>
-                    <ui:TextBlock Style="{StaticResource SectionTitle}" Text="Gesichtserkennung" />
-                    <TextBlock Margin="0,0,0,8" FontSize="12" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Text="Erkennt im Hintergrund Gesichter in den Fotos der aktiven Bibliothek und speichert je Gesicht einen Fingerabdruck im Katalog — vollständig auf diesem PC, nichts verlässt den Rechner. Videos werden noch nicht analysiert. Erkannte Gesichter benennst du in der Lightbox (Taste F); die Galerie filtert und sucht nach Personen." />
-                    <ui:ToggleSwitch Content="Gesichter im Hintergrund erkennen"
-                                     IsChecked="{Binding IsEnabled, Mode=TwoWay}"
-                                     AutomationProperties.Name="Gesichter im Hintergrund erkennen" />
-                    <CheckBox Margin="0,8,0,0" Content="Grafikkarte verwenden (DirectML; sonst Prozessor)"
-                              IsChecked="{Binding UseGpu, Mode=TwoWay}"
-                              AutomationProperties.Name="Grafikkarte für die Gesichtserkennung verwenden" />
-
-                    <!-- Mindestgröße für Gesichter (0.2.40, ADR-0040) -->
-                    <StackPanel Margin="0,10,0,0" Visibility="{Binding HasMinFaceSize, Converter={StaticResource BoolToVis}}">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="Kleine Gesichter automatisch ignorieren:" VerticalAlignment="Center" />
-                            <ComboBox Margin="8,0,0,0" MinWidth="220"
-                                      ItemsSource="{Binding MinFaceSizeChoices}" DisplayMemberPath="Label" SelectedValuePath="Value"
-                                      SelectedValue="{Binding SelectedMinFaceSize, Mode=TwoWay}"
-                                      AutomationProperties.Name="Mindestgröße für Gesichter" />
-                        </StackPanel>
-                        <TextBlock Margin="0,4,0,0" FontSize="12" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                   Text="Sehr kleine Gesichter (meist Menschen im Hintergrund) erkennt das Modell unzuverlässig. Sie werden wie „ignorieren“ behandelt — keine Vorschläge, keine Gruppen — und stehen unter Personen → Ignorierte Gesichter. Ein anderer Wert oder „Aus“ holt sie zurück; selbst ignorierte und bestätigte Gesichter bleiben unberührt." />
-                        <TextBlock Margin="0,4,0,0" FontSize="12" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
-                                   Text="{Binding MinFaceSizeMessage}"
-                                   Visibility="{Binding MinFaceSizeMessage, Converter={StaticResource NullToVis}}" />
-                    </StackPanel>
-
-                    <Grid Margin="0,12,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
-                        <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource Label}" Text="Modell" />
-                        <TextBlock Grid.Row="0" Grid.Column="1" Style="{StaticResource ValueText}"
-                                   Text="{Binding ModelStatusText}" ToolTip="{Binding ModelFolder}" />
-                        <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource Label}" Text="Index" Margin="0,8,12,0" />
-                        <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource ValueText}" Margin="0,8,0,0"
-                                   Text="{Binding IndexStatusText}" ToolTip="{Binding IndexStatusText}" />
-                        <ui:Button Grid.Row="1" Grid.Column="2" Content="Index neu aufbauen" Icon="{ui:SymbolIcon ArrowClockwise24}"
-                                   Margin="12,6,0,0"
-                                   Command="{Binding RebuildIndexCommand}"
-                                   AutomationProperties.Name="Gesichts-Index neu aufbauen" />
-                    </Grid>
-
-                    <ui:Button Margin="0,10,0,0" Icon="{ui:SymbolIcon ArrowDownload24}"
-                               Content="{x:Static faces:FaceSettingsViewModel.DownloadButtonText}"
-                               Command="{Binding DownloadModelCommand}"
-                               Visibility="{Binding IsModelReady, Converter={StaticResource InvBoolToVis}}"
-                               AutomationProperties.Name="Modell für die Gesichtserkennung herunterladen" />
-                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0"
-                                Visibility="{Binding IsDownloading, Converter={StaticResource BoolToVis}}">
-                        <ProgressBar Width="260" Height="4" Minimum="0" Maximum="100" VerticalAlignment="Center"
-                                     Value="{Binding DownloadPercent, Mode=OneWay}" />
-                        <TextBlock Style="{StaticResource ValueText}" Margin="12,0,0,0" Text="{Binding DownloadText}" />
-                        <ui:Button Content="Abbrechen" Margin="12,0,0,0"
-                                   Command="{Binding CancelDownloadCommand}"
-                                   AutomationProperties.Name="Modell-Download abbrechen" />
-                    </StackPanel>
-
-                    <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
-                               Text="{Binding Message}"
-                               Visibility="{Binding Message, Converter={StaticResource NullToVis}}">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock">
-                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding MessageIsError}" Value="True">
-                                        <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
-
-                    <!-- Gesichtsdaten löschen (0.2.38, Wpf/Settings/FaceData): eigener DataContext = SettingsViewModel.FaceData -->
-                    <StackPanel Margin="0,14,0,0"
-                                DataContext="{Binding DataContext.FaceData, RelativeSource={RelativeSource AncestorType={x:Type local:SettingsPage}}}"
-                                Visibility="{Binding Converter={StaticResource NullToVis}}">
-                        <ui:Button Icon="{ui:SymbolIcon Delete24}"
-                                   Content="Gesichtsdaten löschen…"
-                                   Command="{Binding EraseCommand}"
-                                   AutomationProperties.Name="Gesichtsdaten löschen" />
-                        <TextBlock Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                   Text="Löscht für die aktive Bibliothek Personen, Gesichter, Fingerabdrücke, Ablehnungen und den Gesichter-Cache — die Fotos bleiben. Danach ist die Gesichtserkennung aus." />
-                        <TextBlock Margin="0,2,0,0" FontSize="12" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                   Text="{x:Static facedata:FaceDataSettingsViewModel.PrivacyText}" />
-                        <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
-                                   Text="{Binding Message}"
-                                   Visibility="{Binding Message, Converter={StaticResource NullToVis}}">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding MessageIsError}" Value="True">
-                                            <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
-                    </StackPanel>
-                </StackPanel>
-            </Border>
-
-            <!-- Über -->
-            <Border Style="{StaticResource SectionCard}">
-                <StackPanel>
-                    <ui:TextBlock Style="{StaticResource SectionTitle}" Text="Über" />
-                    <TextBlock Text="{Binding AppVersionText}" />
-                    <TextBlock Margin="0,4,0,0" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Text="Native Windows-Desktop-App (.NET 10, WPF, WPF-UI, SQLite) für große Foto- und Videobibliotheken." />
-                </StackPanel>
-            </Border>
         </StackPanel>
-    </ScrollViewer>
+    </Grid>
 </UserControl>

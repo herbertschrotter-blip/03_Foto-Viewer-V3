@@ -53,7 +53,7 @@
 
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <StackPanel Margin="24,12,24,16" MaxWidth="960" HorizontalAlignment="Left">
-            <ui:TextBlock FontTypography="Title" Text="Tags" Margin="0,0,0,4" />
+            <!-- Reiter „Tags“ der Einstellungen (ADR-0042): Überschrift = Reiter -->
             <TextBlock Text="Frei definierbare Schlagworte. Zuweisen in der Galerie über die Aktionsleiste, das Kontextmenü oder Strg+T."
                        FontSize="12" Margin="0,0,0,12"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}" />

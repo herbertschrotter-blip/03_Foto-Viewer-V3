@@ -1,0 +1,44 @@
+<UserControl x:Class="PhotoViewerV3.Settings.Sections.SettingsArchivesSection"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:settings="clr-namespace:PhotoViewerV3.Settings"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance settings:SettingsViewModel}"
+             d:DesignWidth="1000">
+    <!-- Einstellungen › Archive (ADR-0042; Services/Archive, ADR-0032; je aktiver Bibliothek, ADR-0033); DataContext = SettingsViewModel -->
+    <UserControl.Resources>
+        <ResourceDictionary Source="SettingsStyles.xaml" />
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Style="{StaticResource SectionPanel}">
+            <TextBlock Style="{StaticResource Lead}" Text="ZIP-, RAR- und 7z-Archive in Eingangsordnern automatisch entpacken." />
+
+            <Border Style="{StaticResource SectionCard}" IsEnabled="{Binding IsAutoExtractAvailable}">
+                <StackPanel>
+                    <ui:TextBlock Style="{StaticResource SectionTitle}" Text="Archive (ZIP, RAR, 7z …)" />
+                    <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,8" Text="{Binding AutoExtractLibraryText}" />
+                    <ui:ToggleSwitch Content="Neue Archive in Eingangsordnern automatisch entpacken"
+                                     IsChecked="{Binding IsAutoExtractEnabled, Mode=TwoWay}"
+                                     AutomationProperties.Name="Neue Archive in Eingangsordnern automatisch entpacken" />
+                    <CheckBox Margin="0,8,0,0" Content="Archiv nach fehlerfreiem Entpacken in den Papierkorb verschieben"
+                              IsChecked="{Binding IsAutoExtractRecycle, Mode=TwoWay}"
+                              IsEnabled="{Binding IsAutoExtractEnabled}"
+                              AutomationProperties.Name="Archiv nach dem Entpacken in den Papierkorb verschieben" />
+                    <TextBlock Style="{StaticResource Hint}" Margin="0,8,0,0"
+                               Text="Findet „Aktualisieren“ oder die Ordnerüberwachung ein neues Archiv in einem Eingangsordner, wird es nach dem Scan vollständig in einen Ordner mit dem Archivnamen daneben entpackt (verschachtelte Archive bis Tiefe 3) und die Bibliothek erneut aktualisiert. Archive im Bibliotheksordner, Archive in bereits entpackten Ordnern und Archive, deren Zielordner schon existiert, bleiben unberührt. Passwortgeschützte oder beschädigte Archive bleiben liegen und werden in der Statusleiste gemeldet." />
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <ui:Button Content="Vorhandene Archive in Eingängen jetzt entpacken…"
+                                   Command="{Binding ExtractExistingArchivesCommand}"
+                                   AutomationProperties.Name="Vorhandene Archive in Eingängen jetzt entpacken" />
+                    </StackPanel>
+                    <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0"
+                               Text="Archive, die schon vor dem Einschalten im Katalog standen, entpackt die Automatik nicht. Dieser Knopf holt das für die aktive Bibliothek nach (nur bei eingeschalteter Einstellung; Archive, deren Zielordner schon existiert, zählen nicht)." />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

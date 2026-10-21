@@ -1,0 +1,60 @@
+<UserControl x:Class="PhotoViewerV3.Shell.LibrarySwitcher"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:local="clr-namespace:PhotoViewerV3.Shell"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance local:LibrarySwitcherViewModel}"
+             d:DesignWidth="220">
+    <!-- Bibliotheks-Umschalter oben in der linken Leiste (ADR-0042, Mockup 06): Karte mit aktiver Bibliothek,
+         Klick öffnet das Menü (Bibliotheken + „Bibliotheken verwalten…“), ohne Bibliothek direkt die Einstellungen. -->
+    <Button x:Name="SwitchButton"
+            Margin="4,4,4,10"
+            Padding="10,8"
+            HorizontalAlignment="Stretch"
+            HorizontalContentAlignment="Stretch"
+            Cursor="Hand"
+            Click="OnClick"
+            ToolTip="{Binding CaptionText}"
+            AutomationProperties.Name="Bibliothek wechseln">
+        <Button.Template>
+            <ControlTemplate TargetType="Button">
+                <Border x:Name="Card"
+                        Padding="{TemplateBinding Padding}"
+                        CornerRadius="6"
+                        Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1">
+                    <ContentPresenter />
+                </Border>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter TargetName="Card" Property="Background" Value="{DynamicResource CardBackgroundFillColorSecondaryBrush}" />
+                    </Trigger>
+                    <Trigger Property="IsKeyboardFocused" Value="True">
+                        <Setter TargetName="Card" Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                    </Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate>
+        </Button.Template>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <ui:SymbolIcon Grid.Column="0" Symbol="Library24" FontSize="18" VerticalAlignment="Center" Margin="0,0,10,0"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock Text="{Binding ActiveName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                <TextBlock Text="{Binding CaptionText}" FontSize="11" TextTrimming="CharacterEllipsis"
+                           Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+            </StackPanel>
+            <ui:SymbolIcon Grid.Column="2" Symbol="ChevronDown16" FontSize="12" VerticalAlignment="Center" Margin="8,0,0,0"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+        </Grid>
+    </Button>
+</UserControl>

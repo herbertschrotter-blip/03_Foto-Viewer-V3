@@ -599,7 +599,8 @@ public sealed partial class LibraryViewModel : ObservableObject
                         result.Mode == ScanMode.Incremental ? "Aktualisierung abgeschlossen" : "Scan abgeschlossen",
                         CompletedSummary(item, result),
                         warning: false);
-                    if (result.Mode != ScanMode.Incremental || result.HasChanges)
+                    // Von der Seite „Ordner“ aus („Eingang hinzufügen…“, ADR-0042) dort bleiben — sie zeigt die Galerie schon
+                    if ((result.Mode != ScanMode.Incremental || result.HasChanges) && _navigation.CurrentTag != NavigationTags.Folders)
                     {
                         _navigation.NavigateTo(NavigationTags.Gallery);
                     }

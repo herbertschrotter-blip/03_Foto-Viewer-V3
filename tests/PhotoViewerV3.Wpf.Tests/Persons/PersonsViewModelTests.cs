@@ -230,7 +230,7 @@ public sealed class PersonsViewModelTests
         vm.IsRecognitionOff.Should().BeTrue();
         vm.RecognitionOffText.Should().Contain("in den Einstellungen einschalten");
         vm.OpenSettingsCommand.Execute(null);
-        navigation.Tags.Should().Equal(NavigationTags.Settings);
+        navigation.Tags.Should().Equal(NavigationTags.SettingsFaces);
         PersonsDialogService.DescribeOutliers("Anna", 2, 9).Should().Be("2 von 9 Gesichtern passen nicht gut zu „Anna“. Nur Bestätigtes wird gelernt — falsche Gesichter verschlechtern die Vorschläge.");
     }
 

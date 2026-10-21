@@ -77,8 +77,10 @@ public sealed partial class FolderTreeViewModel : ObservableObject
         IFileOperationService fileOps,
         IDialogService dialogs,
         FolderActions folderActions,
-        ILogger<FolderTreeViewModel> logger)
+        ILogger<FolderTreeViewModel> logger,
+        Libraries.IInboxActions? inboxActions = null)
     {
+        _inboxActions = inboxActions; // „Eingang hinzufügen…“ im Seitenkopf (ADR-0042, FolderTreeViewModel.AddInbox.cs)
         _folderActions = folderActions;
         _factory = factory;
         _libraries = libraries;

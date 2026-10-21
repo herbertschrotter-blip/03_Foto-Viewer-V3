@@ -3,6 +3,61 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.44] — 2026-10-21
+
+### Neu (ADR-0042) — Schlankere Navigation, Einstellungen mit Reitern, Info-Seite (Mockup 06, Reiter „Navigation & Einstellungen“)
+- **Linke Leiste**: oben der **Bibliotheks-Umschalter** (aktive Bibliothek mit Namen; Klick → Menü mit allen Bibliotheken
+  samt Dateizahl und „Bibliotheken verwalten…“; ohne Bibliothek führt der Klick direkt zur Einrichtung; während eines
+  Scans der Bibliotheksverwaltung wird nicht gewechselt, Fehler kommen als Dialog; neu gelesen wird bei
+  Bibliothekswechsel, nach Scans, beim Öffnen des Menüs und beim Verlassen der Einstellungen), darunter
+  **Galerie, Ordner, Personen, Sortieren**, unten **Einstellungen**. Die Seiten **Bibliothek, Tags und Kategorien** sind
+  aus der Leiste verschwunden — sie sind jetzt Reiter der Einstellungen. Vergeben von Tags und Kategorien bleibt
+  unverändert in der Galerie (Rechtsklick, Strg+T, Strg+K, Lightbox).
+- **Einstellungen mit Reitern oben** (Pivot im WPF-UI-Stil, gewählter Reiter fett mit Akzent-Strich): **Bibliotheken &
+  Eingänge** (die bisherige Bibliotheksseite unverändert: Neue Bibliothek, Aktiv setzen, Aktualisieren, Neu aufbauen,
+  Eingang hinzufügen, In die Bibliothek übernehmen …; darunter die **Ordnerüberwachung**), **Tags**, **Kategorien** (die
+  bisherigen Seiten), **Gesichter** (Gesichtserkennung, Mindestgröße, Modell, Index neu aufbauen, Gesichtsdaten löschen),
+  **Archive** (automatisch entpacken), **Darstellung** (Farbschema), **Speicher & Wartung** (Speicherorte samt Katalog-
+  Umzug, Vorschaubild-Cache, FFmpeg, unterstützte Formate) und zuletzt **Info**. Kein bisheriger Abschnitt ging verloren;
+  die alte Karte „Über“ ist in „Info“ aufgegangen.
+- **Navigation von außen auf einen Reiter**: `NavigationTags.Library/Tags/Categories` und neue Reiter-Tags
+  (`settings-faces`, `-archives`, `-appearance`, `-storage`, `-info`) öffnen über den `INavigationService` die
+  Einstellungen auf dem Reiter (`SettingsSectionState`) — „Tags verwalten…“/„Kategorien verwalten…“ aus der Galerie
+  funktionieren unverändert, „Einstellungen öffnen“ der Personen-Seite springt jetzt auf „Gesichter“.
+- **Start**: mit Bibliothek wie bisher die Galerie; **ohne Bibliothek (Ersteinrichtung) direkt Einstellungen ›
+  Bibliotheken & Eingänge**.
+- **„Eingang hinzufügen…“ zusätzlich auf der Seite „Ordner“** (Kopf des Ordnerbaums): gleicher Ablauf wie in den
+  Einstellungen für die aktive Bibliothek (Ordnerauswahl, Prüfung, Angebot „Jetzt aktualisieren“); Fehler beim
+  Hinzufügen bzw. beim anschließenden Aktualisieren, ein laufender Scan oder eine fehlende Bibliothek als Dialog. Ein
+  von dort gestarteter Scan bleibt auf der Seite „Ordner“ statt zur Galerie zu springen.
+- **Info**: App-Name, **Version = oberster CHANGELOG-Eintrag** (las `PhotoViewerV3.Wpf.csproj` schon bisher; jetzt mit
+  Test), Build-Datum, Debug/Release, Kurzbeschreibung; Karten **Entwicklung** (Programmierung: Herbert Schrotter;
+  Mitarbeit: Claude (Anthropic), KI-Assistent; Vorgänger: PhotoViewer V2 — keine E-Mail-Adresse), **Dieses System**
+  (.NET, Windows-Build, Architektur, Grafikkarte über `EnumDisplayDevices` mit Ausführung der Gesichtserkennung
+  DirectML/CPU, Gesichtsmodell vorhanden/geladen, Katalog: Bibliotheken · Dateien · DB-Größe), **Speicherorte**
+  (Katalog — markiert die Datei, fehlt sie noch, nur den Ordner —, Vorschaubilder, Protokolle, je „öffnen“ im Explorer) und **Verwendete Bausteine** (WPF-UI,
+  CommunityToolkit.Mvvm, SQLite/EF Core, SharpCompress, ONNX Runtime DirectML, LibVLCSharp — Versionen aus den DLLs
+  neben der App; InsightFace buffalo_l „nur nicht-kommerziell“) mit **„Alle Lizenzen anzeigen…“** (fester Text im
+  App-Dialog, kein Netzzugriff). Knöpfe **„Versionsinfo kopieren“** (Version, Build, System, Bausteine — ohne Pfade und
+  Bibliotheksnamen) und **„Änderungsprotokoll“** (öffnet die CHANGELOG.md neben der App; ohne sie ausgeblendet).
+  `CHANGELOG.md` wird dafür ins Ausgabeverzeichnis und ins portable Paket kopiert.
+
+### Tests
+- `tests/PhotoViewerV3.Wpf.Tests`: 335 (+30, 1 übersprungen ohne Modell). Neu `Shell/NavigationAndSettingsTabsTests`
+  (Reiter-Tags und Reihenfolge, Zustand lehnt Unbekanntes ab, Reiter-Tag öffnet Einstellungen auf dem Reiter auch vor
+  dem Anbinden, Umschalter mit/ohne Bibliothek, Wechsel, „verwalten“, kein Wechsel während eines Scans, Fehler als
+  Dialog, Neulesen beim Verlassen der Einstellungen, zusammengefasstes Neulesen, „Eingang hinzufügen…“ für die aktive
+  Bibliothek bzw. abgebrochen/abgelehnt/ohne Bibliothek, Knopf auf der Ordner-Seite) und `Settings/InfoViewModelTests`
+  (Version = oberster Eintrag der Repo-CHANGELOG, CHANGELOG neben der App, Lesen der obersten Version, Windows-/
+  Kopfzeile, Karten, Grafikkarte/Gesichtsmodell-Texte, Bausteine mit Versionen, Versionsinfo ohne Pfade, Lizenzen,
+  Knopf „Änderungsprotokoll“ nur mit Datei); `PersonsViewModelTests` erwartet den Reiter „Gesichter“.
+  `tests/PhotoViewerV3.Tests` unverändert 602 (1 übersprungen).
+- Rauchtest: Schritte über Bibliothek/Tags/Kategorien öffnen die Einstellungs-Reiter (`OpenSettingsSectionAsync`); der
+  Startschritt prüft die Ersteinrichtung (Einstellungen › Bibliotheken & Eingänge, Umschalter „Bibliothek einrichten“);
+  neuer Schritt **„Einstellungen-Reiter und Info“** vor der Ordnerüberwachung (Leiste ohne Bibliothek/Tags/Kategorien,
+  Umschalter, alle Reiter öffnen, Info-Version = oberster CHANGELOG-Eintrag, „Tags verwalten…“ von außen, „Eingang
+  hinzufügen…“ auf der Ordner-Seite, Screenshots hell/dunkel).
+
 ## [0.2.43] — 2026-10-21
 
 ### Neu (ADR-0041) — Galerie-Kopfzeile: Suche im Titel, Filter frei kombinierbar, Filter zurücksetzen

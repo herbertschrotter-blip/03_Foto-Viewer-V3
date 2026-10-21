@@ -10,7 +10,8 @@ using Wpf.Ui.Controls;
 namespace PhotoViewerV3;
 
 /// <summary>
-/// Hauptfenster: NavigationView (Bibliothek, Galerie, Ordner, Einstellungen) + Statusleiste.
+/// Hauptfenster: NavigationView (Bibliotheks-Umschalter, Galerie, Ordner, Personen, Sortieren, Einstellungen; ADR-0042)
+/// + Statusleiste.
 /// Seiten kommen über den NavigationPageProvider aus DI; Navigation läuft über NavigationView.Navigate(tag),
 /// Klicks werden per SelectionChanged an den NavigationService zurückgemeldet.
 /// </summary>
@@ -57,8 +58,9 @@ public partial class MainWindow : PhotoViewerV3.Shell.Dialogs.AppFluentWindow
             UpdateSystemThemeWatcher(_theme.Mode);
 
             await _shell.StatusBar.InitializeAsync();
+            _ = _shell.LibrarySwitcher.RefreshAsync(); // Bibliotheks-Umschalter (ADR-0042), ohne den Start aufzuhalten
 
-            // Startseite: Galerie, wenn eine aktive Bibliothek existiert, sonst Bibliothek
+            // Startseite: Galerie, wenn eine aktive Bibliothek existiert, sonst Einstellungen › Bibliotheken & Eingänge
             var startTag = await _shell.ResolveStartPageAsync();
             _logger.LogInformation("Startseite: {Tag}", startTag);
             _navigation.NavigateTo(startTag);

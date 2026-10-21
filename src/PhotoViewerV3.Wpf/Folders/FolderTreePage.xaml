@@ -38,13 +38,30 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <StackPanel Grid.Row="0" Margin="4,0,0,8">
-                    <ui:TextBlock FontTypography="BodyStrong" Text="Ordner" />
-                    <TextBlock Text="{Binding LibraryName}"
-                               FontSize="12"
-                               TextTrimming="CharacterEllipsis"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                </StackPanel>
+                <Grid Grid.Row="0" Margin="4,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                        <ui:TextBlock FontTypography="BodyStrong" Text="Ordner" />
+                        <TextBlock Text="{Binding LibraryName}"
+                                   FontSize="12"
+                                   TextTrimming="CharacterEllipsis"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                    <!-- „Eingang hinzufügen…“ direkt hier (ADR-0042), gleicher Ablauf wie in Einstellungen › Bibliotheken & Eingänge -->
+                    <ui:Button Grid.Column="1"
+                               Content="Eingang hinzufügen…"
+                               Icon="{ui:SymbolIcon MailInbox24}"
+                               Padding="8,4"
+                               Margin="8,0,0,0"
+                               VerticalAlignment="Center"
+                               ToolTip="Unsortierten Quellordner als Eingang der aktiven Bibliothek aufnehmen — Dateien darin erscheinen im Filter „Noch im Eingang“"
+                               Command="{Binding AddInboxCommand}"
+                               Visibility="{Binding CanShowAddInbox, Converter={StaticResource BoolToVis}}"
+                               AutomationProperties.Name="Eingang hinzufügen" />
+                </Grid>
 
                 <Grid Grid.Row="1" Margin="0,0,0,8">
                     <Grid.ColumnDefinitions>

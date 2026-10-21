@@ -1,14 +1,81 @@
+using System.ComponentModel;
+using System.Linq;
 using System.Windows.Controls;
+using PhotoViewerV3.Libraries;
+using PhotoViewerV3.Settings.CategoryManagement;
+using PhotoViewerV3.Settings.Info;
+using PhotoViewerV3.Settings.Sections;
+using PhotoViewerV3.Settings.TagManagement;
+using PhotoViewerV3.Shell;
 
 namespace PhotoViewerV3.Settings;
 
-/// <summary>Seite „Einstellungen“; lädt Pfade, Cache-Größe und Status bei jedem Anzeigen neu.</summary>
+/// <summary>
+/// Seite „Einstellungen“ mit Reitern (ADR-0042). Bettet die bisherigen Seiten Bibliothek, Tags und Kategorien als Reiter
+/// ein (Singletons aus DI, sie laden sich beim Anzeigen ihres Reiters selbst neu), hängt die Ordnerüberwachung unter die
+/// Bibliotheksliste und hält den gewählten Reiter mit <see cref="SettingsSectionState"/> abgeglichen. Lädt Pfade,
+/// Cache-Größe und Status des <see cref="SettingsViewModel"/> bei jedem Anzeigen neu.
+/// </summary>
 public partial class SettingsPage : UserControl
 {
-    public SettingsPage(SettingsViewModel viewModel)
+    private readonly SettingsSectionState _sections;
+
+    public SettingsPage(
+        SettingsViewModel viewModel,
+        SettingsSectionState sections,
+        LibraryPage library,
+        TagManagementPage tags,
+        CategoryManagementPage categories,
+        InfoViewModel info)
     {
+        _sections = sections;
         InitializeComponent();
         DataContext = viewModel;
+
+        LibraryTab.Content = library;
+        TagsTab.Content = tags;
+        CategoriesTab.Content = categories;
+        InfoView.DataContext = info;
+        library.SetFooter(new SettingsWatchSection { DataContext = viewModel });
+
+        SelectTab(sections.SelectedSection);
+        Tabs.SelectionChanged += OnTabsSelectionChanged;
+        sections.PropertyChanged += OnSectionsPropertyChanged;
+
         Loaded += (_, _) => _ = viewModel.LoadCommand.ExecuteAsync(null);
+    }
+
+    /// <summary>Tag des angezeigten Reiters (Rauchtest, Tests).</summary>
+    internal string? SelectedTabTag => (Tabs.SelectedItem as TabItem)?.Tag as string;
+
+    private void OnTabsSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        // SelectionChanged steigt auch aus Listen und Auswahlfeldern in den Reitern auf — nur die Reiterleiste zählt
+        if (!ReferenceEquals(e.OriginalSource, Tabs))
+        {
+            return;
+        }
+
+        if (SelectedTabTag is { } tag && tag != _sections.SelectedSection)
+        {
+            _sections.SelectedSection = tag;
+        }
+    }
+
+    private void OnSectionsPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(SettingsSectionState.SelectedSection))
+        {
+            SelectTab(_sections.SelectedSection);
+        }
+    }
+
+    private void SelectTab(string section)
+    {
+        var tab = Tabs.Items.OfType<TabItem>().FirstOrDefault(t => Equals(t.Tag, section));
+        if (tab is not null && !tab.IsSelected)
+        {
+            tab.IsSelected = true;
+        }
     }
 }

@@ -59,6 +59,7 @@ Wenn eine ADR-Entscheidung revidiert wird: **neues ADR anlegen** + altes auf "Su
 | [0038](0038-personen-in-galerie-und-lightbox.md) | Personen in Galerie und Lightbox: Filter/Suche/Spalte direkt in SQL über abdeckende Indizes (`AddFacePersonIndex`), nur bestätigte Gesichter zählen; Rahmen per Taste F; „Gesichtsdaten löschen“ je Bibliothek | Accepted |
 | [0040](0040-ignorierte-gesichter-und-mindestgroesse.md) | Ignorierte Gesichter: Ansicht mit „Zurückholen“, ganze Gruppe ignorieren; Mindestgröße (Standard 24 px) als automatisch ignoriert (Zustand 3 + Markierung in `SuggestionScore`, keine Migration), angewandt beim Einfügen durch den Index und einmal je Schwellenänderung durch den Zuordnungsdienst | Accepted |
 | [0041](0041-galerie-filter-unabhaengig-kombinierbar.md) | Galerie-Filter unabhängig kombinierbar: Dateiart, nur Favoriten, Ablage und Mindest-Bewertung als eigene Teile (`GalleryFilterState`), mit Tags/Personen/Kategorien/Suche/Ordner per UND; „Es gilt“-Zeile, Filter zurücksetzen (Ordnerauswahl bleibt), Sortierung Feld + Richtung getrennt | Accepted |
+| [0042](0042-navigation-und-einstellungen-mit-reitern.md) | Schlankere Navigation (Bibliotheks-Umschalter, Galerie, Ordner, Personen, Sortieren), Einstellungen mit Reitern (Bibliotheken & Eingänge, Tags, Kategorien als eingebettete Seiten; Reiter-Tags im `INavigationService`), „Eingang hinzufügen…“ auf der Ordner-Seite, Info mit Version = oberster CHANGELOG-Eintrag | Accepted |
 
 ## Quellen der Entscheidungen
 

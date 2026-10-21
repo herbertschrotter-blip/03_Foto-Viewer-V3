@@ -33,6 +33,12 @@ public static class ShellServiceCollectionExtensions
         services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<SettingsPage>();
 
+        // Navigation und Einstellungs-Reiter (ADR-0042): Bibliotheks-Umschalter, gewählter Reiter, „Eingang hinzufügen…“
+        // auf der Ordner-Seite über die Bibliotheksverwaltung (Info: AddSettingsInfo in App.xaml.cs)
+        services.AddSingleton<SettingsSectionState>();
+        services.AddSingleton<LibrarySwitcherViewModel>();
+        services.AddSingleton<IInboxActions>(sp => sp.GetRequiredService<LibraryViewModel>());
+
         return services;
     }
 }

@@ -4,13 +4,10 @@
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  xmlns:shell="clr-namespace:PhotoViewerV3.Shell"
-                 xmlns:library="clr-namespace:PhotoViewerV3.Libraries"
                  xmlns:folders="clr-namespace:PhotoViewerV3.Folders"
                  xmlns:settings="clr-namespace:PhotoViewerV3.Settings"
                  xmlns:gallery="clr-namespace:PhotoViewerV3.Gallery.Views"
                  xmlns:sorter="clr-namespace:PhotoViewerV3.Sorter"
-                 xmlns:tagmgmt="clr-namespace:PhotoViewerV3.Settings.TagManagement"
-                 xmlns:catmgmt="clr-namespace:PhotoViewerV3.Settings.CategoryManagement"
                  xmlns:persons="clr-namespace:PhotoViewerV3.Persons"
                  Title="PhotoViewer V3"
                  Height="800"
@@ -29,21 +26,20 @@
         <ui:TitleBar Grid.Row="0" Title="PhotoViewer V3" />
 
         <!-- Seiten werden über TargetPageType + INavigationViewPageProvider (DI, gecacht) aufgelöst;
-             SelectionChanged feuert damit zuverlässig (WPF-UI navigiert nur bei gesetztem TargetPageType). -->
+             SelectionChanged feuert damit zuverlässig (WPF-UI navigiert nur bei gesetztem TargetPageType).
+             Leiste seit 0.2.44 (ADR-0042): oben der Bibliotheks-Umschalter, dann die Arbeitsseiten; Bibliothek, Tags und
+             Kategorien sind Reiter der Einstellungen (NavigationTags.Library/Tags/Categories öffnen dorthin). -->
         <ui:NavigationView x:Name="MainNav"
                            Grid.Row="1"
                            PaneDisplayMode="Left"
                            OpenPaneLength="220"
                            IsBackButtonVisible="Collapsed">
 
+            <ui:NavigationView.PaneHeader>
+                <shell:LibrarySwitcher DataContext="{Binding LibrarySwitcher}" />
+            </ui:NavigationView.PaneHeader>
+
             <ui:NavigationView.MenuItems>
-                <ui:NavigationViewItem Content="Bibliothek"
-                                       TargetPageTag="library"
-                                       TargetPageType="{x:Type library:LibraryPage}">
-                    <ui:NavigationViewItem.Icon>
-                        <ui:SymbolIcon Symbol="Library24" />
-                    </ui:NavigationViewItem.Icon>
-                </ui:NavigationViewItem>
                 <ui:NavigationViewItem Content="Galerie"
                                        TargetPageTag="gallery"
                                        TargetPageType="{x:Type gallery:GalleryView}">
@@ -58,13 +54,6 @@
                         <ui:SymbolIcon Symbol="Folder24" />
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
-                <ui:NavigationViewItem Content="Sortieren"
-                                       TargetPageTag="sorter"
-                                       TargetPageType="{x:Type sorter:SorterPage}">
-                    <ui:NavigationViewItem.Icon>
-                        <ui:SymbolIcon Symbol="FolderArrowRight24" />
-                    </ui:NavigationViewItem.Icon>
-                </ui:NavigationViewItem>
                 <!-- Personen (Gesichtserkennung, ADR-0037) -->
                 <ui:NavigationViewItem Content="Personen"
                                        TargetPageTag="persons"
@@ -73,18 +62,11 @@
                         <ui:SymbolIcon Symbol="People24" />
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
-                <ui:NavigationViewItem Content="Tags"
-                                       TargetPageTag="tags"
-                                       TargetPageType="{x:Type tagmgmt:TagManagementPage}">
+                <ui:NavigationViewItem Content="Sortieren"
+                                       TargetPageTag="sorter"
+                                       TargetPageType="{x:Type sorter:SorterPage}">
                     <ui:NavigationViewItem.Icon>
-                        <ui:SymbolIcon Symbol="Tag24" />
-                    </ui:NavigationViewItem.Icon>
-                </ui:NavigationViewItem>
-                <ui:NavigationViewItem Content="Kategorien"
-                                       TargetPageTag="categories"
-                                       TargetPageType="{x:Type catmgmt:CategoryManagementPage}">
-                    <ui:NavigationViewItem.Icon>
-                        <ui:SymbolIcon Symbol="Group24" />
+                        <ui:SymbolIcon Symbol="FolderArrowRight24" />
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
             </ui:NavigationView.MenuItems>

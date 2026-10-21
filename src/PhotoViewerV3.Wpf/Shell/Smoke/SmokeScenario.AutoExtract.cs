@@ -55,8 +55,7 @@ internal sealed partial class SmokeScenario
 
         // (1) Eingang hinzufügen, Aktualisieren mit Einstellung aus → Archiv im Katalog, nicht entpackt
         var inboxRoot = await _libraries.AddRootAsync(_libraryId, inbox, LibraryRootRole.Inbox).ConfigureAwait(true);
-        _navigation.NavigateTo(NavigationTags.Library);
-        await WaitUntilAsync(() => _navigation.CurrentTag == NavigationTags.Library, ShortWait, "Bibliotheksseite").ConfigureAwait(true);
+        await OpenSettingsSectionAsync(NavigationTags.Library, "Bibliotheksseite").ConfigureAwait(true);
         _lastScan = null;
         await _library.RunSmokeScanAsync(_root).ConfigureAwait(true);
         Check(_lastScan is { Mode: ScanMode.Incremental, Outcome: ScanOutcome.Completed, Added: 1 }, $"Aktualisieren nimmt das vorhandene ZIP auf (Added={_lastScan?.Added})");
@@ -65,8 +64,7 @@ internal sealed partial class SmokeScenario
         Check(!Directory.Exists(oldTarget) && File.Exists(oldZip), "Einstellung aus: nicht entpackt");
 
         // (2) Einstellungsseite: Schalter der aktiven Bibliothek einschalten
-        _navigation.NavigateTo(NavigationTags.Settings);
-        await WaitUntilAsync(() => _navigation.CurrentTag == NavigationTags.Settings, ShortWait, "Einstellungen").ConfigureAwait(true);
+        await OpenSettingsSectionAsync(NavigationTags.SettingsArchives, "Einstellungen").ConfigureAwait(true);
         await _settings.LoadAutoExtractSettingsAsync().ConfigureAwait(true);
         var library = await _libraries.GetAsync(_libraryId).ConfigureAwait(true);
         Check(_settings.IsAutoExtractAvailable && _settings.AutoExtractLibraryId == _libraryId
@@ -97,8 +95,7 @@ internal sealed partial class SmokeScenario
         var newZip = Path.Combine(inbox, AutoExtractNewZip);
         File.Copy(staged, newZip, overwrite: true);
         File.Delete(staged);
-        _navigation.NavigateTo(NavigationTags.Library);
-        await WaitUntilAsync(() => _navigation.CurrentTag == NavigationTags.Library, ShortWait, "Bibliotheksseite").ConfigureAwait(true);
+        await OpenSettingsSectionAsync(NavigationTags.Library, "Bibliotheksseite").ConfigureAwait(true);
         await _library.RunSmokeScanAsync(_root).ConfigureAwait(true);
         Check(_library.ErrorMessage is null, $"Aktualisieren: {_library.ScanSummary}");
         _mediaCount++;

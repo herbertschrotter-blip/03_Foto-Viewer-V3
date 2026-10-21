@@ -234,7 +234,7 @@ public sealed partial class PersonsViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    private void OpenSettings() => _navigation.NavigateTo(NavigationTags.Settings);
+    private void OpenSettings() => _navigation.NavigateTo(NavigationTags.SettingsFaces); // Reiter „Gesichter“ (ADR-0042)
 
     [RelayCommand]
     private async Task BackAsync()

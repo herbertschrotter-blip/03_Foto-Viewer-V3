@@ -65,8 +65,7 @@ internal sealed partial class SmokeScenario
 
         // (1) Eingang hinzufügen + Aktualisieren
         await _libraries.AddRootAsync(_libraryId, inbox, LibraryRootRole.Inbox).ConfigureAwait(true);
-        _navigation.NavigateTo(NavigationTags.Library);
-        await WaitUntilAsync(() => _navigation.CurrentTag == NavigationTags.Library, ShortWait, "Bibliotheksseite").ConfigureAwait(true);
+        await OpenSettingsSectionAsync(NavigationTags.Library, "Bibliotheksseite").ConfigureAwait(true);
         _lastScan = null;
         await _library.RunSmokeScanAsync(_root).ConfigureAwait(true);
         Check(_lastScan is { Outcome: ScanOutcome.Completed, Added: 3 }, $"Aktualisieren mit Übernahme-Eingang: Added={_lastScan?.Added}");

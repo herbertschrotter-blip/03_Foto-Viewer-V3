@@ -16,9 +16,9 @@ großer Foto- und Video-Bibliotheken (50 000–500 000 Dateien). Nachfolger der 
   Kategorien — alle mit UND, „Filter zurücksetzen“), Ordnerfilter, Unterordner-Kacheln für Ordner
   ohne direkte Dateien, Favorit und 1–5 Sterne je Kachel, Mehrfachauswahl mit Aktionsleiste (Favorit, Bewertung,
   Tags, Verschieben nach…, Papierkorb) und Rückgängig. Umschaltbar auf eine **Listenansicht** mit Spalten.
-- **Tags**: frei definierbare, farbige Schlagworte (Seite „Tags“), Zuweisen für die Auswahl (Aktionsleiste,
+- **Tags**: frei definierbare, farbige Schlagworte (Einstellungen › Tags), Zuweisen für die Auswahl (Aktionsleiste,
   Kontextmenü, Strg+T), Tag-Punkte auf der Kachel, Filter nach Tags (ODER/UND/ohne Tag), Suche findet Tag-Namen.
-- **Kategorien**: eigene Kategorien mit festen Werten (Seite „Kategorien“), ein Wert je Datei, Zuweisen per
+- **Kategorien**: eigene Kategorien mit festen Werten (Einstellungen › Kategorien), ein Wert je Datei, Zuweisen per
   Kontextmenü oder Strg+K (auch in der Lightbox), Filter, Suche nach Werten, je Kategorie eine Listenspalte, die die
   ganze Trefferliste sortiert.
 - **Lightbox**: eigenes Fenster (auch auf einem zweiten Monitor) für Bilder mit Zoom/Pan und Info-Panel sowie Videos
@@ -61,9 +61,10 @@ dotnet run --project src/PhotoViewerV3.Wpf -c Debug
 ```
 
 Oder in Visual Studio: `PhotoViewerV3.slnx` öffnen, `PhotoViewerV3.Wpf` als Startprojekt, **F5**.
-Beim ersten Start legt die App die Datenbank an (EF-Core-Migration) und zeigt die Seite „Bibliothek“.
+Beim ersten Start legt die App die Datenbank an (EF-Core-Migration) und öffnet Einstellungen › Bibliotheken &
+Eingänge („Neue Bibliothek…“).
 
-Die App-Version (Einstellungen → „Über“, Dateiversion der EXE) kommt aus dem obersten Eintrag in
+Die App-Version (Einstellungen › Info, Dateiversion der EXE) kommt aus dem obersten Eintrag in
 [CHANGELOG.md](CHANGELOG.md); `PhotoViewerV3.Wpf.csproj` liest sie beim Build aus.
 
 ## Portable Version bauen
@@ -95,7 +96,16 @@ außerhalb von OneDrive), `-NoZip` lässt das ZIP weg, `-FrameworkDependent` bau
 
 ## Bedienung
 
-### Bibliothek
+### Navigation (seit 0.2.44, ADR-0042)
+Die linke Leiste enthält oben den **Bibliotheks-Umschalter** (Name der aktiven Bibliothek; Klick → andere Bibliothek
+wählen oder **Bibliotheken verwalten…**), darunter **Galerie, Ordner, Personen, Sortieren** und unten
+**Einstellungen**. Bibliothek, Tags und Kategorien richtet man selten ein — sie sind Reiter der Einstellungen:
+**Bibliotheken & Eingänge · Tags · Kategorien · Gesichter · Archive · Darstellung · Speicher & Wartung · Info**.
+Tags und Kategorien **vergeben** geht wie bisher in der Galerie (Rechtsklick, Strg+T, Strg+K, Lightbox); „Tags
+verwalten…“ bzw. „Kategorien verwalten…“ im Galerie-Menü öffnen den passenden Reiter. Ohne Bibliothek startet die App
+in Einstellungen › Bibliotheken & Eingänge.
+
+### Bibliotheken & Eingänge (Einstellungen)
 - **Neue Bibliothek…** → Foto-Ordner wählen, Namen vergeben, auf Nachfrage sofort scannen.
 - Je Bibliothek: **Scannen** (leerer Katalog) bzw. **Aktualisieren** (Incremental: neue, geänderte, fehlende und wieder
   vorhandene Dateien; Ids, Favoriten, Bewertungen, Vorschaubilder bleiben), **Neu aufbauen** (Katalog komplett neu mit
@@ -112,6 +122,7 @@ außerhalb von OneDrive), `-NoZip` lässt das ZIP weg, `-FrameworkDependent` bau
   je Eingang **In die Bibliothek übernehmen…**, Archiv-Symbol = diesen Ordner zum Bibliotheksordner machen, Umbenennen
   (Anzeigename), Entfernen (nur Eingänge, nur aus dem Katalog). Scannen/Aktualisieren läuft über alle Ordner. Ein
   Kasten „So funktioniert's“ erklärt den Ablauf; die Datenbank enthält nur Verweise und Bewertungen, keine Bilder.
+- Unter der Liste: **Ordnerüberwachung** (Schalter, Ruhezeit; siehe „Ordnerüberwachung“).
 
 ### Eingang und Bibliotheksordner
 Eine Bibliothek hat genau einen **Bibliotheksordner** (der beim Anlegen gewählte Ordner — dein sortiertes Fotoarchiv;
@@ -130,7 +141,7 @@ Bibliothek übernehmen.
   oder entfernen), **Favorit für alle**, **Kategorie für alle…** (Kategorie-Auswahl wie Strg+K), **Tags für alle…**
   (Tag-Auswahl wie Strg+T). Wirkt auf alle Dateien darunter (mit Unterordnern), nach einer Bestätigung mit Anzahl.
 - **In die Bibliothek übernehmen…** (Rechtsklick auf einen Ordner unter einem Eingang oder auf den Eingang selbst; auf
-  der Bibliotheksseite je Eingang): Dialog mit dem Ordnerbaum des Bibliotheksordners (Suche, **Neuer Ordner**,
+  Einstellungen › Bibliotheken & Eingänge je Eingang): Dialog mit dem Ordnerbaum des Bibliotheksordners (Suche, **Neuer Ordner**,
   zuletzt benutzter Zielordner vorgewählt) und einer **Vorschau** des Ergebnisbaums (alt → neu, Dateien je Ordner,
   Hinweise auf zusammengezogene, zusammengeführte und umbenannte Einträge). Der Ordner landet samt Unterordner-Struktur
   im gewählten Zielordner. Optionen:
@@ -288,10 +299,10 @@ Vorschaubild, die Kachel zeigt ein Archiv-Symbol mit Endung und Größe. Die Dat
 - Passwortgeschützte Archive werden angezeigt, aber mit klarer Meldung nicht entpackt (kein Passwort-Dialog); Einträge
   mit Pfaden außerhalb des Zielordners („Zip-Slip“, `..\..\`) werden übersprungen und als Fehler gemeldet.
 - Entpackt wird in der App über SharpCompress (keine Installation von 7-Zip/WinRAR nötig, ADR-0022).
-- **Automatisch entpacken** (0.2.25, ADR-0032; **je Bibliothek** seit 0.2.31, ADR-0033; Standard aus): Einstellungen →
+- **Automatisch entpacken** (0.2.25, ADR-0032; **je Bibliothek** seit 0.2.31, ADR-0033; Standard aus): Einstellungen ›
   **Archive** → „Neue Archive in Eingangsordnern automatisch entpacken“, optional „Archiv nach fehlerfreiem Entpacken in
   den Papierkorb verschieben“ — beide Schalter gelten für die **aktive Bibliothek** (der Abschnitt nennt sie); für eine
-  andere Bibliothek diese zuerst auf der Bibliotheksseite aktivieren. Eine bis 0.2.30 global eingeschaltete Einstellung
+  andere Bibliothek diese zuerst aktivieren (Umschalter oben links). Eine bis 0.2.30 global eingeschaltete Einstellung
   übernehmen beim ersten Start alle bestehenden Bibliotheken; neue Bibliotheken starten mit „aus“.
   Findet „Aktualisieren“ oder die Ordnerüberwachung ein **neues** Archiv in einem **Eingangsordner**, entpackt die App es
   nach dem Scan vollständig (alle Dateien, verschachtelte Archive bis 3 Ebenen) in einen Ordner mit dem Archivnamen
@@ -313,6 +324,8 @@ werden protokolliert umbenannt und lassen sich mit Rückgängig zurücknehmen), 
 unter einem Eingang, siehe „Eingang und Bibliotheksordner“) sowie **Bewertung für alle Dateien** (1–5 Sterne oder
 entfernen), **Favorit für alle**, **Kategorie für alle…** und **Tags für alle…** — wirken auf alle Dateien des Ordners
 samt Unterordnern, nach einer Bestätigung mit Anzahl. Das Ergebnis steht über dem Baum (✕ blendet es aus).
+**Eingang hinzufügen…** oben neben „Ordner“ nimmt einen unsortierten Quellordner als Eingang der aktiven Bibliothek auf
+(gleicher Ablauf wie in den Einstellungen, danach Angebot „Jetzt aktualisieren“; die Seite bleibt offen).
 
 ### Sortieren
 - **Quelle und Ziel** (beide Bereiche): je eine Auswahl der Wurzeln der aktiven Bibliothek mit Rolle („Eingang“ /
@@ -333,25 +346,33 @@ samt Unterordnern, nach einer Bestätigung mit Anzahl. Das Ergebnis steht über 
   Namenskonflikte → `_1`, `_2`, …), optional direkt in die Zielwurzel und leere Quellordner löschen. Vorschau, Ausführen,
   Rückgängig.
 
-### Tags
+### Tags (Einstellungen)
 Verwaltung der Tags: neues Tag anlegen (Enter), je Tag Farbe aus der Palette, nach oben/unten (Reihenfolge in Menüs,
 Chips und Filter), Umbenennen, Löschen (fragt nach und nennt die Zahl der Dateien; die Dateien selbst bleiben
 unverändert). Neben dem Namen steht, wie vielen Dateien das Tag zugewiesen ist.
 
-### Kategorien
+### Kategorien (Einstellungen)
 Verwaltung der Kategorien (ADR-0027): neue Kategorie mit Namen und optional gleich ihren Werten („N, NN“) anlegen
 (Enter); je Kategorie eine Karte mit Umbenennen, Löschen (fragt nach und nennt die Zahl der Dateien) und Reihenfolge
 (Filter, Spalten, Kontextmenü). Werte: hinzufügen (mehrere durch Komma), umbenennen, nach oben/unten, löschen (betroffene
 Dateien haben danach keinen Wert in dieser Kategorie). Neben jedem Wert steht, wie vielen Dateien er zugeordnet ist.
 
 ### Einstellungen
-Farbschema (Hell/Dunkel/System folgt Windows live), Speicherorte mit „Ordner öffnen“ und **Ändern…** (siehe
-„Speicherort des Katalogs“), Thumbnail-Cache (Belegung,
-**Cache leeren** — Vorschaubilder werden bei Bedarf neu erzeugt), FFmpeg-Status mit kopierbarem winget-Befehl,
-unterstützte Bild- und Videoformate, Ordnerüberwachung (Schalter, Ruhezeit), Version und Build-Datum.
+Reiter oben (ADR-0042):
+- **Bibliotheken & Eingänge**, **Tags**, **Kategorien** — siehe die Abschnitte oben.
+- **Gesichter** — Gesichtserkennung, Grafikkarte, Mindestgröße, Modell, Index neu aufbauen, Gesichtsdaten löschen.
+- **Archive** — automatisch entpacken (je Bibliothek), vorhandene Archive nachholen.
+- **Darstellung** — Farbschema (Hell/Dunkel/System folgt Windows live).
+- **Speicher & Wartung** — Speicherorte mit „Ordner öffnen“ und **Ändern…** (siehe „Speicherort des Katalogs“),
+  Thumbnail-Cache (Belegung, **Cache leeren** — Vorschaubilder werden bei Bedarf neu erzeugt), FFmpeg-Status mit
+  kopierbarem winget-Befehl, unterstützte Bild- und Videoformate.
+- **Info** — Version (= oberster Eintrag der CHANGELOG), Build-Datum, Debug/Release; Entwicklung, dieses System (.NET,
+  Windows, Grafikkarte, Gesichtsmodell, Katalogzahlen), Speicherorte zum Öffnen, verwendete Bausteine mit Versionen und
+  **Alle Lizenzen anzeigen…**; **Versionsinfo kopieren** (für Fehlermeldungen, ohne Pfade) und **Änderungsprotokoll**
+  (öffnet die CHANGELOG.md neben der App).
 
 #### Speicherort des Katalogs
-**Einstellungen → Speicherorte → Datenbank → Ändern…** zieht Katalog (`library.db`) und Vorschaubilder (`thumbs\`) in
+**Einstellungen › Speicher & Wartung → Speicherorte → Datenbank → Ändern…** zieht Katalog (`library.db`) und Vorschaubilder (`thumbs\`) in
 einen anderen Ordner (ADR-0026); **Standardort** holt sie nach `%LocalAppData%\PhotoViewerV3` zurück.
 - Der Ordner muss auf einem lokalen Laufwerk liegen (interne Platte, SSD, USB) — Netzlaufwerke und `\\Server\…` werden
   abgelehnt, ebenso Ordner in einer Bibliothekswurzel (die Vorschaubilder würden sonst als Fotos eingelesen). Er muss
@@ -372,7 +393,7 @@ einen anderen Ordner (ADR-0026); **Standardort** holt sie nach `%LocalAppData%\P
 Erkennt im Hintergrund Gesichter in den Fotos der aktiven Bibliothek und speichert je Gesicht Position, Qualität und
 einen Fingerabdruck (512 Werte) im Katalog (ADR-0035) — vollständig auf diesem PC. Benennen und Vorschläge: Abschnitt
 „Personen“; Filter, Suche und Lightbox-Rahmen: „Personen in Galerie und Lightbox“.
-- **Einstellungen → Gesichtserkennung**: „Gesichter im Hintergrund erkennen“ (Standard **aus**), „Grafikkarte
+- **Einstellungen › Gesichter**: „Gesichter im Hintergrund erkennen“ (Standard **aus**), „Grafikkarte
   verwenden“ (Standard an; DirectML, bei Problemen automatisch Prozessor), Modellstatus, **Index neu aufbauen**
   (analysiert alle Fotos erneut; bestätigte Zuordnungen bleiben).
 - **Kleine Gesichter automatisch ignorieren** (Standard **kleiner als 24 Pixel**; Aus, 16 … 64 Pixel): sehr kleine
@@ -395,7 +416,7 @@ einen Fingerabdruck (512 Werte) im Katalog (ADR-0035) — vollständig auf diese
 ### Personen
 Gefundene Gesichter benennen; PhotoViewer lernt daraus und schlägt die Personen auf weiteren Fotos vor (ADR-0036/0037).
 Gelernt wird **nur aus dem, was du bestätigst** — eigene Vorschläge lernen nie mit.
-1. **Einschalten:** Einstellungen → Gesichtserkennung → „Gesichter im Hintergrund erkennen“ (einmalig das Modell
+1. **Einschalten:** Einstellungen › Gesichter → „Gesichter im Hintergrund erkennen“ (einmalig das Modell
    herunterladen). Die Statusleiste zeigt den Fortschritt; die Seite **Personen** zeigt oben, wie viele Fotos schon
    analysiert sind, und weist darauf hin, wenn die Erkennung aus ist („Einstellungen öffnen“).
 2. **Gruppen benennen:** Unter „Unbenannte Gruppen“ stehen Gesichter, die vermutlich dieselbe Person zeigen (größte
@@ -452,7 +473,7 @@ Vorschläge der Erkennung werden getrennt gezeigt.
   liegt jetzt nur noch auf **F11**. Die Rahmen bleiben beim Weiterblättern an, und PhotoViewer merkt sich die Taste F
   dauerhaft: wer sie eingeschaltet lässt, sieht die Rahmen beim nächsten Öffnen der Lightbox (auch nach Neustart) sofort.
   Ignorierte Gesichter zeigen keinen Rahmen.
-- **Einstellungen → Gesichtserkennung → Gesichtsdaten löschen…**: nach Bestätigung werden für die aktive Bibliothek
+- **Einstellungen › Gesichter → Gesichtsdaten löschen…**: nach Bestätigung werden für die aktive Bibliothek
   alle Gesichter mit Fingerabdrücken, Zuordnungen, abgelehnte Vorschläge, der Gesichter-Cache und Personen, die danach
   in keiner Bibliothek mehr vorkommen, gelöscht; die Gesichtserkennung wird ausgeschaltet. Fotos, Bewertungen, Tags und
   Kategorien bleiben. Alles bleibt auf diesem PC.
@@ -480,7 +501,7 @@ Aktualisierung in n s“, danach „Automatisch aktualisiert: …“. Regeln:
   Regel.
 - Meldet der automatische Scan **viele fehlende Dateien** (Mass-Missing-Guard) oder eine **Bibliothek offline**, wird nicht
   automatisch wiederholt; die Statusleiste zeigt „Automatische Aktualisierung angehalten: …“, bis ein manuelles
-  „Aktualisieren“ auf der Bibliotheksseite erfolgreich war (oder die Bibliothek gewechselt bzw. die Überwachung
+  „Aktualisieren“ in Einstellungen › Bibliotheken & Eingänge erfolgreich war (oder die Bibliothek gewechselt bzw. die Überwachung
   umgeschaltet wird).
 - Nicht erreichbare Wurzeln (USB/NAS) werden alle 30 s erneut versucht; kommt die Wurzel zurück, folgt ein Scan nach der
   Ruhezeit. Ein Pufferüberlauf des Watchers startet ihn neu und plant ebenfalls einen Scan ein.

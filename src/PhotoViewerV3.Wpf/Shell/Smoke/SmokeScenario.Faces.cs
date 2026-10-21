@@ -26,8 +26,7 @@ internal sealed partial class SmokeScenario
         var faces = _settings.Faces!;
         var index = _faceIndex!;
 
-        _navigation.NavigateTo(NavigationTags.Settings);
-        await WaitUntilAsync(() => _navigation.CurrentTag == NavigationTags.Settings, ShortWait, "Einstellungen").ConfigureAwait(true);
+        await OpenSettingsSectionAsync(NavigationTags.SettingsFaces, "Einstellungen").ConfigureAwait(true);
         faces.Load();
         Check(!faces.IsEnabled && index.Status.State == FaceIndexState.Disabled, $"Gesichtserkennung standardmäßig aus ({index.Status.State})");
 

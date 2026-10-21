@@ -42,8 +42,7 @@ internal sealed partial class SmokeScenario
         Check(!_scanGate.IsBusy(_libraryId) && _scanGate.GetWaits().Count == 0, "Sperre frei, niemand wartet");
 
         // (2) Manueller Scan wartet auf einen Datei-Batch → Scan-Panel „Wartet auf laufende Datei-Operation…“ → startet danach
-        _navigation.NavigateTo(NavigationTags.Library);
-        await WaitUntilAsync(() => _navigation.CurrentTag == NavigationTags.Library, ShortWait, "Bibliotheksseite").ConfigureAwait(true);
+        await OpenSettingsSectionAsync(NavigationTags.Library, "Bibliotheksseite").ConfigureAwait(true);
         _lastScan = null;
         Task scanRun;
         using (await _scanGate.AcquireForFileOperationAsync(_libraryId, CancellationToken.None).ConfigureAwait(true))

@@ -8,16 +8,20 @@ namespace PhotoViewerV3.Shell;
 /// Implementierung von <see cref="INavigationService"/>: Das MainWindow bindet sich per <see cref="Attach"/>
 /// mit einem Delegaten auf NavigationView.Navigate(tag) an und meldet Klick-Navigationen über
 /// <see cref="NotifyNavigated"/> zurück, damit CurrentTag und das Navigated-Ereignis konsistent bleiben.
+/// Reiter-Tags der Einstellungen (ADR-0042) setzen <see cref="SettingsSectionState.SelectedSection"/> und öffnen die
+/// Einstellungen — so funktionieren Aufrufe wie „Tags verwalten…“ (NavigateTo(Tags)) ohne eigene Seite weiter.
 /// </summary>
 public sealed class NavigationService : INavigationService
 {
     private readonly ILogger<NavigationService> _logger;
+    private readonly SettingsSectionState _sections;
     private Func<string, bool>? _navigate;
     private string? _pendingTag;
 
-    public NavigationService(ILogger<NavigationService> logger)
+    public NavigationService(ILogger<NavigationService> logger, SettingsSectionState sections)
     {
         _logger = logger;
+        _sections = sections;
     }
 
     public string? CurrentTag { get; private set; }
@@ -42,6 +46,13 @@ public sealed class NavigationService : INavigationService
         {
             _ = dispatcher.InvokeAsync(() => NavigateTo(tag));
             return;
+        }
+
+        // Reiter der Einstellungen: Reiter wählen, dann die Einstellungen öffnen (ADR-0042)
+        if (NavigationTags.IsSettingsSection(tag))
+        {
+            _sections.SelectedSection = tag;
+            tag = NavigationTags.Settings;
         }
 
         if (_navigate is null)

@@ -1,0 +1,141 @@
+<UserControl x:Class="PhotoViewerV3.Settings.Sections.SettingsFacesSection"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:settings="clr-namespace:PhotoViewerV3.Settings"
+             xmlns:faces="clr-namespace:PhotoViewerV3.Faces"
+             xmlns:facedata="clr-namespace:PhotoViewerV3.Settings.FaceData"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance settings:SettingsViewModel}"
+             d:DesignWidth="1000"
+             x:Name="Root">
+    <!-- Einstellungen › Gesichter (ADR-0042; Services/Faces + Wpf/Faces, ADR-0035); DataContext = SettingsViewModel -->
+    <UserControl.Resources>
+        <ResourceDictionary Source="SettingsStyles.xaml" />
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Style="{StaticResource SectionPanel}">
+            <TextBlock Style="{StaticResource Lead}" Text="Gesichter im Hintergrund erkennen und Personen zuordnen — vollständig auf diesem PC." />
+
+            <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,12"
+                       Text="Die Gesichtserkennung ist in diesem Programmteil nicht verfügbar."
+                       Visibility="{Binding Faces, Converter={StaticResource InvNullToVis}}" />
+
+            <Border Style="{StaticResource SectionCard}"
+                    DataContext="{Binding Faces}"
+                    Visibility="{Binding Converter={StaticResource NullToVis}}"
+                    AutomationProperties.Name="Gesichtserkennung">
+                <StackPanel>
+                    <ui:TextBlock Style="{StaticResource SectionTitle}" Text="Gesichtserkennung" />
+                    <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,8"
+                               Text="Erkennt im Hintergrund Gesichter in den Fotos der aktiven Bibliothek und speichert je Gesicht einen Fingerabdruck im Katalog — vollständig auf diesem PC, nichts verlässt den Rechner. Videos werden noch nicht analysiert. Erkannte Gesichter benennst du in der Lightbox (Taste F); die Galerie filtert und sucht nach Personen." />
+                    <ui:ToggleSwitch Content="Gesichter im Hintergrund erkennen"
+                                     IsChecked="{Binding IsEnabled, Mode=TwoWay}"
+                                     AutomationProperties.Name="Gesichter im Hintergrund erkennen" />
+                    <CheckBox Margin="0,8,0,0" Content="Grafikkarte verwenden (DirectML; sonst Prozessor)"
+                              IsChecked="{Binding UseGpu, Mode=TwoWay}"
+                              AutomationProperties.Name="Grafikkarte für die Gesichtserkennung verwenden" />
+
+                    <!-- Mindestgröße für Gesichter (0.2.40, ADR-0040) -->
+                    <StackPanel Margin="0,10,0,0" Visibility="{Binding HasMinFaceSize, Converter={StaticResource BoolToVis}}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Kleine Gesichter automatisch ignorieren:" VerticalAlignment="Center" />
+                            <ComboBox Margin="8,0,0,0" MinWidth="220"
+                                      ItemsSource="{Binding MinFaceSizeChoices}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                      SelectedValue="{Binding SelectedMinFaceSize, Mode=TwoWay}"
+                                      AutomationProperties.Name="Mindestgröße für Gesichter" />
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0"
+                                   Text="Sehr kleine Gesichter (meist Menschen im Hintergrund) erkennt das Modell unzuverlässig. Sie werden wie „ignorieren“ behandelt — keine Vorschläge, keine Gruppen — und stehen unter Personen → Ignorierte Gesichter. Ein anderer Wert oder „Aus“ holt sie zurück; selbst ignorierte und bestätigte Gesichter bleiben unberührt." />
+                        <TextBlock Margin="0,4,0,0" FontSize="12" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
+                                   Text="{Binding MinFaceSizeMessage}"
+                                   Visibility="{Binding MinFaceSizeMessage, Converter={StaticResource NullToVis}}" />
+                    </StackPanel>
+
+                    <Grid Margin="0,12,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource Label}" Text="Modell" />
+                        <TextBlock Grid.Row="0" Grid.Column="1" Style="{StaticResource ValueText}"
+                                   Text="{Binding ModelStatusText}" ToolTip="{Binding ModelFolder}" />
+                        <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource Label}" Text="Index" Margin="0,8,12,0" />
+                        <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource ValueText}" Margin="0,8,0,0"
+                                   Text="{Binding IndexStatusText}" ToolTip="{Binding IndexStatusText}" />
+                        <ui:Button Grid.Row="1" Grid.Column="2" Content="Index neu aufbauen" Icon="{ui:SymbolIcon ArrowClockwise24}"
+                                   Margin="12,6,0,0"
+                                   Command="{Binding RebuildIndexCommand}"
+                                   AutomationProperties.Name="Gesichts-Index neu aufbauen" />
+                    </Grid>
+
+                    <ui:Button Margin="0,10,0,0" Icon="{ui:SymbolIcon ArrowDownload24}"
+                               Content="{x:Static faces:FaceSettingsViewModel.DownloadButtonText}"
+                               Command="{Binding DownloadModelCommand}"
+                               Visibility="{Binding IsModelReady, Converter={StaticResource InvBoolToVis}}"
+                               AutomationProperties.Name="Modell für die Gesichtserkennung herunterladen" />
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0"
+                                Visibility="{Binding IsDownloading, Converter={StaticResource BoolToVis}}">
+                        <ProgressBar Width="260" Height="4" Minimum="0" Maximum="100" VerticalAlignment="Center"
+                                     Value="{Binding DownloadPercent, Mode=OneWay}" />
+                        <TextBlock Style="{StaticResource ValueText}" Margin="12,0,0,0" Text="{Binding DownloadText}" />
+                        <ui:Button Content="Abbrechen" Margin="12,0,0,0"
+                                   Command="{Binding CancelDownloadCommand}"
+                                   AutomationProperties.Name="Modell-Download abbrechen" />
+                    </StackPanel>
+
+                    <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
+                               Text="{Binding Message}"
+                               Visibility="{Binding Message, Converter={StaticResource NullToVis}}">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding MessageIsError}" Value="True">
+                                        <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <!-- Gesichtsdaten löschen (0.2.38, Wpf/Settings/FaceData): eigener DataContext = SettingsViewModel.FaceData -->
+                    <StackPanel Margin="0,14,0,0"
+                                DataContext="{Binding DataContext.FaceData, ElementName=Root}"
+                                Visibility="{Binding Converter={StaticResource NullToVis}}">
+                        <ui:Button Icon="{ui:SymbolIcon Delete24}"
+                                   Content="Gesichtsdaten löschen…"
+                                   Command="{Binding EraseCommand}"
+                                   AutomationProperties.Name="Gesichtsdaten löschen" />
+                        <TextBlock Style="{StaticResource Hint}" Margin="0,6,0,0"
+                                   Text="Löscht für die aktive Bibliothek Personen, Gesichter, Fingerabdrücke, Ablehnungen und den Gesichter-Cache — die Fotos bleiben. Danach ist die Gesichtserkennung aus." />
+                        <TextBlock Style="{StaticResource Hint}" Margin="0,2,0,0"
+                                   Text="{x:Static facedata:FaceDataSettingsViewModel.PrivacyText}" />
+                        <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
+                                   Text="{Binding Message}"
+                                   Visibility="{Binding Message, Converter={StaticResource NullToVis}}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding MessageIsError}" Value="True">
+                                            <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

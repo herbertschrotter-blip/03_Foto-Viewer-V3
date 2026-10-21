@@ -20,6 +20,11 @@
     <InternalsVisibleTo Include="PhotoViewerV3.Wpf.Tests" />
   </ItemGroup>
 
+  <!-- Einstellungen › Info → „Änderungsprotokoll“ (ADR-0042): CHANGELOG.md neben die EXE (Debug-Ausgabe und portables Paket) -->
+  <ItemGroup>
+    <None Include="$(ChangelogFile)" Link="CHANGELOG.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Visible="false" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\PhotoViewerV3.Domain\PhotoViewerV3.Domain.csproj" />
     <ProjectReference Include="..\PhotoViewerV3.Data\PhotoViewerV3.Data.csproj" />

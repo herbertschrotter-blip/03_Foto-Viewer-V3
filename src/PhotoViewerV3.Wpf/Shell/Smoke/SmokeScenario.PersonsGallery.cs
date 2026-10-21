@@ -184,8 +184,7 @@ internal sealed partial class SmokeScenario
         await CheckLightboxFacesRememberedAsync(bertItem).ConfigureAwait(true); // 0.2.39
 
         // Einstellungen: „Gesichtsdaten löschen“ (Bestätigung ist ein echter Dialog — hier direkt nach der Bestätigung)
-        _navigation.NavigateTo(NavigationTags.Settings);
-        await WaitUntilAsync(() => _navigation.CurrentTag == NavigationTags.Settings, ShortWait, "Einstellungen").ConfigureAwait(true);
+        await OpenSettingsSectionAsync(NavigationTags.SettingsFaces, "Einstellungen").ConfigureAwait(true);
         Check(_settings.FaceData is not null, "Abschnitt „Gesichtsdaten löschen“ vorhanden");
         await Task.Delay(300).ConfigureAwait(true);
         var eraseButton = FindByAutomationName(Application.Current.MainWindow, "Gesichtsdaten löschen", typeof(Wpf.Ui.Controls.Button));

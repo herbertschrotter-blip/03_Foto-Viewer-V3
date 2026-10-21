@@ -124,6 +124,7 @@ public partial class App : Application
         services.AddSorterUi();
         services.AddTagManagement(); // Seite „Tags“ (Wpf/Settings/TagManagement, ADR-0021)
         services.AddCategoryManagement(); // Seite „Kategorien“ (Wpf/Settings/CategoryManagement, ADR-0027)
+        services.AddSettingsInfo(); // Einstellungen › Info (Wpf/Settings/Info, ADR-0042)
         services.AddFacesUi(); // Gesichtserkennung: WIC-Lader + Einstellungs-Abschnitt (Wpf/Faces, ADR-0035)
         services.AddPersonsUi(); // Seite „Personen“: Zuordnen, Gruppen, Gesichts-Ausschnitte (Wpf/Persons, ADR-0037)
         services.AddFaceDataSettings(); // „Gesichtsdaten löschen…“ in den Einstellungen (Wpf/Settings/FaceData, 0.2.38)

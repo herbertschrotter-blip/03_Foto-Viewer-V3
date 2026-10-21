@@ -30,8 +30,11 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
+            <!-- Seit 0.2.44 Reiter „Bibliotheken & Eingänge“ der Einstellungen (ADR-0042): Überschrift = Reiter, hier nur die Einleitung -->
             <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                <ui:TextBlock FontTypography="Title" Text="Bibliotheken" />
+                <TextBlock FontSize="13" TextWrapping="Wrap" Margin="0,0,0,4"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Text="Woher die Fotos kommen und wohin sie verschoben werden." />
                 <ui:TextBlock FontTypography="Caption"
                               TextWrapping="Wrap"
                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
@@ -185,6 +188,7 @@
             </StackPanel>
 
             <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+              <StackPanel>
                 <ItemsControl ItemsSource="{Binding Libraries}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="{x:Type local:LibraryListItem}">
@@ -339,6 +343,10 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
+                <!-- Fußbereich unter der Liste (Einstellungen setzen hier die Ordnerüberwachung ein, ADR-0042) -->
+                <ContentControl x:Name="FooterHost" Focusable="False"
+                                Visibility="{Binding IsEmptyStateVisible, Converter={StaticResource InvBoolToVis}}" />
+              </StackPanel>
             </ScrollViewer>
         </Grid>
     </Grid>

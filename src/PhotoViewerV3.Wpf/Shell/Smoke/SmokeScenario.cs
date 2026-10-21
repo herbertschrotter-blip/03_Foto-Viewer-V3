@@ -162,6 +162,7 @@ internal sealed partial class SmokeScenario
         _personsPage = services.GetService<PhotoViewerV3.Persons.ViewModels.PersonsViewModel>();
         _recognition = services.GetService<PhotoViewerV3.Services.Faces.Assignment.IFaceRecognitionService>();
         _personsDialogs = services.GetService<SmokePersonsDialogs>();
+        InitSettingsTabs(services); // Einstellungs-Reiter, Info, Bibliotheks-Umschalter (ADR-0042)
         _messenger.Register<SmokeScenario, ScanCompletedMessage>(this, static (r, m) => r._lastScan = m.Result);
     }
 
@@ -225,6 +226,7 @@ internal sealed partial class SmokeScenario
         await StepAsync("Personen: Gruppe benennen (Ausreißer abgewählt), Vorschlag bestätigen/ablehnen, Zusammenführen", PersonsAsync).ConfigureAwait(true);
         await StepAsync("Personen in Galerie/Lightbox: Filter, Suche, Spalte, Rahmen, bestätigen, Gesichtsdaten löschen", PersonsGalleryAsync).ConfigureAwait(true);
         await StepAsync("Kombinierte Filter: Bilder + Favoriten + Tag + Bewertung, × je Bedingung, Filter zurücksetzen (Ordnerauswahl bleibt)", CombinedFiltersAsync).ConfigureAwait(true); // 0.2.43
+        await StepAsync("Einstellungen-Reiter und Info: Navigation ohne Bibliothek/Tags/Kategorien, alle Reiter, Info-Version = CHANGELOG, Umschalter, Eingang auf der Ordner-Seite", SettingsTabsAndInfoAsync).ConfigureAwait(true);
         await StepAsync("Ordnerüberwachung: Datei kopieren → automatischer Diff-Scan → Galerie", WatchAsync).ConfigureAwait(true);
         if (_cleanup)
         {
@@ -320,8 +322,7 @@ internal sealed partial class SmokeScenario
         Check(dupe is InvalidOperationException, "Ordner innerhalb der Archiv-Wurzel wird als Eingang abgelehnt");
 
         // (2) Incremental-Scan über beide Wurzeln
-        _navigation.NavigateTo(NavigationTags.Library);
-        await WaitUntilAsync(() => _navigation.CurrentTag == NavigationTags.Library, ShortWait, "Bibliotheksseite").ConfigureAwait(true);
+        await OpenSettingsSectionAsync(NavigationTags.Library, "Bibliotheksseite").ConfigureAwait(true);
         _lastScan = null;
         await _library.RunSmokeScanAsync(_root).ConfigureAwait(true);
         Check(_library.ErrorMessage is null && !_library.ScanSummaryIsWarning, $"Aktualisieren mit Eingang: {_library.ScanSummary}");
@@ -456,8 +457,7 @@ internal sealed partial class SmokeScenario
 
         File.Copy(sources[0], Path.Combine(deep, "sm03_0001.jpg"), overwrite: true);
         var inboxRoot = await _libraries.AddRootAsync(_libraryId, inbox, LibraryRootRole.Inbox).ConfigureAwait(true);
-        _navigation.NavigateTo(NavigationTags.Library);
-        await WaitUntilAsync(() => _navigation.CurrentTag == NavigationTags.Library, ShortWait, "Bibliotheksseite").ConfigureAwait(true);
+        await OpenSettingsSectionAsync(NavigationTags.Library, "Bibliotheksseite").ConfigureAwait(true);
         _lastScan = null;
         await _library.RunSmokeScanAsync(_root).ConfigureAwait(true);
         Check(_lastScan is { Mode: ScanMode.Incremental, Outcome: ScanOutcome.Completed, Added: 4, RootsScanned: 2 },
@@ -560,9 +560,21 @@ internal sealed partial class SmokeScenario
     private async Task StartPageAsync()
     {
         var active = await _libraries.GetActiveAsync().ConfigureAwait(true);
-        var expected = active is null ? NavigationTags.Library : NavigationTags.Gallery;
         await WaitUntilAsync(() => _navigation.CurrentTag is not null, ShortWait, "erste Navigation").ConfigureAwait(true);
-        Check(_navigation.CurrentTag == expected, $"Startseite = {expected} (aktive Bibliothek: {active?.Name ?? "keine"})");
+        // Ohne Bibliothek (Ersteinrichtung): Einstellungen › Bibliotheken & Eingänge (ADR-0042), sonst Galerie
+        if (active is null)
+        {
+            await WaitUntilAsync(() => IsOnSettingsSection(NavigationTags.Library), ShortWait, "Reiter Bibliotheken & Eingänge").ConfigureAwait(true);
+            Check(IsOnSettingsSection(NavigationTags.Library),
+                $"Startseite ohne Bibliothek = Einstellungen › Bibliotheken & Eingänge ({_navigation.CurrentTag}/{_settingsSections.SelectedSection})");
+            await WaitUntilAsync(() => !_switcher.HasLibrary && _switcher.ActiveName == "Keine Bibliothek", ShortWait, "Umschalter ohne Bibliothek").ConfigureAwait(true);
+            Check(_switcher.CaptionText == "Bibliothek einrichten", $"Umschalter: {_switcher.ActiveName} / {_switcher.CaptionText}");
+        }
+        else
+        {
+            Check(_navigation.CurrentTag == NavigationTags.Gallery, $"Startseite = Galerie (aktive Bibliothek: {active.Name})");
+        }
+
         await SnapshotAsync("01-start-bibliothek").ConfigureAwait(true);
     }
 
@@ -1015,7 +1027,13 @@ internal sealed partial class SmokeScenario
 
     private async Task SettingsAsync()
     {
-        _navigation.NavigateTo(NavigationTags.Settings);
+        // Theme auf dem Reiter „Darstellung“ (ADR-0042); Cache/DB/Formate stehen unter „Speicher & Wartung“ (gleiches ViewModel)
+        await OpenSettingsSectionAsync(NavigationTags.SettingsAppearance, "Einstellungen › Darstellung").ConfigureAwait(true);
+        // Seit 0.2.44 startet die App ohne Bibliothek in den Einstellungen — deren Werte (Cache damals leer) stehen schon da;
+        // das Laden beim Anzeigen abwarten und einmal frisch laden, statt den alten Stand zu prüfen
+        await Task.Delay(200).ConfigureAwait(true);
+        await WaitUntilAsync(() => !_settings.LoadCommand.IsRunning, ShortWait, "Einstellungen laden").ConfigureAwait(true);
+        await _settings.LoadCommand.ExecuteAsync(null).ConfigureAwait(true);
         await WaitUntilAsync(
             () => _navigation.CurrentTag == NavigationTags.Settings && _settings.ThumbnailCacheText != "wird berechnet…" && _settings.AppVersionText.Length > 0,
             ShortWait,
@@ -1055,8 +1073,7 @@ internal sealed partial class SmokeScenario
     private async Task RescanAsync()
     {
         Check(_mediaCount >= MinMediaFilesForRescan, $"Testbibliothek hat {_mediaCount} Mediendateien (mindestens {MinMediaFilesForRescan}, sonst greift der Mass-Missing-Guard)");
-        _navigation.NavigateTo(NavigationTags.Library);
-        await WaitUntilAsync(() => _navigation.CurrentTag == NavigationTags.Library, ShortWait, "Bibliotheksseite").ConfigureAwait(true);
+        await OpenSettingsSectionAsync(NavigationTags.Library, "Bibliotheksseite").ConfigureAwait(true);
         var maxIdBefore = await DbScalarAsync<int>("SELECT COALESCE(MAX(Id), 0) FROM Files").ConfigureAwait(true);
         var favoritesBefore = await DbScalarAsync<int>("SELECT COUNT(*) FROM Files WHERE IsFavorite = 1").ConfigureAwait(true);
 
@@ -1135,8 +1152,7 @@ internal sealed partial class SmokeScenario
         var userDataBefore = await DbRowsAsync(userDataSql, ("$lib", _libraryId)).ConfigureAwait(true);
         Check(userDataBefore.Count > 0, $"vor ClearAndRescan: {userDataBefore.Count} Dateien mit Favorit/Bewertung");
         var previousMaxId = await DbScalarAsync<int>("SELECT COALESCE(MAX(Id), 0) FROM Files").ConfigureAwait(true);
-        _navigation.NavigateTo(NavigationTags.Library);
-        await WaitUntilAsync(() => _navigation.CurrentTag == NavigationTags.Library, ShortWait, "Bibliotheksseite").ConfigureAwait(true);
+        await OpenSettingsSectionAsync(NavigationTags.Library, "Bibliotheksseite").ConfigureAwait(true);
         _lastScan = null;
         await _library.RunSmokeRebuildAsync(_root).ConfigureAwait(true);
         Check(_library.ErrorMessage is null && _library.IsScanSummaryOpen && !_library.ScanSummaryIsWarning, $"ClearAndRescan: {_library.ScanSummary}");
@@ -1291,8 +1307,7 @@ internal sealed partial class SmokeScenario
         }
 
         // (1) Aktualisieren nimmt das Archiv in den Katalog auf
-        _navigation.NavigateTo(NavigationTags.Library);
-        await WaitUntilAsync(() => _navigation.CurrentTag == NavigationTags.Library, ShortWait, "Bibliotheksseite").ConfigureAwait(true);
+        await OpenSettingsSectionAsync(NavigationTags.Library, "Bibliotheksseite").ConfigureAwait(true);
         _lastScan = null;
         await _library.RunSmokeScanAsync(_root).ConfigureAwait(true);
         Check(_lastScan is { Mode: ScanMode.Incremental, Outcome: ScanOutcome.Completed, Added: 1 }, $"Incremental nimmt das ZIP auf (Added={_lastScan?.Added})");
@@ -1512,9 +1527,9 @@ internal sealed partial class SmokeScenario
         Check(_gallery.ShowGrid && !_gallery.ShowList, "zurück zur Kachelansicht");
 
         // Verwaltungsseite „Tags“
-        _navigation.NavigateTo(NavigationTags.Tags);
+        _navigation.NavigateTo(NavigationTags.Tags); // wie „Tags verwalten…“ → Einstellungen › Tags (ADR-0042)
         await WaitUntilAsync(
-            () => _navigation.CurrentTag == NavigationTags.Tags && _tagManagement.Tags.Any(t => t.Id == urlaub.Id && t.FileCount == 3),
+            () => IsOnSettingsSection(NavigationTags.Tags) && _tagManagement.Tags.Any(t => t.Id == urlaub.Id && t.FileCount == 3),
             ShortWait,
             "Tag-Verwaltung geladen").ConfigureAwait(true);
         Check(_tagManagement.Tags.First(t => t.Id == familie.Id).FileCount == 2, $"Verwaltung: {_tagManagement.SummaryText}");
@@ -1626,9 +1641,9 @@ internal sealed partial class SmokeScenario
         await Task.Delay(300).ConfigureAwait(true);
 
         // Verwaltungsseite „Kategorien“
-        _navigation.NavigateTo(NavigationTags.Categories);
+        _navigation.NavigateTo(NavigationTags.Categories); // Einstellungen › Kategorien (ADR-0042)
         await WaitUntilAsync(
-            () => _navigation.CurrentTag == NavigationTags.Categories && _categoryManagement.Categories.Any(c => c.Id == xx.Id && c.FileCount == 3),
+            () => IsOnSettingsSection(NavigationTags.Categories) && _categoryManagement.Categories.Any(c => c.Id == xx.Id && c.FileCount == 3),
             ShortWait,
             "Kategorien-Verwaltung geladen").ConfigureAwait(true);
         await SnapshotAsync("16-kategorien-verwaltung").ConfigureAwait(true);
