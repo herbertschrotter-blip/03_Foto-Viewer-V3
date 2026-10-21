@@ -2,8 +2,11 @@
 
 Native Windows-Desktop-App (C# / .NET 10 / WPF / WPF-UI) zum Ansehen, Bewerten, Sortieren und
 Verschieben von Foto- und Video-Bibliotheken (50k–500k Dateien) mit SQLite-Katalog. Nachfolger
-der PowerShell-Web-App V2 (`../03_Foto-Viewer-V2`), die bis zur Ablösung im Alltag läuft.
+der PowerShell-Web-App V2 (`D:\OneDrive\Dokumente\02 Arbeit\05 Vorlagen - Scripte\03_Foto-Viewer-V2`), die bis zur
+Ablösung im Alltag läuft.
 
+- Repo lokal unter `D:\Code\Lumora` (seit 0.4.2, nicht mehr in OneDrive); GitHub `herbertschrotter-blip/03_Foto-Viewer-V3` ist Sicherung und Abgleich zwischen Geräten.
+- Werkzeuge außerhalb des Repos: `D:\Code\Lumora-Werkzeuge` — `testlib\` (Rauchtest-Testbibliothek, 43 Dateien), `scripts\run-smoke-v.ps1` (Rauchtest gegen einen Worktree, Ablage in `runs\`), Konflikt-Helfer (`conflib.py`, `resolve_cl.py`, `hunks.py`, `builderrs.py`), `scripts\brief-common.md` (gemeinsame Agenten-Regeln), `models\` (buffalo_l, SigLIP 2 nur für Tests — nie ins Repo), `geodata\` (GeoNames-Rohdaten für `build/geonames`).
 - Plan: `PLAN.md` · Entscheidungen: `docs/adr/` · Messungen: `docs/spikes/` · Mockups: `mockups/`
 - Doku, Kommentare und Commit-Messages auf Deutsch; Code-Bezeichner auf Englisch.
 
@@ -15,7 +18,7 @@ Branch-Policy: current
 - Module: Domain, Data, Services, Wpf, Tests, Docs, Deps, Build
 - Versionsquelle: changelog:CHANGELOG.md
 - Versionsregel: Vorabversion 0.x — jede eingespielte Änderung zählt hoch; Feature → MINOR nur beim Abschluss einer Welle/eines Releases, sonst PATCH
-- Push-Policy: nie automatisch (Repo liegt in OneDrive, Push erzeugt Sync-Konflikte in `.git/objects`)
+- Push-Policy: nie automatisch — Herbert pusht selbst (`git push origin main --tags`); am Ende einer Sitzung den Push anbieten
 - Pre-Commit-Checks: build, unit
 - Doku-Check:
   - CHANGELOG.md → bei jedem Commit (oberster Eintrag = Version)

@@ -66,7 +66,7 @@ vorhandene Kataloge laufen ohne Umzug weiter ([ADR-0047](docs/adr/0047-produktna
 ## Build & Start
 
 ```powershell
-cd "D:\OneDrive\Dokumente\02 Arbeit\05 Vorlagen - Scripte\03_Foto-Viewer-V3"
+cd "D:\Code\Lumora"
 dotnet build PhotoViewerV3.slnx -c Debug --nologo
 dotnet run --project src/PhotoViewerV3.Wpf -c Debug
 ```

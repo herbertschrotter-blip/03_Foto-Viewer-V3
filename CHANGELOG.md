@@ -3,6 +3,17 @@
 Alle nennenswerten Änderungen an Lumora (bis 0.2.48 „PhotoViewer V3“). Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.4.2] — 2026-10-21
+
+### Docs — Repo zieht aus OneDrive nach `D:\Code\Lumora`
+- Das Repo liegt jetzt lokal unter `D:\Code\Lumora` (frischer Klon, Remote GitHub `herbertschrotter-blip/03_Foto-Viewer-V3`);
+  Builds und Tests laufen ohne OneDrive-Synchronisation, die Sync-Konflikte in `.git/objects` beim Push entfallen.
+  GitHub ist Sicherung und Abgleich zwischen Geräten — am Ende einer Sitzung pushen.
+- Werkzeuge außerhalb des Repos nach `D:\Code\Lumora-Werkzeuge` (Rauchtest-Testbibliothek, `run-smoke-v.ps1`,
+  Konflikt-Helfer, gemeinsame Agenten-Regeln, Test-Modelle, GeoNames-Rohdaten) — vorher im temporären Sitzungsordner.
+- CLAUDE.md: Pfad zu V2 absolut, Repo- und Werkzeug-Ort, Push-Policy ohne OneDrive-Begründung; README: Build-Pfad.
+- Der alte Ordner `…\05 Vorlagen - Scripte\03_Foto-Viewer-V3` (OneDrive) bleibt als Archiv liegen, bis Herbert ihn löscht.
+
 ## [0.4.1] — 2026-10-21
 
 ### Feature (ADR-0055) — Orte: umschaltbare moderne Kartenstile und gemeinsamer Filter für Galerie, Ordner und Orte
