@@ -3,6 +3,24 @@
 Alle nennenswerten Änderungen an Lumora (bis 0.2.48 „PhotoViewer V3“). Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.50] — 2026-10-21
+
+### Fix — Personen-Kacheln ohne Binding-Fehler, Design-Time-Datenbank nie mehr der echte Katalog
+- **Personen-Seite:** Titelbilder der Personen- und Gruppen-Kacheln werden als `Image` mit runder bzw. abgerundeter
+  `Clip`-Geometrie gezeichnet statt als `ImageBrush`-Füllung. Beim Recyceln eines Containers (DataContext kurz
+  `DisconnectedItem`) meldete der Freezable-Pinsel einen Binding-Fehler (`Image` auf `NamedObject`), sichtbar als
+  gelegentlich „2 WPF-Binding-Fehler“ im Rauchtest (2 von 5 Läufen). Ein FrameworkElement überspringt diesen Zustand still.
+- **`DesignTimeLibraryContextFactory`** (nur für `dotnet ef`) zeigt auf eine Wegwerf-DB im Temp-Ordner
+  (`%TEMP%\PhotoViewerV3-DesignTime\design-time.db`) statt auf `%LocalAppData%\PhotoViewerV3\library.db`. Ein
+  `dotnet ef migrations remove --force` beim Bau von 0.2.48 hätte sonst den echten Katalog öffnen können (geprüft:
+  Katalog unverändert, alle Migrationen vorhanden, `quick_check` ok).
+- **Zusammenbau 0.2.46–0.2.49:** Collage-Vorlagen relativ eingebunden (`/PhotoViewerV3;component/…` zeigte nach der
+  Umbenennung zu `Lumora.dll` ins Leere), Spalten von Collage (Bildmaße) und Aufnahmedatum gemeinsam in `FileColumns`;
+  ModelSnapshot geprüft (`dotnet ef migrations has-pending-model-changes`: keine Änderungen).
+- **Rauchtest „Collage-Ansicht“** sucht die SICHTBARE `GalleryView` (Galerie- und Ordner-Seite haben je eine Instanz);
+  vorher konnte er je nach Schrittfolge die verborgene Ordner-Instanz erwischen und lief in den Timeout. Die
+  Timeout-Meldung nennt jetzt Panel-Zustand und Seitengröße.
+
 ## [0.2.49] — 2026-10-21
 
 ### Feature (ADR-0047) — Neuer Produktname Lumora mit Schriftzug und App-Symbol

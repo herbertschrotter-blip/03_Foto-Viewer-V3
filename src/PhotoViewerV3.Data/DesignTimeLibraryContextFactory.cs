@@ -5,15 +5,16 @@ namespace PhotoViewerV3.Data;
 
 /// <summary>
 /// Wird von 'dotnet ef' beim Erzeugen von Migrations / SQL-Scripts aufgerufen.
-/// Verwendet einen Design-Time-spezifischen DB-Pfad — die Production-DB wird
-/// durch den Application-Bootstrap (App.xaml.cs + DI) konfiguriert.
+/// Verwendet eine Wegwerf-DB im Temp-Ordner — NIE den echten Katalog unter %LocalAppData%\PhotoViewerV3
+/// (0.2.50: 'dotnet ef migrations remove --force' hätte sonst den Benutzer-Katalog öffnen können).
+/// Die Production-DB wird durch den Application-Bootstrap (App.xaml.cs + DI) konfiguriert.
 /// </summary>
 public sealed class DesignTimeLibraryContextFactory : IDesignTimeDbContextFactory<LibraryContext>
 {
     public LibraryContext CreateDbContext(string[] args)
     {
-        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        var dbPath = Path.Combine(localAppData, "PhotoViewerV3", "library.db");
+        var dbPath = Path.Combine(Path.GetTempPath(), "PhotoViewerV3-DesignTime", "design-time.db");
+        Directory.CreateDirectory(Path.GetDirectoryName(dbPath)!);
 
         var optionsBuilder = new DbContextOptionsBuilder<LibraryContext>();
         optionsBuilder.UseSqlite($"Data Source={dbPath}");

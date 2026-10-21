@@ -25,6 +25,31 @@ namespace PhotoViewerV3.Shell.Smoke;
 /// </summary>
 internal sealed partial class SmokeScenario
 {
+    /// <summary>Erste sichtbare <see cref="GalleryView"/> unter <paramref name="root"/> (verborgene Seiten-Instanzen überspringen).</summary>
+    private static GalleryView? FindVisibleGalleryView(DependencyObject? root)
+    {
+        if (root is null)
+        {
+            return null;
+        }
+
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is GalleryView view && view.IsVisible)
+            {
+                return view;
+            }
+
+            if (FindVisibleGalleryView(child) is { } found)
+            {
+                return found;
+            }
+        }
+
+        return null;
+    }
+
     private async Task CollageAsync()
     {
         _navigation.NavigateTo(NavigationTags.Gallery);
@@ -44,14 +69,27 @@ internal sealed partial class SmokeScenario
         Check(_gallery.ShowCollage && _gallery.ShowGalleryList && !_gallery.ShowGrid && !_gallery.ShowList && _gallery.IsTileSizeAdjustable,
             "Collage aktiv (Galerie-Liste sichtbar, Regler sichtbar)");
 
-        var galleryView = FindVisualChild<GalleryView>(Application.Current.MainWindow);
-        var list = galleryView is null ? null : FindVisualChild<GalleryListBox>(galleryView);
+        // Die SICHTBARE GalleryView (Galerie- und Ordner-Seite haben je eine Instanz; 0.2.50)
+        GalleryView? galleryView = null;
+        GalleryListBox? list = null;
         JustifiedTilePanel? panel = null;
-        await WaitUntilAsync(
-            () => (panel = list is null ? null : FindVisualChild<JustifiedTilePanel>(list)) is { } p
-                  && p.RowCount > 0 && p.ViewportHeight > 0 && p.Layout.ItemCount == _gallery.CurrentPage.Count,
-            ShortWait,
-            "Collage-Panel umgebrochen").ConfigureAwait(true);
+        try
+        {
+            await WaitUntilAsync(
+                () => (galleryView = FindVisibleGalleryView(Application.Current.MainWindow)) is not null
+                      && (list = FindVisualChild<GalleryListBox>(galleryView)) is not null
+                      && (panel = FindVisualChild<JustifiedTilePanel>(list)) is { } p
+                      && p.RowCount > 0 && p.ViewportHeight > 0 && p.Layout.ItemCount == _gallery.CurrentPage.Count,
+                ShortWait,
+                "Collage-Panel umgebrochen").ConfigureAwait(true);
+        }
+        catch (SmokeCheckException ex)
+        {
+            throw new SmokeCheckException(
+                $"{ex.Message} (GalleryView sichtbar: {galleryView is not null}, ListBox: {list is not null}, Panel: {panel is not null}, " +
+                $"Reihen {panel?.RowCount}, Viewport {panel?.ViewportHeight:N0}, Layout-Items {panel?.Layout.ItemCount}, Seite {_gallery.CurrentPage.Count}, " +
+                $"ListBox sichtbar {list?.IsVisible}, Panel-Größe {panel?.ActualWidth:N0}×{panel?.ActualHeight:N0})");
+        }
         Check(FindVisualChild<VirtualizingTilePanel>(list!) is null, "Kachel-Panel ersetzt");
         await Task.Delay(400).ConfigureAwait(true); // die Einstellung wird im Hintergrund geschrieben
         var storedMode = await DbScalarAsync<string>("SELECT Value FROM Settings WHERE Key = $k", ("$k", GalleryViewSettingsStore.ViewModeKey)).ConfigureAwait(true);

@@ -72,11 +72,14 @@
                         <ui:SymbolIcon Symbol="Person24" FontSize="48" HorizontalAlignment="Center" VerticalAlignment="Center"
                                        Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
                     </Border>
-                    <Ellipse Width="130" Height="130" Visibility="{Binding Image, Converter={StaticResource NullToVis}}">
-                        <Ellipse.Fill>
-                            <ImageBrush ImageSource="{Binding Image}" Stretch="UniformToFill" />
-                        </Ellipse.Fill>
-                    </Ellipse>
+                    <!-- Image + Clip statt ImageBrush (0.2.50): Ein Freezable-Pinsel meldet beim Recyceln des Containers
+                         (DataContext kurz DisconnectedItem) einen Binding-Fehler; ein FrameworkElement überspringt das still. -->
+                    <Image Width="130" Height="130" Source="{Binding Image}" Stretch="UniformToFill"
+                           Visibility="{Binding Image, Converter={StaticResource NullToVis}}">
+                        <Image.Clip>
+                            <EllipseGeometry Center="65,65" RadiusX="65" RadiusY="65" />
+                        </Image.Clip>
+                    </Image>
                 </Grid>
                 <TextBlock Margin="0,8,0,0" Text="{Binding Name}" FontWeight="SemiBold" TextAlignment="Center" TextTrimming="CharacterEllipsis" />
                 <TextBlock Text="{Binding Details}" FontSize="11" TextAlignment="Center" TextTrimming="CharacterEllipsis"
@@ -99,11 +102,12 @@
                         <ui:SymbolIcon Symbol="PeopleQueue24" FontSize="48" HorizontalAlignment="Center" VerticalAlignment="Center"
                                        Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
                     </Border>
-                    <Border CornerRadius="8" ClipToBounds="True" Visibility="{Binding Image, Converter={StaticResource NullToVis}}">
-                        <Border.Background>
-                            <ImageBrush ImageSource="{Binding Image}" Stretch="UniformToFill" />
-                        </Border.Background>
-                    </Border>
+                    <Image Width="130" Height="130" Source="{Binding Image}" Stretch="UniformToFill"
+                           Visibility="{Binding Image, Converter={StaticResource NullToVis}}">
+                        <Image.Clip>
+                            <RectangleGeometry Rect="0,0,130,130" RadiusX="8" RadiusY="8" />
+                        </Image.Clip>
+                    </Image>
                 </Grid>
                 <TextBlock Margin="0,8,0,0" Text="{Binding Title}" FontWeight="SemiBold" TextAlignment="Center" />
                 <TextBlock Text="{Binding Hint}" FontSize="11" TextAlignment="Center" TextTrimming="CharacterEllipsis"
