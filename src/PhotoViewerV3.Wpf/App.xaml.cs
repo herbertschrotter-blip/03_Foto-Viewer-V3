@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.Messaging;
+using PhotoViewerV3.Duplicates;
 using PhotoViewerV3.Faces;
 using PhotoViewerV3.Folders;
 using PhotoViewerV3.Services.Faces.Indexing;
@@ -174,6 +175,7 @@ public partial class App : Application, ICatalogHostSwitcher
         services.AddPlacesMap(); // Seite „Orte“: Weltkarte mit Foto-Gruppen, Verorten (Wpf/Places, ADR-0051)
         services.AddMotifsUi(); // Einstellungen › Motive (Wpf/Motifs, ADR-0052)
         services.AddLibraryLinkingUi(); // „Bibliotheken verknüpfen“ in Einstellungen › Bibliotheken & Eingänge (Wpf/Library/Linking, ADR-0048)
+        services.AddDuplicatesUi(); // Seite „Doppelte“ (Wpf/Duplicates, ADR-0053)
 
         services.AddSingleton<MainWindow>();
     }
@@ -320,6 +322,9 @@ public partial class App : Application, ICatalogHostSwitcher
 
         // Orte (ADR-0050): Koordinaten nachtragen im Hintergrund, Ortsnamen (GeoNames) vorladen
         _host.Services.GetRequiredService<PhotoViewerV3.Services.Places.IGeoBackfillService>().Start();
+
+        // Doppelte (ADR-0053): Prüfsummen und Bild-Fingerabdrücke im Hintergrund nach jedem Scan und einmalig für bestehende Kataloge
+        _host.Services.GetRequiredService<PhotoViewerV3.Services.Duplicates.IDuplicateIndexService>().Start();
     }
 
     // ----- Katalogwechsel (ADR-0049) -----

@@ -37,6 +37,8 @@ public sealed class LibraryContext : DbContext
     public DbSet<MotifTerm> MotifTerms => Set<MotifTerm>(); // Motive (ADR-0052)
     public DbSet<FileEmbedding> FileEmbeddings => Set<FileEmbedding>();
     public DbSet<FileMotif> FileMotifs => Set<FileMotif>();
+    public DbSet<FileFingerprint> FileFingerprints => Set<FileFingerprint>(); // Doppelte erkennen (ADR-0053)
+    public DbSet<DuplicateCleanupUndo> DuplicateCleanupUndo => Set<DuplicateCleanupUndo>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

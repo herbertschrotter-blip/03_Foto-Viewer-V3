@@ -115,7 +115,7 @@ außerhalb von OneDrive), `-NoZip` lässt das ZIP weg, `-FrameworkDependent` bau
 
 ### Navigation (seit 0.2.44, ADR-0042)
 Die linke Leiste zeigt ganz oben das App-Symbol mit dem Schriftzug „lumora“, darunter den **Bibliotheks-Umschalter** (Name der aktiven Bibliothek; Klick → andere Bibliothek
-wählen, verknüpfte Bibliotheken als **Alle verknüpften (Name)** gemeinsam ansehen oder **Bibliotheken verwalten…**), darunter **Galerie, Ordner, Personen, Orte, Sortieren** und unten
+wählen, verknüpfte Bibliotheken als **Alle verknüpften (Name)** gemeinsam ansehen oder **Bibliotheken verwalten…**), darunter **Galerie, Ordner, Personen, Orte, Doppelte, Sortieren** und unten
 **Einstellungen**. Bibliothek, Tags und Kategorien richtet man selten ein — sie sind Reiter der Einstellungen:
 **Bibliotheken & Eingänge · Tags · Kategorien · Gesichter · Archive · Darstellung · Speicher & Wartung · Info**.
 Tags und Kategorien **vergeben** geht wie bisher in der Galerie (Rechtsklick, Strg+T, Strg+K, Lightbox); „Tags
@@ -220,7 +220,8 @@ Kopfzeile (0.2.43, ADR-0041):
 - **Filterkarte**, Zeile **Datei**: Dateiart (Alle / Bilder / Videos / Archive), **Nur Favoriten**, **Bewertung**
   (egal / ab 1–4 Sternen / nur 5 Sterne), **Ablage** (Überall / Noch im Eingang / In der Bibliothek) und rechts
   **Filter zurücksetzen** mit der Zahl der aktiven Filter. Zeile **Inhalt**: **Tags**, **Personen** (sobald es Personen
-  oder Gesichter gibt) und **Kategorien** (sobald es Kategorien gibt); wirkende Filter erscheinen in Akzentfarbe mit
+  oder Gesichter gibt), **Kategorien** (sobald es Kategorien gibt) und **Doppelte** (nur Dateien, die es im Bereich
+  byte-gleich ein zweites Mal gibt — seit 0.3.1); wirkende Filter erscheinen in Akzentfarbe mit
   ihrem Wert („Tags: Urlaub“). **Alle Filter gelten gleichzeitig (UND)** — z. B. nur Bilder UND Favoriten UND Tag
   „Urlaub“ UND ohne benannte Person UND noch im Eingang. Bei aktiven Filtern sagt die Zeile **„Es gilt: Bilder UND
   Favoriten UND Tag „Urlaub“ … → 342 Treffer“**, was gerade wirkt; ✕ an einer Bedingung entfernt genau diese.
@@ -645,6 +646,30 @@ springt zum ersten Treffer).
   weiter. Bei einer versteckten Bibliothek weist eine Leiste darauf hin, dass der Kartenserver den betrachteten
   Ausschnitt sieht. Abschalten: `PHOTOVIEWERV3_MAP_TILES=off`.
 
+### Doppelte (seit 0.3.1, ADR-0053)
+Findet doppelte Fotos und Videos der aktiven Bibliothek (bzw. aller Bibliotheken in „Alle verknüpften“) und räumt sie auf.
+Lumora berechnet dafür im Hintergrund — nach jedem Scan, bei neuen Dateien und einmal für bestehende Kataloge — zwei
+Fingerabdrücke (Statusleiste „Doppelte: Prüfsummen n / m“; nur lokale Dateien, nichts wird heruntergeladen): eine
+**Prüfsumme** (SHA-256) für Dateien, deren Größe noch einmal vorkommt, und einen **Bild-Fingerabdruck** aus dem
+Vorschaubild. Solange das noch läuft, nennt die Seite „Noch n … offen — das Ergebnis ist noch unvollständig“.
+- Oben umschalten zwischen **Exakt gleich** (Byte für Byte gleich) und **Ähnlich** (verkleinert, neu gespeichert,
+  leicht beschnitten, WhatsApp-Kopie, Serienaufnahme). Bei „Ähnlich“ stellt der Regler **Ähnlichkeit** ein, wie streng
+  verglichen wird (Abstand 1–12, Standard 10; kleiner = nur fast gleiche). Fast einfarbige Bilder zählen nie als ähnlich.
+- **Eingang schon in der Bibliothek** zeigt nur Dateien im Eingang, die es im Bibliotheksordner schon gibt.
+- Jede Gruppe zeigt ihre Dateien nebeneinander (Vorschaubild, Auflösung, Größe, Aufnahmedatum, Ordner, Bewertung/Favorit,
+  Bibliothek/Eingang, bei „Ähnlich“ der Abstand). Eine Datei ist als **Behalten** vorgeschlagen — nach der Regel über der
+  Liste: höhere Auflösung → Aufnahmedatum aus der Datei → liegt schon in der Bibliothek → Bewertung, Favorit, Tags,
+  Kategorien, Personen → größere Datei → länger im Katalog; die Gruppe nennt den Grund. Mit dem Knopf an einer anderen
+  Datei behält man diese; **Aufräumen** abhaken nimmt eine Gruppe heraus. Doppelklick aufs Bild öffnet die Lightbox.
+- **Übrige in den Papierkorb (n · Größe)** fragt nach und legt alle nicht behaltenen Dateien der angehakten Gruppen in den
+  Windows-Papierkorb (wie „Papierkorb“ in der Galerie, mit Protokoll). Mit **Angaben übertragen** (Standard an) bekommt
+  die behaltene Datei vorher Favorit, die höhere Bewertung, fehlende Tags und Kategorie-Werte sowie die Personen der
+  gelöschten (auf das passende Gesicht; geht das nicht, meldet die Ergebniszeile „Personen nicht übertragbar“).
+- **Rückgängig** holt die zuletzt aufgeräumten Dateien aus dem Papierkorb zurück — mit derselben Katalog-Nummer und allen
+  Angaben (Tags, Personen, Bewertung …); was übertragen wurde, verschwindet wieder von der behaltenen Datei.
+- Liegen nach einem Scan neue Dateien im Eingang schon in der Bibliothek, meldet die Statusleiste „N Dateien im Eingang
+  sind schon in der Bibliothek“ — **Anzeigen** öffnet die Seite mit genau diesen Gruppen.
+
 ### Ordnerüberwachung
 Die Bibliotheksordner der aktiven Bibliothek werden im Hintergrund überwacht (`FileSystemWatcher` je Wurzel, rekursiv).
 Neue, gelöschte, umbenannte oder geänderte Fotos und Videos (nur Formate aus dem Formatregister; `.tmp`/`.part`,
@@ -685,6 +710,7 @@ auf einen laufenden Scan derselben Bibliothek wartet — „Wartet auf laufenden
 wird dann verworfen, bevor sie etwas ändert (beim Sortierer entfallen die restlichen Ziele; schon verschobene Dateien
 bleiben verschoben und sind rückgängig machbar). Rechts: Hinweise
 (Ordnerüberwachung: Countdown, laufende/abgeschlossene automatische Aktualisierung, angehaltene Automatik;
+Fortschritt der Doppelten-Erkennung und „N Dateien im Eingang sind schon in der Bibliothek — Anzeigen“;
 unvollständige oder fehlgeschlagene Dateivorgänge mit Details im Tooltip; Bibliothek offline) und die
 Hintergrund-Aktivität („Bereit“, wenn nichts läuft).
 

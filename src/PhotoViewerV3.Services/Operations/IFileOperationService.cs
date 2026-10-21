@@ -92,4 +92,26 @@ public interface IFileOperationService
     Task<FileOperationBatchResult?> UndoBatchAsync(int batchId, CancellationToken ct = default);
 
     Task<IReadOnlyList<OperationBatchInfo>> GetRecentBatchesAsync(int take = 50, CancellationToken ct = default);
+
+    /// <summary>
+    /// Holt die Dateien eines Papierkorb-Batches aus dem Windows-Papierkorb an ihren Ursprungsort zurück und bucht sie wieder
+    /// in den Katalog (ADR-0053, Rückgängig der Seite „Doppelte“; <c>FileOperationService.Restore.cs</c>).
+    /// <paramref name="restoreCatalog"/> darf die Files-Zeile selbst zurückschreiben (alte FileId samt Angaben) und liefert
+    /// dann deren Id; sonst entsteht eine neue Zeile. null, wenn der Batch nicht existiert. Standard: nicht unterstützt.
+    /// </summary>
+    Task<FileOperationBatchResult?> RestoreRecycledAsync(int batchId, RecycleRestoreCatalog? restoreCatalog = null, CancellationToken ct = default)
+        => throw new NotSupportedException("Zurückholen aus dem Papierkorb wird nicht unterstützt.");
 }
+
+/// <summary>Eine aus dem Papierkorb zurückgeholte Datei, die noch in den Katalog muss.</summary>
+/// <param name="OldFileId">FileId vor dem Löschen (aus dem Protokoll).</param>
+/// <param name="Path">Ursprungspfad (Datei liegt wieder dort).</param>
+/// <param name="LibraryId">Bibliothek der Wurzel, unter der der Pfad liegt.</param>
+/// <param name="FolderId">Folders-Zeile des Ursprungsordners (bei Bedarf neu angelegt).</param>
+public sealed record RecycledFile(int? OldFileId, string Path, int LibraryId, int FolderId);
+
+/// <summary>
+/// Schreibt die Files-Zeile einer zurückgeholten Datei innerhalb der laufenden Item-Transaktion (Verbindung und Transaktion
+/// des Katalogs); liefert die FileId der geschriebenen Zeile oder null, wenn der Standardweg (neue Zeile) gelten soll.
+/// </summary>
+public delegate int? RecycleRestoreCatalog(Microsoft.Data.Sqlite.SqliteConnection connection, Microsoft.Data.Sqlite.SqliteTransaction transaction, RecycledFile file);

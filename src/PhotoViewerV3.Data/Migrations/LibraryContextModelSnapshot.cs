@@ -93,6 +93,42 @@ namespace PhotoViewerV3.Data.Migrations
                     b.ToTable("CategoryValues", (string)null);
                 });
 
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.DuplicateCleanupUndo", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("BatchId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("FileId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("KeptFileId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Snapshot")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Transfer")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("UndoneAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BatchId")
+                        .HasDatabaseName("IX_DuplicateCleanupUndo_Batch");
+
+                    b.ToTable("DuplicateCleanupUndo", (string)null);
+                });
+
             modelBuilder.Entity("PhotoViewerV3.Domain.Entities.Face", b =>
                 {
                     b.Property<int>("Id")
@@ -264,6 +300,46 @@ namespace PhotoViewerV3.Data.Migrations
                         .HasDatabaseName("IX_FileEmbeddings_File_Model");
 
                     b.ToTable("FileEmbeddings", (string)null);
+                });
+
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.FileFingerprint", b =>
+                {
+                    b.Property<int>("FileId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<byte[]>("ContentHash")
+                        .HasColumnType("BLOB");
+
+                    b.Property<long?>("ContentModifiedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ContentSize")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ImageError")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("ImageHash")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("ImageHashVersion")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("ImageLowDetail")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false);
+
+                    b.Property<long?>("ImageModifiedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("FileId");
+
+                    b.HasIndex("ContentHash")
+                        .HasDatabaseName("IX_FileFingerprints_ContentHash")
+                        .HasFilter("ContentHash IS NOT NULL");
+
+                    b.ToTable("FileFingerprints", (string)null);
                 });
 
             modelBuilder.Entity("PhotoViewerV3.Domain.Entities.FileMotif", b =>
@@ -915,6 +991,15 @@ namespace PhotoViewerV3.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.DuplicateCleanupUndo", b =>
+                {
+                    b.HasOne("PhotoViewerV3.Domain.Entities.OperationBatch", null)
+                        .WithMany()
+                        .HasForeignKey("BatchId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("PhotoViewerV3.Domain.Entities.Face", b =>
                 {
                     b.HasOne("PhotoViewerV3.Domain.Entities.MediaFile", null)
@@ -984,6 +1069,15 @@ namespace PhotoViewerV3.Data.Migrations
                     b.HasOne("PhotoViewerV3.Domain.Entities.MediaFile", null)
                         .WithOne()
                         .HasForeignKey("PhotoViewerV3.Domain.Entities.FileEmbedding", "FileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("PhotoViewerV3.Domain.Entities.FileFingerprint", b =>
+                {
+                    b.HasOne("PhotoViewerV3.Domain.Entities.MediaFile", null)
+                        .WithOne()
+                        .HasForeignKey("PhotoViewerV3.Domain.Entities.FileFingerprint", "FileId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

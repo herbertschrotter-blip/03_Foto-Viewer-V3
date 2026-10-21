@@ -79,7 +79,7 @@ public sealed partial class GalleryViewModel
     /// </summary>
     public GalleryFilterState FilterState
     {
-        get => new(MediaFilter, FavoritesOnly, LocationFilter, MinRating) { Place = _placeFilter, Geo = _geoFilter }; // Ort/Karte: ADR-0050
+        get => new(MediaFilter, FavoritesOnly, LocationFilter, MinRating) { Place = _placeFilter, Geo = _geoFilter, Duplicates = DuplicateFilter }; // Ort/Karte: ADR-0050, Doppelte: ADR-0053
         set
         {
             var suppress = _suppressReload;
@@ -90,6 +90,7 @@ public sealed partial class GalleryViewModel
                 FavoritesOnly = value.FavoritesOnly;
                 LocationFilter = value.Location;
                 MinRating = value.EffectiveMinRating;
+                DuplicatesOnly = value.Duplicates is not null; // ADR-0053
                 SetPlaceFiltersFromState(value); // GalleryViewModel.Places.cs
             }
             finally
@@ -186,6 +187,7 @@ public sealed partial class GalleryViewModel
             FavoritesOnly = false;
             LocationFilter = GalleryLocation.Anywhere;
             MinRating = 0;
+            DuplicatesOnly = false; // ADR-0053
             ResetPlaceFilterCore(); // Ort und Kartenausschnitt (ADR-0050)
         }
         finally
@@ -237,6 +239,11 @@ public sealed partial class GalleryViewModel
                 GalleryMediaKind.Videos => "Keine Videos in dieser Bibliothek.",
                 _ => "Keine Archive (ZIP, RAR, 7z …) in dieser Bibliothek.",
             };
+        }
+
+        if (filter.Duplicates is not null)
+        {
+            return DuplicatesEmptyMessage; // ADR-0053
         }
 
         if (filter.FavoritesOnly)
@@ -340,6 +347,11 @@ public sealed partial class GalleryViewModel
         if (FavoritesOnly)
         {
             list.Add((GalleryFilterConditionKind.Favorites, "Favoriten", null));
+        }
+
+        if (DuplicatesOnly)
+        {
+            list.Add((GalleryFilterConditionKind.Duplicates, DuplicatesConditionLabel, null)); // ADR-0053
         }
 
         if (MinRating > 0)
@@ -472,6 +484,9 @@ public sealed partial class GalleryViewModel
                 break;
             case GalleryFilterConditionKind.Rating:
                 MinRating = 0;
+                break;
+            case GalleryFilterConditionKind.Duplicates:
+                DuplicatesOnly = false; // ADR-0053
                 break;
             case GalleryFilterConditionKind.Location:
                 LocationFilter = GalleryLocation.Anywhere;

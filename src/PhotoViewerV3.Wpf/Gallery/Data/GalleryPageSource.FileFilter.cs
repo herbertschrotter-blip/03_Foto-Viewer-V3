@@ -64,6 +64,7 @@ public sealed partial class GalleryPageSource
         }
 
         parts.AddRange(BuildPlaceClauses(filter)); // Ort und Kartenausschnitt (ADR-0050, GalleryPageSource.Places.cs)
+        parts.AddRange(BuildDuplicateClauses(filter)); // nur Doppelte (ADR-0053, GalleryPageSource.Duplicates.cs)
         return string.Join("\n  ", parts);
     }
 

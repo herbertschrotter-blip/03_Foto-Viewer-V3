@@ -79,7 +79,8 @@ public sealed partial class StatusBarViewModel : ObservableObject, IDisposable
         IMessenger? messenger = null,
         PhotoViewerV3.Services.Faces.Indexing.IFaceIndexService? faceIndex = null,
         PhotoViewerV3.Services.Motifs.IMotifIndexService? motifIndex = null,
-        ILibraryScope? libraryScope = null)
+        ILibraryScope? libraryScope = null,
+        PhotoViewerV3.Duplicates.IDuplicatesPageNavigator? duplicates = null)
     {
         _libraryScope = libraryScope; // Anzeige „Alle verknüpften (Name)“ (ADR-0048)
         _messenger = messenger ?? WeakReferenceMessenger.Default;
@@ -114,6 +115,7 @@ public sealed partial class StatusBarViewModel : ObservableObject, IDisposable
         InitMotifIndex(motifIndex); // Motiv-Index (ADR-0052, StatusBarViewModel.MotifIndex.cs)
         InitCaptureDate(); // Aufnahmedatum nachtragen (ADR-0046, StatusBarViewModel.CaptureDate.cs)
         InitPlaces(); // Orte nachtragen (ADR-0050, StatusBarViewModel.Places.cs)
+        InitDuplicates(duplicates); // Doppelte: Fortschritt + Eingang-Hinweis (ADR-0053, StatusBarViewModel.Duplicates.cs)
     }
 
     /// <summary>Datei-Operationen, die auf einen laufenden Scan derselben Bibliothek warten (Hinweis + „Abbrechen“).</summary>

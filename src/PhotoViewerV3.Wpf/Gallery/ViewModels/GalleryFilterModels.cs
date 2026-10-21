@@ -26,6 +26,9 @@ public enum GalleryFilterConditionKind
     MapArea,
     /// <summary>Motive (ADR-0052).</summary>
     Motifs,
+
+    /// <summary>Nur Doppelte (ADR-0053).</summary>
+    Duplicates,
 }
 
 /// <summary>

@@ -108,6 +108,7 @@ src/
   PhotoViewerV3.Services/                # → Domain + Data, WPF-frei; AddPhotoViewerServices()
     Catalog/                          # CatalogUpdateService (Favorit/Bewertung)
     Database/                         # LibraryContextFactory (+ IDatabaseAccessGate), DatabaseInitializer, SqlitePragmaInterceptor
+    Duplicates/                       # Doppelte (ADR-0053): ContentHasher (SHA-256), PerceptualHash (pHash), SimilarGrouping (Bucket-Index + Stern-Gruppen), KeeperRule, DuplicateIndexService (Hintergrund), DuplicateService (Abfragen), DuplicateCleanupService (Papierkorb + Rückgängig, CatalogRowSnapshot, MetadataTransfer)
     Faces/                            # Gesichtserkennung (ADR-0035): FaceEmbeddingCodec, Detection (SCRFD), Alignment, Onnx (DirectML/CPU), Models (Download), Indexing (Hintergrund-Index); Recognition/ = Lern-/Gruppierlogik (ADR-0036); Assignment/ = Zuordnungsdienst, Crops/ = Gesichts-Ausschnitte (ADR-0037); Erase/ = „Gesichtsdaten löschen“ je Bibliothek (ADR-0038)
       Relocation/                     # DatabaseRelocationService, StorageProbe, ThumbnailInventory — Katalog + Thumbnails umziehen (ADR-0026)
     Infrastructure/                   # AppDataPaths, DatabaseLocationStore (database-location.json, ADR-0026)
@@ -121,6 +122,7 @@ src/
     Thumbnails/                       # ThumbnailService, FfmpegVideoThumbnailer, Renderer-Interfaces
   PhotoViewerV3.Wpf/                     # net10.0-windows → alle; App.xaml.cs = Host + DI, MainWindow = NavigationView
     Faces/                            # WicFaceImageLoader (IFaceImageLoader), Einstellungs-Abschnitt Gesichtserkennung
+    Duplicates/                       # Seite „Doppelte“ (ADR-0053): DuplicatesViewModel, Gruppen-/Datei-Karten, Vorschaubilder
     Folders/                          # Ordnerbaum-Seite
     Gallery/                          # Galerie: Data (GalleryPageSource, .Persons = Personen-Filter/-Suche/-Spalte), ViewModels, Views, Controls, Converters, Services, People (Personen-Filter-Dropdown)
     Library/                          # Bibliotheks-Seite (Namespace PhotoViewerV3.Libraries)
@@ -266,6 +268,14 @@ FilesFts           -- FTS5 virtual table (Files.Name, Extension)
   Bibliothek“, übernimmt die nächste Bibliothek. Jede Bibliothek hat ihre Gruppe (Standard: nur sie selbst); verknüpfte
   Bibliotheken teilen eine. Bestand: je benutzender Bibliothek eine Kopie der Begriffe (Zuordnungen umgehängt), ungenutzte
   in jeder Bibliothek. Ansicht „Alle verknüpften“ gemerkt in `Settings["Library.ViewAllLinkedGroup"]`.
+- Doppelte — umgesetzt in 0.3.1 (Migration `AddDuplicateDetection`, ADR-0053, nur CREATE TABLE):
+  `FileFingerprints (FileId PK → Files ON DELETE CASCADE, ContentHash BLOB (SHA-256, nur Dateien gleicher Größe),
+  ContentSize, ContentModifiedAt, ImageHash INTEGER (64-Bit-pHash, vorzeichenbehaftet), ImageHashVersion, ImageModifiedAt,
+  ImageLowDetail, ImageError)` mit `IX_FileFingerprints_ContentHash (ContentHash) WHERE ContentHash IS NOT NULL` — ein
+  Fingerabdruck gilt nur, solange Größe/Änderungszeit der Files-Zeile gleich sind; `DuplicateCleanupUndo (Id, BatchId →
+  OperationBatches ON DELETE CASCADE, FileId, KeptFileId, Snapshot (JSON: Files-Zeile + alle per Kaskade abhängigen Zeilen),
+  Transfer (JSON: was auf die behaltene Datei übertragen wurde), CreatedAtUtc, UndoneAtUtc, IX_DuplicateCleanupUndo_Batch)`.
+  Settings: `duplicates.similarThreshold` (Standard 10), `duplicates.transferMetadata` (Standard an).
 
 ### Pflicht-Indizes V0.1
 ```sql

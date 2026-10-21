@@ -6,6 +6,7 @@ using PhotoViewerV3.Services.Catalog;
 using PhotoViewerV3.Services.Categories;
 using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Database.Relocation;
+using PhotoViewerV3.Services.Duplicates;
 using PhotoViewerV3.Services.Faces;
 using PhotoViewerV3.Services.Faces.Assignment;
 using PhotoViewerV3.Services.Faces.Erase;
@@ -91,6 +92,9 @@ public static class ServiceCollectionExtensions
 
         // Motive: SigLIP 2 lokal, Begriffe, Treffer, Hintergrund-Index, GPU-Sperre mit den Gesichtern (Services/Motifs, ADR-0052)
         services.AddMotifs();
+
+        // Doppelte erkennen: Prüfsummen, Bild-Fingerabdrücke, Gruppen, Aufräumen mit Rückgängig (Services/Duplicates, ADR-0053)
+        services.AddDuplicates();
 
         return services;
     }

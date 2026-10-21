@@ -274,6 +274,20 @@
 
                     <!-- Ort-Filter (ADR-0050): Land → Region → Ort, „ohne Ort“ -->
                     <places:PlaceFilterDropDown />
+
+                    <!-- Nur Doppelte (ADR-0053): Dateien mit byte-gleichem Inhalt im Bereich — Zeile „Inhalt“ (in „Datei“ bräche sie bei 1280 DIP um) -->
+                    <ToggleButton x:Name="DuplicatesChip"
+                                  Style="{StaticResource GalleryFilterChip}"
+                                  AutomationProperties.AutomationId="GalleryDuplicatesFilter"
+                                  AutomationProperties.Name="Nur Doppelte"
+                                  ToolTip="Nur Dateien, die es im Bereich byte-gleich ein zweites Mal gibt (aufräumen auf der Seite „Doppelte“)"
+                                  IsChecked="{Binding DuplicatesOnly, Mode=TwoWay}"
+                                  gc:FilterChip.IsActive="{Binding DuplicatesOnly}">
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="DocumentCopy24" FontSize="13" Margin="0,0,6,0" />
+                            <TextBlock Text="Doppelte" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </ToggleButton>
                 </gc:ToolbarFlowPanel>
 
                 <!-- Fußzeile: wirkende Bedingungen in Worten (nur bei aktiven Filtern) -->

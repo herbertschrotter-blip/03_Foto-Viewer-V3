@@ -256,6 +256,33 @@
                     <Border Style="{StaticResource StatusSeparator}" />
                 </StackPanel>
 
+                <!-- Doppelte (Services/Duplicates, ADR-0053): Hinweis „im Eingang schon in der Bibliothek — Anzeigen“, Fortschritt -->
+                <StackPanel Orientation="Horizontal"
+                            AutomationProperties.Name="Doppelte im Eingang"
+                            Visibility="{Binding InboxDuplicatesText, Converter={StaticResource NullToVis}}">
+                    <ui:SymbolIcon Symbol="DocumentCopy24" Style="{StaticResource StatusIcon}"
+                                   Foreground="{DynamicResource SystemFillColorCautionBrush}" />
+                    <TextBlock Style="{StaticResource StatusText}" Text="{Binding InboxDuplicatesText}" />
+                    <ui:Button Content="Anzeigen"
+                               Appearance="Transparent"
+                               Command="{Binding ShowInboxDuplicatesCommand}"
+                               AutomationProperties.Name="Doppelte im Eingang anzeigen"
+                               FontSize="12" Height="22" Padding="8,0" Margin="8,0,0,0" VerticalAlignment="Center" />
+                    <ui:Button Content="✕"
+                               Appearance="Transparent"
+                               Command="{Binding DismissInboxDuplicatesCommand}"
+                               AutomationProperties.Name="Hinweis ausblenden"
+                               FontSize="11" Height="22" Padding="6,0" Margin="2,0,0,0" VerticalAlignment="Center" />
+                    <Border Style="{StaticResource StatusSeparator}" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal"
+                            AutomationProperties.Name="Doppelte"
+                            ToolTip="Prüfsummen (nur Dateien gleicher Größe) und Bild-Fingerabdrücke werden im Hintergrund berechnet (nur lokale Dateien, nichts wird heruntergeladen)."
+                            Visibility="{Binding DuplicateIndexText, Converter={StaticResource NullToVis}}">
+                    <ui:SymbolIcon Symbol="DocumentCopy24" Style="{StaticResource StatusIcon}" />
+                    <TextBlock Style="{StaticResource StatusText}" Text="{Binding DuplicateIndexText}" />
+                    <Border Style="{StaticResource StatusSeparator}" />
+                </StackPanel>
                 <StackPanel Orientation="Horizontal"
                             Visibility="{Binding IsBackgroundActive, Converter={StaticResource BoolToVis}}">
                     <Ellipse Width="7" Height="7" Margin="0,0,6,0" VerticalAlignment="Center"

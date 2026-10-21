@@ -10,6 +10,7 @@
                  xmlns:sorter="clr-namespace:PhotoViewerV3.Sorter"
                  xmlns:persons="clr-namespace:PhotoViewerV3.Persons"
                  xmlns:places="clr-namespace:PhotoViewerV3.Places"
+                 xmlns:duplicates="clr-namespace:PhotoViewerV3.Duplicates"
                  xmlns:branding="clr-namespace:PhotoViewerV3.Shell.Branding"
                  Title="{x:Static branding:LumoraBrand.ProductName}"
                  Height="800"
@@ -75,6 +76,14 @@
                                        TargetPageType="{x:Type places:PlacesPage}">
                     <ui:NavigationViewItem.Icon>
                         <ui:SymbolIcon Symbol="Map24" />
+                    </ui:NavigationViewItem.Icon>
+                </ui:NavigationViewItem>
+                <!-- Doppelte: gleiche und ähnliche Fotos finden und aufräumen (ADR-0053) -->
+                <ui:NavigationViewItem Content="Doppelte"
+                                       TargetPageTag="duplicates"
+                                       TargetPageType="{x:Type duplicates:DuplicatesPage}">
+                    <ui:NavigationViewItem.Icon>
+                        <ui:SymbolIcon Symbol="DocumentCopy24" />
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
                 <ui:NavigationViewItem Content="Sortieren"

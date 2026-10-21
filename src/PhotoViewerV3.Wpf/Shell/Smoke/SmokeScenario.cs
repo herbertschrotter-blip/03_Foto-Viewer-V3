@@ -168,6 +168,7 @@ internal sealed partial class SmokeScenario
         InitHiddenLibrary(services); // Schritt „Versteckte Bibliothek“ (ADR-0049)
         InitPlaces(services); // Schritt „Orte“ (ADR-0050)
         InitMotifs(services); // Schritt „Motive“ (ADR-0052, SmokeScenario.Motifs.cs)
+        InitDuplicates(services); // Schritt „Doppelte“ (ADR-0053, SmokeScenario.Duplicates.cs)
         _messenger.Register<SmokeScenario, ScanCompletedMessage>(this, static (r, m) => r._lastScan = m.Result);
     }
 
@@ -242,6 +243,7 @@ internal sealed partial class SmokeScenario
         await StepAsync("Motive: Index mit Fake-Encoder → Vektoren/Treffer, Statusleiste, Pause/Fortsetzen, Filter, „Motiv: …“-Suche, Spalte, Lightbox, eigener Begriff ohne neue Analyse", MotifsAsync).ConfigureAwait(true); // ADR-0052
         await StepAsync("Orte: GPS lesen und setzen — Foto mit GPS → Ort erkannt, Ort setzen → EXIF in der Datei, Filter „Ort“, Rückgängig → Bytes identisch", PlacesAsync).ConfigureAwait(true); // ADR-0050
         await StepAsync("Orte-Karte: Seite ohne Kacheln, 3 Fotos per „Hier verorten“ + 2 per Ablegen verortet, Gruppe zerfällt beim Hineinzoomen, „In der Galerie zeigen“", PlacesMapAsync).ConfigureAwait(true); // ADR-0051
+        await StepAsync("Doppelte: Kopie und verkleinerte Kopie erzeugt, Prüfsumme gleich, pHash nah, Galerie-Filter, Seite exakt/ähnlich (hell/dunkel), Übrige in den Papierkorb mit Übertragung, Rückgängig mit derselben FileId", DuplicatesAsync).ConfigureAwait(true); // ADR-0053
         await StepAsync("Versteckte Bibliothek: anlegen (_hidden simuliert), Fotos im eigenen Katalog im Container, Zusperren nach Untätigkeit + Aushängen (Fake), falsches Kennwort, wieder öffnen, normale Bibliothek unverändert, keine Spuren im AppData", HiddenLibraryAsync).ConfigureAwait(true); // ADR-0049
         // Nach dem Katalogwechsel ist die normale Sitzung neu aufgebaut — die restlichen Schritte laufen mit deren Diensten
         await RunAfterHiddenLibraryAsync(async s =>

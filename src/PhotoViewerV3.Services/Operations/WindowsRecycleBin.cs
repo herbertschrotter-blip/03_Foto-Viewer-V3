@@ -16,7 +16,7 @@ namespace PhotoViewerV3.Services.Operations;
 /// Datei wirklich weg ist.
 /// </summary>
 [SupportedOSPlatform("windows")]
-public sealed class WindowsRecycleBin : IRecycleBin
+public sealed partial class WindowsRecycleBin : IRecycleBin
 {
     private const uint FO_DELETE = 0x0003;
     private const ushort FOF_SILENT = 0x0004;

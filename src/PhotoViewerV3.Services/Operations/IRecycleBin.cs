@@ -18,4 +18,12 @@ public interface IRecycleBin
     /// </summary>
     void MoveDirectoryToRecycleBin(string directoryPath)
         => throw new NotSupportedException("Dieser Papierkorb unterstützt keine Ordner.");
+
+    /// <summary>
+    /// Holt die zuletzt (nach <paramref name="deletedAfterUtc"/>) gelöschte Datei mit diesem Ursprungspfad aus dem Papierkorb
+    /// an ihren Platz zurück (Rückgängig von „Übrige in den Papierkorb“, ADR-0053). Wirft, wenn sie nicht (mehr) im Papierkorb
+    /// liegt oder der Platz belegt ist. Standard: nicht unterstützt.
+    /// </summary>
+    void RestoreFromRecycleBin(string originalPath, DateTime deletedAfterUtc)
+        => throw new NotSupportedException("Dieser Papierkorb kann nichts zurückholen.");
 }

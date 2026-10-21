@@ -3,6 +3,77 @@
 Alle nennenswerten Änderungen an Lumora (bis 0.2.48 „PhotoViewer V3“). Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.3.1] — 2026-10-21
+
+### Feature (ADR-0053) — Doppelte erkennen: gleiche und ähnliche Fotos finden und aufräumen
+- **Exakt gleich** = SHA-256 über alle Bytes, nur für Dateien, deren Größe im Katalog noch einmal vorkommt (Vorfilter;
+  in Herberts Handy-Katalog 13 % der Dateien). **Ähnlich** = 64-Bit-pHash (DCT) aus dem Vorschaubild (kurze Kante
+  400 px, auf 128 px geladen ≈ 1 ms; ohne Vorschaubild aus dem lokalen Original), Abstand = Hamming, **Standard-Schwelle
+  10** (einstellbar 1–12); fast einfarbige Bilder zählen nie als ähnlich. Gruppen per Mehrfach-Index-Hashing (vier
+  16-Bit-Bänder, Ergebnis = Vollvergleich) und Stern-Verfahren (alle Mitglieder nah am ersten, keine Ketten).
+- **Schema — Migration `AddDuplicateDetection`** (nur CREATE TABLE): `FileFingerprints` (Prüfsumme + Bild-Fingerabdruck
+  je Datei, gültig nur für die gelesene Dateiversion; `IX_FileFingerprints_ContentHash`) und `DuplicateCleanupUndo`
+  (Rückgängig-Daten). Settings `duplicates.similarThreshold`, `duplicates.transferMetadata`.
+- **Hintergrund-Index** `IDuplicateIndexService` im Muster des Aufnahmedatums: nach jedem Scan, bei neuen Dateien und
+  15 s nach dem Start; Stapel mit einer Transaktion, ruht bei Scan-Sperre und Katalog-Umzug, liest keine
+  OneDrive-Platzhalter und keine Dateien nicht erreichbarer Wurzeln; Statusleiste „Doppelte: Prüfsummen n / m“.
+- **Seite „Doppelte“** (Navigation zwischen „Orte“ und „Sortieren“): Umschalter **Exakt gleich | Ähnlich** mit
+  Schwellen-Regler, Filter **Eingang schon in der Bibliothek**, Gruppen als Karten (Vorschaubild, Auflösung, Größe,
+  Aufnahmedatum, Ordner, Bewertung/Favorit, Bibliothek/Eingang, Abstand), virtualisiert, Doppelklick → Lightbox.
+  **Vorschlag „behalten“** nach sichtbarer Regel (höhere Auflösung → Aufnahmedatum aus der Datei → liegt in der
+  Bibliothek → eigene Angaben → größere Datei → länger im Katalog) mit Begründung je Gruppe; Wahl per Radio-Knopf
+  änderbar, Gruppen abwählbar.
+- **„Übrige in den Papierkorb“** nur nach Bestätigung, über `IFileOperationService.RecycleAsync` (Recycle-Batch,
+  Protokoll, Papierkorb). Vorher je gelöschter Datei ein Abzug ihrer Files-Zeile und aller per Kaskade abhängigen Zeilen
+  (aus dem Schema gelesen) und — **„Angaben übertragen“, Standard an** — Favorit, höhere Bewertung, fehlende Tags und
+  Kategorie-Werte, Personen (Gesicht mit bester Überdeckung bzw. Gesichter kopiert bei byte-gleicher, noch nicht
+  analysierter Datei) auf die behaltene Datei. Bleibt eine Datei (gesperrt), wird ihre Übertragung sofort zurückgenommen.
+- **„Rückgängig“** auf der Seite: neue Methode `IFileOperationService.RestoreRecycledAsync` holt die Dateien aus dem
+  Windows-Papierkorb (eigene Auswertung der `$I`/`$R`-Paare, Verzeichnis einmal je Lauf gelesen) mit **derselben FileId**
+  und allen Angaben zurück; die Übertragung an der behaltenen Datei wird zurückgenommen; teilweise Zurückgeholtes lässt sich
+  erneut versuchen; Gesichter, deren Person inzwischen gelöscht ist, kommen ohne Person zurück.
+- **Eingang-Hinweis**: liegen neu gehashte Dateien im Eingang byte-gleich schon in der Bibliothek, zeigt die Statusleiste
+  „N Dateien im Eingang sind schon in der Bibliothek — Anzeigen“ (nur für den angezeigten Bereich; öffnet die Seite
+  gefiltert). Für die Handy-Übertragung: `IDuplicateService.FindByContentAsync` („gibt es diese Prüfsumme schon?“).
+- **Galerie-Filter „Doppelte“** als Chip in der Zeile „Inhalt“ (in „Datei“ bräche die Zeile bei 1280 DIP um): nur Dateien
+  mit byte-gleichem Gegenstück im Bereich, UND mit allen Filtern, „Es gilt“ mit ✕.
+- **Bereich**: alles nur in den Bibliotheken des Bereichs (`ILibraryScope`), in „Alle verknüpften“ über die Gruppe;
+  versteckte Bibliotheken nur im eigenen Katalog.
+
+### Messung (Spike 15, `docs/spikes/15-doppelte.md`)
+- Handy-Katalog (24 217 Dateien, nur Zahlen): 13,1 % teilen ihre Größe; SHA-256 353 MB/s (plattengebunden), Hochrechnung
+  500 000 Dateien ≈ 80 min Lesen beim ersten Mal. pHash an 400 JPEGs: verkleinert + Q70 p95 4 (max 8), 3 % beschnitten
+  Median 6 / p95 10, heller p95 2, fremde Fotos Median 32; aufeinanderfolgende Fotos ≤ 10: 17 % (Serien).
+- Gruppieren: 100 000 Fingerabdrücke r = 10 ≈ 0,2 s, 500 000 ≈ 4–5 s (r = 12 ≈ 20 s). SQL bei 500 000 Dateien: Seite
+  exakt gleich 1,3 s, ähnlich (r = 10) 6,7 s, Galerie-Filter „nur Doppelte“ 1,1 s, Eingang-Zähler 1,6 s (Hintergrund),
+  Größen-Vorfilter 0,4 s je Durchgang. Ein korreliertes `EXISTS` (erster Entwurf) war für den Eingang-Zähler unbrauchbar.
+
+### Tests
+- `tests/PhotoViewerV3.Tests`: 926 (+41, 1 übersprungen ohne Modell) — `Duplicates/FingerprintTests` (SHA-256 gleich/ungleich über mehrere Puffer,
+  geteiltes Lesen; pHash nah bei verkleinert/neu gespeichert/beschnitten/heller, fern bei anderem Motiv, einfarbig),
+  `SimilarGroupingTests` (Bucket-Suche = Vollvergleich für r = 0–12, Stern-Gruppen, Behalten-Regel), 
+  `DuplicateIndexAndQueryTests` (Vorfilter, veraltete Prüfsumme, Eingang-Hinweis, Bereich je Bibliothek/„Alle
+  verknüpften“, Prüfsummen-Abfrage, Scan-Sperre, Bild-Fingerabdrücke, ähnliche Gruppen, Videos nur mit Vorschaubild),
+  `DuplicateCleanupTests` (Übertragen + Papierkorb + Rückgängig mit derselben FileId, ohne Übertragen, Gesichter kopiert,
+  nicht übertragbar, gesperrte Datei, teilweise zurückgeholt, gelöschte Person, Platz belegt),
+  `Operations/WindowsRecycleBinRestoreTests` (`$I` v1/v2, jüngster Eintrag, echter Papierkorb hin und zurück).
+- `tests/PhotoViewerV3.Wpf.Tests`: 881 (+11, 5 übersprungen ohne Modell/Stichprobe), dreimal hintereinander grün — `Duplicates/DuplicatesViewModelTests`, `DuplicatesPageUiTests` (echte Seite,
+  virtualisiert, Radio-Knopf, keine Binding-Fehler, Navigation/Symbole), `GalleryDuplicateFilterTests` (SQL mit echter DB).
+- Rauchtest: neuer Schritt **„Doppelte“** vor „Versteckte Bibliothek“ (`SmokeScenario.Duplicates.cs`): Foto + Kopie +
+  verkleinerte Kopie, Prüfsumme gleich, pHash nah, Galerie-Filter, Seite exakt/ähnlich (Screenshots
+  `48-doppelte-exakt-hell`, `49-doppelte-aehnlich-dunkel`), Übrige in den Papierkorb mit Übertragung, Rückgängig mit
+  derselben FileId; Navigationsprüfung um „Doppelte“ ergänzt.
+
+### Offen
+- Fingerabdrücke über „Neu aufbauen“ mitnehmen; Rückgängig nur für die jüngste Aufräumaktion auf der Seite (nicht über die
+  Galerie-Taste); manuelles Datum/manueller Ort der gelöschten Datei werden nicht übertragen.
+- „Ähnlich“ über 500 000 Fotos braucht beim Öffnen einige Sekunden; der Größen-Vorfilter liest bei jedem Durchgang die
+  ganze Files-Tabelle (≈ 0,4 s bei 500 000).
+- Schwelle und Vorschlag an Herberts echtem Katalog nachjustieren. Der pHash sieht nur Helligkeit: fast einfarbige Bilder
+  mit wenig Text (z. B. die synthetischen Bilder der Testbibliothek) landen trotz anderer Farbe in einer „ähnlich“-Gruppe.
+- Kommt eine Datei beim Rückgängig ohne ihren Abzug zurück (Bibliothek inzwischen entfernt), bleiben die übertragenen
+  Angaben an der behaltenen Datei (nichts geht verloren, steht aber nur dort).
+
 ## [0.3.0] — 2026-10-21
 
 ### Release — Abschluss der Runde „Trennung, Versteckt, Orte, Motive“ (0.2.51–0.2.56)
