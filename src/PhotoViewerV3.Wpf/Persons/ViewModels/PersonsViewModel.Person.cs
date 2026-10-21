@@ -77,6 +77,7 @@ public sealed partial class PersonsViewModel
             UpdateSelectionState();
             RequestVisible(PersonsListKind.Suggestions);
             RequestVisible(PersonsListKind.Confirmed);
+            UpdateRangeText(PersonsListKind.Suggestions);
         }
         catch (System.Exception ex)
         {
@@ -94,6 +95,8 @@ public sealed partial class PersonsViewModel
         DeletePersonCommand.NotifyCanExecuteChanged();
         ConfirmVisibleSuggestionsCommand.NotifyCanExecuteChanged();
         RejectVisibleSuggestionsCommand.NotifyCanExecuteChanged();
+        ConfirmAllSuggestionsCommand.NotifyCanExecuteChanged();
+        RejectAllSuggestionsCommand.NotifyCanExecuteChanged();
     }
 
     private void Fill(TileCollection<FaceTileViewModel> target, IReadOnlyList<PersonFaceInfo> faces, bool keepState)
@@ -144,12 +147,54 @@ public sealed partial class PersonsViewModel
     [RelayCommand(CanExecute = nameof(CanConfirmSelected))]
     private Task RejectSelectedSuggestionsAsync() => RejectSuggestionsAsync(Suggestions.Where(t => t.IsSelected).ToList());
 
-    /// <summary>„Alle sichtbaren bestätigen“: die Vorschläge, die gerade auf dem Bildschirm stehen.</summary>
+    /// <summary>„Sichtbare bestätigen“: nur die Vorschläge, die gerade auf dem Bildschirm stehen (auch angeschnittene Reihe).</summary>
     [RelayCommand(CanExecute = nameof(CanActOnVisible))]
     private Task ConfirmVisibleSuggestionsAsync() => ConfirmSuggestionsAsync(VisibleTiles(Suggestions, PersonsListKind.Suggestions));
 
     [RelayCommand(CanExecute = nameof(CanActOnVisible))]
     private Task RejectVisibleSuggestionsAsync() => RejectSuggestionsAsync(VisibleTiles(Suggestions, PersonsListKind.Suggestions));
+
+    /// <summary>„Alle Vorschläge bestätigen…“: die ganze Liste (auch nicht sichtbare) — Rückfrage mit Anzahl, danach Ausreißer-Prüfung.</summary>
+    [RelayCommand(CanExecute = nameof(CanActOnVisible))]
+    private async Task ConfirmAllSuggestionsAsync()
+    {
+        if (CurrentPerson is not { } person || Suggestions.Count == 0)
+        {
+            return;
+        }
+
+        var tiles = Suggestions.ToList();
+        var ok = await _dialogs.ConfirmAsync(
+            "Alle Vorschläge bestätigen",
+            $"Alle {N(tiles.Count)} Vorschläge als „{person.Name}“ bestätigen — auch die, die gerade nicht zu sehen sind? "
+            + "Gesichter, die nicht sicher passen, werden danach noch einmal nachgefragt.",
+            "Alle bestätigen").ConfigureAwait(true);
+        if (ok)
+        {
+            await ConfirmSuggestionsAsync(tiles).ConfigureAwait(true);
+        }
+    }
+
+    /// <summary>„Alle Vorschläge ablehnen…“: die ganze Liste — Rückfrage mit Anzahl.</summary>
+    [RelayCommand(CanExecute = nameof(CanActOnVisible))]
+    private async Task RejectAllSuggestionsAsync()
+    {
+        if (CurrentPerson is not { } person || Suggestions.Count == 0)
+        {
+            return;
+        }
+
+        var tiles = Suggestions.ToList();
+        var ok = await _dialogs.ConfirmAsync(
+            "Alle Vorschläge ablehnen",
+            $"Alle {N(tiles.Count)} Vorschläge für „{person.Name}“ ablehnen — auch die, die gerade nicht zu sehen sind? "
+            + $"„{person.Name}“ wird für diese Gesichter nicht mehr vorgeschlagen.",
+            "Alle ablehnen").ConfigureAwait(true);
+        if (ok)
+        {
+            await RejectSuggestionsAsync(tiles).ConfigureAwait(true);
+        }
+    }
 
     private Task ConfirmSuggestionsAsync(IReadOnlyList<FaceTileViewModel> tiles)
     {

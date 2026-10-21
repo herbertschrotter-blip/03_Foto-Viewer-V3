@@ -87,6 +87,7 @@ public sealed partial class PersonsViewModel
         SubscribeSelection(tiles);
         CurrentGroup = group;
         Mode = PersonsPageMode.Group;
+        IgnoreWholeGroupCommand.NotifyCanExecuteChanged();
         Message = null;
         UpdateSelectionState();
         OnPropertyChanged(nameof(GroupSelectionText));
@@ -192,6 +193,53 @@ public sealed partial class PersonsViewModel
             var rest = CurrentGroup with { Members = CurrentGroup.Members.Where(m => !ids.Contains(m.FaceId)).ToList() };
             ShowGroup(rest);
         }, reload: false).ConfigureAwait(true);
+    }
+
+    private bool CanIgnoreWholeGroup() => !IsBusy && _ignore is not null && CurrentGroup is not null;
+
+    /// <summary>„Ganze Gruppe ignorieren…“ (ADR-0040): alle Gesichter der Gruppe — auch abgewählte Ausreißer —, mit Rückfrage.</summary>
+    [RelayCommand(CanExecute = nameof(CanIgnoreWholeGroup))]
+    private Task IgnoreWholeGroupAsync() => CurrentGroup is { } group ? IgnoreGroupAsync(group) : Task.CompletedTask;
+
+    /// <summary>Rechtsklick auf eine Gruppenkachel der Übersicht → „Ganze Gruppe ignorieren…“.</summary>
+    [RelayCommand]
+    private Task IgnoreGroupTileAsync(GroupTileViewModel? tile) => tile is null || IsBusy ? Task.CompletedTask : IgnoreGroupAsync(tile.Group);
+
+    private async Task IgnoreGroupAsync(FaceGroupInfo group)
+    {
+        if (_ignore is null)
+        {
+            return;
+        }
+
+        var outliers = group.OutlierCount > 0
+            ? $" — auch die {N(group.OutlierCount)} als Ausreißer markierten"
+            : string.Empty;
+        var ok = await _dialogs.ConfirmAsync(
+            "Ganze Gruppe ignorieren",
+            $"Alle {N(group.Count)} Gesichter dieser Gruppe{outliers} als „kein Gesicht / ignorieren“ markieren? Sie erscheinen nicht mehr in "
+            + "Gruppen und Vorschlägen; zurückholen lassen sie sich unter „Ignorierte Gesichter“.",
+            "Gruppe ignorieren").ConfigureAwait(true);
+        if (!ok)
+        {
+            return;
+        }
+
+        await RunAsync("Gruppe ignorieren", async () =>
+        {
+            var count = await _ignore.IgnoreGroupAsync(group.GroupId).ConfigureAwait(true);
+            if (count == 0)
+            {
+                ShowError("Die Gruppe hat sich inzwischen geändert — bitte die Übersicht aktualisieren und erneut öffnen.");
+            }
+            else
+            {
+                ShowInfo($"{N(count)} Gesichter ignoriert.");
+            }
+
+            CurrentGroup = null;
+            Mode = PersonsPageMode.Overview;
+        }).ConfigureAwait(true);
     }
 
     [RelayCommand]

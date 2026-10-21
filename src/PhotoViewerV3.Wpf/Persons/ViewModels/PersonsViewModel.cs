@@ -22,6 +22,9 @@ public enum PersonsPageMode
     Overview = 0,
     Person = 1,
     Group = 2,
+
+    /// <summary>Ignorierte Gesichter (ADR-0040).</summary>
+    Ignored = 3,
 }
 
 /// <summary>Kachel-Listen der Seite (für den sichtbaren Bereich, den die Ansicht meldet).</summary>
@@ -32,6 +35,7 @@ public enum PersonsListKind
     Suggestions,
     Confirmed,
     GroupMembers,
+    Ignored,
 }
 
 /// <summary>
@@ -65,8 +69,10 @@ public sealed partial class PersonsViewModel : ObservableObject, IDisposable
         ILightboxService lightbox,
         INavigationService navigation,
         ILogger<PersonsViewModel> logger,
-        IMessenger? messenger = null)
+        IMessenger? messenger = null,
+        IFaceIgnoreService? ignore = null)
     {
+        _ignore = ignore;
         _service = service;
         _index = index;
         _images = images;
@@ -96,7 +102,7 @@ public sealed partial class PersonsViewModel : ObservableObject, IDisposable
     public TileCollection<FaceTileViewModel> GroupMembers { get; } = [];
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsOverview), nameof(IsPersonDetail), nameof(IsGroupDetail))]
+    [NotifyPropertyChangedFor(nameof(IsOverview), nameof(IsPersonDetail), nameof(IsGroupDetail), nameof(IsIgnoredView))]
     private PersonsPageMode _mode;
 
     public bool IsOverview => Mode == PersonsPageMode.Overview;
@@ -113,7 +119,8 @@ public sealed partial class PersonsViewModel : ObservableObject, IDisposable
     [NotifyCanExecuteChangedFor(nameof(NameGroupCommand), nameof(AddGroupToPersonCommand), nameof(IgnoreGroupSelectionCommand),
         nameof(ConfirmSelectedSuggestionsCommand), nameof(RejectSelectedSuggestionsCommand), nameof(ConfirmVisibleSuggestionsCommand),
         nameof(RejectVisibleSuggestionsCommand), nameof(RemoveSelectedConfirmedCommand), nameof(SetCoverCommand),
-        nameof(RenamePersonCommand), nameof(MergePersonCommand), nameof(ToggleHiddenCommand), nameof(DeletePersonCommand))]
+        nameof(RenamePersonCommand), nameof(MergePersonCommand), nameof(ToggleHiddenCommand), nameof(DeletePersonCommand),
+        nameof(ConfirmAllSuggestionsCommand), nameof(RejectAllSuggestionsCommand), nameof(IgnoreWholeGroupCommand), nameof(RestoreIgnoredCommand))]
     private bool _isBusy;
 
     [ObservableProperty]
@@ -166,6 +173,7 @@ public sealed partial class PersonsViewModel : ObservableObject, IDisposable
     {
         PersonsPageMode.Person when CurrentPerson is { } person => LoadPersonAsync(person.Id, keepState: true),
         PersonsPageMode.Group => Task.CompletedTask, // Gruppe bleibt, bis Herbert entscheidet
+        PersonsPageMode.Ignored => LoadIgnoredAsync(keepState: true),
         _ => LoadOverviewAsync(refreshGroups),
     };
 
@@ -188,6 +196,7 @@ public sealed partial class PersonsViewModel : ObservableObject, IDisposable
                 : $"{N(groups.Groups.Count)} Gruppe{(groups.Groups.Count == 1 ? string.Empty : "n")} aus {N(groups.UnknownFaces)} unbenannten Gesichtern"
                   + (groups.Sections > 1 ? $" (in {groups.Sections} Abschnitten gruppiert)" : string.Empty);
             RequestVisible(PersonsListKind.Groups);
+            await LoadIgnoredCountAsync().ConfigureAwait(true);
         }
         catch (Exception ex)
         {
@@ -236,6 +245,7 @@ public sealed partial class PersonsViewModel : ObservableObject, IDisposable
         Suggestions.ReplaceAll([]);
         Confirmed.ReplaceAll([]);
         GroupMembers.ReplaceAll([]);
+        ClearIgnored();
         await LoadOverviewAsync().ConfigureAwait(true);
     }
 
@@ -269,6 +279,7 @@ public sealed partial class PersonsViewModel : ObservableObject, IDisposable
     {
         _visible[list] = (first, last);
         RequestVisible(list);
+        OnVisibleRangeReported(list);
     }
 
     private void RequestVisible(PersonsListKind list)
@@ -284,6 +295,7 @@ public sealed partial class PersonsViewModel : ObservableObject, IDisposable
             PersonsListKind.Groups => Groups.MissingImages(range.First, range.Last),
             PersonsListKind.Suggestions => Suggestions.MissingImages(range.First, range.Last),
             PersonsListKind.Confirmed => Confirmed.MissingImages(range.First, range.Last),
+            PersonsListKind.Ignored => Ignored.MissingImages(range.First, range.Last),
             _ => GroupMembers.MissingImages(range.First, range.Last),
         };
         _images.Request(libraryId, missing);
@@ -296,6 +308,7 @@ public sealed partial class PersonsViewModel : ObservableObject, IDisposable
         Suggestions.Apply(images);
         Confirmed.Apply(images);
         GroupMembers.Apply(images);
+        Ignored.Apply(images);
     }
 
     /// <summary>Sichtbare Kacheln einer Liste (für „alle sichtbaren“).</summary>
@@ -397,9 +410,12 @@ public sealed partial class PersonsViewModel : ObservableObject, IDisposable
             return;
         }
 
-        var list = Mode == PersonsPageMode.Group
-            ? GroupMembers
-            : Suggestions.Contains(tile) ? Suggestions : Confirmed;
+        var list = Mode switch
+        {
+            PersonsPageMode.Group => GroupMembers,
+            PersonsPageMode.Ignored => Ignored,
+            _ => Suggestions.Contains(tile) ? Suggestions : Confirmed,
+        };
         var fileIds = list.Select(t => t.FileId).Distinct().ToList();
         try
         {
@@ -495,6 +511,8 @@ public sealed partial class PersonsViewModel : ObservableObject, IDisposable
         SelectedSuggestionCount = Suggestions.Count(t => t.IsSelected);
         SelectedConfirmedCount = Confirmed.Count(t => t.IsSelected);
         GroupSelectedCount = GroupMembers.Count(t => t.IsSelected);
+        SelectedIgnoredCount = Ignored.Count(t => t.IsSelected);
+        RestoreIgnoredCommand.NotifyCanExecuteChanged();
         ConfirmSelectedSuggestionsCommand.NotifyCanExecuteChanged();
         RejectSelectedSuggestionsCommand.NotifyCanExecuteChanged();
         RemoveSelectedConfirmedCommand.NotifyCanExecuteChanged();

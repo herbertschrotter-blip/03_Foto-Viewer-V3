@@ -94,12 +94,20 @@ public sealed partial class FaceTileViewModel : FaceImageTile
 
     public float? Similarity { get; }
 
+    /// <summary>Automatisch ignoriert, weil kleiner als die Mindestgröße (ADR-0040) — Kachel zeigt „zu klein“.</summary>
+    public bool IsAutoIgnored { get; init; }
+
+    /// <summary>Seite der Box in Pixeln (nur in der Ansicht „Ignorierte Gesichter“ gesetzt).</summary>
+    public float? FaceSize { get; init; }
+
     public bool IsSuggestion => State == FaceState.Suggested;
 
     public override long? ImageFaceId => FaceId;
 
     /// <summary>Score bzw. Ähnlichkeit als Prozent („82 %“).</summary>
-    public string? ScoreText => (Score ?? Similarity) is { } v ? $"{Math.Round(v * 100):0} %" : null;
+    public string? ScoreText => FaceSize is { } px
+        ? $"{Math.Round(px):0} px"
+        : (Score ?? Similarity) is { } v ? $"{Math.Round(v * 100):0} %" : null;
 
     [ObservableProperty] private bool _isSelected;
 
@@ -107,7 +115,11 @@ public sealed partial class FaceTileViewModel : FaceImageTile
     {
         get
         {
-            var kind = IsOutlier ? "Gesicht (möglicher Ausreißer)" : IsSuggestion ? "Vorschlag" : "Gesicht";
+            var kind = IsOutlier ? "Gesicht (möglicher Ausreißer)"
+                : IsSuggestion ? "Vorschlag"
+                : IsAutoIgnored ? "Ignoriertes Gesicht (zu klein)"
+                : State == FaceState.Ignored ? "Ignoriertes Gesicht"
+                : "Gesicht";
             var selected = IsSelected ? ", ausgewählt" : string.Empty;
             return ScoreText is { } s ? $"{kind} {FaceId}, {s}{selected}" : $"{kind} {FaceId}{selected}";
         }

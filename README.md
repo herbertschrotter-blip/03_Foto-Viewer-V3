@@ -356,6 +356,11 @@ einen Fingerabdruck (512 Werte) im Katalog (ADR-0035) — vollständig auf diese
 - **Einstellungen → Gesichtserkennung**: „Gesichter im Hintergrund erkennen“ (Standard **aus**), „Grafikkarte
   verwenden“ (Standard an; DirectML, bei Problemen automatisch Prozessor), Modellstatus, **Index neu aufbauen**
   (analysiert alle Fotos erneut; bestätigte Zuordnungen bleiben).
+- **Kleine Gesichter automatisch ignorieren** (Standard **kleiner als 24 Pixel**; Aus, 16 … 64 Pixel): sehr kleine
+  Gesichter (meist Menschen im Hintergrund) gelten als ignoriert — keine Vorschläge, keine Gruppen, nicht in Galerie-
+  Filtern. Gemessen wird die Gesichtsgröße im auf 1280 Pixel verkleinerten Foto. Ein anderer Wert oder „Aus“ holt die
+  automatisch ignorierten im Hintergrund zurück; selbst ignorierte und bestätigte Gesichter fasst die Einstellung nie an
+  (ADR-0040).
 - **Modell**: InsightFace *buffalo_l* (Erkennung SCRFD `det_10g.onnx`, Fingerabdruck ArcFace `w600k_r50.onnx`). Fehlt
   es, steht dort **„Modell herunterladen… (275 MB, InsightFace buffalo_l, nur nicht-kommerzielle Nutzung)“**: nach
   Bestätigung lädt PhotoViewer das Paket von GitHub (InsightFace Release v0.7), prüft die SHA-256-Prüfsumme und entpackt
@@ -380,18 +385,28 @@ Gelernt wird **nur aus dem, was du bestätigst** — eigene Vorschläge lernen n
    - **Als neue Person benennen…** — Name eingeben; nur die ausgewählten Gesichter werden bestätigt.
    - **Zu Person hinzufügen…** — Person aus der Liste wählen (ähnelt die Gruppe einer bekannten Person, ist sie
      vorgewählt).
-   - **Kein Gesicht / ignorieren** — Fehlerkennungen; sie erscheinen nirgends mehr.
+   - **Kein Gesicht / ignorieren** — die ausgewählten Gesichter (Fehlerkennungen); sie erscheinen nirgends mehr.
+   - **Ganze Gruppe ignorieren…** — alle Gesichter der Gruppe, auch die abgewählten Ausreißer (Rückfrage mit Anzahl),
+     z. B. für Fremde im Hintergrund; die Gruppe verschwindet. Dasselbe per **Rechtsklick auf eine Gruppenkachel**.
    Passt ein ausgewähltes Gesicht nicht gut zur Person (bzw. ähnelt es einer anderen bekannten Person), fragt
    PhotoViewer nach: **Ohne diese bestätigen** / **Trotzdem alle bestätigen** / **Abbrechen**.
 3. **Vorschläge prüfen:** Nach dem Benennen lernt PhotoViewer im Hintergrund (wenige Sekunden) und schlägt die Person
    auf weiteren Fotos vor. Person öffnen → Reiter **Vorschläge**: je Gesicht ✓ (bestätigen) oder ✗ (ablehnen), oder
-   mehrere auswählen bzw. **Alle sichtbaren bestätigen/ablehnen** (die gerade auf dem Bildschirm stehen). Abgelehnt
+   mehrere auswählen bzw. **Sichtbare bestätigen/ablehnen** (nur die gerade auf dem Bildschirm stehen) oder **Alle
+   Vorschläge bestätigen…/ablehnen…** (die ganze Liste, mit Rückfrage samt Anzahl; beim Bestätigen danach die
+   Ausreißer-Rückfrage). Die Zeile über der Liste zeigt „Zeigt 1–14 von 30 Vorschlägen — nach unten scrollen für
+   weitere“, solange nicht alle auf den Bildschirm passen. Abgelehnt
    heißt „das ist nicht diese Person“ — sie wird für dieses Gesicht nie wieder vorgeschlagen, der nächstbeste Kandidat
    rückt sofort nach.
 4. **Korrigieren:** Reiter **Bestätigt** → falsche Gesichter auswählen → **Aus Person entfernen** (danach wird ohne sie
    neu gelernt), **Als Titelbild**. Oben: **Umbenennen…**, **Zusammenführen mit…** (z. B. zwei Einträge derselben
    Person), **Ausblenden** (aus der Übersicht; „Ausgeblendete zeigen“ holt sie zurück), **Löschen…** (die Gesichter
    bleiben und sind wieder unbenannt).
+5. **Ignorierte Gesichter:** Übersicht → **Ignorierte Gesichter (N)** zeigt alle ignorierten Gesichter der aktiven
+   Bibliothek (neueste Fotos zuerst, wird beim Scrollen nachgeladen); automatisch wegen der Mindestgröße ignorierte sind
+   mit **„zu klein“** und ihrer Größe in Pixeln markiert. Auswählen → **Zurückholen** (wieder unbenannt; Vorschläge und
+   Gruppen werden neu berechnet), Doppelklick öffnet das Foto. Ein zurückgeholtes kleines Gesicht bleibt, bis die
+   Mindestgröße geändert wird.
 - Personen gelten für alle Bibliotheken, Zähler und Vorschläge für die aktive. Neue Gesichter aus dem laufenden Index
   erscheinen in den Gruppen nach **Aktualisieren**.
 - Die Gesichts-Ausschnitte (128 × 128) liegen im Vorschaubild-Ordner (`thumbs\<Bibliothek>\faces\`) und werden nur für

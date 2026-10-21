@@ -101,6 +101,8 @@ public sealed class FaceIndexStore
                 using var tx = await _retry.BeginTransactionAsync(connection, ct).ConfigureAwait(false);
                 var written = new List<int>(results.Count);
                 var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                // Mindestgröße (ADR-0040): neue Gesichter darunter werden gleich automatisch ignoriert eingefügt.
+                var minSize = FaceAutoIgnore.ReadMinSize(connection, tx);
                 foreach (var result in results)
                 {
                     if (Scalar(connection, tx, "SELECT COUNT(*) FROM Files WHERE Id = $id;", ("$id", result.FileId)) == 0)
@@ -108,7 +110,7 @@ public sealed class FaceIndexStore
                         continue;
                     }
 
-                    WriteFile(connection, tx, result, now);
+                    WriteFile(connection, tx, result, now, minSize);
                     written.Add(result.FileId);
                 }
 
@@ -139,7 +141,7 @@ public sealed class FaceIndexStore
             },
             ct);
 
-    private static void WriteFile(SqliteConnection connection, SqliteTransaction tx, FaceFileResult result, long now)
+    private static void WriteFile(SqliteConnection connection, SqliteTransaction tx, FaceFileResult result, long now, int minSize)
     {
         var analysis = result.ErrorCode is null ? result.Analysis : null;
         var faceCount = 0;
@@ -186,11 +188,13 @@ public sealed class FaceIndexStore
                 cmd.CommandText = """
                     INSERT INTO Faces (FileId, BoxX, BoxY, BoxW, BoxH, Landmarks, DetScore, Size, Sharpness, Quality,
                         Embedding, ModelVersion, PersonId, State, SuggestedPersonId, SuggestionScore, CreatedAtUtc)
-                    VALUES ($file, $x, $y, $w, $h, $lm, $det, $size, $sharp, $q, $emb, $ver, NULL, $state, NULL, NULL, $now);
+                    VALUES ($file, $x, $y, $w, $h, $lm, $det, $size, $sharp, $q, $emb, $ver, NULL, $state, NULL, $auto, $now);
                     """;
                 BindFace(cmd, analysis.Faces[index], boxes[index], analysis, result.ModelVersion);
+                var tooSmall = FaceAutoIgnore.Applies(minSize, analysis.Faces[index].Quality.Size);
                 cmd.Parameters.AddWithValue("$file", result.FileId);
-                cmd.Parameters.AddWithValue("$state", (int)FaceState.Unconfirmed);
+                cmd.Parameters.AddWithValue("$state", (int)(tooSmall ? FaceState.Ignored : FaceState.Unconfirmed));
+                cmd.Parameters.AddWithValue("$auto", tooSmall ? (double)FaceAutoIgnore.AutoMarker : DBNull.Value);
                 cmd.Parameters.AddWithValue("$now", now);
                 cmd.ExecuteNonQuery();
             }

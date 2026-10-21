@@ -57,6 +57,7 @@ Wenn eine ADR-Entscheidung revidiert wird: **neues ADR anlegen** + altes auf "Su
 | [0036](0036-gesichter-lernen-und-gruppieren.md) | Gesichter lernen nur aus bestätigten Beispielen (k-NN k = 3 + linearer Klassifikator je Person, Distanzprüfung, Ablehnungen, Ausreißer-Prüfung); strenge Gruppen-Vorschläge per Average Linkage | Accepted |
 | [0037](0037-gesichter-zuordnen-personen-seite.md) | Gesichter zuordnen: ein Zuordnungsdienst (Modell je aktiver Bibliothek, Neu-Lernen nach jeder Korrektur, Vorschläge per bedingtem UPDATE, Ablehnen → sofort nächstbester), Gruppen-Cache über unbekannte Gesichter, Gesichts-Ausschnitte im Thumbnail-Ordner, Personen-Seite mit abgewählten Ausreißern | Accepted |
 | [0038](0038-personen-in-galerie-und-lightbox.md) | Personen in Galerie und Lightbox: Filter/Suche/Spalte direkt in SQL über abdeckende Indizes (`AddFacePersonIndex`), nur bestätigte Gesichter zählen; Rahmen per Taste F; „Gesichtsdaten löschen“ je Bibliothek | Accepted |
+| [0040](0040-ignorierte-gesichter-und-mindestgroesse.md) | Ignorierte Gesichter: Ansicht mit „Zurückholen“, ganze Gruppe ignorieren; Mindestgröße (Standard 24 px) als automatisch ignoriert (Zustand 3 + Markierung in `SuggestionScore`, keine Migration), angewandt beim Einfügen durch den Index und einmal je Schwellenänderung durch den Zuordnungsdienst | Accepted |
 
 ## Quellen der Entscheidungen
 

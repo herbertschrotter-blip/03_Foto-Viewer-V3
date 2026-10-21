@@ -3,6 +3,65 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.40] — 2026-10-21
+
+### Neu (ADR-0040) — Ignorierte Gesichter ansehen und zurückholen, ganze Gruppe ignorieren, Mindestgröße
+- **Personen → „Ignorierte Gesichter (N)“** (Knopf in der Übersicht): alle ignorierten Gesichter der aktiven Bibliothek,
+  neueste Fotos zuerst, seitenweise je 500 nachgeladen, Kacheln virtualisiert mit Ausschnitten wie die übrigen;
+  automatisch ignorierte mit **„zu klein“** und Größe in Pixeln markiert. Auswahl → **Zurückholen** (Zustand 3 → 0,
+  danach Neu-Lernen und Vorschläge, Gruppen neu), Doppelklick → Lightbox. Zeile „Zeigt 1–21 von 30 …“ über der Liste.
+- **Ganze Gruppe ignorieren…** in der Gruppenansicht und per Rechtsklick auf eine Gruppenkachel: alle Mitglieder
+  inklusive der abgewählten Ausreißer (Rückfrage mit Anzahl), nur noch offene (ein inzwischen bestätigtes bleibt); die
+  Gruppe verschwindet.
+- **Einstellungen → Gesichtserkennung → „Kleine Gesichter automatisch ignorieren“** (Aus, 16 … 64 Pixel, **Standard
+  kleiner als 24 Pixel** — Spike 09: p10 ≈ 25 px, p50 ≈ 62 px bei 1280er-Kante; unter 24 px trägt die Größe nichts mehr
+  zur Qualität bei). Automatisch ignorierte bleiben Zustand 3 (wirken auf Lernen, Gruppen, Vorschläge, Galerie wie
+  manuell ignorierte) und tragen die Markierung `SuggestionScore = -1` — **keine Migration, kein neuer State-Wert**.
+  Neue Gesichter ignoriert der Index gleich beim Einfügen (`FaceIndexStore`, gleiche Transaktion); auf den Bestand wendet
+  der Zuordnungsdienst die Schwelle im Hintergrund einmal je Änderung an (beim Start, wenn sie von der zuletzt
+  angewandten abweicht — beim ersten Start nach dem Update also einmal mit 24 px): offene unter der Schwelle → ignoriert,
+  nicht mehr betroffene automatische → zurück. Bestätigte und manuell ignorierte fasst die Regel nie an.
+- Dienst: neues Interface `IFaceIgnoreService` (`GetIgnoredFacesAsync`, `UnignoreFacesAsync`, `IgnoreGroupAsync`,
+  `Get/SetMinFaceSizeAsync`), implementiert vom `FaceRecognitionService` (partial `FaceRecognitionService.Ignore.cs`),
+  registriert in `AddFaceRecognition()`; `IFaceRecognitionService` und seine Fakes bleiben unverändert. Regel und
+  Markierung in `Services/Faces/FaceAutoIgnore`.
+- Galerie-Abfragen (`Wpf/Gallery/Data/**`) gelesen: sie prüfen nur `State` 0/1/2 — automatisch ignorierte (Zustand 3)
+  fallen dort wie manuell ignorierte heraus, keine Anpassung nötig.
+
+### Fix — Vorschläge einer Person „nicht alle zu sehen“ (Herberts Meldung)
+- Ursache: Die Liste lädt und zeigt alle Vorschläge (nachgestellt im Test: echte Seite in der WPF-UI-NavigationView,
+  60 Vorschläge im kleinen Fenster — alle in der Liste, Liste scrollbar), aber unter Kopf, Meldungen, Reitern und
+  Knopfleiste bleiben bei 1280 × 800 nur etwa zwei Kachelreihen (≈ 14 Gesichter); die schmale Bildlaufleiste von WPF-UI
+  blendet sich aus, nichts wies auf weitere hin. **„Alle sichtbaren bestätigen“ bestätigte nur diese ≈ 14** — danach
+  rückten die übrigen nach, was wie „jetzt sind sie da“ aussah. Zusätzlich forderte ein Reiterwechsel keine Ausschnitte
+  an, wenn das Panel denselben Bereich wie zuvor meldete (kein `VisibleRangeChanged`) — leere Kacheln möglich.
+- Neu: **„Alle Vorschläge bestätigen…“ / „Alle Vorschläge ablehnen…“** (ganze Liste, Rückfrage mit Anzahl, beim
+  Bestätigen danach die Ausreißer-Rückfrage wie beim Benennen); die bisherigen Knöpfe heißen **„Sichtbare
+  bestätigen“/„Sichtbare ablehnen“**; Zeile **„Zeigt 1–14 von 30 Vorschlägen — nach unten scrollen für weitere.“** über
+  der Liste; Reiterwechsel fordert die Ausschnitte des sichtbaren Reiters an.
+
+### Tests
+- `tests/PhotoViewerV3.Tests`: 602 (+7, 1 übersprungen ohne Modell): `Faces/Assignment/FaceIgnoreServiceTests`
+  (Zurückholen → Vorschläge, ganze Gruppe inkl. Ausreißer und Gruppe weg, inzwischen bestätigte bleiben,
+  Mindestgröße anwenden/senken/ausschalten mit bestätigten und manuell ignorierten unverändert, Standard einmal beim
+  Start und zurückgeholte bleiben beim nächsten Start, seitenweises Lesen, Index fügt zu kleine ignoriert ein). Fake-
+  Analysator in `FaceFakes` liefert jetzt 26-px-Gesichter (über dem Standard).
+- `tests/PhotoViewerV3.Wpf.Tests`: 293 (+8, 1 übersprungen), dreimal hintereinander grün:
+  `Persons/PersonsIgnoredViewModelTests` (Ansicht, „zu klein“, Zurückholen, Nachladen, ganze Gruppe per Knopf und
+  Kontextmenü mit Rückfrage, alle Vorschläge bestätigen/ablehnen vs. sichtbare, Einstellung Mindestgröße),
+  `Persons/PersonsSuggestionsListUiTests` (Reproduktion in der NavigationView: 60 Vorschläge im kleinen Fenster,
+  Scrollen und Reiterwechsel fordern Ausschnitte an; 2 000 ignorierte virtualisiert als Blatt-Kacheln mit Nachladen).
+- Rauchtest 28/28 OK, 0 Binding-Fehler — Block **„Ignorierte Gesichter“** im Schritt „Personen“
+  (`Shell/Smoke/SmokeScenario.PersonsIgnored.cs`): manuell ignorieren → Ansicht, Mindestgröße 400 px → alle offenen
+  automatisch ignoriert (bestätigte/manuelles bleiben), Schwelle zurück → zurückgeholt, „Zurückholen“ über die Ansicht.
+  Screenshot `23b-personen-ignorierte`.
+
+### Offen
+- Laufzeit der Anwendung auf den Bestand bei 500 000 Gesichtern nicht gemessen (eine Transaktion über `IX_Faces_State`).
+- Gruppenkacheln: zwei WPF-Binding-Fehler (`ImageBrush.ImageSource`, „Cannot find governing FrameworkElement“) traten
+  im Rauchtest auf, solange zwischen Personen- und Gruppenliste ein zusätzliches `await` lag — zeitabhängig, mit der
+  jetzigen Reihenfolge 0; die Vorlage (`ImageBrush` in `Border.Background`) bleibt empfindlich.
+
 ## [0.2.39] — 2026-10-21
 
 ### Neu — Gesichter sichtbar machen (Galerie und Lightbox)

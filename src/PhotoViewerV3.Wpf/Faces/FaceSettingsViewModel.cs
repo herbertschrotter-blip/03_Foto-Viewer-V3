@@ -50,13 +50,16 @@ public sealed partial class FaceSettingsViewModel : ObservableObject, IDisposabl
     private bool _isRebuilding;
 
     /// <param name="messenger">Optional (Tests); produktiv WeakReferenceMessenger.Default.</param>
+    /// <param name="ignore">Mindestgröße für Gesichter (ADR-0040); ohne Dienst bleibt der Abschnitt verborgen.</param>
     public FaceSettingsViewModel(
         IFaceIndexService index,
         IFaceModelProvider models,
         IDialogService dialogs,
         ILogger<FaceSettingsViewModel> logger,
-        IMessenger? messenger = null)
+        IMessenger? messenger = null,
+        PhotoViewerV3.Services.Faces.Assignment.IFaceIgnoreService? ignore = null)
     {
+        _ignore = ignore;
         _index = index;
         _models = models;
         _dialogs = dialogs;
@@ -82,6 +85,7 @@ public sealed partial class FaceSettingsViewModel : ObservableObject, IDisposabl
 
         RefreshModel();
         ShowStatus(_index.Status);
+        _ = LoadMinFaceSizeAsync();
     }
 
     private void RefreshModel()

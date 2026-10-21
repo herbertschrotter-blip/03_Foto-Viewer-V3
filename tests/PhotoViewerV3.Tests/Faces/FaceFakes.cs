@@ -104,10 +104,11 @@ public sealed class FakeFaceAnalyzerFactory(string version = "fake/v1") : IFaceA
                 {
                     var x = 5f + 30 * k;
                     var points = Enumerable.Range(0, 5).Select(i => new FacePoint(x + i, 10 + i)).ToArray();
-                    var detection = new FaceDetection(x, 10, x + 20, 30, 0.9f, points);
+                    // 26 px: über der Standard-Mindestgröße (24 px, ADR-0040) — sonst würden die Gesichter automatisch ignoriert
+                    var detection = new FaceDetection(x, 10, x + 26, 36, 0.9f, points);
                     var embedding = new float[FaceEmbeddingCodec.Dimensions];
                     embedding[k] = 1f;
-                    faces.Add(new AnalyzedFace(detection, embedding, FaceQuality.Score(0.9f, 20, 100)));
+                    faces.Add(new AnalyzedFace(detection, embedding, FaceQuality.Score(0.9f, 26, 100)));
                 }
 
                 return new FaceAnalysis(image.Width, image.Height, faces);

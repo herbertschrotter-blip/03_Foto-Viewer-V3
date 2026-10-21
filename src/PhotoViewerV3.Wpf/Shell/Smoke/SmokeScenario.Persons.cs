@@ -133,6 +133,8 @@ internal sealed partial class SmokeScenario
         Check(crops >= 4, $"{crops} Gesichts-Ausschnitte im Cache (thumbs\\{_libraryId}\\faces)");
         _logger.LogInformation("Rauchtest   Personen: {Groups} Gruppen, {Crops} Ausschnitte", page.Groups.Count, crops);
 
+        await PersonsIgnoredAsync(page, recognition).ConfigureAwait(true); // (6) Ignorierte Gesichter, Mindestgröße (0.2.40)
+
         await page.BackCommand.ExecuteAsync(null).ConfigureAwait(true);
         _navigation.NavigateTo(NavigationTags.Gallery);
         await WaitUntilAsync(() => _navigation.CurrentTag == NavigationTags.Gallery, ShortWait, "zurück in der Galerie").ConfigureAwait(true);

@@ -39,6 +39,7 @@ public partial class PersonsPage : UserControl
             nameof(SuggestionsList) => ViewModels.PersonsListKind.Suggestions,
             nameof(ConfirmedList) => ViewModels.PersonsListKind.Confirmed,
             nameof(GroupMembersList) => ViewModels.PersonsListKind.GroupMembers,
+            nameof(IgnoredList) => ViewModels.PersonsListKind.Ignored,
             _ => null,
         };
         if (list is { } key)
@@ -100,6 +101,15 @@ public partial class PersonsPage : UserControl
         e.Handled = true;
     }
 
+    /// <summary>Kontextmenü einer Gruppenkachel: „Ganze Gruppe ignorieren…“ (ADR-0040).</summary>
+    private void OnIgnoreGroupMenuClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem { Parent: ContextMenu { PlacementTarget: FrameworkElement { DataContext: GroupTileViewModel tile } } })
+        {
+            _viewModel.IgnoreGroupTileCommand.Execute(tile);
+        }
+    }
+
     private void OnFaceTileKeyDown(object sender, KeyEventArgs e)
     {
         if (sender is not ListBoxItem { DataContext: FaceTileViewModel tile })
@@ -135,7 +145,7 @@ public partial class PersonsPage : UserControl
     private void OnScrollToTopRequested(object? sender, EventArgs e)
         => Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () =>
         {
-            foreach (var list in new ListBox[] { SuggestionsList, ConfirmedList, GroupMembersList })
+            foreach (var list in new ListBox[] { SuggestionsList, ConfirmedList, GroupMembersList, IgnoredList })
             {
                 if (FindPanel(list) is { } panel)
                 {

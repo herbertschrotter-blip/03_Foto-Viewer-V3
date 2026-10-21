@@ -263,6 +263,23 @@
                               IsChecked="{Binding UseGpu, Mode=TwoWay}"
                               AutomationProperties.Name="Grafikkarte für die Gesichtserkennung verwenden" />
 
+                    <!-- Mindestgröße für Gesichter (0.2.40, ADR-0040) -->
+                    <StackPanel Margin="0,10,0,0" Visibility="{Binding HasMinFaceSize, Converter={StaticResource BoolToVis}}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Kleine Gesichter automatisch ignorieren:" VerticalAlignment="Center" />
+                            <ComboBox Margin="8,0,0,0" MinWidth="220"
+                                      ItemsSource="{Binding MinFaceSizeChoices}" DisplayMemberPath="Label" SelectedValuePath="Value"
+                                      SelectedValue="{Binding SelectedMinFaceSize, Mode=TwoWay}"
+                                      AutomationProperties.Name="Mindestgröße für Gesichter" />
+                        </StackPanel>
+                        <TextBlock Margin="0,4,0,0" FontSize="12" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   Text="Sehr kleine Gesichter (meist Menschen im Hintergrund) erkennt das Modell unzuverlässig. Sie werden wie „ignorieren“ behandelt — keine Vorschläge, keine Gruppen — und stehen unter Personen → Ignorierte Gesichter. Ein anderer Wert oder „Aus“ holt sie zurück; selbst ignorierte und bestätigte Gesichter bleiben unberührt." />
+                        <TextBlock Margin="0,4,0,0" FontSize="12" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
+                                   Text="{Binding MinFaceSizeMessage}"
+                                   Visibility="{Binding MinFaceSizeMessage, Converter={StaticResource NullToVis}}" />
+                    </StackPanel>
+
                     <Grid Margin="0,12,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />

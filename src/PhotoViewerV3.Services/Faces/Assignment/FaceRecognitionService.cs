@@ -21,7 +21,7 @@ namespace PhotoViewerV3.Services.Faces.Assignment;
 /// (<see cref="_writeLock"/>); Hintergrund-Vorschläge überschreiben nie eine inzwischen getroffene Entscheidung
 /// (bedingtes UPDATE in <see cref="FaceAssignmentStore.WriteSuggestions"/>).
 /// </remarks>
-public sealed class FaceRecognitionService : IFaceRecognitionService, IDisposable
+public sealed partial class FaceRecognitionService : IFaceRecognitionService, IDisposable
 {
     private readonly ILibraryContextFactory _factory;
     private readonly ILibraryService _libraries;
@@ -120,6 +120,7 @@ public sealed class FaceRecognitionService : IFaceRecognitionService, IDisposabl
         {
             _delayStart = _options.StartDelay > TimeSpan.Zero;
             _retrainRequested = true;
+            _autoIgnorePending = true; // Mindestgröße prüfen (ADR-0040): einmalig nach dem Update bzw. nach einer Änderung
         }
 
         _worker = Task.Run(WorkerLoopAsync);
@@ -161,7 +162,7 @@ public sealed class FaceRecognitionService : IFaceRecognitionService, IDisposabl
     {
         lock (_sync)
         {
-            return !_busy && !_retrainRequested && _pendingFiles.Count == 0 && _wake.Reader.Count == 0;
+            return !_busy && !_retrainRequested && !_autoIgnorePending && _pendingFiles.Count == 0 && _wake.Reader.Count == 0;
         }
     }
 
@@ -233,11 +234,13 @@ public sealed class FaceRecognitionService : IFaceRecognitionService, IDisposabl
 
     private async Task ProcessAsync(CancellationToken stop)
     {
+        // Mindestgröße zuerst (global, ADR-0040) — zurückgeholte Gesichter brauchen danach Vorschläge.
+        var restoredBySize = await ApplyAutoIgnoreIfPendingAsync(stop).ConfigureAwait(false);
         bool retrain;
         int[] files;
         lock (_sync)
         {
-            retrain = _retrainRequested;
+            retrain = _retrainRequested || restoredBySize;
             _retrainRequested = false;
             files = [.. _pendingFiles];
             _pendingFiles.Clear();
