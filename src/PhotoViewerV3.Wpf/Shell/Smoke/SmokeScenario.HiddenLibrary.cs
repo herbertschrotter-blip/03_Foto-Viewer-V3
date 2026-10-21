@@ -173,15 +173,8 @@ internal sealed partial class SmokeScenario
                 continue;
             }
 
-            byte[] content;
-            try
-            {
-                using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-                using var memory = new MemoryStream();
-                stream.CopyTo(memory);
-                content = memory.ToArray();
-            }
-            catch (IOException)
+            var content = ReadUnlockedBytes(file);
+            if (content is null)
             {
                 hits.Add(Path.GetFileName(file) + " (nicht lesbar)");
                 continue;
@@ -194,6 +187,45 @@ internal sealed partial class SmokeScenario
         }
 
         return hits;
+    }
+
+    /// <summary>
+    /// Liest eine Datei blockweise (4 KB) und überspringt Blöcke, die gerade gesperrt sind — SQLite sperrt in einer
+    /// offenen DB samt <c>-wal</c>/<c>-shm</c> einzelne Byte-Bereiche (LockFileEx), das Lesen darüber wirft dann eine
+    /// IOException (0.3.0; vorher zählte die ganze Datei als „nicht lesbar“ und damit als Spur). Liefert null, wenn die
+    /// Datei gar nicht geöffnet oder kein einziger Block gelesen werden konnte.
+    /// </summary>
+    private static byte[]? ReadUnlockedBytes(string file)
+    {
+        const int Block = 4096;
+        try
+        {
+            using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var memory = new MemoryStream();
+            var buffer = new byte[Block];
+            var readAny = stream.Length == 0;
+            for (long offset = 0; offset < stream.Length; offset += Block)
+            {
+                try
+                {
+                    stream.Position = offset;
+                    var read = stream.Read(buffer, 0, Block);
+                    memory.Write(buffer, 0, read);
+                    readAny |= read > 0;
+                }
+                catch (IOException)
+                {
+                    // gesperrter Bereich: überspringen (Platzhalter hält Abstände, damit Muster nicht über die Lücke passen)
+                    memory.Write(new byte[Block], 0, Block);
+                }
+            }
+
+            return readAny ? memory.ToArray() : null;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
     }
 
     /// <summary>Restliche Schritte nach dem Katalogwechsel — im Nachfolger, falls die normale Sitzung neu aufgebaut wurde.</summary>

@@ -3,6 +3,29 @@
 Alle nennenswerten Änderungen an Lumora (bis 0.2.48 „PhotoViewer V3“). Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.3.0] — 2026-10-21
+
+### Release — Abschluss der Runde „Trennung, Versteckt, Orte, Motive“ (0.2.51–0.2.56)
+Nach der Versionsregel des Projektprofils (MINOR beim Abschluss einer Welle) schließt 0.3.0 die Runde ab. Enthalten:
+- **0.2.51 Bibliotheks-Trennung** (ADR-0048): Tags, Kategorien, Personen, Beziehungen je Bibliotheks-Gruppe;
+  „Bibliotheken verknüpfen“ als Einstellung; Ansicht „Alle verknüpften“.
+- **0.2.52 Versteckte Bibliotheken** (ADR-0049): eigener Katalog in `.lumora` im verschlüsselten Container, nur mit
+  `_hidden` und Lumora-Kennwort, Zusperren nach Untätigkeit, Aushängen.
+- **0.2.53 Orte-Daten** (ADR-0050): GPS lesen, „Ort setzen“ verlustfrei in EXIF/XMP mit Rückgängig, Ortsnamen offline
+  (GeoNames), Filter „Ort“.
+- **0.2.54 Orte-Karte** (ADR-0051): Weltkarte mit Foto-Gruppen, die beim Zoomen feiner werden; Verorten per Ziehen.
+- **0.2.55 Motive** (ADR-0052): SigLIP 2 lokal, deutsche Begriffe, Filter „Motive“, Bildinhalt-Suche.
+- **0.2.56 Zusammenbau**: Trennung gilt auch für Orte, Karte und Motive.
+
+### Fix — Rauchtest-Spurenprüfung der versteckten Bibliothek
+- `SmokeScenario.FindTraces` liest Dateien blockweise (4 KB) und überspringt gesperrte Bereiche. SQLite sperrt in der
+  offenen DB samt `-wal`/`-shm` einzelne Byte-Bereiche (LockFileEx); vorher zählte die ganze Datei als „nicht lesbar“
+  und damit als Spur (zeitabhängiger FAIL „library.db-shm/-wal (nicht lesbar)“ im Schritt „Versteckte Bibliothek“).
+  Nur eine Datei, aus der gar nichts lesbar ist, bleibt eine mögliche Spur. Tests `TraceScanLockedRangeTests`
+  (gesperrter Bereich ohne Treffer, Treffer außerhalb, ganz gesperrte Datei).
+- Verworfen auf Herberts Wunsch (Testphase, Daten sind Kopien): eine automatische Sicherung vor Migrationen — wird vor
+  dem Produktivbetrieb wieder angeboten.
+
 ## [0.2.56] — 2026-10-21
 
 ### Fix (ADR-0048 Nachtrag) — Zusammenbau Welle 10: Bibliotheks-Trennung gilt auch für Orte, Karte und Motive
