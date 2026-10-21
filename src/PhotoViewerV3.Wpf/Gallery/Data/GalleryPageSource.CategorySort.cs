@@ -265,7 +265,7 @@ public sealed partial class GalleryPageSource
 
     /// <summary>Ohne Suche und ohne jeden Filter — dann entspricht die Segmentgröße der Zahl der Zuordnungen des Werts.</summary>
     private static bool IsUnfiltered(GalleryQuery query)
-        => !query.HasSearch && query.Filter == GalleryFilter.All && !query.HasTagFilter && !query.HasFolder
+        => !query.HasSearch && !query.Filter.IsActive && !query.HasTagFilter && !query.HasFolder
            && query.ActiveCategoryFilters.Count == 0;
 
     private enum SegmentDrive

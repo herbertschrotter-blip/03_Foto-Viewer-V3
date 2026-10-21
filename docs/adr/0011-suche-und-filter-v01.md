@@ -1,6 +1,6 @@
 # ADR-0011: Suche und Filter in V0.1
 
-- **Status:** Accepted
+- **Status:** Accepted (Filter-Teil — sich ausschließende Filter-Pills — ersetzt durch ADR-0041, 0.2.43)
 - **Datum:** 2026-05-10
 - **Entscheider:** Herbert Schrotter, Claude, GPT-5
 

@@ -345,7 +345,13 @@
         <KeyBinding Modifiers="Ctrl" Key="M" Command="{Binding ArchiveSelectionCommand}" />
         <KeyBinding Modifiers="Ctrl" Key="T" Command="{Binding EditSelectionTagsCommand}" />
         <KeyBinding Modifiers="Ctrl" Key="K" Command="{Binding EditSelectionCategoriesCommand}" />
+        <!-- Strg+F: Suchfeld der Kopfzeile (0.2.43) -->
+        <KeyBinding Modifiers="Ctrl" Key="F" Command="ApplicationCommands.Find" />
     </UserControl.InputBindings>
+
+    <UserControl.CommandBindings>
+        <CommandBinding Command="ApplicationCommands.Find" Executed="OnFindExecuted" />
+    </UserControl.CommandBindings>
 
     <Grid Margin="16,8,16,12">
         <Grid.RowDefinitions>
@@ -357,16 +363,7 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- Kopf: Titel + Library -->
-        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,6">
-            <ui:TextBlock FontTypography="Title" Text="Galerie" />
-            <ui:TextBlock FontTypography="BodyStrong"
-                          VerticalAlignment="Bottom"
-                          Margin="16,0,0,4"
-                          Text="{Binding LibraryNameDisplay}" />
-        </StackPanel>
-
-        <!-- Library-Root offline -->
+        <!-- Library-Root offline (unter der Kopfzeile, direkt über dem Inhalt) -->
         <ui:InfoBar Grid.Row="1"
                     Margin="0,0,0,8"
                     Severity="Warning"
@@ -375,8 +372,8 @@
                     Message="Der Ordner der Bibliothek ist offline. Vorschaubilder, Lightbox und Dateiaktionen stehen erst wieder zur Verfügung, wenn er erreichbar ist."
                     IsOpen="{Binding IsRootOffline, Mode=OneWay}" />
 
-        <!-- Kopfzeile (Filter, Suche, Sortierung, Seitengröße, Ansicht): eigenes Control mit Umbruch bei wenig Platz -->
-        <gc:GalleryToolbar Grid.Row="2" Margin="0,0,0,8" IsEnabled="{Binding HasLibrary}" />
+        <!-- Kopfzeile (0.2.43, Mockup 06): Titel + Trefferzeile + Suche, Filterkarte, Sortier- und Ansichtsleiste -->
+        <gc:GalleryToolbar x:Name="Toolbar" Grid.Row="0" Margin="0,0,0,8" IsEnabled="{Binding HasLibrary}" />
 
         <!-- Inhalt -->
         <Border Grid.Row="3"
@@ -593,37 +590,31 @@
             </Grid>
         </Border>
 
-        <!-- Pager -->
-        <Grid Grid.Row="4" Margin="0,10,0,0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-
-            <StackPanel Grid.Column="0" Orientation="Horizontal">
-                <ui:Button Icon="{ui:SymbolIcon ChevronDoubleLeft20}" ToolTip="Erste Seite (Strg+Pos1)" AutomationProperties.Name="Erste Seite"
-                           Command="{Binding FirstPageCommand}" Margin="0,0,4,0" />
-                <ui:Button Icon="{ui:SymbolIcon ChevronLeft24}" ToolTip="Vorherige Seite (Strg+←)" AutomationProperties.Name="Vorherige Seite"
-                           Command="{Binding PrevPageCommand}" Margin="0,0,8,0" />
-                <ui:TextBlock VerticalAlignment="Center">
-                    <Run Text="Seite " />
-                    <Run Text="{Binding DisplayPageIndex, Mode=OneWay}" FontWeight="Bold" />
-                    <Run Text=" / " />
-                    <Run Text="{Binding PageCount, StringFormat=N0, Mode=OneWay}" />
-                </ui:TextBlock>
-                <ui:Button Icon="{ui:SymbolIcon ChevronRight24}" ToolTip="Nächste Seite (Strg+→)" AutomationProperties.Name="Nächste Seite"
-                           Command="{Binding NextPageCommand}" Margin="8,0,4,0" />
-                <ui:Button Icon="{ui:SymbolIcon ChevronDoubleRight20}" ToolTip="Letzte Seite (Strg+Ende)" AutomationProperties.Name="Letzte Seite"
-                           Command="{Binding LastPageCommand}" />
-            </StackPanel>
-
-            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                <ui:TextBlock FontTypography="Caption"
-                              Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                              Text="{Binding TotalCount, StringFormat='Gesamt: {0:N0}'}" />
-            </StackPanel>
-        </Grid>
+        <!-- Blättern und Seitengröße unter der Galerie (0.2.43, Mockup 06): „‹ Seite 1 von 7 › · Pro Seite [200 ▾]“ -->
+        <StackPanel x:Name="PagerBar" Grid.Row="4" Margin="0,10,0,0" Orientation="Horizontal" HorizontalAlignment="Center"
+                    AutomationProperties.Name="Seiten">
+            <ui:Button Appearance="Transparent" Icon="{ui:SymbolIcon ChevronDoubleLeft20}" ToolTip="Erste Seite (Strg+Pos1)" AutomationProperties.Name="Erste Seite"
+                       Command="{Binding FirstPageCommand}" Margin="0,0,2,0" />
+            <ui:Button Appearance="Transparent" Icon="{ui:SymbolIcon ChevronLeft24}" ToolTip="Vorherige Seite (Strg+←)" AutomationProperties.Name="Vorherige Seite"
+                       Command="{Binding PrevPageCommand}" Margin="0,0,8,0" />
+            <TextBlock VerticalAlignment="Center" FontSize="13" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       AutomationProperties.AutomationId="GalleryPageText">
+                <Run Text="Seite " /><Run Text="{Binding DisplayPageIndex, Mode=OneWay}" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}" /><Run Text=" von " /><Run Text="{Binding PageCount, StringFormat=N0, Mode=OneWay}" />
+            </TextBlock>
+            <ui:Button Appearance="Transparent" Icon="{ui:SymbolIcon ChevronRight24}" ToolTip="Nächste Seite (Strg+→)" AutomationProperties.Name="Nächste Seite"
+                       Command="{Binding NextPageCommand}" Margin="8,0,2,0" />
+            <ui:Button Appearance="Transparent" Icon="{ui:SymbolIcon ChevronDoubleRight20}" ToolTip="Letzte Seite (Strg+Ende)" AutomationProperties.Name="Letzte Seite"
+                       Command="{Binding LastPageCommand}" />
+            <Border Width="1" Height="20" Margin="12,0" Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
+            <TextBlock Text="Pro Seite" VerticalAlignment="Center" Margin="0,0,8,0" FontSize="13"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+            <ComboBox MinWidth="80"
+                      AutomationProperties.AutomationId="GalleryPageSizeCombo"
+                      AutomationProperties.Name="Dateien pro Seite"
+                      ItemsSource="{Binding PageSizeOptions}"
+                      SelectedItem="{Binding PageSize, Mode=TwoWay}"
+                      ToolTip="Dateien pro Seite" />
+        </StackPanel>
 
         <!-- Status / Telemetrie -->
         <Border Grid.Row="5" Margin="0,8,0,0"

@@ -167,7 +167,7 @@ public sealed class GalleryFaceMarksTests : IAsyncLifetime
     }
 
     private GalleryQuery Faces(GalleryPersonMode mode, bool suggestions = false)
-        => new GalleryQuery(_libraryId, GalleryFilter.All, null, Sort: GallerySort.NameAsc) with
+        => new GalleryQuery(_libraryId, GalleryFilterState.None, null, Sort: GallerySort.NameAsc) with
         {
             PersonFilter = new GalleryPersonFilter([], mode, suggestions),
         };

@@ -1,21 +1,6 @@
 namespace PhotoViewerV3.Gallery.Data;
 
-public enum GalleryFilter
-{
-    All,
-    Images,
-    Videos,
-    Favorites,
-
-    /// <summary>Nur Archive (ZIP/RAR/7z …, MediaType 2, ADR-0022).</summary>
-    Archives,
-
-    /// <summary>Dateien unter einer Eingangs-Wurzel (Folders.RootId → LibraryRoots.Role = Inbox, ADR-0020).</summary>
-    NotArchived,
-
-    /// <summary>Dateien unter der Archiv-Wurzel.</summary>
-    Archived,
-}
+// Der frühere Einzel-Filter (enum GalleryFilter) ist seit 0.2.43 in unabhängige Teile zerlegt: GalleryFilterState (ADR-0041).
 
 /// <summary>Sortierung der Galerie; die Zweitsortierung nach Id ist immer stabil (siehe GalleryPageSource).</summary>
 public enum GallerySort

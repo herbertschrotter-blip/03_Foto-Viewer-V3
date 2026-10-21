@@ -92,7 +92,7 @@ public sealed class GalleryCategorySortPagingTests : IAsyncLifetime
     [MemberData(nameof(PageSizes))]
     public async Task Blaettern_ergibt_ueber_alle_Seitengrenzen_die_bisherige_Reihenfolge(int pageSize, bool descending)
     {
-        var query = new GalleryQuery(1, GalleryFilter.All, null, CategorySort: new GalleryCategorySort(_stufe.Id, descending));
+        var query = new GalleryQuery(1, GalleryFilterState.None, null, CategorySort: new GalleryCategorySort(_stufe.Id, descending));
         var expected = Reference(descending, string.Empty);
         expected.Should().HaveCount(LibraryFiles, "nur Dateien der Bibliothek 1");
         (await PagedIdsAsync(query, pageSize)).Should().Equal(expected);
@@ -105,10 +105,10 @@ public sealed class GalleryCategorySortPagingTests : IAsyncLifetime
     public async Task Blaettern_mit_Filter_und_mit_Suche_ergibt_die_bisherige_Reihenfolge(int pageSize, bool descending)
     {
         var sort = new GalleryCategorySort(_stufe.Id, descending);
-        var favorites = new GalleryQuery(1, GalleryFilter.Favorites, null, CategorySort: sort);
+        var favorites = new GalleryQuery(1, new GalleryFilterState(FavoritesOnly: true), null, CategorySort: sort);
         (await PagedIdsAsync(favorites, pageSize)).Should().Equal(Reference(descending, "AND f.IsFavorite = 1"));
 
-        var search = new GalleryQuery(1, GalleryFilter.All, "haus", CategorySort: sort);
+        var search = new GalleryQuery(1, GalleryFilterState.None, "haus", CategorySort: sort);
         var expectedSearch = Reference(descending, "AND f.Name LIKE 'Haus%'");
         expectedSearch.Should().NotBeEmpty();
         (await PagedIdsAsync(search, pageSize)).Should().Equal(expectedSearch);
@@ -117,7 +117,7 @@ public sealed class GalleryCategorySortPagingTests : IAsyncLifetime
     [Fact]
     public async Task Gleiche_Werte_stehen_nach_Datum_neu_vor_alt_und_bei_gleichem_Datum_hoehere_Id_zuerst()
     {
-        var ids = await PagedIdsAsync(new GalleryQuery(1, GalleryFilter.All, null, CategorySort: new GalleryCategorySort(_stufe.Id, false)), 9);
+        var ids = await PagedIdsAsync(new GalleryQuery(1, GalleryFilterState.None, null, CategorySort: new GalleryCategorySort(_stufe.Id, false)), 9);
         var modified = Lookup("SELECT Id, ModifiedAtUtc FROM Files");
         var value = Lookup($"SELECT FileId, ValueId FROM FileCategoryValues WHERE CategoryId = {_stufe.Id}");
         for (var i = 1; i < ids.Count; i++)
@@ -137,7 +137,7 @@ public sealed class GalleryCategorySortPagingTests : IAsyncLifetime
     [Fact]
     public async Task Zuweisung_zwischen_zwei_Seiten_wird_beim_naechsten_Laden_beruecksichtigt()
     {
-        var query = new GalleryQuery(1, GalleryFilter.All, null, CategorySort: new GalleryCategorySort(_stufe.Id, false));
+        var query = new GalleryQuery(1, GalleryFilterState.None, null, CategorySort: new GalleryCategorySort(_stufe.Id, false));
         var count = await _source.GetTotalCountAsync(query, CancellationToken.None);
         await _source.LoadPageAsync(query, 0, 10, count, CancellationToken.None);
 
@@ -151,7 +151,7 @@ public sealed class GalleryCategorySortPagingTests : IAsyncLifetime
     [Fact]
     public async Task Neue_Datei_nach_dem_Zaehlen_erscheint_ohne_erneutes_Zaehlen()
     {
-        var query = new GalleryQuery(1, GalleryFilter.All, null, CategorySort: new GalleryCategorySort(_stufe.Id, false));
+        var query = new GalleryQuery(1, GalleryFilterState.None, null, CategorySort: new GalleryCategorySort(_stufe.Id, false));
         var count = await _source.GetTotalCountAsync(query, CancellationToken.None);
         using (var connection = _factory.OpenSqliteConnection())
         {
@@ -170,7 +170,7 @@ public sealed class GalleryCategorySortPagingTests : IAsyncLifetime
     public async Task Werte_ohne_Dateien_und_Seiten_hinter_dem_Ende_bleiben_leer()
     {
         var leer = await _categories.CreateAsync("Leer", ["L1", "L2"]);
-        var query = new GalleryQuery(1, GalleryFilter.All, null, CategorySort: new GalleryCategorySort(leer.Id, true));
+        var query = new GalleryQuery(1, GalleryFilterState.None, null, CategorySort: new GalleryCategorySort(leer.Id, true));
         var modified = Lookup("SELECT Id, ModifiedAtUtc FROM Files");
         (await PagedIdsAsync(query, 25)).Should().Equal(Enumerable.Range(1, LibraryFiles).OrderByDescending(id => modified[id]).ThenByDescending(id => id),
             "ohne Werte ist alles „ohne Wert“ in der Standard-Reihenfolge");

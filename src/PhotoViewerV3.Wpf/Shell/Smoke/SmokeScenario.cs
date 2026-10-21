@@ -224,6 +224,7 @@ internal sealed partial class SmokeScenario
         await StepAsync("Gesichter: Index mit Fake-Analyzer → FaceScans/Faces geschrieben, Statusleiste, Pause/Fortsetzen", FacesAsync).ConfigureAwait(true);
         await StepAsync("Personen: Gruppe benennen (Ausreißer abgewählt), Vorschlag bestätigen/ablehnen, Zusammenführen", PersonsAsync).ConfigureAwait(true);
         await StepAsync("Personen in Galerie/Lightbox: Filter, Suche, Spalte, Rahmen, bestätigen, Gesichtsdaten löschen", PersonsGalleryAsync).ConfigureAwait(true);
+        await StepAsync("Kombinierte Filter: Bilder + Favoriten + Tag + Bewertung, × je Bedingung, Filter zurücksetzen (Ordnerauswahl bleibt)", CombinedFiltersAsync).ConfigureAwait(true); // 0.2.43
         await StepAsync("Ordnerüberwachung: Datei kopieren → automatischer Diff-Scan → Galerie", WatchAsync).ConfigureAwait(true);
         if (_cleanup)
         {
@@ -338,7 +339,7 @@ internal sealed partial class SmokeScenario
         Check(inboxFolderRows == 1 && nullRootRows == 0, $"DB: Folders.RootId gesetzt (Eingang {inboxFolderRows} Ordner, {nullRootRows} ohne Wurzel)");
 
         // (3) Filter „Nicht archiviert“ + Badge
-        _gallery.Filter = GalleryFilter.NotArchived;
+        _gallery.FilterState = new GalleryFilterState(Location: GalleryLocation.Inbox);
         await WaitForGalleryAsync("Filter Nicht archiviert").ConfigureAwait(true);
         Check(_gallery.TotalCount == 2 && _gallery.CurrentPage.All(i => i.IsInbox), $"Filter „Nicht archiviert“: {_gallery.TotalCount} Dateien mit Badge „Eingang“");
         await SnapshotAsync("11-galerie-eingang").ConfigureAwait(true);
@@ -368,11 +369,11 @@ internal sealed partial class SmokeScenario
         var underArchive = await DbScalarAsync<int>(
             $"SELECT COUNT(*) FROM Files f JOIN Folders d ON d.Id = f.FolderId WHERE f.Id IN ({archivedIds}) AND d.RootId = $r", ("$r", archiveRootId)).ConfigureAwait(true);
         Check(underArchive == 2, "DB: Files.FolderId zeigt auf einen Ordner der Archiv-Wurzel");
-        Check(_gallery.Filter == GalleryFilter.NotArchived && _gallery.TotalCount == 0 && _gallery.IsEmpty, $"Ansicht bleibt bei „Nicht archiviert“ und ist leer: {_gallery.EmptyMessage}");
+        Check(_gallery.FilterState == new GalleryFilterState(Location: GalleryLocation.Inbox) && _gallery.TotalCount == 0 && _gallery.IsEmpty, $"Ansicht bleibt bei „Nicht archiviert“ und ist leer: {_gallery.EmptyMessage}");
         var remembered = await DbScalarAsync<string>("SELECT Value FROM Settings WHERE Key = $k", ("$k", "archive.lastTarget." + _libraryId)).ConfigureAwait(true);
         Check(PathEquals(remembered ?? string.Empty, target), $"Setting archive.lastTarget = {remembered}");
 
-        _gallery.Filter = GalleryFilter.Archived;
+        _gallery.FilterState = new GalleryFilterState(Location: GalleryLocation.Library);
         await WaitForGalleryAsync("Filter Archiviert").ConfigureAwait(true);
         Check(_gallery.TotalCount == _mediaCount && _gallery.CurrentPage.All(i => !i.IsInbox), $"Filter „Archiviert“: {_gallery.TotalCount} Dateien");
 
@@ -389,7 +390,7 @@ internal sealed partial class SmokeScenario
         var underInbox = await DbScalarAsync<int>(
             $"SELECT COUNT(*) FROM Files f JOIN Folders d ON d.Id = f.FolderId WHERE f.Id IN ({archivedIds}) AND d.RootId = $r", ("$r", inboxRootId)).ConfigureAwait(true);
         Check(underInbox == 2, "DB: Files.FolderId wieder unter der Eingangs-Wurzel");
-        _gallery.Filter = GalleryFilter.NotArchived;
+        _gallery.FilterState = new GalleryFilterState(Location: GalleryLocation.Inbox);
         await WaitForGalleryAsync("Filter Nicht archiviert nach Rückgängig").ConfigureAwait(true);
         Check(_gallery.TotalCount == 2, $"„Nicht archiviert“ nach Rückgängig: {_gallery.TotalCount}");
 
@@ -404,7 +405,7 @@ internal sealed partial class SmokeScenario
         Check(folderBatches >= 2, $"OperationBatches MkDir/RenameFolder angewendet: {folderBatches}");
 
         // (7) Eingangs-Wurzel entfernen (nur Katalog), Dateien bleiben auf der Platte
-        _gallery.Filter = GalleryFilter.All;
+        _gallery.FilterState = GalleryFilterState.None;
         await WaitForGalleryAsync("Filter Alle").ConfigureAwait(true);
         await _libraries.RemoveRootAsync(inboxRoot.Id).ConfigureAwait(true);
         var leftRows = await DbScalarAsync<int>($"SELECT COUNT(*) FROM Files WHERE Id IN ({archivedIds})").ConfigureAwait(true);
@@ -517,7 +518,7 @@ internal sealed partial class SmokeScenario
         Check(ftsHits == 2, $"FTS findet die verschobenen Dateien ({ftsHits}/2)");
         _navigation.NavigateTo(NavigationTags.Gallery);
         await WaitUntilAsync(() => _navigation.CurrentTag == NavigationTags.Gallery, ShortWait, "Galerie aktiv").ConfigureAwait(true);
-        _gallery.Filter = GalleryFilter.NotArchived;
+        _gallery.FilterState = new GalleryFilterState(Location: GalleryLocation.Inbox);
         await WaitForGalleryAsync("Filter Nicht archiviert nach Sortieren").ConfigureAwait(true);
         Check(_gallery.TotalCount == 1, $"„Nicht archiviert“ nach dem Sortieren: {_gallery.TotalCount} (nur Handy\\Reise\\Tag1)");
 
@@ -544,7 +545,7 @@ internal sealed partial class SmokeScenario
         Check(File.Exists(Path.Combine(deep, "sm03_0001.jpg")) && !File.Exists(flattened), $"Flatten rückgängig: {flatten.StatusText}");
 
         // (7) Eingang entfernen (nur Katalog) — die Wurzel-Auswahl lädt über LibraryRootsChangedMessage neu
-        _gallery.Filter = GalleryFilter.All;
+        _gallery.FilterState = GalleryFilterState.None;
         await WaitForGalleryAsync("Filter Alle").ConfigureAwait(true);
         await _libraries.RemoveRootAsync(inboxRoot.Id).ConfigureAwait(true);
         _mediaCount -= 4;
@@ -708,19 +709,19 @@ internal sealed partial class SmokeScenario
         var videos = MediaFiles().Count(f => _formats.VideoExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()));
         var images = _mediaCount - videos;
 
-        _gallery.Filter = GalleryFilter.Videos;
+        _gallery.FilterState = new GalleryFilterState(GalleryMediaKind.Videos);
         await WaitForGalleryAsync("Filter Videos").ConfigureAwait(true);
         Check(_gallery.TotalCount == videos && _gallery.CurrentPage.All(i => i.IsVideo), $"Filter Videos: {_gallery.TotalCount} (erwartet {videos})");
 
-        _gallery.Filter = GalleryFilter.Images;
+        _gallery.FilterState = new GalleryFilterState(GalleryMediaKind.Images);
         await WaitForGalleryAsync("Filter Bilder").ConfigureAwait(true);
         Check(_gallery.TotalCount == images && _gallery.CurrentPage.All(i => !i.IsVideo), $"Filter Bilder: {_gallery.TotalCount} (erwartet {images})");
 
-        _gallery.Filter = GalleryFilter.Favorites;
+        _gallery.FilterState = new GalleryFilterState(FavoritesOnly: true);
         await WaitForGalleryAsync("Filter Favoriten").ConfigureAwait(true);
         Check(_gallery.TotalCount == 0 && _gallery.IsEmpty, $"Filter Favoriten (noch keine): {_gallery.EmptyMessage}");
 
-        _gallery.Filter = GalleryFilter.All;
+        _gallery.FilterState = GalleryFilterState.None;
         await WaitForGalleryAsync("Filter Alle").ConfigureAwait(true);
         Check(_gallery.TotalCount == _mediaCount, "Filter Alle");
     }
@@ -793,10 +794,10 @@ internal sealed partial class SmokeScenario
         _gallery.ClearSelectionCommand.Execute(null);
         Check(_gallery.SelectedCount == 0 && !_gallery.HasSelection, "Auswahl aufgehoben (Esc)");
 
-        _gallery.Filter = GalleryFilter.Favorites;
+        _gallery.FilterState = new GalleryFilterState(FavoritesOnly: true);
         await WaitForGalleryAsync("Filter Favoriten").ConfigureAwait(true);
         Check(_gallery.TotalCount == 3, $"Favoriten-Filter: {_gallery.TotalCount} Treffer");
-        _gallery.Filter = GalleryFilter.All;
+        _gallery.FilterState = GalleryFilterState.None;
         await WaitForGalleryAsync("Filter Alle").ConfigureAwait(true);
 
         var single = _gallery.CurrentPage.First(i => targets.All(t => t.Id != i.Id));
@@ -1310,11 +1311,11 @@ internal sealed partial class SmokeScenario
         Check(tile.Thumbnail is null && thumbRows == 0, "Archiv ohne Thumbnail (keine Thumbnails-Zeile, Kachel zeigt Icon)");
 
         // (2) Filter „Archive“
-        _gallery.Filter = GalleryFilter.Archives;
+        _gallery.FilterState = new GalleryFilterState(GalleryMediaKind.Archives);
         await WaitForGalleryAsync("Filter Archive").ConfigureAwait(true);
         Check(_gallery.TotalCount == 1 && _gallery.CurrentPage.Count == 1 && _gallery.CurrentPage[0].Id == tile.Id, $"Filter „Archive“: {_gallery.TotalCount} Treffer");
         await SnapshotAsync("11-galerie-archive").ConfigureAwait(true);
-        _gallery.Filter = GalleryFilter.All;
+        _gallery.FilterState = GalleryFilterState.None;
         await WaitForGalleryAsync("Filter Alle").ConfigureAwait(true);
         tile = _gallery.CurrentPage.First(i => i.Id == tile.Id);
 
@@ -1369,9 +1370,9 @@ internal sealed partial class SmokeScenario
     {
         _navigation.NavigateTo(NavigationTags.Gallery);
         await WaitUntilAsync(() => _navigation.CurrentTag == NavigationTags.Gallery, ShortWait, "Galerie aktiv").ConfigureAwait(true);
-        if (_gallery.Filter != GalleryFilter.All)
+        if (_gallery.FilterState.IsActive)
         {
-            _gallery.Filter = GalleryFilter.All;
+            _gallery.FilterState = GalleryFilterState.None;
             await WaitForGalleryAsync("Filter Alle").ConfigureAwait(true);
         }
 

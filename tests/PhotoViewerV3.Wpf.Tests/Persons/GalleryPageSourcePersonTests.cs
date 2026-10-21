@@ -227,7 +227,7 @@ public sealed class GalleryPageSourcePersonTests : IAsyncLifetime
         => Query() with { PersonFilter = new GalleryPersonFilter(ids, mode, suggestions) };
 
     private GalleryQuery Query(string? search = null)
-        => new(_libraryId, GalleryFilter.All, search, Sort: GallerySort.NameAsc);
+        => new(_libraryId, GalleryFilterState.None, search, Sort: GallerySort.NameAsc);
 
     private async Task<IReadOnlyList<string>> NamesAsync(GalleryQuery query)
     {

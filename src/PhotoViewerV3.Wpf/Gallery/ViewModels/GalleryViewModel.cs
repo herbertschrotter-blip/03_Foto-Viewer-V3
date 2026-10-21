@@ -186,13 +186,9 @@ public sealed partial class GalleryViewModel : ObservableObject
     private int _pageSize = 500;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(PageCount), nameof(CanGoForward), nameof(IsEmpty), nameof(EmptyMessage))]
+    [NotifyPropertyChangedFor(nameof(PageCount), nameof(CanGoForward), nameof(IsEmpty), nameof(EmptyMessage), nameof(ResultCountText))]
     [NotifyCanExecuteChangedFor(nameof(NextPageCommand), nameof(LastPageCommand))]
     private int _totalCount;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(EmptyMessage))]
-    private GalleryFilter _filter = GalleryFilter.All;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(EmptyMessage))]
@@ -296,6 +292,11 @@ public sealed partial class GalleryViewModel : ObservableObject
     {
         get
         {
+            if (ActiveFilterCount > 1)
+            {
+                return "Keine Dateien erfüllen alle gewählten Bedingungen zusammen — entferne einzelne Bedingungen unter „Es gilt“ oder setze die Filter zurück.";
+            }
+
             if (!string.IsNullOrWhiteSpace(SearchTerm))
             {
                 return $"Keine Treffer für „{SearchTerm.Trim()}“.";
@@ -323,16 +324,7 @@ public sealed partial class GalleryViewModel : ObservableObject
                 return "In diesem Ordner liegen keine Dateien, die zum Filter passen.";
             }
 
-            return Filter switch
-            {
-                GalleryFilter.Images => "Keine Bilder in dieser Bibliothek.",
-                GalleryFilter.Videos => "Keine Videos in dieser Bibliothek.",
-                GalleryFilter.Favorites => "Noch keine Favoriten — markiere Dateien mit dem Herz.",
-                GalleryFilter.Archives => "Keine Archive (ZIP, RAR, 7z …) in dieser Bibliothek.",
-                GalleryFilter.NotArchived => "Nichts mehr im Eingang — alle Dateien sind in der Bibliothek. Eingänge verwaltest du unter „Bibliothek“.",
-                GalleryFilter.Archived => "Noch nichts in der Bibliothek — wähle Dateien und verschiebe sie mit „In die Bibliothek…“ (Strg+M) oder übernimm einen Ordner im Ordnerbaum.",
-                _ => "Diese Bibliothek enthält noch keine Dateien. Starte unter „Bibliothek“ einen Scan.",
-            };
+            return EmptyMessageForFileFilter(FilterState); // GalleryViewModel.Filters.cs (ADR-0041)
         }
     }
 
@@ -395,7 +387,7 @@ public sealed partial class GalleryViewModel : ObservableObject
         _suppressReload = true;
         try
         {
-            Filter = GalleryFilter.All;
+            ResetFileFilter(); // Datei-Filter (ADR-0041)
             SearchTerm = null;
             FolderId = null;
             FolderName = null;
@@ -575,7 +567,8 @@ public sealed partial class GalleryViewModel : ObservableObject
         }
 
         _logger.LogDebug("FilesChangedMessage: Kind={Kind} Count={Count}", m.Kind, m.FileIds.Count);
-        if (m.Kind == FilesChangeKind.Metadata && Filter != GalleryFilter.Favorites)
+        // Favoriten- oder Bewertungs-Filter aktiv: eine Metadaten-Änderung kann die Trefferliste ändern → neu laden.
+        if (m.Kind == FilesChangeKind.Metadata && !FileFilterDependsOnMetadata)
         {
             await RefreshMetadataAsync(m.FileIds);
         }
@@ -680,6 +673,12 @@ public sealed partial class GalleryViewModel : ObservableObject
             }
 
             TotalCount = total;
+            await UpdateFilterSummaryAsync(query, total, ct); // Trefferzeile + „Es gilt“ (GalleryViewModel.Filters.cs)
+            if (ct.IsCancellationRequested)
+            {
+                return;
+            }
+
             if (PageIndex > PageCount - 1)
             {
                 PageIndex = PageCount - 1;
@@ -796,7 +795,7 @@ public sealed partial class GalleryViewModel : ObservableObject
         SetLoadStatus($"{TotalCount:N0} Treffer · Seite {DisplayPageIndex} von {PageCount:N0} · {LastPageLoadMs:N1} ms");
         _logger.LogInformation(
             "Page geladen: Idx={Idx} Size={Size} Rows={Rows} Time={Ms:N1}ms Filter={Filter} Sort={Sort} Folder={Folder} Rekursiv={Rek} Search={Search}",
-            PageIndex, PageSize, rows.Count, LastPageLoadMs, Filter, SelectedSort.Sort,
+            PageIndex, PageSize, rows.Count, LastPageLoadMs, FilterState, SelectedSort.Sort,
             FolderId?.ToString() ?? "-", IncludeSubfolders, SearchTerm ?? "-");
 
         // Thumbnails nur anstoßen (Service dedupliziert, ist thread-sicher) — sichtbare Kacheln zuerst.
@@ -861,7 +860,7 @@ public sealed partial class GalleryViewModel : ObservableObject
     private GalleryQuery BuildQuery()
     {
         var term = string.IsNullOrWhiteSpace(SearchTerm) ? null : SearchTerm.Trim();
-        return new GalleryQuery(_libraryId, Filter, term, FolderId, IncludeSubfolders, SelectedSort.Sort, SelectedTagIds(), TagFilterMode, SelectedCategoryFilters(), SelectedSort.Category, SelectedPersonFilter());
+        return new GalleryQuery(_libraryId, FilterState, term, FolderId, IncludeSubfolders, SelectedSort.Sort, SelectedTagIds(), TagFilterMode, SelectedCategoryFilters(), SelectedSort.Category, SelectedPersonFilter());
     }
 
     /// <summary>
@@ -1236,6 +1235,7 @@ public sealed partial class GalleryViewModel : ObservableObject
     [RelayCommand]
     private Task SearchAsync()
     {
+        _searchDebounceCts?.Cancel(); // Enter sucht sofort (GalleryViewModel.Filters.cs)
         // Nur Sonderzeichen (z. B. „---“, „***“) ergeben keinen FTS-Ausdruck (FtsQueryBuilder → null): Feld leeren und
         // sagen warum, statt den Text stehen zu lassen und still die ganze Bibliothek zu zeigen.
         if (!string.IsNullOrWhiteSpace(SearchTerm) && FtsQueryBuilder.FromUserInput(SearchTerm) is null)
@@ -1252,6 +1252,7 @@ public sealed partial class GalleryViewModel : ObservableObject
     private Task ClearSearchAsync()
     {
         SearchTerm = null;
+        _searchDebounceCts?.Cancel();
         return ChangeQueryAsync();
     }
 
@@ -1332,16 +1333,9 @@ public sealed partial class GalleryViewModel : ObservableObject
         return ReloadTotalAndPageAsync(restoreSelection: false);
     }
 
-    partial void OnFilterChanged(GalleryFilter value)
-    {
-        if (!_suppressReload && _isInitialized)
-        {
-            FireAndForget(ChangeQueryAsync);
-        }
-    }
-
     partial void OnSelectedSortChanged(GallerySortOption value)
     {
+        NotifySortBarChanged(); // Sortierleiste: Feld + Richtung (GalleryViewModel.SortBar.cs)
         if (!_suppressReload && _isInitialized)
         {
             FireAndForget(ChangeQueryAsync);

@@ -23,11 +23,12 @@ namespace PhotoViewerV3.Gallery.Data;
 /// Tag-Name (Tags, ADR-0021), Kategorie-Wert oder Kategorie-Name (ADR-0027) den Suchtext enthält. <paramref name="TagIds"/> +
 /// <paramref name="TagMode"/> filtern nach Tags (ODER / UND / ohne Tag), <paramref name="CategoryFilters"/> nach
 /// Kategorie-Werten. <paramref name="CategorySort"/> (nicht null) sortiert die ganze Trefferliste nach dem Wert einer
-/// Kategorie und ersetzt dann <paramref name="Sort"/>.
+/// Kategorie und ersetzt dann <paramref name="Sort"/>. <paramref name="Filter"/> = Datei-Teil (Dateiart, Favoriten,
+/// Ablage, Mindest-Bewertung, ADR-0041); alle Teile wirken mit UND.
 /// </summary>
 public sealed record GalleryQuery(
     int LibraryId,
-    GalleryFilter Filter,
+    GalleryFilterState Filter,
     string? SearchTerm,
     int? FolderId = null,
     bool IncludeSubfolders = true,
@@ -575,30 +576,10 @@ public sealed partial class GalleryPageSource : IDisposable
         return $"{column} {direction}, f.Id {direction}";
     }
 
-    /// <summary>
-    /// Status-Filter (ADR-0020) über die (kleine) Folders-Tabelle: Ordner, deren Wurzel die Rolle Eingang (0) bzw.
-    /// Archiv (1) hat — als IN-Subquery, damit die Count-Query ohne Join auskommt.
-    /// </summary>
-    private const string InboxClause =
-        "AND f.FolderId IN (SELECT d.Id FROM Folders d JOIN LibraryRoots r ON r.Id = d.RootId WHERE d.LibraryId = $libId AND r.Role = 0)";
-
-    private const string ArchiveClause =
-        "AND f.FolderId IN (SELECT d.Id FROM Folders d JOIN LibraryRoots r ON r.Id = d.RootId WHERE d.LibraryId = $libId AND r.Role = 1)";
-
-    private static string BuildFilterClause(GalleryFilter filter) => filter switch
-    {
-        GalleryFilter.Images => "AND f.MediaType = 0",
-        GalleryFilter.Videos => "AND f.MediaType = 1",
-        GalleryFilter.Favorites => "AND f.IsFavorite = 1",
-        GalleryFilter.Archives => "AND f.MediaType = 2",
-        GalleryFilter.NotArchived => InboxClause,
-        GalleryFilter.Archived => ArchiveClause,
-        _ => string.Empty,
-    };
-
     private static void BindFilterParams(SqliteCommand cmd, GalleryQuery query, FolderClause folder)
     {
         cmd.Parameters.AddWithValue("$libId", query.LibraryId);
+        BindFileFilterParams(cmd, query.Filter); // Datei-Filter (ADR-0041, GalleryPageSource.FileFilter.cs)
         if (query.MatchExpression is { } matchExpression)
         {
             cmd.Parameters.AddWithValue("$term", matchExpression);

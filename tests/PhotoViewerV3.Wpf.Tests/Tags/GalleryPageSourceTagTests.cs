@@ -157,7 +157,7 @@ public sealed class GalleryPageSourceTagTests : IAsyncLifetime
     }
 
     private GalleryQuery Query(string? search = null, IReadOnlyList<int>? tagIds = null, GalleryTagMode mode = GalleryTagMode.Any)
-        => new(_libraryId, GalleryFilter.All, search, Sort: GallerySort.NameAsc, TagIds: tagIds, TagMode: mode);
+        => new(_libraryId, GalleryFilterState.None, search, Sort: GallerySort.NameAsc, TagIds: tagIds, TagMode: mode);
 
     private async Task<List<string>> NamesAsync(GalleryQuery query)
     {

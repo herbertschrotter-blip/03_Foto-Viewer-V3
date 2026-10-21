@@ -28,18 +28,18 @@ public sealed class GalleryStatusFilterTests
         using var source = new GalleryPageSource(db.Factory);
         source.Open();
 
-        (await CountAsync(source, db, GalleryFilter.All)).Should().Be(5);
-        (await CountAsync(source, db, GalleryFilter.NotArchived)).Should().Be(2);
-        (await CountAsync(source, db, GalleryFilter.Archived)).Should().Be(3);
+        (await CountAsync(source, db, GalleryFilterState.None)).Should().Be(5);
+        (await CountAsync(source, db, new GalleryFilterState(Location: GalleryLocation.Inbox))).Should().Be(2);
+        (await CountAsync(source, db, new GalleryFilterState(Location: GalleryLocation.Library))).Should().Be(3);
 
-        var inbox = await PageAsync(source, db, GalleryFilter.NotArchived);
+        var inbox = await PageAsync(source, db, new GalleryFilterState(Location: GalleryLocation.Inbox));
         inbox.Select(f => f.Name).Should().BeEquivalentTo("neu.jpg", "urlaub-3.jpg");
         inbox.Should().OnlyContain(f => f.IsInbox && f.RootRole == 0);
 
-        var archived = await PageAsync(source, db, GalleryFilter.Archived);
+        var archived = await PageAsync(source, db, new GalleryFilterState(Location: GalleryLocation.Library));
         archived.Should().HaveCount(3).And.OnlyContain(f => !f.IsInbox && f.RootRole == 1);
 
-        var all = await PageAsync(source, db, GalleryFilter.All);
+        var all = await PageAsync(source, db, GalleryFilterState.None);
         all.Count(f => f.IsInbox).Should().Be(2, "das Badge hängt an der Datei, nicht am Filter");
     }
 
@@ -58,17 +58,17 @@ public sealed class GalleryStatusFilterTests
         using var source = new GalleryPageSource(db.Factory);
         source.Open();
 
-        var search = new GalleryQuery(db.LibraryId, GalleryFilter.NotArchived, "urlaub");
+        var search = new GalleryQuery(db.LibraryId, new GalleryFilterState(Location: GalleryLocation.Inbox), "urlaub");
         (await source.GetTotalCountAsync(search, CancellationToken.None)).Should().Be(2);
         (await source.LoadPageAsync(search, 0, 100, 2, CancellationToken.None)).Select(f => f.Name)
             .Should().BeEquivalentTo("urlaub-eingang.jpg", "urlaub-kamera.jpg");
 
-        var archivedSearch = search with { Filter = GalleryFilter.Archived };
+        var archivedSearch = search with { Filter = new GalleryFilterState(Location: GalleryLocation.Library) };
         (await source.GetTotalCountAsync(archivedSearch, CancellationToken.None)).Should().Be(1);
 
-        var folder = new GalleryQuery(db.LibraryId, GalleryFilter.NotArchived, null, FolderId: camera.Id);
+        var folder = new GalleryQuery(db.LibraryId, new GalleryFilterState(Location: GalleryLocation.Inbox), null, FolderId: camera.Id);
         (await source.GetTotalCountAsync(folder, CancellationToken.None)).Should().Be(2);
-        (await source.GetTotalCountAsync(folder with { Filter = GalleryFilter.Archived }, CancellationToken.None)).Should().Be(0);
+        (await source.GetTotalCountAsync(folder with { Filter = new GalleryFilterState(Location: GalleryLocation.Library) }, CancellationToken.None)).Should().Be(0);
     }
 
     [Fact]
@@ -88,16 +88,16 @@ public sealed class GalleryStatusFilterTests
         using var source = new GalleryPageSource(db.Factory);
         source.Open();
 
-        (await CountAsync(source, db, GalleryFilter.All)).Should().Be(1);
-        (await CountAsync(source, db, GalleryFilter.NotArchived)).Should().Be(0);
-        (await CountAsync(source, db, GalleryFilter.Archived)).Should().Be(0);
-        (await PageAsync(source, db, GalleryFilter.All)).Single().RootRole.Should().BeNull();
+        (await CountAsync(source, db, GalleryFilterState.None)).Should().Be(1);
+        (await CountAsync(source, db, new GalleryFilterState(Location: GalleryLocation.Inbox))).Should().Be(0);
+        (await CountAsync(source, db, new GalleryFilterState(Location: GalleryLocation.Library))).Should().Be(0);
+        (await PageAsync(source, db, GalleryFilterState.None)).Single().RootRole.Should().BeNull();
     }
 
-    private static Task<int> CountAsync(GalleryPageSource source, ArchiveTestDb db, GalleryFilter filter)
+    private static Task<int> CountAsync(GalleryPageSource source, ArchiveTestDb db, GalleryFilterState filter)
         => source.GetTotalCountAsync(new GalleryQuery(db.LibraryId, filter, null), CancellationToken.None);
 
-    private static async Task<IReadOnlyList<GalleryFileDto>> PageAsync(GalleryPageSource source, ArchiveTestDb db, GalleryFilter filter)
+    private static async Task<IReadOnlyList<GalleryFileDto>> PageAsync(GalleryPageSource source, ArchiveTestDb db, GalleryFilterState filter)
     {
         var query = new GalleryQuery(db.LibraryId, filter, null);
         var total = await source.GetTotalCountAsync(query, CancellationToken.None);

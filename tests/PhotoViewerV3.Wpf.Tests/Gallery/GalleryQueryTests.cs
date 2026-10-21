@@ -16,7 +16,7 @@ public sealed class GalleryQueryTests
     [InlineData("a\"b")]
     [InlineData("(x):y*")]
     public void HasSearch_ist_wahr_bei_suchbarem_Inhalt(string term)
-        => new GalleryQuery(1, GalleryFilter.All, term).HasSearch.Should().BeTrue();
+        => new GalleryQuery(1, GalleryFilterState.None, term).HasSearch.Should().BeTrue();
 
     [Theory]
     [InlineData(null)]
@@ -25,9 +25,9 @@ public sealed class GalleryQueryTests
     [InlineData("\"\"")]
     [InlineData("* ( )")]
     public void HasSearch_ist_falsch_ohne_suchbaren_Inhalt(string? term)
-        => new GalleryQuery(1, GalleryFilter.All, term).HasSearch.Should().BeFalse();
+        => new GalleryQuery(1, GalleryFilterState.None, term).HasSearch.Should().BeFalse();
 
     [Fact]
     public void MatchExpression_ist_der_Praefix_Ausdruck_des_FtsQueryBuilders()
-        => new GalleryQuery(1, GalleryFilter.All, "foto-2024 x").MatchExpression.Should().Be("\"foto-2024\"* \"x\"*");
+        => new GalleryQuery(1, GalleryFilterState.None, "foto-2024 x").MatchExpression.Should().Be("\"foto-2024\"* \"x\"*");
 }

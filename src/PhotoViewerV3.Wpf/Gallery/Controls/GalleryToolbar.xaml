@@ -12,275 +12,439 @@
              xmlns:vm="clr-namespace:PhotoViewerV3.Gallery.ViewModels"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=vm:GalleryViewModel, IsDesignTimeCreatable=False}"
-             d:DesignWidth="1000"
+             d:DesignWidth="1028"
+             x:Name="Root"
              Focusable="False">
     <!--
-        Kopfzeile der Galerie (0.2.13, vorher direkt in GalleryView.xaml). DataContext = GalleryViewModel; Bindungen und
-        Commands unverändert. Zwei ToolbarFlowPanel-Zeilen, die bei wenig Platz umbrechen statt überzulaufen:
-          1. Typ-Filter als Segmentgruppe (Alle | Bilder | Videos | Favoriten | Archive), Status-Dropdown (Nicht
-             archiviert / Archiviert), Tag-Filter, Ordner-Chip, Suche (Mindestbreite, wächst bis MaxWidth; passt sie
-             nicht mehr in die Zeile, rutscht sie in eine eigene Zeile darunter).
-          2. Sortierung, Seitengröße — Umschalter Kachel/Liste, Rückgängig, Aktualisieren (rechtsbündig).
+        Kopfzeile der Galerie (0.2.43, Mockup 06 „Galerie-Kopfzeile“, ADR-0041). DataContext = GalleryViewModel.
+          1. HeaderRow: Seitentitel („Galerie“/„Ordner“) mit Trefferzeile darunter, Suchfeld rechtsbündig.
+          2. Filterkarte: Zeile „Datei“ (Dateiart, nur Favoriten, Bewertung, Ablage, Filter zurücksetzen), Zeile „Inhalt“
+             (Tags, Personen, Kategorien), Fußzeile „Es gilt: … UND … → n Treffer“ nur bei aktiven Filtern.
+          3. ViewRow: Sortieren (Feld + Richtung) · Ansicht (Kacheln | Liste) + Vorschaugröße · Alle auswählen,
+             Rückgängig, Aktualisieren.
+        Alle Zeilen sind ToolbarFlowPanel: bei 1280 DIP Fensterbreite einzeilig, darunter brechen sie sauber um.
+        Blättern und „Pro Seite“ stehen unter der Galerie (GalleryView).
     -->
     <UserControl.Resources>
-        <BooleanToVisibilityConverter x:Key="BoolToVis" />
-        <conv:EnumEqualsConverter x:Key="EnumEquals" />
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/PhotoViewerV3;component/Gallery/Controls/GalleryFilterStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <BooleanToVisibilityConverter x:Key="BoolToVis" />
+            <conv:InverseBoolToVisibilityConverter x:Key="InverseBoolToVis" />
+            <conv:StringToVisibilityConverter x:Key="StringToVis" />
+            <conv:EnumEqualsConverter x:Key="EnumEquals" />
 
-        <!-- Ein Segment der Filtergruppe (Fluent „Segmented“): ausgewählt = Akzentfläche, Hover = dezente Fläche -->
-        <Style x:Key="FilterSegment" TargetType="RadioButton">
-            <Setter Property="GroupName" Value="Filter" />
-            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
-            <Setter Property="Padding" Value="10,0" />
-            <Setter Property="MinHeight" Value="28" />
-            <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="RadioButton">
-                        <Border x:Name="Segment"
-                                CornerRadius="4"
-                                Background="Transparent"
-                                BorderBrush="Transparent"
-                                BorderThickness="1"
-                                Padding="{TemplateBinding Padding}"
-                                MinHeight="{TemplateBinding MinHeight}">
-                            <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Center" />
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Segment" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
-                            </Trigger>
-                            <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="Segment" Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
-                                <Setter Property="Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
-                            </Trigger>
-                            <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="Segment" Property="BorderBrush" Value="{DynamicResource FocusStrokeColorOuterBrush}" />
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Opacity" Value="0.5" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- Rahmenloser Schließen-Knopf im Ordner-Chip -->
-        <Style x:Key="ChipButton" TargetType="Button">
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Padding" Value="3" />
-            <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Focusable" Value="False" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}" CornerRadius="12" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter />
-                        </Border>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
+            <!-- Rahmenloser Schließen-Knopf im Ordner-Chip und an den Bedingungen -->
+            <Style x:Key="ChipButton" TargetType="Button">
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="Padding" Value="3" />
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Bg" Background="{TemplateBinding Background}" CornerRadius="3" Padding="{TemplateBinding Padding}">
+                                <ContentPresenter />
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Bg" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                                </Trigger>
+                                <Trigger Property="IsKeyboardFocused" Value="True">
+                                    <Setter TargetName="Bg" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+        </ResourceDictionary>
     </UserControl.Resources>
 
     <StackPanel>
-        <!-- Zeile 1: Filter + Suche -->
-        <gc:ToolbarFlowPanel x:Name="FilterRow" Margin="0,0,0,6">
-            <Border x:Name="TypeFilterGroup"
-                    Padding="2"
-                    CornerRadius="6"
-                    BorderThickness="1"
-                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-                    Background="{DynamicResource ControlFillColorDefaultBrush}">
-                <StackPanel Orientation="Horizontal">
-                    <RadioButton Style="{StaticResource FilterSegment}" Content="Alle"
-                                 IsChecked="{Binding Filter, Converter={StaticResource EnumEquals}, ConverterParameter=All}" />
-                    <RadioButton Style="{StaticResource FilterSegment}" AutomationProperties.Name="Bilder"
-                                 IsChecked="{Binding Filter, Converter={StaticResource EnumEquals}, ConverterParameter=Images}">
-                        <StackPanel Orientation="Horizontal">
-                            <ui:SymbolIcon Symbol="Image24" FontSize="14" Margin="0,0,5,0" />
-                            <TextBlock Text="Bilder" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </RadioButton>
-                    <RadioButton Style="{StaticResource FilterSegment}" AutomationProperties.Name="Videos"
-                                 IsChecked="{Binding Filter, Converter={StaticResource EnumEquals}, ConverterParameter=Videos}">
-                        <StackPanel Orientation="Horizontal">
-                            <ui:SymbolIcon Symbol="Video24" FontSize="14" Margin="0,0,5,0" />
-                            <TextBlock Text="Videos" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </RadioButton>
-                    <RadioButton Style="{StaticResource FilterSegment}" AutomationProperties.Name="Favoriten"
-                                 IsChecked="{Binding Filter, Converter={StaticResource EnumEquals}, ConverterParameter=Favorites}">
-                        <StackPanel Orientation="Horizontal">
-                            <ui:SymbolIcon Symbol="Heart24" FontSize="14" Margin="0,0,5,0" />
-                            <TextBlock Text="Favoriten" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </RadioButton>
-                    <RadioButton Style="{StaticResource FilterSegment}" AutomationProperties.Name="Archive"
-                                 ToolTip="ZIP-, RAR- und 7z-Archive"
-                                 IsChecked="{Binding Filter, Converter={StaticResource EnumEquals}, ConverterParameter=Archives}">
-                        <StackPanel Orientation="Horizontal">
-                            <ui:SymbolIcon Symbol="FolderZip24" FontSize="14" Margin="0,0,5,0" />
-                            <TextBlock Text="Archive" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </RadioButton>
-                </StackPanel>
-            </Border>
-
-            <!-- Status-Filter (ADR-0020): Eingang / Archiv über Folders.RootId → LibraryRoots.Role -->
-            <gc:GalleryStatusFilterDropDown />
-
-            <!-- Tag-Filter (ODER/UND/ohne Tag), ADR-0021 -->
-            <tags:TagFilterDropDown />
-
-            <!-- Personen-Filter (ODER/UND/ohne Person/unbenannte Gesichter, 0.2.38) — sobald Personen oder Gesichter da sind -->
-            <people:PersonFilterDropDown Visibility="{Binding ShowPersonFilter, Converter={StaticResource BoolToVis}}" />
-
-            <!-- Kategorien-Filter (je Kategorie Werte + „ohne Wert“), ADR-0027 — nur wenn Kategorien angelegt sind -->
-            <cats:CategoryFilterDropDown Visibility="{Binding HasCategories, Converter={StaticResource BoolToVis}}" />
-
-            <!-- Ordner-Chip -->
-            <Border Padding="10,3,4,3"
-                    CornerRadius="14"
-                    Background="{DynamicResource AccentFillColorTertiaryBrush}"
-                    Visibility="{Binding HasFolderFilter, Converter={StaticResource BoolToVis}}">
-                <StackPanel Orientation="Horizontal">
-                    <ui:SymbolIcon Symbol="Folder24" FontSize="14" Margin="0,0,6,0"
-                                   Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
-                    <TextBlock Text="{Binding FolderChipText}"
-                               FontSize="12"
+        <!-- ===== Zeile 1: Titel + Trefferzeile links, Suche rechtsbündig ===== -->
+        <gc:ToolbarFlowPanel x:Name="HeaderRow" Margin="0,0,0,12" Spacing="16">
+            <StackPanel x:Name="TitleBlock" VerticalAlignment="Center">
+                <ui:TextBlock x:Name="TitleText"
+                              FontTypography="Title"
+                              Text="{Binding PageTitle, ElementName=Root}"
+                              ToolTip="{Binding LibraryNameDisplay}" />
+                <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                    <TextBlock x:Name="ResultLine"
+                               FontSize="13"
                                VerticalAlignment="Center"
-                               MaxWidth="260"
-                               TextTrimming="CharacterEllipsis"
-                               ToolTip="{Binding FolderChipText}"
-                               Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
-                    <Button Style="{StaticResource ChipButton}"
-                            Margin="6,0,0,0"
-                            ToolTip="Ordnerfilter aufheben"
-                            AutomationProperties.Name="Ordnerfilter aufheben"
-                            Command="{Binding ClearFolderFilterCommand}">
-                        <ui:SymbolIcon Symbol="Dismiss16" FontSize="12"
+                               AutomationProperties.AutomationId="GalleryResultLine"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                        <Run Text="{Binding TotalCount, StringFormat=N0, Mode=OneWay}"
+                             FontWeight="SemiBold"
+                             Foreground="{DynamicResource TextFillColorPrimaryBrush}" /><Run Text="{Binding ResultCountText, Mode=OneWay}" />
+                    </TextBlock>
+                    <TextBlock Text=" · Ordner: alle"
+                               FontSize="13"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Visibility="{Binding HasFolderFilter, Converter={StaticResource InverseBoolToVis}}" />
+                    <TextBlock Text=" · "
+                               FontSize="13"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Visibility="{Binding HasFolderFilter, Converter={StaticResource BoolToVis}}" />
+                    <!-- Ordner-Chip (Ordnerfilter aus Ordnerbaum/Unterordner-Kachel); × hebt ihn auf -->
+                    <Border Padding="8,1,2,1"
+                            CornerRadius="10"
+                            VerticalAlignment="Center"
+                            Background="{DynamicResource AccentFillColorTertiaryBrush}"
+                            Visibility="{Binding HasFolderFilter, Converter={StaticResource BoolToVis}}">
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="Folder24" FontSize="12" Margin="0,0,5,0"
+                                           Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                            <TextBlock Text="{Binding FolderChipText}"
+                                       FontSize="12"
+                                       VerticalAlignment="Center"
+                                       MaxWidth="320"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip="{Binding FolderChipText}"
                                        Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
-                    </Button>
+                            <Button Style="{StaticResource ChipButton}"
+                                    Margin="4,0,0,0"
+                                    ToolTip="Ordnerfilter aufheben"
+                                    AutomationProperties.Name="Ordnerfilter aufheben"
+                                    Command="{Binding ClearFolderFilterCommand}">
+                                <ui:SymbolIcon Symbol="Dismiss16" FontSize="11"
+                                               Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                            </Button>
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
-            </Border>
+            </StackPanel>
 
-            <!-- Suche: belegt mindestens MinWidth, wächst bis MaxWidth; Enter sucht, Esc leert -->
+            <!-- Suche: Enter sucht sofort, sonst nach kurzer Tipp-Pause; Esc leert; Strg+F fokussiert (GalleryView) -->
             <Grid x:Name="SearchArea"
                   gc:ToolbarFlowPanel.Fill="True"
-                  MinWidth="360"
-                  MaxWidth="640">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
+                  MinWidth="300"
+                  MaxWidth="380"
+                  VerticalAlignment="Center">
                 <ui:TextBox x:Name="SearchBox"
-                            Grid.Column="0"
                             AutomationProperties.AutomationId="GallerySearchBox"
                             AutomationProperties.Name="Suche"
+                            AutomationProperties.HelpText="Suche nach Dateiname, Tag, Person oder Kategorie. Strg+F springt hierher, Enter sucht, Esc leert."
                             Icon="{ui:SymbolIcon Search24}"
-                            PlaceholderText="Name, Tag oder Person…"
-                            ToolTip="Suche nach Dateiname, Endung, Tag-Name oder Kategorie-Wert (Enter sucht, Esc leert)"
+                            PlaceholderText="Suchen: Name, Tag, Person oder Kategorie"
+                            ToolTip="Suche nach Dateiname, Endung, Tag, Person, Kategorie oder Kategorie-Wert (Strg+F, Enter sucht, Esc leert)"
                             ClearButtonEnabled="False"
+                            Padding="10,6,64,7"
                             Text="{Binding SearchTerm, UpdateSourceTrigger=PropertyChanged}">
                     <ui:TextBox.InputBindings>
                         <KeyBinding Key="Return" Command="{Binding SearchCommand}" />
                         <KeyBinding Key="Escape" Command="{Binding ClearSearchCommand}" />
                     </ui:TextBox.InputBindings>
                 </ui:TextBox>
-                <ui:Button Grid.Column="1" Content="Suchen" Command="{Binding SearchCommand}" Margin="4,0,0,0" />
-                <ui:Button Grid.Column="2"
-                           Icon="{ui:SymbolIcon Dismiss24}"
-                           ToolTip="Suche leeren (Esc)"
-                           AutomationProperties.Name="Leeren"
-                           Command="{Binding ClearSearchCommand}"
-                           Margin="4,0,0,0" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,6,0">
+                    <!-- Tastenhinweis, solange das Feld leer ist -->
+                    <Border x:Name="SearchShortcutHint"
+                            Padding="5,1"
+                            CornerRadius="3"
+                            BorderThickness="1"
+                            IsHitTestVisible="False"
+                            BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+                            Visibility="{Binding SearchTerm, Converter={StaticResource StringToVis}, ConverterParameter=Invert}">
+                        <TextBlock Text="Strg+F" FontSize="11" Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                    </Border>
+                    <Button Style="{StaticResource ChipButton}"
+                            Padding="6"
+                            ToolTip="Suche leeren (Esc)"
+                            AutomationProperties.Name="Suche leeren"
+                            Command="{Binding ClearSearchCommand}"
+                            Visibility="{Binding SearchTerm, Converter={StaticResource StringToVis}}">
+                        <ui:SymbolIcon Symbol="Dismiss16" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    </Button>
+                </StackPanel>
             </Grid>
         </gc:ToolbarFlowPanel>
 
-        <!-- Zeile 2: Sortierung + Seitengröße links, Ansicht + Rückgängig + Aktualisieren rechts -->
-        <gc:ToolbarFlowPanel x:Name="ViewRow">
-            <StackPanel Orientation="Horizontal">
-                <ui:SymbolIcon Symbol="ArrowSort24" FontSize="16" Margin="0,0,6,0"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                <ComboBox MinWidth="150"
-                          AutomationProperties.AutomationId="GallerySortCombo"
-                          AutomationProperties.Name="Sortierung"
-                          ItemsSource="{Binding SortOptions}"
-                          SelectedItem="{Binding SelectedSort, Mode=TwoWay}"
-                          DisplayMemberPath="Label"
-                          ToolTip="Sortierung" />
-            </StackPanel>
+        <!-- ===== Filterkarte ===== -->
+        <Border x:Name="FilterCard"
+                CornerRadius="8"
+                BorderThickness="1"
+                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
+            <StackPanel>
+                <!-- Zeile „Datei“ -->
+                <gc:ToolbarFlowPanel x:Name="FileRow" Margin="14,10,14,4" Spacing="6">
+                    <TextBlock Text="DATEI" Width="54" Style="{StaticResource GalleryFilterRowLabel}" />
 
-            <StackPanel Orientation="Horizontal" Margin="8,0,0,0">
-                <TextBlock Text="Pro Seite:" VerticalAlignment="Center" Margin="0,0,6,0"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                <ComboBox MinWidth="80"
-                          AutomationProperties.AutomationId="GalleryPageSizeCombo"
-                          AutomationProperties.Name="Dateien pro Seite"
-                          ItemsSource="{Binding PageSizeOptions}"
-                          SelectedItem="{Binding PageSize, Mode=TwoWay}"
-                          ToolTip="Dateien pro Seite" />
-            </StackPanel>
+                    <!-- Dateiart -->
+                    <Border x:Name="MediaSegment" Style="{StaticResource GallerySegmentHost}"
+                            AutomationProperties.Name="Dateiart">
+                        <StackPanel Orientation="Horizontal">
+                            <RadioButton Style="{StaticResource GallerySegmentRadio}" GroupName="GalleryMedia" Content="Alle"
+                                         AutomationProperties.Name="Alle Dateiarten"
+                                         IsChecked="{Binding MediaFilter, Converter={StaticResource EnumEquals}, ConverterParameter=All}" />
+                            <RadioButton Style="{StaticResource GallerySegmentRadio}" GroupName="GalleryMedia" AutomationProperties.Name="Bilder"
+                                         IsChecked="{Binding MediaFilter, Converter={StaticResource EnumEquals}, ConverterParameter=Images}">
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:SymbolIcon Symbol="Image24" FontSize="12" Margin="0,0,4,0" />
+                                    <TextBlock Text="Bilder" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </RadioButton>
+                            <RadioButton Style="{StaticResource GallerySegmentRadio}" GroupName="GalleryMedia" AutomationProperties.Name="Videos"
+                                         IsChecked="{Binding MediaFilter, Converter={StaticResource EnumEquals}, ConverterParameter=Videos}">
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:SymbolIcon Symbol="Video24" FontSize="12" Margin="0,0,4,0" />
+                                    <TextBlock Text="Videos" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </RadioButton>
+                            <RadioButton Style="{StaticResource GallerySegmentRadio}" GroupName="GalleryMedia" AutomationProperties.Name="Archive"
+                                         ToolTip="ZIP-, RAR- und 7z-Archive"
+                                         IsChecked="{Binding MediaFilter, Converter={StaticResource EnumEquals}, ConverterParameter=Archives}">
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:SymbolIcon Symbol="FolderZip24" FontSize="12" Margin="0,0,4,0" />
+                                    <TextBlock Text="Archive" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </RadioButton>
+                        </StackPanel>
+                    </Border>
 
-            <!-- Abstandhalter: schiebt die rechte Gruppe an den Rand -->
-            <Border gc:ToolbarFlowPanel.Fill="True" MinWidth="0" Height="1" />
+                    <!-- Nur Favoriten (Umschalter) -->
+                    <ToggleButton x:Name="FavoritesChip"
+                                  Style="{StaticResource GalleryFilterChip}"
+                                  AutomationProperties.AutomationId="GalleryFavoritesFilter"
+                                  AutomationProperties.Name="Nur Favoriten"
+                                  ToolTip="Nur Dateien mit Herz zeigen"
+                                  IsChecked="{Binding FavoritesOnly, Mode=TwoWay}"
+                                  gc:FilterChip.IsActive="{Binding FavoritesOnly}">
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="Heart24" FontSize="13" Margin="0,0,6,0" Filled="{Binding FavoritesOnly}" />
+                            <TextBlock Text="Nur Favoriten" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </ToggleButton>
 
-            <!-- Vorschaugröße (nur Kachelansicht, 0.2.19): 120–320 px in 20er-Stufen; auch Strg+Mausrad, Strg+Plus/Minus -->
-            <StackPanel Orientation="Horizontal" Margin="0,0,8,0"
-                        Visibility="{Binding IsGridView, Converter={StaticResource BoolToVis}}">
-                <Slider Width="72" VerticalAlignment="Center"
-                        AutomationProperties.AutomationId="GalleryTileSizeSlider"
-                        AutomationProperties.Name="Vorschaugröße"
-                        ToolTip="Vorschaugröße (Strg+Mausrad)"
-                        Minimum="{Binding MinTileSizeValue, Mode=OneTime}"
-                        Maximum="{Binding MaxTileSizeValue, Mode=OneTime}"
-                        TickFrequency="{Binding TileSizeStepValue, Mode=OneTime}"
-                        SmallChange="{Binding TileSizeStepValue, Mode=OneTime}"
-                        LargeChange="{Binding TileSizeStepValue, Mode=OneTime}"
-                        IsSnapToTickEnabled="True"
-                        Value="{Binding TileSize, Mode=TwoWay}" />
-            </StackPanel>
+                    <!-- Bewertung -->
+                    <gc:GalleryRatingFilterDropDown />
 
-            <StackPanel Orientation="Horizontal">
-                <!-- Umschalter Kachel-Grid / Liste (Wahl wird gemerkt) -->
-                <RadioButton GroupName="ViewMode"
-                             Style="{StaticResource {x:Type ToggleButton}}"
-                             Padding="8,4"
-                             Margin="0,0,2,0"
-                             ToolTip="Kachelansicht"
-                             AutomationProperties.Name="Kachelansicht"
-                             IsChecked="{Binding ViewMode, Converter={StaticResource EnumEquals}, ConverterParameter=Grid}">
-                    <ui:SymbolIcon Symbol="Grid24" FontSize="16" />
-                </RadioButton>
-                <RadioButton GroupName="ViewMode"
-                             Style="{StaticResource {x:Type ToggleButton}}"
-                             Padding="8,4"
-                             Margin="0,0,12,0"
-                             ToolTip="Listenansicht"
-                             AutomationProperties.Name="Listenansicht"
-                             IsChecked="{Binding ViewMode, Converter={StaticResource EnumEquals}, ConverterParameter=List}">
-                    <ui:SymbolIcon Symbol="AppsListDetail24" FontSize="16" />
-                </RadioButton>
-                <!-- Alle auswählen (wie Strg+A): alle Dateien der aktuellen Seite -->
-                <ui:Button Icon="{ui:SymbolIcon SelectAllOn24}"
-                           ToolTip="Alle Dateien dieser Seite auswählen (Strg+A)"
-                           AutomationProperties.AutomationId="GallerySelectAllButton"
-                           AutomationProperties.Name="Alle auswählen"
-                           Command="{Binding SelectAllCommand}"
-                           Margin="0,0,4,0" />
-                <ui:Button Content="Rückgängig"
-                           Icon="{ui:SymbolIcon ArrowUndo24}"
-                           ToolTip="Letzte Datei-Operation rückgängig machen"
-                           Command="{Binding UndoCommand}"
-                           Margin="0,0,4,0" />
-                <ui:Button Icon="{ui:SymbolIcon ArrowClockwise24}"
-                           ToolTip="Aktualisieren (F5)"
-                           AutomationProperties.Name="Aktualisieren"
-                           Command="{Binding ReloadCommand}" />
+                    <!-- Ablage (ADR-0020): Eingang / Bibliothek -->
+                    <gc:GalleryStatusFilterDropDown />
+
+                    <!-- Abstandhalter: schiebt „Filter zurücksetzen“ an den rechten Rand -->
+                    <Border gc:ToolbarFlowPanel.Fill="True" MinWidth="0" Height="1" />
+
+                    <ui:Button x:Name="ResetFiltersButton"
+                               Height="32"
+                               Padding="10,0"
+                               AutomationProperties.AutomationId="GalleryResetFilters"
+                               AutomationProperties.Name="Filter zurücksetzen"
+                               ToolTip="Alle Filter und die Suche aufheben (die Ordnerauswahl bleibt)"
+                               Command="{Binding ResetFiltersCommand}">
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="FilterDismiss24" FontSize="13" Margin="0,0,6,0" />
+                            <TextBlock Text="Filter zurücksetzen" VerticalAlignment="Center" FontSize="13" />
+                            <Border Margin="6,0,0,0"
+                                    MinWidth="18" Height="18"
+                                    Padding="5,0"
+                                    CornerRadius="9"
+                                    Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                    Visibility="{Binding HasActiveFilters, Converter={StaticResource BoolToVis}}">
+                                <TextBlock Text="{Binding ActiveFilterCount}"
+                                           FontSize="11" FontWeight="Bold"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                            </Border>
+                        </StackPanel>
+                    </ui:Button>
+                </gc:ToolbarFlowPanel>
+
+                <!-- Zeile „Inhalt“ -->
+                <gc:ToolbarFlowPanel x:Name="ContentRow" Margin="14,4,14,10" Spacing="6">
+                    <TextBlock Text="INHALT" Width="54" Style="{StaticResource GalleryFilterRowLabel}" />
+
+                    <!-- Tag-Filter (ODER/UND/ohne Tag), ADR-0021 -->
+                    <tags:TagFilterDropDown />
+
+                    <!-- Personen-Filter (0.2.38) — sobald Personen oder Gesichter da sind -->
+                    <people:PersonFilterDropDown Visibility="{Binding ShowPersonFilter, Converter={StaticResource BoolToVis}}" />
+
+                    <!-- Kategorien-Filter (ADR-0027) — nur wenn Kategorien angelegt sind -->
+                    <cats:CategoryFilterDropDown Visibility="{Binding HasCategories, Converter={StaticResource BoolToVis}}" />
+                </gc:ToolbarFlowPanel>
+
+                <!-- Fußzeile: wirkende Bedingungen in Worten (nur bei aktiven Filtern) -->
+                <Border x:Name="ActiveRow"
+                        Padding="14,8"
+                        CornerRadius="0,0,8,8"
+                        BorderThickness="0,1,0,0"
+                        BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+                        Background="{DynamicResource SubtleFillColorTertiaryBrush}"
+                        AutomationProperties.Name="Aktive Filter"
+                        Visibility="{Binding HasActiveFilters, Converter={StaticResource BoolToVis}}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Es gilt:" FontSize="13" Margin="0,3,8,0" VerticalAlignment="Top"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        <ItemsControl Grid.Column="1"
+                                      x:Name="ConditionList"
+                                      Focusable="False"
+                                      ItemsSource="{Binding ActiveConditions}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:GalleryFilterCondition}">
+                                    <StackPanel Orientation="Horizontal" Margin="0,1,0,1">
+                                        <TextBlock x:Name="And" Text="UND" FontSize="11" FontWeight="Bold" Margin="6,0,6,0"
+                                                   VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                                        <Grid>
+                                            <Border CornerRadius="4" Background="{DynamicResource AccentFillColorDefaultBrush}" Opacity="0.12" />
+                                            <StackPanel Orientation="Horizontal" Margin="8,2,3,2">
+                                                <TextBlock Text="{Binding Label}" FontSize="13" VerticalAlignment="Center"
+                                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                                                <Button Style="{StaticResource ChipButton}"
+                                                        Margin="4,0,0,0"
+                                                        ToolTip="Diese Bedingung entfernen"
+                                                        AutomationProperties.Name="{Binding Label, StringFormat='Bedingung {0} entfernen'}"
+                                                        Command="{Binding DataContext.RemoveFilterConditionCommand, ElementName=Root}"
+                                                        CommandParameter="{Binding}">
+                                                    <ui:SymbolIcon Symbol="Dismiss16" FontSize="10" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                </Button>
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
+                                    <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding IsFirst}" Value="True">
+                                            <Setter TargetName="And" Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </DataTemplate.Triggers>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Grid.Column="2" FontSize="13" Margin="12,3,0,0" VerticalAlignment="Top"
+                                   AutomationProperties.AutomationId="GalleryActiveHits">
+                            <Run Text="→ " Foreground="{DynamicResource TextFillColorSecondaryBrush}" /><Run Text="{Binding TotalCount, StringFormat=N0, Mode=OneWay}" FontWeight="SemiBold" /><Run Text=" Treffer" />
+                        </TextBlock>
+                    </Grid>
+                </Border>
             </StackPanel>
-        </gc:ToolbarFlowPanel>
+        </Border>
+
+        <!-- ===== Sortier- und Ansichtsleiste ===== -->
+        <Border Margin="0,12,0,0"
+                Padding="0,6"
+                BorderThickness="0,1"
+                BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}">
+            <gc:ToolbarFlowPanel x:Name="ViewRow" Spacing="12">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Sortieren" Style="{StaticResource GalleryBarLabel}" />
+                    <ComboBox MinWidth="150"
+                              AutomationProperties.AutomationId="GallerySortFieldCombo"
+                              AutomationProperties.Name="Sortieren nach"
+                              ItemsSource="{Binding SortFields}"
+                              SelectedItem="{Binding SelectedSortField, Mode=TwoWay}"
+                              DisplayMemberPath="Label"
+                              ToolTip="Wonach sortiert wird" />
+                    <ui:Button Margin="4,0,0,0"
+                               Appearance="Transparent"
+                               Padding="8,4"
+                               AutomationProperties.AutomationId="GallerySortDirectionButton"
+                               AutomationProperties.Name="{Binding SortDirectionText, StringFormat='Sortierrichtung: {0} (umkehren)'}"
+                               ToolTip="Richtung umkehren"
+                               Command="{Binding ToggleSortDirectionCommand}">
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="{Binding SortDirectionSymbol}" FontSize="14" Margin="0,0,6,0" />
+                            <TextBlock Text="{Binding SortDirectionText}" VerticalAlignment="Center" FontSize="13" />
+                        </StackPanel>
+                    </ui:Button>
+                </StackPanel>
+
+                <Border Width="1" Height="20" Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
+
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Ansicht" Style="{StaticResource GalleryBarLabel}" />
+                    <!-- Segment aus ViewModeOptions: ein weiterer GalleryViewMode (Welle 2 „Collage“) = ein weiterer Eintrag -->
+                    <ListBox x:Name="ViewModeSegment"
+                             Style="{StaticResource GallerySegmentListBox}"
+                             AutomationProperties.AutomationId="GalleryViewModeSegment"
+                             AutomationProperties.Name="Ansicht"
+                             ItemsSource="{Binding ViewModeOptions}"
+                             SelectedValuePath="Mode"
+                             SelectedValue="{Binding ViewMode, Mode=TwoWay}">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem" BasedOn="{StaticResource GallerySegmentListBoxItem}">
+                                <Setter Property="AutomationProperties.Name" Value="{Binding Label}" />
+                                <Setter Property="ToolTip" Value="{Binding ToolTip}" />
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:GalleryViewModeOption}">
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:SymbolIcon Symbol="{Binding Symbol}" FontSize="13" Margin="0,0,5,0" />
+                                    <TextBlock Text="{Binding Label}" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <!-- Vorschaugröße (nur Kachelansicht, 0.2.19): 120–320 px in 20er-Stufen; auch Strg+Mausrad, Strg+Plus/Minus -->
+                    <StackPanel Orientation="Horizontal" Margin="12,0,0,0"
+                                Visibility="{Binding IsGridView, Converter={StaticResource BoolToVis}}">
+                        <ui:SymbolIcon Symbol="ZoomOut24" FontSize="12" Margin="0,0,6,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        <Slider Width="80" VerticalAlignment="Center"
+                                AutomationProperties.AutomationId="GalleryTileSizeSlider"
+                                AutomationProperties.Name="Vorschaugröße"
+                                ToolTip="Vorschaugröße (Strg+Mausrad)"
+                                Minimum="{Binding MinTileSizeValue, Mode=OneTime}"
+                                Maximum="{Binding MaxTileSizeValue, Mode=OneTime}"
+                                TickFrequency="{Binding TileSizeStepValue, Mode=OneTime}"
+                                SmallChange="{Binding TileSizeStepValue, Mode=OneTime}"
+                                LargeChange="{Binding TileSizeStepValue, Mode=OneTime}"
+                                IsSnapToTickEnabled="True"
+                                Value="{Binding TileSize, Mode=TwoWay}" />
+                        <ui:SymbolIcon Symbol="ZoomIn24" FontSize="14" Margin="6,0,0,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- Abstandhalter: schiebt die Aktionen an den rechten Rand -->
+                <Border gc:ToolbarFlowPanel.Fill="True" MinWidth="0" Height="1" />
+
+                <StackPanel Orientation="Horizontal">
+                    <!-- Alle auswählen (wie Strg+A): alle Dateien der aktuellen Seite -->
+                    <ui:Button Appearance="Transparent"
+                               Padding="8,4"
+                               ToolTip="Alle Dateien dieser Seite auswählen (Strg+A)"
+                               AutomationProperties.AutomationId="GallerySelectAllButton"
+                               AutomationProperties.Name="Alle auswählen"
+                               Command="{Binding SelectAllCommand}"
+                               Margin="0,0,2,0">
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="SelectAllOn24" FontSize="14" Margin="0,0,6,0" />
+                            <TextBlock Text="Alle auswählen" VerticalAlignment="Center" FontSize="13" />
+                        </StackPanel>
+                    </ui:Button>
+                    <ui:Button Appearance="Transparent"
+                               Padding="8,4"
+                               ToolTip="Letzte Datei-Operation rückgängig machen"
+                               AutomationProperties.Name="Rückgängig"
+                               Command="{Binding UndoCommand}"
+                               Margin="0,0,2,0">
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="ArrowUndo24" FontSize="14" Margin="0,0,6,0" />
+                            <TextBlock Text="Rückgängig" VerticalAlignment="Center" FontSize="13" />
+                        </StackPanel>
+                    </ui:Button>
+                    <ui:Button Appearance="Transparent"
+                               Padding="8,4"
+                               Icon="{ui:SymbolIcon ArrowClockwise24}"
+                               ToolTip="Aktualisieren (F5)"
+                               AutomationProperties.Name="Aktualisieren"
+                               Command="{Binding ReloadCommand}" />
+                </StackPanel>
+            </gc:ToolbarFlowPanel>
+        </Border>
     </StackPanel>
 </UserControl>

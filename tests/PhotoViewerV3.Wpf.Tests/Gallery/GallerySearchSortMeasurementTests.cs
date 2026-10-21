@@ -38,6 +38,7 @@ public sealed class GallerySearchSortMeasurementTests : IAsyncLifetime
     private GalleryPageSource _source = null!;
     private int _libraryId;
     private CategoryInfo _quality = null!;
+    private int _familieTagId;
 
     public GallerySearchSortMeasurementTests(ITestOutputHelper output)
     {
@@ -84,6 +85,7 @@ public sealed class GallerySearchSortMeasurementTests : IAsyncLifetime
 
         var urlaub = (await tags.CreateAsync("Urlaub")).Id;
         var familie = (await tags.CreateAsync("Familie")).Id;
+        _familieTagId = familie;
 
         using var categories = new CategoryService(_factory, NullLogger<CategoryService>.Instance, messenger);
         _quality = await categories.CreateAsync("Qualität", ["Q1", "Q2", "Q3", "Q4", "Q5"]);
@@ -102,6 +104,9 @@ public sealed class GallerySearchSortMeasurementTests : IAsyncLifetime
             AssignCategory(connection, tx, _quality, "Id % 5 <> 0", "Id * 31");
             AssignCategory(connection, tx, projekt, "Id % 2 = 0", "Id * 17 + 5");
             AssignCategory(connection, tx, kunde, "Id % 50 = 7", "Id");
+
+            // Datei-Filter (0.2.43, ADR-0041): jedes 4. ein Video, jedes 10. Favorit, Bewertung 1–5 (jedes 6. ohne).
+            Exec(connection, tx, "UPDATE Files SET MediaType = CASE WHEN Id % 4 = 0 THEN 1 ELSE 0 END, IsFavorite = CASE WHEN Id % 10 = 0 THEN 1 ELSE 0 END, Rating = CASE WHEN Id % 6 = 0 THEN NULL ELSE Id % 6 END;");
             tx.Commit();
 
             // Kein ANALYZE: die App führt keins aus, der Planer arbeitet wie beim Benutzer ohne Statistiken.
@@ -183,7 +188,7 @@ public sealed class GallerySearchSortMeasurementTests : IAsyncLifetime
 
         await Measure("Tag-Suche „urlaub“ (selten), Seite 1", Search("urlaub"), 0, _files / 100);
         await Measure("Tag-Suche „familie“ (häufig), Seite 1", Search("familie"), 0);
-        var sort = new GalleryQuery(_libraryId, GalleryFilter.All, null, CategorySort: new GalleryCategorySort(_quality.Id, false));
+        var sort = new GalleryQuery(_libraryId, GalleryFilterState.None, null, CategorySort: new GalleryCategorySort(_quality.Id, false));
         await Measure("Kategorie-Sortierung ↑, Seite 1", sort, 0, _files);
         await Measure($"Kategorie-Sortierung ↑, Seite {midPage + 1} (Mitte)", sort, midPage, _files);
         await Measure($"Kategorie-Sortierung ↑, Seite {deepPage + 1} (tief)", sort, deepPage, _files);
@@ -192,8 +197,15 @@ public sealed class GallerySearchSortMeasurementTests : IAsyncLifetime
         await Measure("Kategorie-Namen-Suche „projekt“ (50 %), Seite 1", Search("projekt"), 0);
         await Measure("Kategorie-Namen-Suche „kunde“ (2 %), Seite 1", Search("kunde"), 0);
 
+        // Datei-Filter unabhängig kombiniert (0.2.43): Einzel-Filter wie vorher, dazu UND-Kombinationen.
+        var images = new GalleryQuery(_libraryId, new GalleryFilterState(GalleryMediaKind.Images), null);
+        await Measure("Datei-Filter Bilder (75 %), Seite 1", images, 0);
+        await Measure("Datei-Filter Favoriten (10 %), Seite 1", images with { Filter = new GalleryFilterState(FavoritesOnly: true) }, 0);
+        await Measure("Bilder + Favoriten + ab 3 Sternen, Seite 1", images with { Filter = new GalleryFilterState(GalleryMediaKind.Images, true, MinRating: 3) }, 0);
+        await Measure("Bilder + ab 3 Sternen + Tag „Familie“, Seite 1", images with { Filter = new GalleryFilterState(GalleryMediaKind.Images, MinRating: 3), TagIds = [_familieTagId] }, 0);
+
         // Vergleich (nicht Teil der Änderung): Grundsortierungen mit Lookup je Datei.
-        var all = new GalleryQuery(_libraryId, GalleryFilter.All, null);
+        var all = new GalleryQuery(_libraryId, GalleryFilterState.None, null);
         await Measure($"Vergleich: Datum neu → alt, Seite {midPage + 1}", all, midPage, _files);
         await Measure($"Vergleich: Name A → Z, Seite {midPage + 1}", all with { Sort = GallerySort.NameAsc }, midPage, _files);
 
@@ -203,7 +215,7 @@ public sealed class GallerySearchSortMeasurementTests : IAsyncLifetime
         }
     }
 
-    private GalleryQuery Search(string term) => new(_libraryId, GalleryFilter.All, term);
+    private GalleryQuery Search(string term) => new(_libraryId, GalleryFilterState.None, term);
 
     private static double Median(List<double> values)
     {

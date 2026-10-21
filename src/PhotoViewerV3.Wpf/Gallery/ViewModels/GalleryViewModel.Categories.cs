@@ -131,6 +131,7 @@ public sealed partial class GalleryViewModel
             }
 
             CategoryColumns = categories;
+            UpdateCategorySortFields(); // Sortierleiste: Kategorien als Felder (GalleryViewModel.SortBar.cs)
             OnPropertyChanged(nameof(HasCategories));
             NotifyCategoryFilterChanged();
             UpdateCategoryMenuStates();
@@ -361,6 +362,8 @@ public sealed partial class GalleryViewModel
         {
             RemoveUnusedCategorySortOptions(selected);
         }
+
+        OnFilterTextChanged(e.PropertyName); // Chip-Werte und „Es gilt“-Zeile (GalleryViewModel.Filters.cs, ADR-0041)
     }
 
     /// <summary>Nur die gewählte Kategorie-Sortierung bleibt in der Auswahlliste; feste Einträge bleiben immer.</summary>

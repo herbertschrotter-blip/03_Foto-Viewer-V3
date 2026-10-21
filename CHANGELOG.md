@@ -3,6 +3,55 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.43] — 2026-10-21
+
+### Neu (ADR-0041) — Galerie-Kopfzeile: Suche im Titel, Filter frei kombinierbar, Filter zurücksetzen
+Mockup 06 („Galerie-Kopfzeile“, `mockups/06-galerie-kopfzeile.html`) von Herbert abgenommen am 2026-10-21.
+- **Filter unabhängig kombinierbar**: Dateiart (Alle/Bilder/Videos/Archive), **Nur Favoriten**, **Ablage**
+  (Überall/Noch im Eingang/In der Bibliothek) und neu **Bewertung** (egal/ab 1–4 Sternen/nur 5 Sterne) sind eigene
+  Filter statt eines Einzel-Enums; zusammen mit Tags, Personen, Kategorien, Suche und Ordner gelten alle mit **UND** —
+  z. B. „nur Bilder UND Favoriten UND Tag „Urlaub“ UND ohne benannte Person UND noch im Eingang“. Modell
+  `GalleryFilterState` ersetzt `GalleryFilter` (`Gallery/Data/GalleryFilterState.cs`, SQL in
+  `GalleryPageSource.FileFilter.cs`); die bisherigen Einzel-Filter erzeugen wortgleiches SQL (gleiche Abfragepläne).
+- **Kopfzeile neu** (`Gallery/Controls/GalleryToolbar.xaml`): Titel „Galerie“ bzw. „Ordner“ mit Trefferzeile „342 von
+  1.248 Dateien · Ordner: …“ (Ordner-Chip mit ✕ bleibt dort), Suchfeld rechtsbündig („Suchen: Name, Tag, Person oder
+  Kategorie“, **Strg+F** fokussiert, Enter sucht sofort, sonst nach 450 ms Tipp-Pause, Esc leert; der Knopf „Suchen“
+  entfällt). **Filterkarte** mit Zeile „Datei“ (Segment, Chips „Nur Favoriten“, „Bewertung“, „Ablage“, rechts **Filter
+  zurücksetzen** mit Zähler, ohne Filter deaktiviert) und Zeile „Inhalt“ (Tags, Personen, Kategorien als Chips, aktiv in
+  Akzentfarbe mit Wert). Fußzeile nur bei aktiven Filtern: **„Es gilt: Bilder UND Favoriten UND Tag „Urlaub“ … →
+  342 Treffer“**, ✕ entfernt genau diese Bedingung. „Filter zurücksetzen“ hebt alle Filter und die Suche auf, die
+  Ordnerauswahl bleibt.
+- **Flyouts mit verständlichen Texten**: Tags „Mindestens eines der gewählten / Alle gewählten zusammen / Ohne Tag“,
+  Personen „Eine der gewählten Personen / Alle gewählten Personen zusammen / Keine benannte Person / Unbenannte
+  Gesichter / Irgendein Gesicht“, „Auch Vorschläge mitzählen“; Suchfeld über die Tag- bzw. Personenliste; „Leeren“ /
+  „Fertig“. Alle Funktionen der bisherigen Dropdowns bleiben (Zähler, ausgeblendete Personen, „ohne Wert“ je Kategorie).
+- **Sortier- und Ansichtsleiste**: „Sortieren [Feld ▾] [↓ Neueste zuerst]“ — Feld (Änderungsdatum, Name, Größe, jede
+  Kategorie) und Richtung getrennt; Kategorie-Sortierung per Spaltenkopf bleibt und erscheint als Feld. „Ansicht
+  [Kacheln | Liste]“ als Segment aus einer Liste (`ViewModeOptions` — „Collage“ in Welle 2 ist ein weiterer Eintrag),
+  Vorschaugrößen-Regler, rechts Alle auswählen, Rückgängig, Aktualisieren.
+- **Blättern und „Pro Seite“ unter der Galerie**: „‹ Seite 1 von 7 › · Pro Seite [200 ▾]“ (erste/letzte Seite bleiben).
+- Bei 1280 DIP Fensterbreite einzeilig: Titelzeile, Zeile „Datei“ und Sortierleiste — auch mit allen Datei-Filtern
+  aktiv (Chips zeigen dafür Kurzwerte „Ablage: Eingang“, „Bewertung: ab 3 ★“); schmaler brechen sie sauber um.
+- Stile der Chips, Segmente und Flyouts zentral in `Gallery/Controls/GalleryFilterStyles.xaml` (nur Theme-Ressourcen,
+  hell und dunkel). Galerie-Kacheln, Tastenkürzel und Automation-Namen unverändert; neu `GalleryResetFilters`,
+  `GalleryFavoritesFilter`, `GalleryRatingFilterButton`, `GallerySortFieldCombo`, `GallerySortDirectionButton`,
+  `GalleryViewModeSegment` (der alte `GallerySortCombo` entfällt).
+
+### Messung (500 000 Dateien, `GallerySearchSortMeasurementTests`, Median aus 3, warmer Cache)
+- Bilder: Zählen 21 ms, Seite 1 7 ms · Favoriten: 4 / 56 ms · Bilder + Favoriten + ab 3 Sternen (8 334 Treffer):
+  144 / 231 ms · Bilder + ab 3 Sternen + Tag „Familie“ (41 666): 233 / 112 ms (Tag-Suche „familie“ zum Vergleich
+  167 / 188 ms). Bewertung ohne eigenen Index (keine Migration) — siehe ADR-0041.
+
+### Tests
+- `tests/PhotoViewerV3.Wpf.Tests`: `Gallery/GalleryFilterCombinationTests` (96 Kombinationen aus Dateiart × Favoriten ×
+  Ablage × Bewertung gegen eine echte DB, jeweils auch mit Tag-Filter, „ohne Tag“, Suche und Ordnerfilter; Abfrageplan
+  ohne Vollscan über Files in jeder Kombination; Einzel-Filter wortgleich wie vorher; Bezugsgröße der Trefferzeile;
+  Leertexte), `GalleryToolbarLayoutTests` neu für die Kopfzeile (1280/1920/2560 einzeilig, 1280 mit allen Filtern hell
+  und dunkel, 1024 und Ordner-Seite brechen ohne Überlauf um). Alle `GalleryFilter`-Aufrufe in Tests umgestellt.
+- Rauchtest: Filter-Schritte auf `FilterState` umgestellt; neuer Schritt **„Kombinierte Filter“** vor der
+  Ordnerüberwachung (Bilder + Favoriten + Tag + ab 3 Sternen gegen die DB-Zahl, „Es gilt“-Zeile, ✕ an „ab 3 Sternen“,
+  Suche als Bedingung, Filter zurücksetzen mit erhaltener Ordnerauswahl, Gesamtzahl wieder da, Strg+F gebunden).
+
 ## [0.2.42] — 2026-10-21
 
 ### Behoben — Doppelklick auf eine Kachel öffnete manchmal ein anderes Foto

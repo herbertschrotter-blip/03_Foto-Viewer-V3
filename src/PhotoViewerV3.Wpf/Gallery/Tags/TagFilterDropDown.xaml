@@ -3,28 +3,38 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:conv="clr-namespace:PhotoViewerV3.Gallery.Converters"
+             xmlns:gc="clr-namespace:PhotoViewerV3.Gallery.Controls"
              xmlns:local="clr-namespace:PhotoViewerV3.Gallery.Tags"
              x:Name="Root"
              Focusable="False">
     <!--
-        Tag-Filter neben den Filter-Pills: Knopf zeigt den aktiven Filter („Tags: Urlaub, Familie (UND)“), das Popup
-        bietet je Tag ein Häkchen (mit Zähler), die Verknüpfung ODER/UND/ohne Tag und „Zurücksetzen“.
-        DataContext = GalleryViewModel (TagFilterEntries, TagFilterMode, ApplyTagFilterCommand, ClearTagFilterCommand).
+        Chip „Tags: …“ in der Zeile „Inhalt“ (0.2.43, Mockup 06): zeigt den aktiven Filter in Akzentfarbe („Tags: Urlaub“).
+        Das Flyout bietet die Verknüpfung in Worten (mindestens eines / alle zusammen / ohne Tag), eine Suche über die
+        Tag-Liste, je Tag ein Häkchen mit Zähler, „Leeren“ und „Fertig“. Häkchen wirken sofort.
+        DataContext = GalleryViewModel (TagFilterEntries, TagFilterMode, TagFilterValueText, HasTagFilter,
+        ApplyTagFilterCommand, ClearTagFilterCommand).
     -->
     <UserControl.Resources>
-        <BooleanToVisibilityConverter x:Key="BoolToVis" />
-        <conv:EnumEqualsConverter x:Key="EnumEquals" />
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/PhotoViewerV3;component/Gallery/Controls/GalleryFilterStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <BooleanToVisibilityConverter x:Key="BoolToVis" />
+            <conv:EnumEqualsConverter x:Key="EnumEquals" />
+        </ResourceDictionary>
     </UserControl.Resources>
     <Grid>
         <ToggleButton x:Name="Toggle"
+                      Style="{StaticResource GalleryFilterChip}"
                       AutomationProperties.AutomationId="GalleryTagFilterButton"
-                      AutomationProperties.Name="Tag-Filter"
-                      ToolTip="Nach Tags filtern"
-                      Padding="10,4"
+                      AutomationProperties.Name="{Binding TagFilterValueText, StringFormat='Tag-Filter: {0}'}"
+                      ToolTip="{Binding TagFilterText}"
+                      gc:FilterChip.IsActive="{Binding HasTagFilter}"
                       IsChecked="{Binding IsOpen, ElementName=FilterPopup, Mode=TwoWay}">
             <StackPanel Orientation="Horizontal">
-                <ui:SymbolIcon Symbol="Tag24" FontSize="14" Margin="0,0,6,0" />
-                <TextBlock Text="{Binding TagFilterText}" MaxWidth="260" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                <ui:SymbolIcon Symbol="Tag24" FontSize="13" Margin="0,0,6,0" />
+                <TextBlock Text="Tags:" Style="{StaticResource GalleryChipLabel}" />
+                <TextBlock Text="{Binding TagFilterValueText}" MaxWidth="240" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                 <ui:SymbolIcon Symbol="ChevronDown24" FontSize="10" Margin="6,0,0,0" />
             </StackPanel>
         </ToggleButton>
@@ -34,44 +44,62 @@
                Placement="Bottom"
                StaysOpen="False"
                AllowsTransparency="True"
-               PopupAnimation="Fade">
-            <Border Margin="0,4,0,0"
-                    MinWidth="260"
-                    MaxHeight="420"
-                    Padding="10"
-                    CornerRadius="8"
-                    Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}"
-                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-                    BorderThickness="1">
-                <Border.Effect>
-                    <DropShadowEffect BlurRadius="12" ShadowDepth="3" Opacity="0.3" />
-                </Border.Effect>
+               PopupAnimation="Fade"
+               Closed="OnPopupClosed">
+            <Border Style="{StaticResource GalleryFlyoutBorder}" Width="300" MaxHeight="480">
                 <DockPanel>
-                    <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
-                        <TextBlock Text="Verknüpfung" FontSize="11" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,0,0,4" />
-                        <RadioButton Content="mindestens eines der Tags (ODER)" GroupName="TagMode"
-                                     IsChecked="{Binding TagFilterMode, Converter={StaticResource EnumEquals}, ConverterParameter=Any}" />
-                        <RadioButton Content="alle gewählten Tags (UND)" GroupName="TagMode"
-                                     IsChecked="{Binding TagFilterMode, Converter={StaticResource EnumEquals}, ConverterParameter=All}" />
-                        <RadioButton Content="nur Dateien ohne Tag" GroupName="TagMode"
-                                     IsChecked="{Binding TagFilterMode, Converter={StaticResource EnumEquals}, ConverterParameter=None}" />
+                    <StackPanel DockPanel.Dock="Top">
+                        <TextBlock Text="WELCHE TAGS?" Style="{StaticResource GalleryFlyoutHeading}" />
+                        <RadioButton GroupName="TagMode" Margin="0,2"
+                                     AutomationProperties.Name="Mindestens eines der gewählten Tags"
+                                     IsChecked="{Binding TagFilterMode, Converter={StaticResource EnumEquals}, ConverterParameter=Any}">
+                            <StackPanel>
+                                <TextBlock Text="Mindestens eines der gewählten" />
+                                <TextBlock Text="z. B. Urlaub oder Familie" Style="{StaticResource GalleryFlyoutHint}" />
+                            </StackPanel>
+                        </RadioButton>
+                        <RadioButton GroupName="TagMode" Margin="0,2"
+                                     AutomationProperties.Name="Alle gewählten Tags zusammen"
+                                     IsChecked="{Binding TagFilterMode, Converter={StaticResource EnumEquals}, ConverterParameter=All}">
+                            <StackPanel>
+                                <TextBlock Text="Alle gewählten zusammen" />
+                                <TextBlock Text="Urlaub und Familie auf derselben Datei" Style="{StaticResource GalleryFlyoutHint}" />
+                            </StackPanel>
+                        </RadioButton>
+                        <RadioButton GroupName="TagMode" Margin="0,2"
+                                     AutomationProperties.Name="Ohne Tag"
+                                     IsChecked="{Binding TagFilterMode, Converter={StaticResource EnumEquals}, ConverterParameter=None}">
+                            <StackPanel>
+                                <TextBlock Text="Ohne Tag" />
+                                <TextBlock Text="nur Dateien ohne jedes Tag" Style="{StaticResource GalleryFlyoutHint}" />
+                            </StackPanel>
+                        </RadioButton>
+                        <Border Style="{StaticResource GalleryFlyoutDivider}" />
+                        <ui:TextBox x:Name="SearchBox"
+                                    Margin="0,0,0,6"
+                                    PlaceholderText="Tag suchen"
+                                    Icon="{ui:SymbolIcon Search24}"
+                                    ClearButtonEnabled="True"
+                                    AutomationProperties.Name="Tag suchen"
+                                    TextChanged="OnSearchTextChanged" />
                     </StackPanel>
 
                     <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
-                        <ui:Button Content="Zurücksetzen" Command="{Binding ClearTagFilterCommand}" Click="OnCloseClick" Margin="0,0,6,0" />
-                        <ui:Button Content="Schließen" Appearance="Primary" Click="OnCloseClick" />
+                        <ui:Button Content="Leeren" ToolTip="Tag-Filter aufheben" Command="{Binding ClearTagFilterCommand}" Click="OnCloseClick" Margin="0,0,6,0" />
+                        <ui:Button Content="Fertig" Appearance="Primary" Click="OnCloseClick" />
                     </StackPanel>
 
                     <TextBlock DockPanel.Dock="Top" Text="Noch keine Tags — unter „Tags“ anlegen."
-                               FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                Visibility="{Binding HasNoTags, Converter={StaticResource BoolToVis}}" />
 
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
-                        <ItemsControl ItemsSource="{Binding TagFilterEntries}">
+                    <ScrollViewer x:Name="ListScroller" VerticalScrollBarVisibility="Auto">
+                        <ItemsControl x:Name="TagList" ItemsSource="{Binding TagFilterEntries}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="{x:Type local:TagFilterEntry}">
                                     <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
                                               Margin="0,1"
+                                              AutomationProperties.Name="{Binding Name}"
                                               Command="{Binding DataContext.ApplyTagFilterCommand, ElementName=Root}">
                                         <StackPanel Orientation="Horizontal">
                                             <Border Width="10" Height="10" CornerRadius="5" Background="{Binding Brush}" Margin="0,0,6,0" VerticalAlignment="Center" />

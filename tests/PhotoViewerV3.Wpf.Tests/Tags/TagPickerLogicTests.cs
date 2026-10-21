@@ -57,10 +57,10 @@ public sealed class TagPickerLogicTests
     [Fact]
     public void GalleryQuery_HasTagFilter()
     {
-        new GalleryQuery(1, GalleryFilter.All, null).HasTagFilter.Should().BeFalse();
-        new GalleryQuery(1, GalleryFilter.All, null, TagIds: Array.Empty<int>()).HasTagFilter.Should().BeFalse();
-        new GalleryQuery(1, GalleryFilter.All, null, TagIds: [1]).HasTagFilter.Should().BeTrue();
-        new GalleryQuery(1, GalleryFilter.All, null, TagMode: GalleryTagMode.None).HasTagFilter.Should().BeTrue("„ohne Tag“ wirkt auch ohne gewählte Tags");
+        new GalleryQuery(1, GalleryFilterState.None, null).HasTagFilter.Should().BeFalse();
+        new GalleryQuery(1, GalleryFilterState.None, null, TagIds: Array.Empty<int>()).HasTagFilter.Should().BeFalse();
+        new GalleryQuery(1, GalleryFilterState.None, null, TagIds: [1]).HasTagFilter.Should().BeTrue();
+        new GalleryQuery(1, GalleryFilterState.None, null, TagMode: GalleryTagMode.None).HasTagFilter.Should().BeTrue("„ohne Tag“ wirkt auch ohne gewählte Tags");
     }
 
     [Theory]

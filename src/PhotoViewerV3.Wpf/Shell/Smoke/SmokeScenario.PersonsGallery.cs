@@ -75,9 +75,9 @@ internal sealed partial class SmokeScenario
             await _gallery.ClearFolderFilterCommand.ExecuteAsync(null).ConfigureAwait(true);
         }
 
-        if (_gallery.Filter != GalleryFilter.All)
+        if (_gallery.FilterState.IsActive)
         {
-            _gallery.Filter = GalleryFilter.All;
+            _gallery.FilterState = GalleryFilterState.None;
         }
 
         await WaitForGalleryAsync("Galerie ohne Filter").ConfigureAwait(true);

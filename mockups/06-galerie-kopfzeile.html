@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>PhotoViewer V3 — Galerie-Kopfzeile und Navigation (Entwurf 06)</title>
+<style>
+/* Tokens aus 04-fluent-light.html / 05-fluent-dark.html (Design-Vorlage), unverändert übernommen */
+:root {
+  --mica-base:        #F3F3F3;
+  --layer-default:    rgba(255,255,255,0.7);
+  --layer-card:       #FFFFFF;
+  --layer-subtle:     rgba(0,0,0,0.026);
+  --layer-secondary:  rgba(0,0,0,0.04);
+  --layer-tertiary:   rgba(0,0,0,0.06);
+  --text-primary:     #1A1A1A;
+  --text-secondary:   #5C5C5C;
+  --text-tertiary:    #8B8B8B;
+  --text-disabled:    #B5B5B5;
+  --text-on-accent:   #FFFFFF;
+  --stroke-default:   rgba(0,0,0,0.0578);
+  --stroke-secondary: rgba(0,0,0,0.0357);
+  --stroke-divider:   rgba(0,0,0,0.0803);
+  --stroke-card:      rgba(0,0,0,0.0578);
+  --accent:           #5B5FC7;
+  --accent-light:     #7579D8;
+  --accent-dark:      #4145A0;
+  --accent-soft:      rgba(91,95,199,0.08);
+  --accent-soft-2:    rgba(91,95,199,0.16);
+  --success:          #107C10;
+  --warning:          #C29C00;
+  --danger:           #C42B1C;
+  --shadow-card:      0 2px 4px rgba(0,0,0,0.02), 0 1px 2px rgba(0,0,0,0.03);
+  --shadow-flyout:    0 8px 16px rgba(0,0,0,0.14);
+}
+body.dark {
+  --mica-base:        #202020;
+  --layer-default:    rgba(43,43,43,0.7);
+  --layer-card:       #2C2C2C;
+  --layer-subtle:     rgba(255,255,255,0.03);
+  --layer-secondary:  rgba(255,255,255,0.0418);
+  --layer-tertiary:   rgba(255,255,255,0.0605);
+  --text-primary:     #FFFFFF;
+  --text-secondary:   #D0D0D0;
+  --text-tertiary:    #A0A0A0;
+  --text-disabled:    #6A6A6A;
+  --text-on-accent:   #FFFFFF;
+  --stroke-default:   rgba(255,255,255,0.0837);
+  --stroke-secondary: rgba(255,255,255,0.0698);
+  --stroke-divider:   rgba(255,255,255,0.0837);
+  --stroke-card:      rgba(255,255,255,0.0578);
+  --accent:           #818CF8;
+  --accent-light:     #A5B0FF;
+  --accent-dark:      #6066D8;
+  --accent-soft:      rgba(129,140,248,0.12);
+  --accent-soft-2:    rgba(129,140,248,0.24);
+  --success:          #6CCB5F;
+  --warning:          #FCE100;
+  --danger:           #FF6B5E;
+  --shadow-card:      0 2px 4px rgba(0,0,0,0.18), 0 1px 2px rgba(0,0,0,0.22);
+  --shadow-flyout:    0 8px 16px rgba(0,0,0,0.4);
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: #E9E9EC; color: var(--text-primary);
+  font-family: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif; font-size: 14px;
+}
+body.dark { background: #161616; }
+.ic { font-family: 'Segoe Fluent Icons', 'Segoe MDL2 Assets'; font-size: 16px; line-height: 1; font-style: normal; }
+.ic.s { font-size: 12px; }
+
+/* Mockup-Steuerung (gehört nicht zur App) */
+.mock-bar { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; padding: 10px 20px;
+  background: #2B2B33; color: #EEE; font-size: 13px; }
+.mock-bar b { font-weight: 600; margin-right: 4px; }
+.mock-bar button { background: #44444F; color: #EEE; border: 1px solid #5A5A66; border-radius: 4px; padding: 4px 10px;
+  font: inherit; cursor: pointer; }
+.mock-bar button.on { background: #5B5FC7; border-color: #7579D8; }
+.mock-note { max-width: 1440px; margin: 14px auto 0; padding: 0 20px; font-size: 13px; color: #555; }
+body.dark .mock-note { color: #AAA; }
+
+/* App-Fenster */
+.window { max-width: 1440px; margin: 14px auto 30px; background: var(--mica-base); border-radius: 8px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.18); overflow: hidden; display: grid; grid-template-columns: 220px 1fr;
+  min-height: 760px; border: 1px solid var(--stroke-default); }
+.titlebar { grid-column: 1 / -1; height: 36px; display: flex; align-items: center; padding: 0 14px; gap: 10px;
+  font-size: 12px; color: var(--text-secondary); }
+.titlebar .wc { margin-left: auto; display: flex; gap: 22px; font-family: 'Segoe Fluent Icons'; font-size: 10px; }
+
+/* Navigation */
+.nav { padding: 4px 8px 12px; display: flex; flex-direction: column; gap: 2px; }
+.nav-item { display: flex; align-items: center; gap: 12px; padding: 9px 12px; border-radius: 4px; color: var(--text-primary);
+  cursor: pointer; position: relative; }
+.nav-item:hover { background: var(--layer-secondary); }
+.nav-item.active { background: var(--layer-secondary); }
+.nav-item.active::before { content: ''; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 2px;
+  background: var(--accent); }
+.nav-item.gone { color: var(--text-tertiary); text-decoration: line-through; }
+.nav-sep { height: 1px; background: var(--stroke-divider); margin: 6px 4px; }
+.nav .spacer { flex: 1; }
+.lib-switch { margin: 4px 4px 10px; padding: 8px 10px; border-radius: 6px; background: var(--layer-card);
+  border: 1px solid var(--stroke-card); box-shadow: var(--shadow-card); display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.lib-switch small { display: block; color: var(--text-tertiary); font-size: 11px; }
+.lib-switch .ic.chev { margin-left: auto; font-size: 10px; color: var(--text-secondary); }
+
+/* Inhalt */
+.content { background: var(--layer-default); border-top-left-radius: 8px; border-left: 1px solid var(--stroke-default);
+  border-top: 1px solid var(--stroke-default); padding: 18px 24px 24px; min-width: 0; position: relative; }
+
+/* Zeile 1: Titel + Suche */
+.head { display: flex; align-items: center; gap: 16px; }
+.head h1 { font-size: 28px; font-weight: 600; margin: 0; line-height: 1.2; }
+.head .count { color: var(--text-secondary); font-size: 13px; margin-top: 4px; }
+.head .count b { color: var(--text-primary); font-weight: 600; }
+.search { margin-left: auto; width: 380px; display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 6px 0 12px;
+  background: var(--layer-card); border: 1px solid var(--stroke-default); border-bottom: 1px solid rgba(0,0,0,0.16);
+  border-radius: 4px; }
+body.dark .search { border-bottom-color: rgba(255,255,255,0.22); }
+.search:focus-within { border-bottom: 2px solid var(--accent); }
+.search input { flex: 1; border: 0; outline: 0; background: transparent; font: inherit; color: var(--text-primary); }
+.search input::placeholder { color: var(--text-tertiary); }
+.search .kbd { font-size: 11px; color: var(--text-tertiary); border: 1px solid var(--stroke-divider); border-radius: 3px; padding: 1px 5px; }
+.search .x { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 3px; cursor: pointer; color: var(--text-secondary); }
+.search .x:hover { background: var(--layer-secondary); }
+
+/* Zeile 2: Filterleiste */
+.filters { margin-top: 16px; background: var(--layer-card); border: 1px solid var(--stroke-card); border-radius: 8px;
+  box-shadow: var(--shadow-card); padding: 10px 12px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; position: relative; }
+.filters { flex-direction: column; align-items: stretch; gap: 8px; padding: 12px 14px; }
+.frow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.frow .flabel { width: 70px; flex: none; }
+.filters .active-row { margin: 2px -14px -12px; padding: 9px 14px; border-top: 1px solid var(--stroke-divider);
+  background: var(--layer-subtle); border-radius: 0 0 8px 8px; }
+.flabel { display: flex; align-items: center; gap: 6px; color: var(--text-secondary); font-size: 12px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .04em; margin-right: 2px; }
+.vsep { width: 1px; align-self: stretch; background: var(--stroke-divider); margin: 2px 2px; }
+.seg { display: inline-flex; background: var(--layer-secondary); border-radius: 6px; padding: 2px; gap: 2px; }
+.seg button { border: 0; background: transparent; font: inherit; color: var(--text-primary); padding: 5px 11px; border-radius: 4px;
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; }
+.seg button:hover { background: var(--layer-tertiary); }
+.seg button.on { background: var(--layer-card); box-shadow: 0 1px 2px rgba(0,0,0,0.12); color: var(--accent); font-weight: 600; }
+body.dark .seg button.on { background: #3A3A3A; }
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border-radius: 16px;
+  border: 1px solid var(--stroke-divider); background: var(--layer-card); color: var(--text-primary); cursor: pointer;
+  font: inherit; font-size: 13px; white-space: nowrap; position: relative; }
+.chip:hover { background: var(--layer-subtle); }
+.chip .ic.chev { font-size: 9px; color: var(--text-secondary); }
+.chip .lbl { color: var(--text-secondary); }
+.chip.on { background: var(--accent-soft-2); border-color: var(--accent); color: var(--accent-dark); font-weight: 600; }
+body.dark .chip.on { color: var(--accent-light); }
+.chip.on .lbl { color: inherit; font-weight: 400; opacity: .8; }
+.chip.on .ic.chev { color: inherit; }
+.chip .new { font-size: 10px; font-weight: 700; background: var(--warning); color: #1A1A1A; border-radius: 6px; padding: 0 5px; }
+.reset { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 4px;
+  border: 1px solid var(--stroke-divider); background: var(--layer-card); font: inherit; font-size: 13px; cursor: pointer; color: var(--text-primary); }
+.reset:hover { background: var(--layer-subtle); }
+.reset .badge { background: var(--accent); color: var(--text-on-accent); font-size: 11px; font-weight: 700; border-radius: 9px;
+  min-width: 18px; height: 18px; display: grid; place-items: center; padding: 0 5px; }
+.reset:disabled { color: var(--text-disabled); cursor: default; background: transparent; }
+.reset:disabled .badge { display: none; }
+
+/* Zeile 3: aktive Bedingungen */
+.active-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 10px; padding: 0 2px; font-size: 13px; color: var(--text-secondary); }
+.cond { display: inline-flex; align-items: center; gap: 4px; background: var(--accent-soft); color: var(--text-primary);
+  border-radius: 4px; padding: 3px 4px 3px 8px; }
+.cond .ic { font-size: 10px; width: 18px; height: 18px; display: grid; place-items: center; border-radius: 3px; cursor: pointer; color: var(--text-secondary); }
+.cond .ic:hover { background: var(--layer-tertiary); }
+.and { font-size: 11px; font-weight: 700; color: var(--accent); letter-spacing: .05em; }
+.hits { margin-left: 8px; color: var(--text-primary); }
+.hits b { font-weight: 600; }
+
+/* Zeile 4: Sortier- und Ansichtsleiste */
+.viewbar { margin-top: 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 0;
+  border-top: 1px solid var(--stroke-divider); border-bottom: 1px solid var(--stroke-divider); }
+.grp { display: flex; align-items: center; gap: 8px; }
+.grp > .t { font-size: 12px; color: var(--text-secondary); }
+.dd { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; border-radius: 4px;
+  background: var(--layer-card); border: 1px solid var(--stroke-default); font-size: 13px; cursor: pointer; min-width: 0; }
+.dd .ic.chev { font-size: 9px; color: var(--text-secondary); margin-left: 4px; }
+.ibtn { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 4px; border: 0;
+  background: transparent; font: inherit; font-size: 13px; color: var(--text-primary); cursor: pointer; }
+.ibtn:hover { background: var(--layer-secondary); }
+.ibtn.only { width: 32px; padding: 0; justify-content: center; }
+.slider { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); }
+.slider .track { width: 80px; height: 4px; border-radius: 2px; background: var(--layer-tertiary); position: relative; }
+.slider .track::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 45%; background: var(--accent); border-radius: 2px; }
+.slider .track::after { content: ''; position: absolute; left: calc(45% - 9px); top: -7px; width: 18px; height: 18px; border-radius: 50%;
+  background: var(--layer-card); border: 1px solid var(--stroke-divider); box-shadow: inset 0 0 0 4px var(--accent); }
+.right { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+
+/* Galerie-Raster (nur Kulisse) */
+.grid { margin-top: 14px; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.pager { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 16px; font-size: 13px; color: var(--text-secondary); }
+.pager b { color: var(--text-primary); }
+.pager .vsep { height: 20px; margin: 0 6px; }
+.collage { margin-top: 14px; display: flex; flex-direction: column; gap: 6px; }
+.crow { display: flex; gap: 6px; }
+.list { margin-top: 14px; font-size: 13px; }
+.lrow { display: grid; grid-template-columns: 40px 2fr 1.4fr 1fr 1fr 1fr; gap: 12px; align-items: center; padding: 4px 8px;
+  border-bottom: 1px solid var(--stroke-secondary); }
+.lhead { color: var(--text-secondary); font-size: 12px; font-weight: 600; }
+.lth { width: 32px; height: 32px; border-radius: 4px; }
+.tile { aspect-ratio: 1; border-radius: 6px; position: relative; overflow: hidden; }
+.tile .st { position: absolute; left: 6px; bottom: 5px; color: #FFF; font-size: 11px; text-shadow: 0 1px 2px rgba(0,0,0,.6); }
+.tile .fav { position: absolute; right: 6px; top: 5px; color: #FFD54A; font-family: 'Segoe Fluent Icons'; font-size: 13px; text-shadow: 0 1px 2px rgba(0,0,0,.5); }
+
+/* Flyouts */
+.flyout { position: absolute; z-index: 10; background: var(--layer-card); border: 1px solid var(--stroke-divider); border-radius: 8px;
+  box-shadow: var(--shadow-flyout); padding: 12px; width: 300px; display: none; font-size: 13px; }
+.flyout.show { display: block; }
+.flyout h4 { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .04em; }
+.opt { display: flex; align-items: center; gap: 10px; padding: 6px 6px; border-radius: 4px; cursor: pointer; }
+.opt:hover { background: var(--layer-secondary); }
+.radio { width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--text-secondary); flex: none; }
+.radio.on { border: 5px solid var(--accent); }
+.check { width: 16px; height: 16px; border-radius: 3px; border: 1px solid var(--text-secondary); flex: none; display: grid; place-items: center;
+  font-family: 'Segoe Fluent Icons'; font-size: 10px; color: transparent; }
+.check.on { background: var(--accent); border-color: var(--accent); color: #FFF; }
+.opt small { color: var(--text-tertiary); display: block; font-size: 11px; }
+.flyout .divider { height: 1px; background: var(--stroke-divider); margin: 8px 0; }
+.avatar { width: 24px; height: 24px; border-radius: 50%; flex: none; }
+.opt .n { margin-left: auto; color: var(--text-tertiary); font-size: 12px; }
+.flyout .foot { display: flex; justify-content: space-between; margin-top: 8px; }
+.flyout .search.mini { width: 100%; height: 30px; margin-bottom: 6px; }
+.btn-acc { background: var(--accent); color: var(--text-on-accent); border: 0; border-radius: 4px; padding: 5px 14px; font: inherit; font-size: 13px; cursor: pointer; }
+.btn-std { background: var(--layer-card); color: var(--text-primary); border: 1px solid var(--stroke-divider); border-radius: 4px; padding: 5px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+
+/* Reiter 2: Navigation */
+.compare { display: grid; grid-template-columns: 240px 240px 1fr; gap: 22px; max-width: 1440px; margin: 14px auto 30px; padding: 0 20px; align-items: start; }
+.panel { background: var(--mica-base); border: 1px solid var(--stroke-default); border-radius: 8px; box-shadow: 0 12px 40px rgba(0,0,0,0.12); overflow: hidden; }
+.panel > .cap { padding: 10px 14px; font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .04em;
+  border-bottom: 1px solid var(--stroke-divider); }
+.panel .nav { min-height: 520px; padding-top: 10px; }
+.settings { display: grid; grid-template-columns: 220px 1fr; min-height: 560px; }
+.settings .sub { padding: 14px 8px; border-right: 1px solid var(--stroke-divider); }
+.settings .body { padding: 18px 24px; background: var(--layer-default); }
+.settings h2 { font-size: 22px; margin: 0 0 4px; font-weight: 600; }
+.settings .lead { color: var(--text-secondary); font-size: 13px; margin: 0 0 16px; }
+.card { background: var(--layer-card); border: 1px solid var(--stroke-card); border-radius: 6px; box-shadow: var(--shadow-card);
+  padding: 12px 14px; display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+.card .t { flex: 1; }
+.card small { display: block; color: var(--text-tertiary); font-size: 12px; }
+.pill { font-size: 11px; border-radius: 10px; padding: 1px 8px; background: var(--layer-tertiary); color: var(--text-secondary); }
+.pill.in { background: rgba(194,156,0,.16); color: var(--text-primary); }
+.pill.lib { background: rgba(16,124,16,.14); color: var(--text-primary); }
+.sect { font-size: 13px; font-weight: 600; margin: 18px 0 8px; }
+.hint { font-size: 12px; color: var(--text-secondary); background: var(--accent-soft); border-radius: 6px; padding: 10px 12px; margin-top: 14px; line-height: 1.5; }
+.tag-new { font-size: 10px; font-weight: 700; background: var(--accent); color: var(--text-on-accent); border-radius: 6px; padding: 0 5px; margin-left: auto; }
+.tag-moved { font-size: 10px; font-weight: 700; background: var(--warning); color: #1A1A1A; border-radius: 6px; padding: 0 5px; margin-left: auto; }
+
+.compare { grid-template-columns: 240px 240px 1fr; }
+.panel.wide { grid-column: 1 / -1; }
+.panel .nav { min-height: 360px; }
+.sbody { padding: 18px 24px 24px; background: var(--layer-default); min-height: 560px; }
+.sbody h2 { font-size: 28px; margin: 0 0 12px; font-weight: 600; }
+.pivot { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--stroke-divider); margin-bottom: 16px; }
+.pivot button { border: 0; background: transparent; font: inherit; font-size: 14px; color: var(--text-secondary); padding: 8px 12px 10px;
+  cursor: pointer; position: relative; display: inline-flex; align-items: center; gap: 6px; border-radius: 4px 4px 0 0; }
+.pivot button:hover { color: var(--text-primary); background: var(--layer-secondary); }
+.pivot button.on { color: var(--text-primary); font-weight: 600; }
+.pivot button.on::after { content: ''; position: absolute; left: 12px; right: 12px; bottom: -1px; height: 3px; border-radius: 2px; background: var(--accent); }
+.pivot .tag-moved { margin-left: 2px; }
+.ppage { max-width: 900px; }
+.about { display: flex; align-items: center; gap: 16px; background: var(--layer-card); border: 1px solid var(--stroke-card); border-radius: 8px;
+  box-shadow: var(--shadow-card); padding: 16px 18px; }
+.about .logo { width: 56px; height: 56px; border-radius: 12px; display: grid; place-items: center; color: #FFF;
+  background: linear-gradient(135deg, var(--accent-light), var(--accent-dark)); }
+.about .logo .ic { font-size: 28px; }
+.about .appname { font-size: 20px; font-weight: 600; }
+.about .ver { color: var(--text-secondary); font-size: 13px; margin-top: 2px; }
+.about .sub2 { color: var(--text-tertiary); font-size: 12px; margin-top: 4px; }
+.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+.icard { background: var(--layer-card); border: 1px solid var(--stroke-card); border-radius: 8px; box-shadow: var(--shadow-card); padding: 14px 16px; }
+.icard h3 { margin: 0 0 8px; font-size: 13px; font-weight: 600; }
+.icard dl { display: grid; grid-template-columns: 120px 1fr; gap: 6px 12px; margin: 0; font-size: 13px; }
+.icard dt { color: var(--text-secondary); }
+.icard dd { margin: 0; }
+.icard dd.path { font-family: Consolas, monospace; font-size: 12px; }
+.icard a { color: var(--accent); cursor: pointer; font-family: 'Segoe UI Variable Text', 'Segoe UI', sans-serif; margin-left: 6px; }
+.icard a.more { display: inline-block; margin: 10px 0 0; font-size: 13px; }
+
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="mock-bar">
+  <span><b>Mockup 06</b> nur Entwurf, ohne Funktion</span>
+  <span><b>Seite:</b>
+    <button id="tabA" class="on" onclick="tab('A')">Galerie-Kopfzeile</button>
+    <button id="tabB" onclick="tab('B')">Navigation &amp; Einstellungen</button></span>
+  <span id="stateCtl"><b>Zustand:</b>
+    <button id="s0" onclick="state(0)">Keine Filter</button>
+    <button id="s1" class="on" onclick="state(1)">Filter aktiv</button>
+    <button id="s2" onclick="state(2)">Personen-Auswahl offen</button>
+    <button id="s3" onclick="state(3)">Tag-Auswahl offen</button></span>
+  <span><b>Design:</b>
+    <button id="tl" class="on" onclick="theme(false)">Hell</button>
+    <button id="td" onclick="theme(true)">Dunkel</button></span>
+</div>
+
+<!-- ============================ Reiter A: Galerie-Kopfzeile ============================ -->
+<div id="pageA">
+<p class="mock-note">
+  <b>Idee:</b> oben Titel und Suche in einer Zeile. Darunter eine Filterleiste, in der <b>jeder Filter für sich</b> wirkt:
+  Art, Favoriten, Ablage, Bewertung, Tags, Personen und Kategorien gelten <b>immer gleichzeitig (UND)</b>.
+  Die Zeile „Es gilt“ zeigt in Worten, was gerade gefiltert ist; jede Bedingung lässt sich dort einzeln mit × entfernen.
+  Darunter eine Leiste für Sortierung und Ansicht (Kacheln, <b>Collage</b>, Liste) mit Aktionen rechts.
+  Blättern und „Pro Seite“ wandern ans Ende der Galerie.
+</p>
+
+<div class="window">
+  <div class="titlebar"><span class="ic s">&#xE91B;</span> PhotoViewer V3 <span class="wc"><span>&#xE921;</span><span>&#xE922;</span><span>&#xE8BB;</span></span></div>
+
+  <nav class="nav">
+    <div class="lib-switch"><span class="ic">&#xE8F1;</span><div>PhotoTest<small>Bibliothek</small></div><span class="ic chev">&#xE70D;</span></div>
+    <div class="nav-item active"><span class="ic">&#xE91B;</span>Galerie</div>
+    <div class="nav-item"><span class="ic">&#xE8B7;</span>Ordner</div>
+    <div class="nav-item"><span class="ic">&#xE716;</span>Personen</div>
+    <div class="nav-item"><span class="ic">&#xE8CB;</span>Sortieren</div>
+    <div class="spacer"></div>
+    <div class="nav-item"><span class="ic">&#xE713;</span>Einstellungen</div>
+  </nav>
+
+  <main class="content">
+    <!-- Zeile 1: Titel links, Suche rechtsbündig -->
+    <div class="head">
+      <div>
+        <h1>Galerie</h1>
+        <div class="count" id="countLine"><b>342</b> von 1.248 Dateien · Ordner: alle</div>
+      </div>
+      <div class="search">
+        <span class="ic" style="color:var(--text-secondary)">&#xE721;</span>
+        <input placeholder="Suchen: Name, Tag, Person oder Kategorie" value="">
+        <span class="kbd">Strg+F</span>
+        <span class="x ic s" title="Suche leeren (Esc)">&#xE711;</span>
+      </div>
+    </div>
+
+    <!-- Zeile 2: Filterleiste -->
+    <div class="filters">
+      <div class="frow">
+        <span class="flabel"><span class="ic s">&#xE7C3;</span>Datei</span>
+        <div class="seg" title="Welche Dateiart">
+          <button data-k="art" class="art">Alle</button>
+          <button data-k="art" class="art on1"><span class="ic s">&#xEB9F;</span>Bilder</button>
+          <button data-k="art" class="art"><span class="ic s">&#xE714;</span>Videos</button>
+          <button data-k="art" class="art"><span class="ic s">&#xF012;</span>Archive</button>
+        </div>
+        <button class="chip f-on" id="cFav"><span class="ic s">&#xE735;</span>Nur Favoriten</button>
+        <button class="chip" id="cRat"><span class="ic s">&#xE734;</span><span class="lbl">Bewertung:</span> egal <span class="ic chev">&#xE70D;</span> <span class="new">neu</span></button>
+        <button class="chip" id="cAbl"><span class="ic s">&#xE8B7;</span><span class="lbl">Ablage:</span> Überall <span class="ic chev">&#xE70D;</span></button>
+        <button class="reset" id="reset"><span class="ic s">&#xE894;</span>Filter zurücksetzen <span class="badge">4</span></button>
+      </div>
+      <div class="frow">
+        <span class="flabel"><span class="ic s">&#xE8EC;</span>Inhalt</span>
+        <button class="chip f-on" id="cTag" onclick="state(3)"><span class="ic s">&#xE8EC;</span><span class="lbl">Tags:</span> <span class="val">Urlaub</span> <span class="ic chev">&#xE70D;</span></button>
+        <button class="chip f-on" id="cPer" onclick="state(2)"><span class="ic s">&#xE716;</span><span class="lbl">Personen:</span> <span class="val">ohne Person</span> <span class="ic chev">&#xE70D;</span></button>
+        <button class="chip" id="cKat"><span class="ic s">&#xE8FD;</span><span class="lbl">Kategorien:</span> alle <span class="ic chev">&#xE70D;</span></button>
+      </div>
+
+      <!-- Flyout Personen -->
+      <div class="flyout" id="flyPer" style="left:250px; top:92px; width:320px;">
+        <h4>Was soll auf dem Foto sein?</h4>
+        <div class="opt"><span class="radio"></span><div>Eine der gewählten Personen<small>z. B. Anna <i>oder</i> Ben</small></div></div>
+        <div class="opt"><span class="radio"></span><div>Alle gewählten Personen zusammen<small>Anna <i>und</i> Ben auf demselben Foto</small></div></div>
+        <div class="divider"></div>
+        <div class="opt"><span class="radio on"></span><div>Keine benannte Person<small>nur Fotos</small></div></div>
+        <div class="opt"><span class="radio"></span><div>Unbenannte Gesichter<small>noch zu benennen</small></div></div>
+        <div class="opt"><span class="radio"></span><div>Irgendein Gesicht</div></div>
+        <div class="divider"></div>
+        <div class="search mini"><span class="ic s" style="color:var(--text-secondary)">&#xE721;</span><input placeholder="Person suchen"></div>
+        <div style="opacity:.45">
+          <div class="opt"><span class="check"></span><span class="avatar" style="background:linear-gradient(135deg,#C9A27E,#8C6A4F)"></span>Anna<span class="n">214</span></div>
+          <div class="opt"><span class="check"></span><span class="avatar" style="background:linear-gradient(135deg,#9DB4C0,#5C7A89)"></span>Ben<span class="n">87</span></div>
+          <div class="opt"><span class="check"></span><span class="avatar" style="background:linear-gradient(135deg,#D7B8A0,#A4785C)"></span>Clara<span class="n">41</span></div>
+        </div>
+        <div class="opt"><span class="check"></span>Auch Vorschläge mitzählen</div>
+        <div class="foot"><button class="btn-std">Leeren</button><button class="btn-acc" onclick="state(1)">Fertig</button></div>
+      </div>
+
+      <!-- Flyout Tags -->
+      <div class="flyout" id="flyTag" style="left:90px; top:92px;">
+        <h4>Welche Tags?</h4>
+        <div class="opt"><span class="radio on"></span><div>Mindestens eines der gewählten<small>Urlaub <i>oder</i> Familie</small></div></div>
+        <div class="opt"><span class="radio"></span><div>Alle gewählten zusammen<small>Urlaub <i>und</i> Familie</small></div></div>
+        <div class="opt"><span class="radio"></span><div>Ohne Tag</div></div>
+        <div class="divider"></div>
+        <div class="search mini"><span class="ic s" style="color:var(--text-secondary)">&#xE721;</span><input placeholder="Tag suchen"></div>
+        <div class="opt"><span class="check on">&#xE73E;</span>Urlaub<span class="n">512</span></div>
+        <div class="opt"><span class="check"></span>Familie<span class="n">380</span></div>
+        <div class="opt"><span class="check"></span>Baustelle<span class="n">96</span></div>
+        <div class="opt"><span class="check"></span>Belege<span class="n">33</span></div>
+        <div class="foot"><button class="btn-std">Leeren</button><button class="btn-acc" onclick="state(1)">Fertig</button></div>
+      </div>
+
+      <!-- Fußzeile der Filterkarte: Bedingungen in Worten -->
+      <div class="active-row" id="activeRow">
+        <span>Es gilt:</span>
+        <span class="cond">Bilder<span class="ic">&#xE711;</span></span><span class="and">UND</span>
+        <span class="cond">Favoriten<span class="ic">&#xE711;</span></span><span class="and">UND</span>
+        <span class="cond">Tag „Urlaub“<span class="ic">&#xE711;</span></span><span class="and">UND</span>
+        <span class="cond">ohne benannte Person<span class="ic">&#xE711;</span></span>
+        <span class="hits">→ <b>342</b> Treffer</span>
+      </div>
+    </div>
+
+    <!-- Zeile 4: Sortieren · Ansicht · Aktionen -->
+    <div class="viewbar">
+      <div class="grp">
+        <span class="t">Sortieren</span>
+        <span class="dd">Änderungsdatum<span class="ic chev">&#xE70D;</span></span>
+        <button class="ibtn" title="Richtung umkehren"><span class="ic s">&#xE74B;</span>Neueste zuerst</button>
+      </div>
+      <div class="vsep"></div>
+      <div class="grp">
+        <span class="t">Ansicht</span>
+        <div class="seg">
+          <button class="on vm" data-v="tiles" title="Kacheln: gleich große Quadrate"><span class="ic s">&#xF0E2;</span>Kacheln</button>
+          <button class="vm" data-v="collage" title="Collage: echte Seitenverhältnisse, Reihen randvoll"><span class="ic s">&#xE80A;</span>Collage<span class="new" style="font-size:10px;font-weight:700;background:var(--warning);color:#1A1A1A;border-radius:6px;padding:0 5px">neu</span></button>
+          <button class="vm" data-v="list" title="Liste mit Spalten"><span class="ic s">&#xE8FD;</span>Liste</button>
+        </div>
+        <div class="slider" title="Vorschaugröße (Strg+Mausrad)"><span class="ic s">&#xE71F;</span><div class="track"></div><span class="ic">&#xE71E;</span></div>
+      </div>
+      <div class="right">
+        <button class="ibtn" title="Alle Dateien dieser Seite auswählen (Strg+A)"><span class="ic s">&#xE8B3;</span>Alle auswählen</button>
+        <button class="ibtn" title="Letzte Datei-Operation rückgängig machen (Strg+Z)"><span class="ic s">&#xE7A7;</span>Rückgängig</button>
+        <button class="ibtn only" title="Aktualisieren (F5)"><span class="ic s">&#xE72C;</span></button>
+      </div>
+    </div>
+
+    <div class="grid" id="grid"></div>
+
+    <!-- Seitenleiste unten: Blättern und Seitengröße gehören zusammen -->
+    <div class="pager">
+      <button class="ibtn only" title="Vorherige Seite (Bild auf)"><span class="ic s">&#xE76B;</span></button>
+      <span>Seite <b>1</b> von 2</span>
+      <button class="ibtn only" title="Nächste Seite (Bild ab)"><span class="ic s">&#xE76C;</span></button>
+      <span class="vsep"></span>
+      <span class="t">Pro Seite</span>
+      <span class="dd">200<span class="ic chev">&#xE70D;</span></span>
+    </div>
+  </main>
+</div>
+</div>
+
+<!-- ============================ Reiter B: Navigation & Einstellungen ============================ -->
+<div id="pageB" class="hidden">
+<p class="mock-note">
+  <b>Idee:</b> In der linken Leiste bleibt nur, womit du täglich arbeitest: Galerie, Ordner, Personen, Sortieren.
+  Bibliothek, Tags und Kategorien richtest du selten ein; sie wandern in die Einstellungen.
+  <b>Tags und Kategorien vergeben</b> bleibt wie bisher in der Galerie (Rechtsklick, Strg+T, Strg+K, Lightbox).
+  Die Einstellungen bekommen Reiter oben; der letzte Reiter „Info“ zeigt Version, Entwickler, System und Bausteine.
+  Die aktive Bibliothek wechselst du oben in der Leiste. <b>„Eingang hinzufügen…“</b> gibt es zusätzlich direkt auf der Seite „Ordner“, weil du das oft brauchst.
+</p>
+<div class="compare">
+  <div class="panel">
+    <div class="cap">Heute</div>
+    <nav class="nav">
+      <div class="nav-item gone"><span class="ic">&#xE8F1;</span>Bibliothek</div>
+      <div class="nav-item active"><span class="ic">&#xE91B;</span>Galerie</div>
+      <div class="nav-item"><span class="ic">&#xE8B7;</span>Ordner</div>
+      <div class="nav-item"><span class="ic">&#xE8CB;</span>Sortieren</div>
+      <div class="nav-item"><span class="ic">&#xE716;</span>Personen</div>
+      <div class="nav-item gone"><span class="ic">&#xE8EC;</span>Tags</div>
+      <div class="nav-item gone"><span class="ic">&#xE8FD;</span>Kategorien</div>
+      <div class="spacer"></div>
+      <div class="nav-item"><span class="ic">&#xE713;</span>Einstellungen</div>
+    </nav>
+  </div>
+  <div class="panel">
+    <div class="cap">Neu</div>
+    <nav class="nav">
+      <div class="lib-switch"><span class="ic">&#xE8F1;</span><div>PhotoTest<small>Bibliothek wechseln</small></div><span class="ic chev">&#xE70D;</span></div>
+      <div class="nav-item active"><span class="ic">&#xE91B;</span>Galerie</div>
+      <div class="nav-item"><span class="ic">&#xE8B7;</span>Ordner</div>
+      <div class="nav-item"><span class="ic">&#xE716;</span>Personen</div>
+      <div class="nav-item"><span class="ic">&#xE8CB;</span>Sortieren</div>
+      <div class="spacer"></div>
+      <div class="nav-item"><span class="ic">&#xE713;</span>Einstellungen</div>
+    </nav>
+  </div>
+  <div class="panel wide">
+    <div class="cap">Einstellungen, neu mit Reitern</div>
+    <div class="sbody">
+      <h2>Einstellungen</h2>
+      <div class="pivot" id="pivot">
+        <button data-p="lib" class="on">Bibliotheken &amp; Eingänge<span class="tag-moved">neu hier</span></button>
+        <button data-p="tags">Tags<span class="tag-moved">neu hier</span></button>
+        <button data-p="kat">Kategorien<span class="tag-moved">neu hier</span></button>
+        <button data-p="face">Gesichter</button>
+        <button data-p="arc">Archive</button>
+        <button data-p="look">Darstellung</button>
+        <button data-p="store">Speicher &amp; Wartung</button>
+        <button data-p="info">Info</button>
+      </div>
+
+      <!-- Reiter: Bibliotheken & Eingänge -->
+      <div class="ppage" id="p-lib">
+        <p class="lead">Woher die Fotos kommen und wohin sie verschoben werden.</p>
+        <div class="card"><span class="ic">&#xE8F1;</span><div class="t">PhotoTest<small>Aktive Bibliothek · 1.248 Dateien</small></div>
+          <button class="btn-std">Neu aufbauen</button><button class="btn-std">Index neu aufbauen</button></div>
+        <div class="card"><span class="ic">&#xE8F1;</span><div class="t">Familienfotos<small>9.410 Dateien</small></div><button class="btn-std">Aktiv setzen</button></div>
+        <div style="display:flex; gap:8px; margin:8px 0 0"><button class="btn-std">Neue Bibliothek…</button></div>
+
+        <div class="sect">Ordner der Bibliothek „PhotoTest“</div>
+        <div class="card"><span class="ic">&#xE8B7;</span><div class="t">D:\PhotoTest\Bibliothek<small>hierhin wird verschoben</small></div><span class="pill lib">Bibliotheksordner</span></div>
+        <div class="card"><span class="ic">&#xE896;</span><div class="t">D:\Eingang\Handy 2026<small>32 Dateien</small></div><span class="pill in">Eingang</span><button class="btn-std">Entfernen</button></div>
+        <div class="card"><span class="ic">&#xE896;</span><div class="t">D:\Eingang\Kamera Sommer<small>214 Dateien</small></div><span class="pill in">Eingang</span><button class="btn-std">Entfernen</button></div>
+        <div style="display:flex; gap:8px; margin-top:8px; align-items:center"><button class="btn-acc">Eingang hinzufügen…</button>
+          <span style="font-size:12px;color:var(--text-secondary)">auch direkt auf der Seite „Ordner“</span></div>
+        <div class="card" style="margin-top:14px"><span class="ic">&#xE7B3;</span><div class="t">Bibliotheksordner überwachen<small>neue und geänderte Dateien automatisch einlesen</small></div><span class="pill">Ein</span></div>
+        <div class="hint">Pfade und Zahlen sind Beispiele.</div>
+      </div>
+
+      <!-- Reiter mit unverändertem Inhalt -->
+      <div class="ppage hidden" id="p-same">
+        <p class="lead" id="sameLead"></p>
+        <div class="hint">Inhalt wie heute, nur an neuem Platz. Im Mockup nicht ausgeführt.</div>
+      </div>
+
+      <!-- Reiter: Info -->
+      <div class="ppage hidden" id="p-info">
+        <div class="about">
+          <div class="logo"><span class="ic">&#xE91B;</span></div>
+          <div>
+            <div class="appname">PhotoViewer V3</div>
+            <div class="ver">Version 0.2.42 · erstellt am 21.10.2026 · Debug-Build</div>
+            <div class="sub2">Fotos und Videos ansehen, bewerten, sortieren und in die Bibliothek verschieben.</div>
+          </div>
+          <div style="margin-left:auto; display:flex; gap:8px">
+            <button class="btn-std"><span class="ic s">&#xE8C8;</span> Versionsinfo kopieren</button>
+            <button class="btn-std"><span class="ic s">&#xE81C;</span> Änderungsprotokoll</button>
+          </div>
+        </div>
+
+        <div class="info-grid">
+          <div class="icard">
+            <h3>Entwicklung</h3>
+            <dl>
+              <dt>Programmierung</dt><dd>Herbert Schrotter</dd>
+              <dt>Mitarbeit</dt><dd>Claude (Anthropic), KI-Assistent</dd>
+              <dt>Quellcode</dt><dd>GitHub-Repository (privat)</dd>
+              <dt>Vorgänger</dt><dd>PhotoViewer V2 (PowerShell-Web-App)</dd>
+            </dl>
+          </div>
+          <div class="icard">
+            <h3>Dieses System</h3>
+            <dl>
+              <dt>Laufzeit</dt><dd>.NET 10 · Windows 11 (26200)</dd>
+              <dt>Grafikkarte</dt><dd>NVIDIA GTX 1080 Ti (DirectML)</dd>
+              <dt>Gesichtsmodell</dt><dd>buffalo_l · geladen</dd>
+              <dt>Katalog</dt><dd>1 Bibliothek aktiv · 1.248 Dateien · 18 MB</dd>
+            </dl>
+          </div>
+          <div class="icard">
+            <h3>Speicherorte</h3>
+            <dl>
+              <dt>Katalog</dt><dd class="path">…\PhotoViewerV3\library.db <a>öffnen</a></dd>
+              <dt>Vorschaubilder</dt><dd class="path">…\PhotoViewerV3\thumbs <a>öffnen</a></dd>
+              <dt>Protokolle</dt><dd class="path">…\PhotoViewerV3\logs <a>öffnen</a></dd>
+            </dl>
+          </div>
+          <div class="icard">
+            <h3>Verwendete Bausteine</h3>
+            <dl>
+              <dt>Oberfläche</dt><dd>WPF-UI 4.0.2 · CommunityToolkit.Mvvm</dd>
+              <dt>Datenbank</dt><dd>SQLite · Entity Framework Core 10</dd>
+              <dt>Archive</dt><dd>SharpCompress 0.50.6</dd>
+              <dt>Gesichter</dt><dd>ONNX Runtime DirectML 1.24.4 · InsightFace buffalo_l (nur nicht-kommerziell)</dd>
+            </dl>
+            <a class="more">Alle Lizenzen anzeigen…</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+// Kulisse: Platzhalter-Fotos mit gemischten Seitenverhältnissen (Quer, Hoch, Quadrat, Panorama)
+const g = document.getElementById('grid');
+const cols = [['#8FB3D9','#3E6B99'],['#E8C39E','#A9714B'],['#9CC9A4','#4E8A5A'],['#D7A6B8','#8E5168'],['#C8C2A6','#7D7553'],
+              ['#A7B6E0','#545FA3'],['#E3B17C','#96602A'],['#B5D3D6','#4F8A8F'],['#CFA9D9','#7A4B8A'],['#DCD08E','#8F7F2A']];
+const ratios = [1.5, 0.75, 1.33, 1, 0.67, 1.78, 1.5, 2.6, 0.75, 1.33, 1.5, 0.67, 1, 1.78, 1.5, 0.75, 1.33, 2.2, 1.5, 0.8,
+                1.33, 1.5, 0.75, 1.78, 1, 1.5, 0.67, 1.33];
+const photos = ratios.map((r, i) => ({ r, c: cols[i % cols.length], name: `IMG_${4120 + i}.jpg`, deg: (i * 37) % 360 }));
+let view = 'tiles';
+
+function tileHtml(p) {
+  return `<span class="fav">&#xE735;</span><span class="st">${p.name}</span>`;
+}
+function render() {
+  g.innerHTML = '';
+  g.className = view === 'collage' ? 'collage' : view === 'list' ? 'list' : 'grid';
+  if (view === 'tiles') {
+    photos.slice(0, 20).forEach(p => {
+      const t = document.createElement('div');
+      t.className = 'tile'; t.style.background = `linear-gradient(${p.deg}deg, ${p.c[0]}, ${p.c[1]})`;
+      t.innerHTML = tileHtml(p); g.appendChild(t);
+    });
+  } else if (view === 'collage') {
+    // Reihen füllen, bis die Breite bei Zielhöhe überläuft; dann Reihe auf volle Breite skalieren
+    const W = g.clientWidth, gap = 6, target = 180;
+    let row = [], sum = 0;
+    const flush = (last) => {
+      const h = last ? target : (W - gap * (row.length - 1)) / sum;
+      const r = document.createElement('div'); r.className = 'crow';
+      row.forEach(p => {
+        const t = document.createElement('div'); t.className = 'tile';
+        t.style.cssText = `width:${p.r * h}px;height:${h}px;aspect-ratio:auto;flex:none;background:linear-gradient(${p.deg}deg, ${p.c[0]}, ${p.c[1]})`;
+        t.innerHTML = tileHtml(p); r.appendChild(t);
+      });
+      g.appendChild(r); row = []; sum = 0;
+    };
+    photos.forEach(p => { row.push(p); sum += p.r; if (sum * target + gap * (row.length - 1) >= W) flush(false); });
+    if (row.length) flush(true);
+  } else {
+    g.innerHTML = '<div class="lrow lhead"><span></span><span>Name</span><span>Datum</span><span>Größe</span><span>Tags</span><span>Person</span></div>' +
+      photos.slice(0, 12).map(p => `<div class="lrow"><span class="lth" style="background:linear-gradient(${p.deg}deg, ${p.c[0]}, ${p.c[1]})"></span>` +
+        `<span>${p.name}</span><span>12.08.2026 14:32</span><span>4,2 MB</span><span>Urlaub</span><span>—</span></div>`).join('');
+  }
+}
+document.querySelectorAll('.vm').forEach(b => b.onclick = () => {
+  view = b.dataset.v;
+  document.querySelectorAll('.vm').forEach(x => x.classList.toggle('on', x === b));
+  render();
+});
+window.addEventListener('resize', () => { if (view === 'collage') render(); });
+render();
+
+function setOn(ids, on) { ids.forEach(id => document.getElementById(id).classList.toggle('on', on)); }
+function state(n) {
+  for (let i = 0; i < 4; i++) document.getElementById('s' + i).classList.toggle('on', i === n);
+  const active = n !== 0;
+  setOn(['cFav', 'cTag', 'cPer'], active);
+  document.querySelectorAll('.seg .art').forEach((b, i) => b.classList.toggle('on', active ? i === 1 : i === 0));
+  document.querySelector('#cTag .val').textContent = active ? 'Urlaub' : 'alle';
+  document.querySelector('#cPer .val').textContent = active ? 'ohne Person' : 'alle';
+  document.getElementById('activeRow').classList.toggle('hidden', !active);
+  document.getElementById('reset').disabled = !active;
+  document.getElementById('countLine').innerHTML = active ? '<b>342</b> von 1.248 Dateien · Ordner: alle' : '<b>1.248</b> Dateien · Ordner: alle';
+  document.getElementById('flyPer').classList.toggle('show', n === 2);
+  document.getElementById('flyTag').classList.toggle('show', n === 3);
+}
+function theme(dark) {
+  document.body.classList.toggle('dark', dark);
+  document.getElementById('tl').classList.toggle('on', !dark);
+  document.getElementById('td').classList.toggle('on', dark);
+}
+function tab(t) {
+  document.getElementById('pageA').classList.toggle('hidden', t !== 'A');
+  document.getElementById('pageB').classList.toggle('hidden', t !== 'B');
+  document.getElementById('stateCtl').classList.toggle('hidden', t !== 'A');
+  document.getElementById('tabA').classList.toggle('on', t === 'A');
+  document.getElementById('tabB').classList.toggle('on', t === 'B');
+}
+document.getElementById('reset').onclick = () => state(0);
+const sameText = { tags: 'Tags anlegen, umbenennen, Farbe und Reihenfolge festlegen.',
+  kat: 'Kategorien und ihre festen Werte festlegen.',
+  face: 'Gesichtserkennung ein/aus, Grafikkarte, Mindestgröße, ignorierte Gesichter, Gesichtsdaten löschen.',
+  arc: 'Archive in Eingängen automatisch entpacken, Ziel, Papierkorb danach.',
+  look: 'Hell/Dunkel, Vorschaugröße, Standard-Sortierung.',
+  store: 'Speicherort von Katalog und Vorschaubildern, Cache leeren, Export/Import.' };
+document.querySelectorAll('#pivot button').forEach(b => b.onclick = () => {
+  const p = b.dataset.p;
+  document.querySelectorAll('#pivot button').forEach(x => x.classList.toggle('on', x === b));
+  document.getElementById('p-lib').classList.toggle('hidden', p !== 'lib');
+  document.getElementById('p-info').classList.toggle('hidden', p !== 'info');
+  document.getElementById('p-same').classList.toggle('hidden', !(p in sameText));
+  if (p in sameText) document.getElementById('sameLead').textContent = sameText[p];
+});
+state(1);
+</script>
+</body>
+</html>

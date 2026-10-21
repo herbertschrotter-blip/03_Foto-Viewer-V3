@@ -61,8 +61,17 @@ public partial class GalleryView : UserControl
         TagsDropDown.Flyout = flyout;
     }
 
+    /// <summary>Strg+F: Suchfeld der Kopfzeile fokussieren (0.2.43).</summary>
+    private void OnFindExecuted(object sender, ExecutedRoutedEventArgs e)
+    {
+        e.Handled = true;
+        Toolbar.FocusSearch();
+    }
+
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
+        // Seitentitel: dieselbe View steckt rechts in der Ordner-Seite (0.2.43, Mockup 06).
+        Toolbar.PageTitle = FindAncestor<PhotoViewerV3.Folders.FolderTreePage>(this) is null ? "Galerie" : "Ordner";
         _viewModel.OwnerWindowResolver = ResolveOwnerWindow;
         _viewModel.CurrentPage.CollectionChanged += OnPageChanged;
         try

@@ -12,7 +12,8 @@ großer Foto- und Video-Bibliotheken (50 000–500 000 Dateien). Nachfolger der 
   (Offline-Guard), bei ungewöhnlich vielen fehlenden Dateien fragt die App nach (Mass-Missing-Guard).
 - **Galerie**: seitenweises, virtualisiertes Kachel-Grid (200/500/1000 pro Seite) mit echten Vorschaubildern (WIC,
   EXIF-Orientierung; Videos und Formate ohne Windows-Codec über FFmpeg), Sortierung nach Datum/Name/Größe, Volltextsuche
-  über Dateiname und Endung (FTS5), Filter Alle/Bilder/Videos/Favoriten, Ordnerfilter, Unterordner-Kacheln für Ordner
+  über Dateiname und Endung (FTS5), frei kombinierbare Filter (Dateiart, Favoriten, Bewertung, Ablage, Tags, Personen,
+  Kategorien — alle mit UND, „Filter zurücksetzen“), Ordnerfilter, Unterordner-Kacheln für Ordner
   ohne direkte Dateien, Favorit und 1–5 Sterne je Kachel, Mehrfachauswahl mit Aktionsleiste (Favorit, Bewertung,
   Tags, Verschieben nach…, Papierkorb) und Rückgängig. Umschaltbar auf eine **Listenansicht** mit Spalten.
 - **Tags**: frei definierbare, farbige Schlagworte (Seite „Tags“), Zuweisen für die Auswahl (Aktionsleiste,
@@ -122,7 +123,7 @@ Favoriten, Tags und Kategorien — keine Bilder.
 Bibliothek übernehmen.
 - **Bibliothek → Eingang hinzufügen…**: Ordner wählen (darf nicht in oder über einem anderen Ordner der Bibliothek
   liegen), danach „Jetzt aktualisieren“ nimmt die Dateien in den Katalog auf.
-- **Galerie**: Dropdown **Status** mit **Noch im Eingang** (alles in Eingängen) und **In der Bibliothek**; Kacheln im
+- **Galerie**: Filter **Ablage** mit **Noch im Eingang** (alles in Eingängen) und **In der Bibliothek** (kombinierbar mit allen anderen Filtern); Kacheln im
   Eingang tragen das Badge „Eingang“, im Bibliotheksordner „Bibliothek“. Der Ordnerbaum zeigt die Wurzeln als oberste
   Knoten mit Rolle.
 - **Ganze Ordner bewerten**: Rechtsklick auf einen Ordner im Ordnerbaum → **Bewertung für alle Dateien** (1–5 Sterne
@@ -157,14 +158,31 @@ Bibliothek übernehmen.
   der Bibliotheksordner ist ein Ordner.
 
 ### Galerie
-Toolbar: Filter-Pills als Segmentgruppe (Alle / Bilder / Videos / Favoriten / Archive), Dropdown **Status** (Noch im Eingang /
-In der Bibliothek), Tag-Filter, Suchfeld (Dateiname, Endung, Tag-Name, Kategorie-Wert oder Kategorie-Name; Wörter werden
-als Präfix gesucht, Sonderzeichen sind erlaubt; ✕ leert die Suche), Sortierung, Seitengröße, **Vorschaugröße** (Regler neben
-der Ansichtsumschaltung, nur in der Kachelansicht: Kachelbreite 120–320 px in 20er-Stufen, wird gemerkt), Pager, Aktualisieren. In schmalen
-Fenstern (bzw. rechts auf der Ordner-Seite) rutscht die Suche in eine eigene Zeile, statt gequetscht zu werden. Ein Ordnerfilter erscheint als
-Chip und lässt sich dort wieder aufheben. Kacheln: Herz = Favorit, Sterne = Bewertung, Badge „fehlt“ bei Dateien, die
+Kopfzeile (0.2.43, ADR-0041):
+- **Titel und Suche**: links „Galerie“ (auf der Ordner-Seite „Ordner“) mit der Trefferzeile darunter („342 von
+  1.248 Dateien · Ordner: alle“; ein Ordnerfilter erscheint dort als Chip, ✕ hebt ihn auf). Rechts das Suchfeld
+  (Dateiname, Endung, Tag, Person, Kategorie-Wert oder Kategorie-Name; Wörter werden als Präfix gesucht, Sonderzeichen
+  sind erlaubt): **Strg+F** springt hinein, **Enter** sucht sofort, sonst sucht es nach einer kurzen Tipp-Pause; **Esc**
+  oder ✕ leert die Suche.
+- **Filterkarte**, Zeile **Datei**: Dateiart (Alle / Bilder / Videos / Archive), **Nur Favoriten**, **Bewertung**
+  (egal / ab 1–4 Sternen / nur 5 Sterne), **Ablage** (Überall / Noch im Eingang / In der Bibliothek) und rechts
+  **Filter zurücksetzen** mit der Zahl der aktiven Filter. Zeile **Inhalt**: **Tags**, **Personen** (sobald es Personen
+  oder Gesichter gibt) und **Kategorien** (sobald es Kategorien gibt); wirkende Filter erscheinen in Akzentfarbe mit
+  ihrem Wert („Tags: Urlaub“). **Alle Filter gelten gleichzeitig (UND)** — z. B. nur Bilder UND Favoriten UND Tag
+  „Urlaub“ UND ohne benannte Person UND noch im Eingang. Bei aktiven Filtern sagt die Zeile **„Es gilt: Bilder UND
+  Favoriten UND Tag „Urlaub“ … → 342 Treffer“**, was gerade wirkt; ✕ an einer Bedingung entfernt genau diese.
+  **Filter zurücksetzen** hebt alle Filter und die Suche auf, die Ordnerauswahl bleibt.
+- **Sortieren** [Feld ▾] [Richtung]: Änderungsdatum, Name, Größe oder eine Kategorie; der Knopf daneben kehrt die
+  Richtung um („Neueste zuerst“ ↔ „Älteste zuerst“, „A → Z“ ↔ „Z → A“ …). Ein neues Feld beginnt mit seiner üblichen
+  Richtung. · **Ansicht** Kacheln | Liste (wird gemerkt) und **Vorschaugröße** (Regler, nur Kacheln: 120–320 px in
+  20er-Stufen, wird gemerkt) · rechts **Alle auswählen**, **Rückgängig**, Aktualisieren.
+- **Unter der Galerie**: Blättern („‹ Seite 1 von 7 ›“, dazu erste/letzte Seite) und **Pro Seite** (200/500/1000).
+- Bei 1280 Pixel Fensterbreite bleiben Titelzeile, Zeile „Datei“ und Sortierleiste einzeilig; schmaler (bzw. rechts auf
+  der Ordner-Seite) brechen sie sauber um, die Suche rutscht unter den Titel.
+
+Kacheln: Herz = Favorit, Sterne = Bewertung, Badge „fehlt“ bei Dateien, die
 beim letzten Scan nicht mehr auf der Platte lagen. Ordner ohne direkte Dateien zeigen ihre Unterordner als Kacheln.
-**Alle auswählen** (Knopf rechts in der Kopfzeile neben „Rückgängig“, wie Strg+A) wählt alle Dateien der aktuellen
+**Alle auswählen** (Knopf rechts in der Sortierleiste neben „Rückgängig“, wie Strg+A) wählt alle Dateien der aktuellen
 Seite. Bei einer Auswahl erscheint unten die Aktionsleiste (Favorit setzen/entfernen, Bewertung, Verschieben nach…,
 In die Bibliothek…, Papierkorb, Alle auswählen, Auswahl aufheben); **Rückgängig** nimmt die letzte Verschiebung/Umbenennung (auch eine
 Ordner-Umbenennung oder eine Ordner-Übernahme) zurück.
@@ -184,23 +202,24 @@ Ordner-Umbenennung oder eine Ordner-Übernahme) zurück.
 | Strg+T | Tags der Auswahl bearbeiten (Tag-Auswahl) |
 | Strg+K | Kategorie-Werte der Auswahl zuweisen (Kategorie-Auswahl) |
 | Rechtsklick | Tag-Menü der Auswahl (nicht ausgewählte Kachel/Zeile wird zuerst gewählt) |
-| Enter im Suchfeld | Suchen |
+| Strg+F | Suchfeld der Kopfzeile |
+| Enter im Suchfeld | Suchen (sonst sucht es nach einer kurzen Tipp-Pause) |
 
 #### Tags
 Tags legt man auf der Seite **Tags** an (Name, Farbe aus einer Palette mit zwölf Farben, Reihenfolge, Umbenennen,
 Löschen mit Bestätigung und Anzahl der betroffenen Dateien) oder direkt in der Tag-Auswahl („Neues Tag…“). Zuweisen:
 Knopf **Tags** in der Aktionsleiste oder Rechtsklick — Häkchen = alle ausgewählten Dateien haben das Tag, „(teilweise)“
 = nur ein Teil; Klick setzt das Tag bei allen bzw. entfernt es. **Strg+T** öffnet die Tag-Auswahl mit dreistufigen
-Häkchen für eine gemischte Auswahl. Die Kachel zeigt je Tag einen farbigen Punkt (Hover = Namen). Das Dropdown **Tags**
-neben den Filter-Pills filtert nach einem oder mehreren Tags — „mindestens eines“ (ODER), „alle“ (UND) oder „nur
-Dateien ohne Tag“. Die Suche findet neben Dateinamen auch Dateien, deren Tag-Name den Suchtext enthält. Tags hängen am
+Häkchen für eine gemischte Auswahl. Die Kachel zeigt je Tag einen farbigen Punkt (Hover = Namen). Der Filter **Tags**
+in der Zeile „Inhalt“ filtert nach einem oder mehreren Tags — „Mindestens eines der gewählten“ (ODER), „Alle gewählten
+zusammen“ (UND) oder „Ohne Tag“; das Suchfeld im Flyout grenzt lange Tag-Listen ein. Die Suche findet neben Dateinamen auch Dateien, deren Tag-Name den Suchtext enthält. Tags hängen am
 Katalog-Eintrag: „Aktualisieren“ und „Neu aufbauen“ (über den Pfad) behalten sie, der Papierkorb entfernt die Zuweisungen.
 
 #### Kategorien
 Eigene Kategorien mit festen Werten (z. B. „Projekt“: Nord, Süd) legt man auf der Seite **Kategorien** an (ADR-0027).
 Jede Datei hat je Kategorie höchstens einen Wert. Zuweisen: Rechtsklick auf Kachel oder Zeile → Untermenü der Kategorie
-→ Wert (Häkchen = alle ausgewählten Dateien haben ihn, „(teilweise)“ = nur ein Teil; **Kein Wert** entfernt ihn). Das
-Dropdown **Kategorien** neben dem Tag-Filter (erscheint, sobald es Kategorien gibt) filtert je Kategorie nach einem
+→ Wert (Häkchen = alle ausgewählten Dateien haben ihn, „(teilweise)“ = nur ein Teil; **Kein Wert** entfernt ihn). Der
+Filter **Kategorien** in der Zeile „Inhalt“ (erscheint, sobald es Kategorien gibt) filtert je Kategorie nach einem
 oder mehreren Werten und/oder „ohne Wert“ — innerhalb einer Kategorie ODER, zwischen Kategorien UND. In der
 Listenansicht ist jede Kategorie eine eigene Spalte. Werte hängen wie Tags am Katalog-Eintrag („Neu aufbauen“ behält
 sie, der Papierkorb entfernt sie).
@@ -213,15 +232,15 @@ Kategorie-Wert den Suchtext enthält (wie bei Tag-Namen, ohne Groß-/Kleinschrei
 einer Kategorie (z. B. „Projekt“), findet sie alle Dateien, die in dieser Kategorie irgendeinen Wert haben.
 
 #### Listenansicht
-Der Umschalter rechts in der Kopfzeile wechselt zwischen Kachel-Grid und Liste (die Wahl bleibt gespeichert). Die
+„Ansicht“ in der Sortierleiste wechselt zwischen Kacheln und Liste (die Wahl bleibt gespeichert). Die
 Liste zeigt dieselbe Seite mit den Spalten Name (mit Vorschaubild), Ordner, Geändert, Größe, Typ, Bewertung (Sterne
 klickbar), Favorit (Herz klickbar), Tags, Status und je Kategorie eine Spalte (neue Kategorien erscheinen am Ende).
 Rechtsklick auf eine Spaltenüberschrift blendet Spalten ein/aus,
 Ziehen ändert die Reihenfolge — beides bleibt gespeichert. Klick auf Name, Geändert oder Größe sortiert die ganze
-Trefferliste (wie die Sortier-Auswahl). Klick auf eine Kategorie-Spalte sortiert ebenfalls die ganze Trefferliste:
+Trefferliste (wie „Sortieren“ in der Kopfzeile). Klick auf eine Kategorie-Spalte sortiert ebenfalls die ganze Trefferliste:
 Werte in ihrer Reihenfolge von der Seite **Kategorien**, erneuter Klick kehrt um; Dateien ohne Wert stehen immer am
-Ende, gleiche Werte nach Datum neu → alt. Die Sortier-Auswahl zeigt das als „… (Kategorie) ↑/↓“; eine andere
-Sortierung dort hebt es wieder auf. Die übrigen Spalten sortieren nur die geladene Seite. Auswahl, Aktionsleiste,
+Ende, gleiche Werte nach Datum neu → alt. „Sortieren“ zeigt dann „Kategorie: …“ als Feld (dort auch direkt wählbar);
+ein anderes Feld hebt es wieder auf. Die übrigen Spalten sortieren nur die geladene Seite. Auswahl, Aktionsleiste,
 Doppelklick/Enter (Lightbox) und Tastenkürzel wie im Grid.
 
 ### Lightbox
@@ -255,7 +274,7 @@ Gesetzte Kategorie-Werte stehen außerdem in der Titelleiste (z. B. „Projekt: 
 
 ### Archive
 Archive (`.zip .rar .7z .tar .gz .tgz .bz2 .xz`) nimmt der Scan wie Fotos in den Katalog auf; sie bekommen kein
-Vorschaubild, die Kachel zeigt ein Archiv-Symbol mit Endung und Größe. Die Filter-Pill **Archive** zeigt nur sie.
+Vorschaubild, die Kachel zeigt ein Archiv-Symbol mit Endung und Größe. Die Dateiart **Archive** in der Zeile „Datei“ zeigt nur sie.
 - **Inhalt ansehen:** Enter/Doppelklick (oder Kontextmenü „Inhalt anzeigen“) öffnet das Archiv in der Lightbox als Liste
   der Einträge mit Größe, komprimierter Größe und Datum; Fotos/Videos und Archive im Archiv sind markiert. Knöpfe
   **Entpacken…** und **Im Explorer anzeigen**.

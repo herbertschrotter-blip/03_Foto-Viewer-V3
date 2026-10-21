@@ -132,7 +132,7 @@ public sealed class GalleryPageSourceCategoryTests : IAsyncLifetime
     public async Task Leerer_Filter_wirkt_nicht_und_Suche_und_Kategorien_Filter_wirken_zusammen()
     {
         (await NamesAsync(new GalleryCategoryFilter(_xx.Id, [], false))).Should().HaveCount(5);
-        var query = new GalleryQuery(_libraryId, GalleryFilter.All, "IMG_c", Sort: GallerySort.NameAsc,
+        var query = new GalleryQuery(_libraryId, GalleryFilterState.None, "IMG_c", Sort: GallerySort.NameAsc,
             CategoryFilters: [new GalleryCategoryFilter(_projekt.Id, [Sued], false)]);
         (await _source.GetTotalCountAsync(query, CancellationToken.None)).Should().Be(1, "Suche und Kategorien-Filter wirken zusammen");
     }
@@ -151,7 +151,7 @@ public sealed class GalleryPageSourceCategoryTests : IAsyncLifetime
     public async Task Suche_nach_Wert_und_Dateiname_wirken_zusammen_und_mit_Kategorien_Filter()
     {
         (await SearchAsync("IMG_d")).Should().Equal("IMG_d.jpg");
-        var query = new GalleryQuery(_libraryId, GalleryFilter.All, "n", Sort: GallerySort.NameAsc,
+        var query = new GalleryQuery(_libraryId, GalleryFilterState.None, "n", Sort: GallerySort.NameAsc,
             CategoryFilters: [new GalleryCategoryFilter(_projekt.Id, [], true)]);
         var count = await _source.GetTotalCountAsync(query, CancellationToken.None);
         var rows = await _source.LoadPageAsync(query, 0, 100, count, CancellationToken.None);
@@ -175,7 +175,7 @@ public sealed class GalleryPageSourceCategoryTests : IAsyncLifetime
     [Fact]
     public async Task Suche_nach_Werten_laeuft_ueber_Indizes_statt_ueber_alle_Dateien()
     {
-        var query = new GalleryQuery(_libraryId, GalleryFilter.All, "nord");
+        var query = new GalleryQuery(_libraryId, GalleryFilterState.None, "nord");
         foreach (var count in new[] { true, false })
         {
             var plan = await _source.ExplainAsync(query, count, CancellationToken.None);
@@ -214,7 +214,7 @@ public sealed class GalleryPageSourceCategoryTests : IAsyncLifetime
     {
         var sort = new GalleryCategorySort(_xx.Id, descending);
         var expected = await SortedAsync(sort);
-        var query = new GalleryQuery(_libraryId, GalleryFilter.All, null, CategorySort: sort);
+        var query = new GalleryQuery(_libraryId, GalleryFilterState.None, null, CategorySort: sort);
         var paged = new List<string>();
         for (var page = 0; page < 3; page++)
         {
@@ -228,11 +228,11 @@ public sealed class GalleryPageSourceCategoryTests : IAsyncLifetime
     [Fact]
     public async Task Sortierung_wirkt_zusammen_mit_Filter_und_Suche_und_ersetzt_die_Grundsortierung()
     {
-        var filtered = new GalleryQuery(_libraryId, GalleryFilter.All, null, Sort: GallerySort.NameDesc,
+        var filtered = new GalleryQuery(_libraryId, GalleryFilterState.None, null, Sort: GallerySort.NameDesc,
             CategoryFilters: [new GalleryCategoryFilter(_projekt.Id, [], true)], CategorySort: new GalleryCategorySort(_xx.Id, true));
         (await LoadAllAsync(filtered)).Should().Equal(["IMG_b.jpg", "IMG_e.jpg", "IMG_d.jpg"], "b hat N, d/e ohne Wert; Name Z → A gilt nicht");
 
-        var searched = new GalleryQuery(_libraryId, GalleryFilter.All, "n", CategorySort: new GalleryCategorySort(_projekt.Id, false));
+        var searched = new GalleryQuery(_libraryId, GalleryFilterState.None, "n", CategorySort: new GalleryCategorySort(_projekt.Id, false));
         (await LoadAllAsync(searched)).Should().Equal("IMG_a.jpg", "IMG_c.jpg", "IMG_b.jpg");
     }
 
@@ -241,7 +241,7 @@ public sealed class GalleryPageSourceCategoryTests : IAsyncLifetime
     {
         // 0.2.30 (ADR-0031): Segment-Zählung über den abdeckenden Kategorie-Index, Seiten je Segment in der Reihenfolge
         // von IX_Files_Library_Modified — kein Schlüssel-Lookup je Datei und keine Sortierung der ganzen Bibliothek mehr.
-        var plan = await _source.ExplainAsync(new GalleryQuery(_libraryId, GalleryFilter.All, null, CategorySort: new GalleryCategorySort(_xx.Id, false)), false, CancellationToken.None);
+        var plan = await _source.ExplainAsync(new GalleryQuery(_libraryId, GalleryFilterState.None, null, CategorySort: new GalleryCategorySort(_xx.Id, false)), false, CancellationToken.None);
         var joined = string.Join(" | ", plan);
         plan.Should().Contain(l => l.StartsWith("SEARCH scv USING COVERING INDEX IX_FileCategoryValues_Category_Value_File (CategoryId=?)", StringComparison.Ordinal),
             $"Zählung je Wert nur aus dem Index (Plan: {joined})");
@@ -274,18 +274,18 @@ public sealed class GalleryPageSourceCategoryTests : IAsyncLifetime
         (await SearchAsync("projekt")).Should().BeEmpty("der alte Name steht nirgends mehr");
         (await SearchAsync("baustelle")).Should().Equal("IMG_a.jpg", "IMG_c.jpg");
 
-        var query = new GalleryQuery(_libraryId, GalleryFilter.All, "baustelle",
+        var query = new GalleryQuery(_libraryId, GalleryFilterState.None, "baustelle",
             CategoryFilters: [new GalleryCategoryFilter(_xx.Id, [N], false)]);
         (await LoadAllAsync(query)).Should().Equal(["IMG_a.jpg"], "nur a hat einen Baustellen-Wert und XX = N");
 
-        var sorted = new GalleryQuery(_libraryId, GalleryFilter.All, "baustelle", CategorySort: new GalleryCategorySort(_projekt.Id, true));
+        var sorted = new GalleryQuery(_libraryId, GalleryFilterState.None, "baustelle", CategorySort: new GalleryCategorySort(_projekt.Id, true));
         (await LoadAllAsync(sorted)).Should().Equal(["IMG_c.jpg", "IMG_a.jpg"], "Süd vor Nord bei absteigender Sortierung");
     }
 
     [Fact]
     public async Task Suche_nach_Kategorie_Namen_laeuft_ueber_den_Kategorie_Index()
     {
-        var query = new GalleryQuery(_libraryId, GalleryFilter.All, "projekt");
+        var query = new GalleryQuery(_libraryId, GalleryFilterState.None, "projekt");
         foreach (var count in new[] { true, false })
         {
             var plan = await _source.ExplainAsync(query, count, CancellationToken.None);
@@ -297,10 +297,10 @@ public sealed class GalleryPageSourceCategoryTests : IAsyncLifetime
     }
 
     private async Task<List<string>> SearchAsync(string term)
-        => await LoadAllAsync(new GalleryQuery(_libraryId, GalleryFilter.All, term, Sort: GallerySort.NameAsc));
+        => await LoadAllAsync(new GalleryQuery(_libraryId, GalleryFilterState.None, term, Sort: GallerySort.NameAsc));
 
     private async Task<List<string>> SortedAsync(GalleryCategorySort sort)
-        => await LoadAllAsync(new GalleryQuery(_libraryId, GalleryFilter.All, null, Sort: GallerySort.NameDesc, CategorySort: sort));
+        => await LoadAllAsync(new GalleryQuery(_libraryId, GalleryFilterState.None, null, Sort: GallerySort.NameDesc, CategorySort: sort));
 
     private async Task<List<string>> LoadAllAsync(GalleryQuery query)
     {
@@ -312,7 +312,7 @@ public sealed class GalleryPageSourceCategoryTests : IAsyncLifetime
 
     private async Task<List<string>> NamesAsync(params GalleryCategoryFilter[] filters)
     {
-        var query = new GalleryQuery(_libraryId, GalleryFilter.All, null, Sort: GallerySort.NameAsc, CategoryFilters: filters);
+        var query = new GalleryQuery(_libraryId, GalleryFilterState.None, null, Sort: GallerySort.NameAsc, CategoryFilters: filters);
         var count = await _source.GetTotalCountAsync(query, CancellationToken.None);
         var rows = await _source.LoadPageAsync(query, 0, 100, count, CancellationToken.None);
         rows.Should().HaveCount(count, "Zähl- und Page-SQL nutzen dieselben Bedingungen");

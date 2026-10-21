@@ -29,7 +29,7 @@ Wenn eine ADR-Entscheidung revidiert wird: **neues ADR anlegen** + altes auf "Su
 | [0008](0008-storage-profile.md) | Storage-Profile (SSD/HDD/NAS) | Accepted |
 | [0009](0009-cache-strategie.md) | Cache-Strategie (lokal in LocalAppData) | Accepted |
 | [0010](0010-ui-datenmodell-paging.md) | UI-Datenmodell mit Paging | Accepted |
-| [0011](0011-suche-und-filter-v01.md) | Suche und Filter in V0.1 | Accepted |
+| [0011](0011-suche-und-filter-v01.md) | Suche und Filter in V0.1 | Accepted (Filter-Pills ersetzt durch 0041) |
 | [0012](0012-operation-logging.md) | Operation-Logging (Batches + Operations) | Accepted |
 | [0013](0013-status-ui.md) | Status-UI mit 4 Indikatoren | Accepted |
 | [0014](0014-animated-hover-not-v01.md) | Animated Hover NICHT in V0.1 | Accepted |
@@ -58,6 +58,7 @@ Wenn eine ADR-Entscheidung revidiert wird: **neues ADR anlegen** + altes auf "Su
 | [0037](0037-gesichter-zuordnen-personen-seite.md) | Gesichter zuordnen: ein Zuordnungsdienst (Modell je aktiver Bibliothek, Neu-Lernen nach jeder Korrektur, Vorschläge per bedingtem UPDATE, Ablehnen → sofort nächstbester), Gruppen-Cache über unbekannte Gesichter, Gesichts-Ausschnitte im Thumbnail-Ordner, Personen-Seite mit abgewählten Ausreißern | Accepted |
 | [0038](0038-personen-in-galerie-und-lightbox.md) | Personen in Galerie und Lightbox: Filter/Suche/Spalte direkt in SQL über abdeckende Indizes (`AddFacePersonIndex`), nur bestätigte Gesichter zählen; Rahmen per Taste F; „Gesichtsdaten löschen“ je Bibliothek | Accepted |
 | [0040](0040-ignorierte-gesichter-und-mindestgroesse.md) | Ignorierte Gesichter: Ansicht mit „Zurückholen“, ganze Gruppe ignorieren; Mindestgröße (Standard 24 px) als automatisch ignoriert (Zustand 3 + Markierung in `SuggestionScore`, keine Migration), angewandt beim Einfügen durch den Index und einmal je Schwellenänderung durch den Zuordnungsdienst | Accepted |
+| [0041](0041-galerie-filter-unabhaengig-kombinierbar.md) | Galerie-Filter unabhängig kombinierbar: Dateiart, nur Favoriten, Ablage und Mindest-Bewertung als eigene Teile (`GalleryFilterState`), mit Tags/Personen/Kategorien/Suche/Ordner per UND; „Es gilt“-Zeile, Filter zurücksetzen (Ordnerauswahl bleibt), Sortierung Feld + Richtung getrennt | Accepted |
 
 ## Quellen der Entscheidungen
 

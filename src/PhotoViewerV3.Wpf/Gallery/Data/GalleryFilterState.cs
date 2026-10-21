@@ -1,0 +1,65 @@
+namespace PhotoViewerV3.Gallery.Data;
+
+/// <summary>Dateiart im Galerie-Filter (Segment „Alle | Bilder | Videos | Archive“), ADR-0041.</summary>
+public enum GalleryMediaKind
+{
+    All,
+
+    /// <summary>MediaType 0.</summary>
+    Images,
+
+    /// <summary>MediaType 1.</summary>
+    Videos,
+
+    /// <summary>Archive (ZIP/RAR/7z …, MediaType 2, ADR-0022).</summary>
+    Archives,
+}
+
+/// <summary>Ablage im Galerie-Filter (ADR-0020/0041): wo die Datei liegt, bestimmt die Rolle der Wurzel ihres Ordners.</summary>
+public enum GalleryLocation
+{
+    /// <summary>Keine Einschränkung.</summary>
+    Anywhere,
+
+    /// <summary>Unter einer Eingangs-Wurzel (Folders.RootId → LibraryRoots.Role = 0) — „Noch im Eingang“.</summary>
+    Inbox,
+
+    /// <summary>Unter der Bibliotheks-(Archiv-)Wurzel (Role = 1) — „In der Bibliothek“.</summary>
+    Library,
+}
+
+/// <summary>
+/// Datei-Teil des Galerie-Filters (ADR-0041, ersetzt das Einzel-Enum <c>GalleryFilter</c>): Dateiart, nur Favoriten,
+/// Ablage und Mindest-Bewertung wirken unabhängig voneinander und werden in SQL mit UND verknüpft — zusammen mit
+/// Tag-, Personen-, Kategorie-, Ordner- und Suchfilter aus <see cref="GalleryQuery"/>.
+/// </summary>
+/// <param name="Media">Dateiart.</param>
+/// <param name="FavoritesOnly">Nur Favoriten (Files.IsFavorite = 1).</param>
+/// <param name="Location">Ablage (Eingang / Bibliothek).</param>
+/// <param name="MinRating">Mindest-Bewertung 0–5; 0 = egal, sonst Files.Rating ≥ Wert (ohne Bewertung fällt dann heraus).</param>
+public sealed record GalleryFilterState(
+    GalleryMediaKind Media = GalleryMediaKind.All,
+    bool FavoritesOnly = false,
+    GalleryLocation Location = GalleryLocation.Anywhere,
+    int MinRating = 0)
+{
+    /// <summary>Kein Datei-Filter.</summary>
+    public static GalleryFilterState None { get; } = new();
+
+    public const int MaxRating = 5;
+
+    /// <summary>Mindest-Bewertung auf 0–5 begrenzt.</summary>
+    public int EffectiveMinRating => Math.Clamp(MinRating, 0, MaxRating);
+
+    /// <summary>Anzahl wirkender Teile (für den Zähler am Knopf „Filter zurücksetzen“).</summary>
+    public int ActiveCount
+        => (Media != GalleryMediaKind.All ? 1 : 0)
+           + (FavoritesOnly ? 1 : 0)
+           + (Location != GalleryLocation.Anywhere ? 1 : 0)
+           + (EffectiveMinRating > 0 ? 1 : 0);
+
+    public bool IsActive => ActiveCount > 0;
+
+    /// <summary>Kurzform fürs Log („Art=Images Fav=True Ablage=Inbox Min=3“).</summary>
+    public override string ToString() => $"Art={Media} Fav={FavoritesOnly} Ablage={Location} Min={EffectiveMinRating}";
+}
