@@ -115,8 +115,7 @@ außerhalb von OneDrive), `-NoZip` lässt das ZIP weg, `-FrameworkDependent` bau
 
 ### Navigation (seit 0.2.44, ADR-0042)
 Die linke Leiste zeigt ganz oben das App-Symbol mit dem Schriftzug „lumora“, darunter den **Bibliotheks-Umschalter** (Name der aktiven Bibliothek; Klick → andere Bibliothek
-wählen oder **Bibliotheken verwalten…**), darunter **Galerie, Ordner, Personen, Orte, Sortieren** und unten
-wählen, verknüpfte Bibliotheken als **Alle verknüpften (Name)** gemeinsam ansehen oder **Bibliotheken verwalten…**), darunter **Galerie, Ordner, Personen, Sortieren** und unten
+wählen, verknüpfte Bibliotheken als **Alle verknüpften (Name)** gemeinsam ansehen oder **Bibliotheken verwalten…**), darunter **Galerie, Ordner, Personen, Orte, Sortieren** und unten
 **Einstellungen**. Bibliothek, Tags und Kategorien richtet man selten ein — sie sind Reiter der Einstellungen:
 **Bibliotheken & Eingänge · Tags · Kategorien · Gesichter · Archive · Darstellung · Speicher & Wartung · Info**.
 Tags und Kategorien **vergeben** geht wie bisher in der Galerie (Rechtsklick, Strg+T, Strg+K, Lightbox); „Tags
@@ -144,22 +143,26 @@ in Einstellungen › Bibliotheken & Eingänge.
 
 ### Bibliotheken getrennt oder verknüpft (seit 0.2.51, ADR-0048)
 Jede Bibliothek ist für sich: eine geöffnete Bibliothek zeigt **nichts** aus einer anderen — keine Fotos, keine Tags,
-Kategorien, Personen oder Beziehungen, keine Treffer in der Suche, keine Personen-Vorschläge. Zwei Bibliotheken dürfen
+Kategorien, Personen oder Beziehungen, keine Motiv-Begriffe, keine Orte auf der Karte oder im Ort-Filter, keine Treffer
+in der Suche oder der Bildinhalt-Suche, keine Personen-Vorschläge (Motive und Orte seit 0.2.56). Zwei Bibliotheken dürfen
 gleich benannte Tags oder Personen haben; es sind verschiedene.
 - **Verknüpfen**: Einstellungen › Bibliotheken & Eingänge, im Kasten unter einer Bibliothek **Verknüpfen mit…** → die
   andere Bibliothek wählen. Der Dialog zeigt, was zusammengeführt wird (gleichnamige Tags, Kategorien samt Werten und
-  Beziehungen werden eins, die übrigen kommen hinzu) und listet gleichnamige Personen: Häkchen = zusammenführen
+  Beziehungen werden eins, die übrigen kommen hinzu; ebenso die Motiv-Begriffe — fehlende Treffer rechnet Lumora danach
+  aus den gespeicherten Bild-Vektoren nach, kein Foto wird neu analysiert) und listet gleichnamige Personen: Häkchen = zusammenführen
   (Standard), ohne Häkchen bleiben sie getrennt und bekommen den Bibliotheksnamen als Rufnamen-Zusatz. Verknüpfte
   Bibliotheken teilen danach Tags, Kategorien, Personen und Beziehungen; die Gruppe heißt wie die Bibliothek, von der aus
   verknüpft wurde (**Umbenennen**-Symbol daneben).
 - **Alle verknüpften** ansehen: im Bibliotheks-Umschalter oben links erscheint für verknüpfte Bibliotheken
-  „Alle verknüpften (Name)“. Galerie, Suche, Filter, Personen und Ordnerbaum (je Bibliothek ein Knoten) zeigen dann alle
-  zusammen, die Zähler sind die Summe. Verschieben…, „In die Bibliothek“ und Entpacken aus der Galerie sowie „Eingang
+  „Alle verknüpften (Name)“. Galerie, Suche, Filter (auch Motive und Ort), Personen, die Karte **Orte** und der
+  Ordnerbaum (je Bibliothek ein Knoten) zeigen dann alle zusammen, die Zähler sind die Summe; Fotos lassen sich auch in
+  dieser Ansicht verorten. Verschieben…, „In die Bibliothek“ und Entpacken aus der Galerie sowie „Eingang
   hinzufügen…“ auf der Ordner-Seite sind in dieser Ansicht gesperrt (das Ziel wäre nicht eindeutig) — dafür eine einzelne
   Bibliothek wählen. Favoriten, Bewertung, Tags, Kategorien, Personen, Datum und Papierkorb gehen weiter; „In die
   Bibliothek übernehmen…“ im Ordnerbaum wirkt in der Bibliothek des Ordners.
 - **Verknüpfung lösen**: die Bibliothek wird wieder einzeln geführt und bekommt eine **Kopie** aller gemeinsamen Begriffe
-  und Personen — nichts geht verloren; Tags, Kategorien und Gesichter ihrer Fotos zeigen auf die Kopien.
+  (auch der Motiv-Begriffe) und Personen — nichts geht verloren; Tags, Kategorien, Motiv-Treffer und Gesichter ihrer
+  Fotos zeigen auf die Kopien.
 - Beim Update auf 0.2.51 bekommt jede Bibliothek die Begriffe, die sie benutzt; nicht benutzte Tags, Kategorien,
   Personen und Beziehungen findet man in jeder Bibliothek wieder (überzählige dort löschen).
 
@@ -512,10 +515,10 @@ Erkennt, was auf den Fotos zu sehen ist — Sonnenuntergang, Meer, Hund, Torte, 
 Je Foto (Videos: Vorschaubild) entsteht im Hintergrund ein Bild-Vektor im Katalog; die Begriffe werden damit verglichen.
 - **Einstellungen › Motive**: „Motive im Hintergrund erkennen“ (Standard an — läuft erst mit Modell), „Grafikkarte
   verwenden“, Modellstatus, Index mit **Neu analysieren**, **Schwelle** für alle Begriffe (Standard 1 %; kleiner = mehr
-  Treffer). Darunter die **Begriffe** der aktiven Bibliothek mit Anzahl Treffern: **anlegen** (Begriff + optionale
+  Treffer). Darunter die **Begriffe** der aktiven Bibliothek (verknüpfte Bibliotheken teilen sie) mit Anzahl Treffern: **anlegen** (Begriff + optionale
   Beschreibung, englisch trennt am besten, z. B. „a photo of a lighthouse“), **umbenennen**, **Beschreibung ändern**,
   **eigene Schwelle**, **löschen**. Neue oder geänderte Begriffe wirken sofort aus den gespeicherten Vektoren — kein Foto
-  wird dafür neu analysiert. Beim ersten Start legt Lumora je Bibliothek ≈ 80 Begriffe an.
+  wird dafür neu analysiert. Beim ersten Start legt Lumora je Bibliothek (bzw. Verknüpfungsgruppe) ≈ 80 Begriffe an.
 - **Modell**: Fehlt es, steht dort **„Motiv-Modell herunterladen… (≈ 690 MB, SigLIP 2 von Google, Apache-2.0)“**: nach
   Bestätigung (Dateien, Quelle, Größen, Lizenz) lädt Lumora SigLIP 2 base als ONNX von Hugging Face
   (onnx-community/siglip2-base-patch16-224-ONNX), prüft jede Datei per SHA-256 und legt sie unter

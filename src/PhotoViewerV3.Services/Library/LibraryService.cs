@@ -239,6 +239,10 @@ public sealed class LibraryService : ILibraryService
 
         await ClearAsync(libraryId, ct).ConfigureAwait(false);
 
+        // Gemeinsame Motiv-Begriffe mit dieser Bibliothek als Anker an eine andere der Gruppe hängen (0.2.56) — sonst nähme
+        // die Kaskade von MotifTerms.LibraryId sie den übrigen Bibliotheken weg. Scheitert das, wird nicht gelöscht.
+        await WriteGroupsAsync((connection, tx) => LibraryGroupStore.ReanchorMotifTerms(connection, tx, libraryId), ct).ConfigureAwait(false);
+
         int groupId;
         await using (var ctx = _factory.Create())
         {

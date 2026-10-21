@@ -17,14 +17,18 @@ internal sealed class MotifTermConfiguration : IEntityTypeConfiguration<MotifTer
         b.Property(x => x.SortOrder).IsRequired();
         b.Property(x => x.CreatedAtUtc).HasConversion(ValueConverters.DateTimeToUnixSeconds);
 
-        // Bereichsbezug (Bibliotheks-Trennung): vorerst die Bibliothek; Bibliothek gelöscht → Begriffe weg.
+        // Anker-Bibliothek (seit 0.2.56 nur noch für den Fremdschlüssel aus AddMotifs — ihn zu entfernen hieße die Tabelle
+        // neu aufbauen, FileMotifs hängen per Kaskade daran). Der Bereich ist GroupId (ADR-0048, Migration MotifTermsByGroup).
         b.HasOne<Library>()
             .WithMany()
             .HasForeignKey(x => x.LibraryId)
             .OnDelete(DeleteBehavior.Cascade);
+        b.HasIndex(x => x.LibraryId).HasDatabaseName("IX_MotifTerms_Library");
 
-        // „Hund“ und „hund“ sind in einer Bibliothek derselbe Begriff (NOCASE-Spalte).
-        b.HasIndex(x => new { x.LibraryId, x.Name }).IsUnique().HasDatabaseName("UX_MotifTerms_Library_Name");
+        // „Hund“ und „hund“ sind in einer Bibliotheks-Gruppe derselbe Begriff (NOCASE-Spalte). GroupId ohne Fremdschlüssel
+        // wie bei Tags/Kategorien (ADR-0048).
+        b.Property(x => x.GroupId).IsRequired();
+        b.HasIndex(x => new { x.GroupId, x.Name }).IsUnique().HasDatabaseName("UX_MotifTerms_Group_Name");
     }
 }
 

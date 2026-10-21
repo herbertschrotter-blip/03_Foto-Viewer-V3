@@ -100,6 +100,67 @@ public sealed class HiddenCatalogTests : IDisposable
         Directory.EnumerateFileSystemEntries(normalRoot, "*", SearchOption.AllDirectories).Should().BeEmpty("nichts im normalen Datenordner");
     }
 
+    /// <summary>
+    /// Zusammenbau 0.2.56 (ADR-0048/0049): die versteckte Bibliothek bekommt beim Anlegen ihre eigene Gruppe (nicht erst
+    /// beim ersten Bereichs-Zugriff), Verknüpfen und „Alle verknüpften“ sind gesperrt, Motiv-Begriffe und Orte landen nur
+    /// im Katalog des Containers.
+    /// </summary>
+    [Fact]
+    public async Task Hidden_library_gets_its_group_cannot_be_linked_and_keeps_motifs_and_places_in_its_catalog()
+    {
+        var normalRoot = Directory.CreateDirectory(Path.Combine(_root, "appdata")).FullName;
+        var library = Directory.CreateDirectory(Path.Combine(_root, "container", "Tresor")).FullName;
+        new HiddenLibraryStore(iterations: 1_000).Create(library, "Tresor", "kennwort-1");
+        File.WriteAllBytes(Path.Combine(library, "geheim-1.jpg"), new byte[512]);
+        var hiddenPaths = HiddenLibraryStore.GetCatalogPaths(library);
+        hiddenPaths.EnsureDirectoriesExist();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IAppDataPaths>(hiddenPaths);
+        services.AddHiddenCatalog(hiddenPaths, normalRoot);
+        services.AddPhotoViewerServices();
+
+        await using (var provider = services.BuildServiceProvider())
+        {
+            await provider.GetRequiredService<DatabaseInitializer>().InitializeAsync();
+            var created = await provider.GetRequiredService<ILibraryService>().CreateAsync("Tresor", library);
+            var factory = provider.GetRequiredService<ILibraryContextFactory>();
+            using (var connection = factory.OpenSqliteConnection())
+            using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = "SELECT COUNT(*) FROM Libraries l JOIN LibraryGroups g ON g.Id = l.GroupId WHERE l.Id = $id;";
+                cmd.Parameters.AddWithValue("$id", created.Id);
+                Convert.ToInt32(cmd.ExecuteScalar()).Should().Be(1, "Gruppe schon beim Anlegen, ohne Umweg über den Bereichsdienst");
+            }
+
+            var scope = provider.GetRequiredService<ILibraryScope>();
+            var current = await scope.GetCurrentAsync();
+            current.Should().Match<LibraryScopeInfo>(s => s.LibraryId == created.Id && s.GroupId != 0 && !s.IsAllLinked && !s.IsLinked);
+            var linking = provider.GetRequiredService<ILibraryLinkService>();
+            await FluentActions.Awaiting(() => linking.LinkAsync(created.Id, created.Id)).Should().ThrowAsync<LibraryLinkNotAllowedException>();
+            await FluentActions.Awaiting(() => linking.PreviewUnlinkAsync(created.Id)).Should().ThrowAsync<LibraryLinkNotAllowedException>();
+            await FluentActions.Awaiting(() => scope.ShowAllLinkedAsync(current.GroupId)).Should().ThrowAsync<LibraryLinkNotAllowedException>();
+
+            // Motiv-Begriffe der versteckten Sitzung: Start-Liste + eigener Begriff in der Gruppe der versteckten Bibliothek
+            var motifs = provider.GetRequiredService<PhotoViewerV3.Services.Motifs.IMotifTermService>();
+            await motifs.AddTermAsync(created.Id, "Geheimnis");
+            (await motifs.GetTermsAsync(created.Id)).Should().Contain(t => t.Name == "Geheimnis");
+            using (var connection = factory.OpenSqliteConnection())
+            using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandText = "SELECT COUNT(*) FROM MotifTerms WHERE GroupId <> $g;";
+                cmd.Parameters.AddWithValue("$g", current.GroupId);
+                Convert.ToInt32(cmd.ExecuteScalar()).Should().Be(0);
+            }
+
+            var geo = provider.GetRequiredService<PhotoViewerV3.Services.Places.IGeoCatalogReader>();
+            (await geo.GetPlaceCountsAsync(current.LibraryIds)).Places.Should().BeEmpty();
+        }
+
+        File.Exists(Path.Combine(library, ".lumora", "library.db")).Should().BeTrue();
+        Directory.EnumerateFileSystemEntries(normalRoot, "*", SearchOption.AllDirectories).Should().BeEmpty("Begriffe und Orte nur im Katalog des Containers");
+    }
+
     [Fact]
     public void Enumerator_skips_lumora_even_without_hidden_attribute()
     {

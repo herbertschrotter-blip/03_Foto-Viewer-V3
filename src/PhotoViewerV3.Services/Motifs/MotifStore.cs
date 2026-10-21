@@ -5,6 +5,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using PhotoViewerV3.Services.Database;
+using PhotoViewerV3.Services.Library;
 
 namespace PhotoViewerV3.Services.Motifs;
 
@@ -48,8 +49,11 @@ public static class MotifMatcher
 /// <summary>
 /// SQL der Motiv-Erkennung (ADR-0052) für Index, Begriffe und Suche. Alle Schreibvorgänge laufen nacheinander
 /// (<see cref="_writeLock"/>, Single-Writer) in Transaktionen mit stiller Warte-Logik (ADR-0030); lange Neuberechnungen
-/// in Abschnitten zu je 2 000 Dateien, damit andere Schreiber dazwischen drankommen. Bibliotheks-Trennung: jede Abfrage
-/// ist auf <c>Files.LibraryId</c> bzw. <c>MotifTerms.LibraryId</c> des Bereichs beschränkt.
+/// in Abschnitten zu je 2 000 Dateien, damit andere Schreiber dazwischen drankommen. Bibliotheks-Trennung (ADR-0048,
+/// seit 0.2.56): Begriffe gehören der Gruppe der Bibliothek (<c>MotifTerms.GroupId</c>), Dateien werden über
+/// <c>Files.LibraryId</c> des Bereichs gelesen; eine Begriffsänderung rechnet die Treffer aller Bibliotheken der Gruppe neu.
+/// Schreibwege legen eine fehlende Gruppe an (<c>LibraryGroupStore.EnsureGroup</c>), damit nie zwei Bibliotheken ohne
+/// Gruppe dieselben Begriffe sehen. <c>MotifTerms.LibraryId</c> ist nur der Anker des Fremdschlüssels.
 /// </summary>
 public sealed class MotifStore
 {
@@ -69,6 +73,9 @@ public sealed class MotifStore
     }
 
     // ---- Index -----------------------------------------------------------------------------------
+
+    /// <summary>Dateien aller Bibliotheken der Gruppe <c>$grp</c> (Begriffe gelten für die ganze Gruppe).</summary>
+    private const string GroupFilesCondition = "f.LibraryId IN (SELECT gl.Id FROM Libraries gl WHERE gl.GroupId = $grp)";
 
     private const string AnalyzableCondition =
         "f.LibraryId = $lib AND f.Missing = 0 AND (f.MediaType = 0 OR (f.MediaType = 1 AND EXISTS (SELECT 1 FROM Thumbnails tv WHERE tv.FileId = f.Id AND tv.Status = 2)))";
@@ -143,7 +150,7 @@ public sealed class MotifStore
                 {
                     using var connection = _factory.OpenSqliteConnection();
                     using var tx = await _retry.BeginTransactionAsync(connection, ct).ConfigureAwait(false);
-                    var terms = ReadTermVectors(connection, tx, libraryId, textVersion, defaultThreshold);
+                    var terms = ReadTermVectors(connection, tx, LibraryGroupStore.EnsureGroup(connection, tx, libraryId), textVersion, defaultThreshold);
                     var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
                     var written = new List<int>(results.Count);
                     foreach (var result in results)
@@ -204,22 +211,36 @@ public sealed class MotifStore
 
     // ---- Begriffe -------------------------------------------------------------------------------
 
-    /// <summary>Begriffe der Bibliothek mit Anzahl Treffer (über <c>IX_FileMotifs_Term_File</c>), in Anzeigereihenfolge.</summary>
+    /// <summary>Begriffe der Bibliothek (ihrer Gruppe) mit Anzahl Treffer nur in dieser Bibliothek.</summary>
     public Task<IReadOnlyList<MotifTermInfo>> GetTermsAsync(int libraryId, string textVersion, CancellationToken ct)
+        => GetTermsAsync(libraryId, [libraryId], textVersion, ct);
+
+    /// <summary>
+    /// Begriffe der Gruppe von <paramref name="libraryId"/> mit Anzahl Treffer in den Bibliotheken des Bereichs
+    /// (<paramref name="scopeLibraryIds"/>), in Anzeigereihenfolge. Deckt der Bereich die ganze Gruppe ab, zählt der Index
+    /// <c>IX_FileMotifs_Term_File</c> allein; sonst nur Treffer auf Dateien des Bereichs (verknüpfte Bibliothek einzeln).
+    /// </summary>
+    public Task<IReadOnlyList<MotifTermInfo>> GetTermsAsync(int libraryId, IReadOnlyCollection<int> scopeLibraryIds, string textVersion, CancellationToken ct)
         => Task.Run<IReadOnlyList<MotifTermInfo>>(
             () =>
             {
                 using var connection = _factory.OpenSqliteConnection();
+                var group = ReadGroup(connection, libraryId);
+                if (group == 0)
+                {
+                    return [];
+                }
+
                 using var cmd = connection.CreateCommand();
-                cmd.CommandText = """
+                cmd.CommandText = $"""
                     SELECT t.Id, t.LibraryId, t.Name, t.Prompt, t.Threshold,
                            (t.TextEmbedding IS NOT NULL AND t.TextModelVersion = $ver),
-                           (SELECT COUNT(*) FROM FileMotifs m WHERE m.TermId = t.Id)
+                           {HitCountSql(connection, group, scopeLibraryIds)}
                     FROM MotifTerms t
-                    WHERE t.LibraryId = $lib
+                    WHERE t.GroupId = $grp
                     ORDER BY t.SortOrder, t.Name COLLATE NOCASE, t.Id;
                     """;
-                cmd.Parameters.AddWithValue("$lib", libraryId);
+                cmd.Parameters.AddWithValue("$grp", group);
                 cmd.Parameters.AddWithValue("$ver", textVersion);
                 var list = new List<MotifTermInfo>();
                 using var reader = cmd.ExecuteReader();
@@ -238,18 +259,24 @@ public sealed class MotifStore
             ct);
 
     /// <summary>
-    /// Legt die Standard-Begriffe einmal je Bibliothek an (Merker <c>motifs.seeded.{id}</c> in Settings — gelöschte
-    /// Standard-Begriffe kommen nicht wieder). Liefert die Zahl neu angelegter Begriffe.
+    /// Legt die Standard-Begriffe einmal je Bibliotheks-Gruppe an (Merker <c>motifs.seeded.g{GroupId}</c> in Settings —
+    /// gelöschte Standard-Begriffe kommen nicht wieder, auch nicht über eine andere Bibliothek der Gruppe). Legt eine
+    /// fehlende Gruppe an. Liefert die Zahl neu angelegter Begriffe.
     /// </summary>
     public Task<int> EnsureDefaultsAsync(int libraryId, CancellationToken ct)
         => Task.Run(
             async () =>
             {
-                var key = SeededKey(libraryId);
                 using (var probe = _factory.OpenSqliteConnection())
                 {
-                    if (Scalar(probe, null, "SELECT COUNT(*) FROM Settings WHERE Key = $key;", ("$key", key)) > 0
-                        || Scalar(probe, null, "SELECT COUNT(*) FROM Libraries WHERE Id = $lib;", ("$lib", libraryId)) == 0)
+                    var known = LibraryGroupStore.ReadGroupOf(probe, null, libraryId);
+                    if (known is null)
+                    {
+                        return 0; // Bibliothek gibt es nicht
+                    }
+
+                    if (LibraryGroupStore.GroupExists(probe, null, known.Value)
+                        && Scalar(probe, null, "SELECT COUNT(*) FROM Settings WHERE Key = $key;", ("$key", SeededKey(known.Value))) > 0)
                     {
                         return 0;
                     }
@@ -260,8 +287,11 @@ public sealed class MotifStore
                 {
                     using var connection = _factory.OpenSqliteConnection();
                     using var tx = await _retry.BeginTransactionAsync(connection, ct).ConfigureAwait(false);
-                    if (Scalar(connection, tx, "SELECT COUNT(*) FROM Settings WHERE Key = $key;", ("$key", key)) > 0)
+                    var group = LibraryGroupStore.EnsureGroup(connection, tx, libraryId);
+                    var key = SeededKey(group);
+                    if (group == 0 || Scalar(connection, tx, "SELECT COUNT(*) FROM Settings WHERE Key = $key;", ("$key", key)) > 0)
                     {
+                        tx.Commit(); // ggf. neu angelegte Gruppe behalten
                         return 0;
                     }
 
@@ -271,10 +301,10 @@ public sealed class MotifStore
                     {
                         var term = MotifDefaults.Terms[i];
                         added += Execute(connection, tx, """
-                            INSERT OR IGNORE INTO MotifTerms (LibraryId, Name, Prompt, Threshold, SortOrder, TextEmbedding, TextModelVersion, CreatedAtUtc)
-                            VALUES ($lib, $name, $prompt, NULL, $sort, NULL, NULL, $now);
+                            INSERT OR IGNORE INTO MotifTerms (LibraryId, GroupId, Name, Prompt, Threshold, SortOrder, TextEmbedding, TextModelVersion, CreatedAtUtc)
+                            VALUES ($lib, $grp, $name, $prompt, NULL, $sort, NULL, NULL, $now);
                             """,
-                            ("$lib", libraryId), ("$name", term.Name), ("$prompt", term.Prompt), ("$sort", i), ("$now", now));
+                            ("$lib", libraryId), ("$grp", group), ("$name", term.Name), ("$prompt", term.Prompt), ("$sort", i), ("$now", now));
                     }
 
                     Execute(connection, tx, "INSERT INTO Settings (Key, Value) VALUES ($key, 'true');", ("$key", key));
@@ -288,28 +318,38 @@ public sealed class MotifStore
             },
             ct);
 
-    public static string SeededKey(int libraryId) => "motifs.seeded." + libraryId.ToString(CultureInfo.InvariantCulture);
+    /// <summary>Merker „Start-Liste angelegt“ der Gruppe.</summary>
+    public static string SeededKey(int groupId) => LibraryGroupStore.MotifSeededKey(groupId);
 
     /// <summary>Neuer Begriff am Ende der Liste; wirft <see cref="MotifTermException"/>, wenn der Name im Bereich schon existiert.</summary>
     public Task<int> AddTermAsync(int libraryId, string name, string? prompt, CancellationToken ct)
         => WriteTermAsync(ct, (connection, tx) =>
         {
-            if (Scalar(connection, tx, "SELECT COUNT(*) FROM MotifTerms WHERE LibraryId = $lib AND Name = $name;", ("$lib", libraryId), ("$name", name)) > 0)
+            var group = LibraryGroupStore.EnsureGroup(connection, tx, libraryId);
+            if (group == 0)
+            {
+                throw new MotifTermException("Die Bibliothek gibt es nicht mehr.");
+            }
+
+            if (Scalar(connection, tx, "SELECT COUNT(*) FROM MotifTerms WHERE GroupId = $grp AND Name = $name;", ("$grp", group), ("$name", name)) > 0)
             {
                 throw new MotifTermException($"Den Begriff „{name}“ gibt es schon.");
             }
 
-            var sort = Scalar(connection, tx, "SELECT COALESCE(MAX(SortOrder), -1) + 1 FROM MotifTerms WHERE LibraryId = $lib;", ("$lib", libraryId));
+            var sort = Scalar(connection, tx, "SELECT COALESCE(MAX(SortOrder), -1) + 1 FROM MotifTerms WHERE GroupId = $grp;", ("$grp", group));
             Execute(connection, tx, """
-                INSERT INTO MotifTerms (LibraryId, Name, Prompt, Threshold, SortOrder, TextEmbedding, TextModelVersion, CreatedAtUtc)
-                VALUES ($lib, $name, $prompt, NULL, $sort, NULL, NULL, $now);
+                INSERT INTO MotifTerms (LibraryId, GroupId, Name, Prompt, Threshold, SortOrder, TextEmbedding, TextModelVersion, CreatedAtUtc)
+                VALUES ($lib, $grp, $name, $prompt, NULL, $sort, NULL, NULL, $now);
                 """,
-                ("$lib", libraryId), ("$name", name), ("$prompt", (object?)prompt ?? DBNull.Value), ("$sort", sort),
+                ("$lib", libraryId), ("$grp", group), ("$name", name), ("$prompt", (object?)prompt ?? DBNull.Value), ("$sort", sort),
                 ("$now", DateTimeOffset.UtcNow.ToUnixTimeSeconds()));
             return (int)Scalar(connection, tx, "SELECT last_insert_rowid();");
         });
 
-    /// <summary>Name/Beschreibung ändern: Text-Vektor verfällt (wird neu gerechnet). Gleicher Name in anderer Schreibweise ist erlaubt.</summary>
+    /// <summary>
+    /// Name/Beschreibung ändern: Text-Vektor verfällt (wird neu gerechnet). Gleicher Name in anderer Schreibweise ist
+    /// erlaubt. Liefert die Anker-Bibliothek des Begriffs (eine der Gruppe) bzw. -1.
+    /// </summary>
     public Task<int> UpdateTermTextAsync(int termId, string name, string? prompt, CancellationToken ct)
         => WriteTermAsync(ct, (connection, tx) =>
         {
@@ -319,7 +359,8 @@ public sealed class MotifStore
                 throw new MotifTermException("Den Begriff gibt es nicht mehr.");
             }
 
-            if (Scalar(connection, tx, "SELECT COUNT(*) FROM MotifTerms WHERE LibraryId = $lib AND Name = $name AND Id <> $id;", ("$lib", libraryId), ("$name", name), ("$id", termId)) > 0)
+            var group = Scalar(connection, tx, "SELECT GroupId FROM MotifTerms WHERE Id = $id;", ("$id", termId));
+            if (Scalar(connection, tx, "SELECT COUNT(*) FROM MotifTerms WHERE GroupId = $grp AND Name = $name AND Id <> $id;", ("$grp", group), ("$name", name), ("$id", termId)) > 0)
             {
                 throw new MotifTermException($"Den Begriff „{name}“ gibt es schon.");
             }
@@ -346,15 +387,21 @@ public sealed class MotifStore
             return libraryId;
         });
 
-    /// <summary>Begriffe ohne Text-Vektor der Version (Id, Name, Beschreibung).</summary>
+    /// <summary>Begriffe der Gruppe ohne Text-Vektor der Version (Id, Name, Beschreibung).</summary>
     public Task<IReadOnlyList<(int Id, string Name, string? Prompt)>> GetTermsWithoutVectorAsync(int libraryId, string textVersion, CancellationToken ct)
         => Task.Run<IReadOnlyList<(int, string, string?)>>(
             () =>
             {
                 using var connection = _factory.OpenSqliteConnection();
+                var group = ReadGroup(connection, libraryId);
+                if (group == 0)
+                {
+                    return [];
+                }
+
                 using var cmd = connection.CreateCommand();
-                cmd.CommandText = "SELECT Id, Name, Prompt FROM MotifTerms WHERE LibraryId = $lib AND (TextEmbedding IS NULL OR TextModelVersion IS NULL OR TextModelVersion <> $ver) ORDER BY Id;";
-                cmd.Parameters.AddWithValue("$lib", libraryId);
+                cmd.CommandText = "SELECT Id, Name, Prompt FROM MotifTerms WHERE GroupId = $grp AND (TextEmbedding IS NULL OR TextModelVersion IS NULL OR TextModelVersion <> $ver) ORDER BY Id;";
+                cmd.Parameters.AddWithValue("$grp", group);
                 cmd.Parameters.AddWithValue("$ver", textVersion);
                 var list = new List<(int, string, string?)>();
                 using var reader = cmd.ExecuteReader();
@@ -386,7 +433,8 @@ public sealed class MotifStore
     /// <summary>
     /// Treffer neu berechnen (Begriffe geändert, Schwelle geändert): je Abschnitt von 2 000 Dateien eine Transaktion —
     /// alte Treffer der betroffenen Begriffe löschen, neue aus den gespeicherten Bild-Vektoren einfügen. Die Bild-Vektoren
-    /// bleiben unverändert. <paramref name="termIds"/> null = alle Begriffe der Bibliothek.
+    /// bleiben unverändert. Begriffe gelten für die ganze Gruppe — gerechnet werden die Dateien ALLER Bibliotheken der
+    /// Gruppe von <paramref name="libraryId"/>. <paramref name="termIds"/> null = alle Begriffe der Gruppe.
     /// </summary>
     public async Task<int> RecomputeAsync(int libraryId, IReadOnlyCollection<int>? termIds, MotifScoring scoring, double defaultThreshold, string modelVersion, CancellationToken ct)
     {
@@ -403,18 +451,19 @@ public sealed class MotifStore
                     {
                         using var connection = _factory.OpenSqliteConnection();
                         using var tx = await _retry.BeginTransactionAsync(connection, ct).ConfigureAwait(false);
-                        var terms = ReadTermVectors(connection, tx, libraryId, modelVersion, defaultThreshold)
+                        var group = LibraryGroupStore.EnsureGroup(connection, tx, libraryId);
+                        var terms = ReadTermVectors(connection, tx, group, modelVersion, defaultThreshold)
                             .Where(t => termIds is null || termIds.Contains(t.TermId)).ToList();
                         var rows = new List<(int FileId, float[] Vector)>(RecomputeChunk);
                         using (var cmd = connection.CreateCommand())
                         {
                             cmd.Transaction = tx;
-                            cmd.CommandText = """
+                            cmd.CommandText = $"""
                                 SELECT e.FileId, e.Embedding FROM FileEmbeddings e JOIN Files f ON f.Id = e.FileId
-                                WHERE f.LibraryId = $lib AND e.FileId > $after AND e.ModelVersion = $ver AND e.Embedding IS NOT NULL
+                                WHERE {GroupFilesCondition} AND e.FileId > $after AND e.ModelVersion = $ver AND e.Embedding IS NOT NULL
                                 ORDER BY e.FileId LIMIT $limit;
                                 """;
-                            cmd.Parameters.AddWithValue("$lib", libraryId);
+                            cmd.Parameters.AddWithValue("$grp", group);
                             cmd.Parameters.AddWithValue("$after", after);
                             cmd.Parameters.AddWithValue("$ver", modelVersion);
                             cmd.Parameters.AddWithValue("$limit", RecomputeChunk);
@@ -431,8 +480,8 @@ public sealed class MotifStore
                         }
 
                         var termFilter = termIds is null ? string.Empty : " AND TermId IN (" + string.Join(",", termIds.Select(i => i.ToString(CultureInfo.InvariantCulture))) + ")";
-                        Execute(connection, tx, $"DELETE FROM FileMotifs WHERE FileId IN (SELECT e.FileId FROM FileEmbeddings e JOIN Files f ON f.Id = e.FileId WHERE f.LibraryId = $lib AND e.FileId > $after AND e.FileId <= $last){termFilter};",
-                            ("$lib", libraryId), ("$after", after), ("$last", rows[^1].FileId));
+                        Execute(connection, tx, $"DELETE FROM FileMotifs WHERE FileId IN (SELECT e.FileId FROM FileEmbeddings e JOIN Files f ON f.Id = e.FileId WHERE {GroupFilesCondition} AND e.FileId > $after AND e.FileId <= $last){termFilter};",
+                            ("$grp", group), ("$after", after), ("$last", rows[^1].FileId));
                         foreach (var (fileId, vector) in rows)
                         {
                             InsertHits(connection, tx, fileId, MotifMatcher.Match(vector, terms, scoring));
@@ -492,17 +541,25 @@ public sealed class MotifStore
 
     /// <summary>Freitext-Bildsuche: die <paramref name="limit"/> ähnlichsten Bild-Vektoren der Bibliothek (Kosinus).</summary>
     public Task<IReadOnlyList<MotifSearchHit>> SearchAsync(int libraryId, float[] query, string modelVersion, int limit, CancellationToken ct)
+        => SearchAsync([libraryId], query, modelVersion, limit, ct);
+
+    /// <summary>Wie oben über alle Bibliotheken des Bereichs (Ansicht „Alle verknüpften“).</summary>
+    public Task<IReadOnlyList<MotifSearchHit>> SearchAsync(IReadOnlyCollection<int> libraryIds, float[] query, string modelVersion, int limit, CancellationToken ct)
         => Task.Run<IReadOnlyList<MotifSearchHit>>(
             () =>
             {
                 var best = new PriorityQueue<int, float>();
+                if (libraryIds.Count == 0)
+                {
+                    return [];
+                }
+
                 using var connection = _factory.OpenSqliteConnection();
                 using var cmd = connection.CreateCommand();
-                cmd.CommandText = """
+                cmd.CommandText = $"""
                     SELECT e.FileId, e.Embedding FROM FileEmbeddings e JOIN Files f ON f.Id = e.FileId
-                    WHERE f.LibraryId = $lib AND e.ModelVersion = $ver AND e.Embedding IS NOT NULL;
+                    WHERE f.LibraryId IN ({IdList(libraryIds)}) AND e.ModelVersion = $ver AND e.Embedding IS NOT NULL;
                     """;
-                cmd.Parameters.AddWithValue("$lib", libraryId);
                 cmd.Parameters.AddWithValue("$ver", modelVersion);
                 using var reader = cmd.ExecuteReader();
                 var scores = new Dictionary<int, float>();
@@ -550,12 +607,35 @@ public sealed class MotifStore
             },
             ct).ConfigureAwait(false);
 
-    private static List<MotifTermVector> ReadTermVectors(SqliteConnection connection, SqliteTransaction? tx, int libraryId, string textVersion, double defaultThreshold)
+    /// <summary>Gruppe der Bibliothek ohne Schreiben (0 = keine bzw. Bibliothek fehlt — dann gibt es keine Begriffe).</summary>
+    private static int ReadGroup(SqliteConnection connection, int libraryId)
+        => LibraryGroupStore.ReadGroupOf(connection, null, libraryId) is { } g && g != 0 && LibraryGroupStore.GroupExists(connection, null, g) ? g : 0;
+
+    /// <summary>
+    /// Zähl-Ausdruck „Treffer des Begriffs t im Bereich“: deckt der Bereich alle Bibliotheken der Gruppe ab, liegen alle
+    /// Treffer des Begriffs im Bereich (Treffer entstehen nur für Dateien der Gruppe) → nur der Index; sonst über Files.
+    /// </summary>
+    private static string HitCountSql(SqliteConnection connection, int group, IReadOnlyCollection<int> scopeLibraryIds)
+    {
+        var groupLibraries = LibraryGroupStore.ReadGroupLibraries(connection, null, group);
+        return groupLibraries.All(scopeLibraryIds.Contains)
+            ? "(SELECT COUNT(*) FROM FileMotifs m WHERE m.TermId = t.Id)"
+            : $"(SELECT COUNT(*) FROM FileMotifs m JOIN Files f ON f.Id = m.FileId WHERE m.TermId = t.Id AND f.LibraryId IN ({IdList(scopeLibraryIds)}))";
+    }
+
+    /// <summary>Ganzzahlige Ids als SQL-Liste (nur Katalog-Ids, daher sicher einzubetten); leer → -1 (trifft nichts).</summary>
+    private static string IdList(IEnumerable<int> ids)
+    {
+        var list = string.Join(",", ids.Distinct().Select(i => i.ToString(CultureInfo.InvariantCulture)));
+        return list.Length == 0 ? "-1" : list;
+    }
+
+    private static List<MotifTermVector> ReadTermVectors(SqliteConnection connection, SqliteTransaction? tx, int groupId, string textVersion, double defaultThreshold)
     {
         using var cmd = connection.CreateCommand();
         cmd.Transaction = tx;
-        cmd.CommandText = "SELECT Id, TextEmbedding, Threshold FROM MotifTerms WHERE LibraryId = $lib AND TextEmbedding IS NOT NULL AND TextModelVersion = $ver;";
-        cmd.Parameters.AddWithValue("$lib", libraryId);
+        cmd.CommandText = "SELECT Id, TextEmbedding, Threshold FROM MotifTerms WHERE GroupId = $grp AND TextEmbedding IS NOT NULL AND TextModelVersion = $ver;";
+        cmd.Parameters.AddWithValue("$grp", groupId);
         cmd.Parameters.AddWithValue("$ver", textVersion);
         var list = new List<MotifTermVector>();
         using var reader = cmd.ExecuteReader();

@@ -5,7 +5,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using PhotoViewerV3.Services.Database;
 using PhotoViewerV3.Services.Messaging;
-using PhotoViewerV3.Services.Scanning;
+using PhotoViewerV3.Services.Scanning;
+
 using PhotoViewerV3.Services.Infrastructure;
 
 namespace PhotoViewerV3.Services.Library;
@@ -90,8 +91,8 @@ public sealed class LibraryLinkService : ILibraryLinkService, IDisposable
             }
 
             _logger.LogInformation(
-                "Bibliotheken verknüpft: {Library} + {Other} → Gruppe {Group} — zusammengeführt: {Tags} Tags, {Categories} Kategorien, {Relations} Beziehungen, {Persons} Personen; getrennt gehalten: {Apart} ({Ms:N0} ms)",
-                libraryId, otherLibraryId, result.GroupId, result.TagsMerged, result.CategoriesMerged, result.RelationsMerged, result.PersonsMerged, result.PersonsKeptApart, sw.Elapsed.TotalMilliseconds);
+                "Bibliotheken verknüpft: {Library} + {Other} → Gruppe {Group} — zusammengeführt: {Tags} Tags, {Categories} Kategorien, {Relations} Beziehungen, {Persons} Personen, {Motifs} Motiv-Begriffe; getrennt gehalten: {Apart} ({Ms:N0} ms)",
+                libraryId, otherLibraryId, result.GroupId, result.TagsMerged, result.CategoriesMerged, result.RelationsMerged, result.PersonsMerged, result.MotifTermsMerged, result.PersonsKeptApart, sw.Elapsed.TotalMilliseconds);
             await NotifyAsync(affected, ct).ConfigureAwait(false);
             return result;
         }
@@ -146,8 +147,8 @@ public sealed class LibraryLinkService : ILibraryLinkService, IDisposable
             }
 
             _logger.LogInformation(
-                "Verknüpfung gelöst: Bibliothek {Library} → eigene Gruppe {Group} — kopiert: {Tags} Tags, {Categories} Kategorien, {Relations} Beziehungen, {Persons} Personen ({Ms:N0} ms)",
-                libraryId, result.NewGroupId, result.TagsCopied, result.CategoriesCopied, result.RelationsCopied, result.PersonsCopied, sw.Elapsed.TotalMilliseconds);
+                "Verknüpfung gelöst: Bibliothek {Library} → eigene Gruppe {Group} — kopiert: {Tags} Tags, {Categories} Kategorien, {Relations} Beziehungen, {Persons} Personen, {Motifs} Motiv-Begriffe ({Ms:N0} ms)",
+                libraryId, result.NewGroupId, result.TagsCopied, result.CategoriesCopied, result.RelationsCopied, result.PersonsCopied, result.MotifTermsCopied, sw.Elapsed.TotalMilliseconds);
             await NotifyAsync(affected, ct).ConfigureAwait(false);
             return result;
         }

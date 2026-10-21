@@ -56,7 +56,8 @@ public sealed partial record GalleryQuery
 /// <summary>
 /// Motive in der Galerie-SQL (ADR-0052): Filter (ODER/UND über <c>IX_FileMotifs_Term_File</c>), Suche nach
 /// Begriffsnamen als weiterer UNION-Zweig (nur Begriffe des Bereichs) bzw. „Motiv: …“ als reine Motiv-Suche, Zähler je
-/// Begriff und Treffer je Datei für Liste und Kachel.
+/// Begriff und Treffer je Datei für Liste und Kachel. Begriffe gehören der Gruppe der Bibliothek (ADR-0048, seit 0.2.56
+/// <c>MotifTerms.GroupId</c>); <c>$libId</c> ist immer die aktive Bibliothek des Bereichs und damit in der Gruppe.
 /// </summary>
 public sealed partial class GalleryPageSource
 {
@@ -64,13 +65,13 @@ public sealed partial class GalleryPageSource
     private const string MotifSearchUnion = """
         UNION
         SELECT fm.FileId FROM FileMotifs fm
-        WHERE fm.TermId IN (SELECT mt.Id FROM MotifTerms mt WHERE mt.LibraryId = $libId AND mt.Name LIKE $tagLike ESCAPE '\')
+        WHERE fm.TermId IN (SELECT mt.Id FROM MotifTerms mt WHERE mt.GroupId = (SELECT ml.GroupId FROM Libraries ml WHERE ml.Id = $libId) AND mt.Name LIKE $tagLike ESCAPE '\')
         """;
 
     /// <summary>Quelle für „Motiv: Hund“: nur die Motiv-Treffer, kein Dateiname/Tag/Person.</summary>
     private const string MotifOnlySource = """
         (SELECT fm.FileId AS Id FROM FileMotifs fm
-         WHERE fm.TermId IN (SELECT mt.Id FROM MotifTerms mt WHERE mt.LibraryId = $libId AND mt.Name LIKE $motifLike ESCAPE '\')
+         WHERE fm.TermId IN (SELECT mt.Id FROM MotifTerms mt WHERE mt.GroupId = (SELECT ml.GroupId FROM Libraries ml WHERE ml.Id = $libId) AND mt.Name LIKE $motifLike ESCAPE '\')
         ) hit
         CROSS JOIN Files f ON f.Id = hit.Id
         """;
@@ -125,17 +126,41 @@ public sealed partial class GalleryPageSource
         }
     }
 
-    /// <summary>Begriffe des Bereichs mit Anzahl Dateien (Treffer), in der Reihenfolge der Verwaltung.</summary>
+    /// <summary>Begriffe der Bibliothek (ihrer Gruppe) mit Anzahl Dateien dieser Bibliothek, in der Reihenfolge der Verwaltung.</summary>
     public Task<IReadOnlyList<GalleryMotifCount>> GetMotifCountsAsync(int libraryId, CancellationToken ct)
+        => GetMotifCountsAsync([libraryId], ct);
+
+    /// <summary>
+    /// Begriffe der Gruppe des Bereichs mit Anzahl Dateien IM Bereich (ADR-0048): eine verknüpfte Bibliothek einzeln zählt
+    /// nur ihre eigenen Treffer (über Files), deckt der Bereich die ganze Gruppe ab, zählt der Index allein. Begriffe einer
+    /// anderen Gruppe erscheinen nie (auch nicht mit 0).
+    /// </summary>
+    public Task<IReadOnlyList<GalleryMotifCount>> GetMotifCountsAsync(IReadOnlyList<int> libraryIds, CancellationToken ct)
         => RunAsync<IReadOnlyList<GalleryMotifCount>>(conn =>
         {
+            if (libraryIds.Count == 0)
+            {
+                return [];
+            }
+
             using var cmd = conn.CreateCommand();
-            cmd.CommandText = """
-                SELECT t.Id, t.Name, (SELECT COUNT(*) FROM FileMotifs m WHERE m.TermId = t.Id)
-                FROM MotifTerms t WHERE t.LibraryId = $libId
-                ORDER BY t.SortOrder, t.Name COLLATE NOCASE, t.Id;
-                """;
-            cmd.Parameters.AddWithValue("$libId", libraryId);
+            cmd.Parameters.AddWithValue("$libId", libraryIds[0]);
+            using (var probe = conn.CreateCommand())
+            {
+                // Bibliotheken der Gruppe, die NICHT im Bereich sind → Treffer über Files auf den Bereich beschränken
+                probe.CommandText = $"SELECT COUNT(*) FROM Libraries WHERE GroupId = {GroupOfScopeSql(libraryIds)} AND Id NOT IN ({string.Join(",", libraryIds)});";
+                probe.Parameters.AddWithValue("$libId", libraryIds[0]);
+                var partial = Convert.ToInt64(probe.ExecuteScalar() ?? 0L, System.Globalization.CultureInfo.InvariantCulture) > 0;
+                var count = partial
+                    ? $"(SELECT COUNT(*) FROM FileMotifs m JOIN Files f ON f.Id = m.FileId WHERE m.TermId = t.Id AND {ScopeCondition(libraryIds, "f.LibraryId")})"
+                    : "(SELECT COUNT(*) FROM FileMotifs m WHERE m.TermId = t.Id)";
+                cmd.CommandText = $"""
+                    SELECT t.Id, t.Name, {count}
+                    FROM MotifTerms t WHERE t.GroupId = {GroupOfScopeSql(libraryIds)}
+                    ORDER BY t.SortOrder, t.Name COLLATE NOCASE, t.Id;
+                    """;
+            }
+
             var result = new List<GalleryMotifCount>();
             using var reader = cmd.ExecuteReader();
             while (reader.Read())

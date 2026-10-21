@@ -242,11 +242,13 @@ FilesFts           -- FTS5 virtual table (Files.Name, Extension)
   SetGeoLocation`, je Datei eine FileOperation). Gefüllt vom Nachtragen im Hintergrund; manuelle Orte überleben „Neu
   aufbauen“ und Inhaltsänderungen wie das Aufnahmedatum.
 - Motive — umgesetzt in 0.2.55 (Migration `AddMotifs`, ADR-0052):
-  `MotifTerms (Id, LibraryId → Libraries ON DELETE CASCADE, Name COLLATE NOCASE, Prompt NULL (Beschreibung fürs
+  `MotifTerms (Id, LibraryId → Libraries ON DELETE CASCADE, GroupId, Name COLLATE NOCASE, Prompt NULL (Beschreibung fürs
   Modell), Threshold NULL (= globale Schwelle), SortOrder, TextEmbedding BLOB NULL (768 float32), TextModelVersion NULL,
-  CreatedAtUtc; UX_MotifTerms_Library_Name (LibraryId, Name) eindeutig)` — Begriffe je Bibliotheks-Bereich (vorerst
-  `LibraryId`, die Bibliotheks-Trennung stellt auf Gruppen um); Standard-Liste (82 Begriffe) einmal je Bibliothek
-  (Merker `Settings.motifs.seeded.{id}`).
+  CreatedAtUtc; UX_MotifTerms_Group_Name (GroupId, Name) eindeutig, IX_MotifTerms_Library (LibraryId))` — seit 0.2.56
+  (Migration `MotifTermsByGroup`, ADR-0048 Nachtrag) Begriffe **je Bibliotheks-Gruppe** wie Tags: `GroupId` per
+  `ADD COLUMN` ohne Fremdschlüssel; `LibraryId` ist nur noch der Anker des Fremdschlüssels aus `AddMotifs` (eine
+  Bibliothek der Gruppe, beim Lösen/Entfernen nachgezogen) und wird für den Bereich nie gelesen. Standard-Liste
+  (82 Begriffe) einmal je Gruppe (Merker `Settings.motifs.seeded.g{GroupId}`, vorher `motifs.seeded.{LibraryId}`).
   `FileEmbeddings (FileId PK → Files ON DELETE CASCADE, ModelVersion, ErrorCode NULL, CreatedAtUtc, Embedding BLOB NULL
   = 768 float16 = 1 536 Bytes L2-normiert, als letzte Spalte; IX_FileEmbeddings_File_Model (FileId, ModelVersion)
   abdeckend fürs Zählen)` — Bild-Vektor je Foto bzw. Video-Vorschaubild, bleibt bei Begriffs-Änderungen.
@@ -257,7 +259,7 @@ FilesFts           -- FTS5 virtual table (Files.Name, Extension)
   Treffer an Ort und Stelle geänderter Dateien.
 - Bibliotheks-Gruppen — umgesetzt in 0.2.51 (Migration `AddLibraryScoping`, ADR-0048): `LibraryGroups (Id, Name NOCASE,
   CreatedAtUtc)`, `Libraries.GroupId` (`IX_Libraries_Group`), dazu `GroupId` an `Tags`, `Categories`, `Persons` und
-  `PersonRelations` — die Angaben „global“ oben gelten seitdem **je Gruppe**: `UX_Tags_Group_Name`,
+  `PersonRelations` (seit 0.2.56 auch `MotifTerms`) — die Angaben „global“ oben gelten seitdem **je Gruppe**: `UX_Tags_Group_Name`,
   `UX_Categories_Group_Name`, `IX_PersonRelations_Group_Name` (eindeutig, NOCASE), `IX_Persons_Group_IsMe` (ersetzt
   `IX_Persons_IsMe`), `IX_Persons_Group_Name`; die globalen `UX_Tags_Name`, `UX_Categories_Name`, `IX_PersonRelations_Name`
   sind weg. `GroupId` ohne Fremdschlüssel (`ADD COLUMN … NOT NULL DEFAULT 0`, kein Tabellen-Neuaufbau); 0 = „ohne

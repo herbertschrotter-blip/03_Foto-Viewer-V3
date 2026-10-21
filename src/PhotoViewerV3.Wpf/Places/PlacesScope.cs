@@ -6,30 +6,32 @@ using PhotoViewerV3.Services.Library;
 namespace PhotoViewerV3.Places;
 
 /// <summary>
-/// Bibliotheks-Bereich der Karte (harte Regel „Bibliotheks-Trennung“): die Bibliotheken, deren Fotos die Seite „Orte“
-/// zeigt, zählt und verortet. Heute = die aktive Bibliothek.
-/// ZUSAMMENBAU mit Agent T: <see cref="ActiveLibraryPlacesScope"/> auf dessen Bereichs-Logik umstellen (aktive
-/// Bibliothek bzw. Verknüpfungsgruppe in der Ansicht „Alle verknüpften“).
+/// Bibliotheks-Bereich der Karte (harte Regel „Bibliotheks-Trennung“, ADR-0048): die Bibliotheken, deren Fotos die Seite
+/// „Orte“ zeigt, zählt und verortet — die aktive Bibliothek bzw. in der Ansicht „Alle verknüpften“ alle Bibliotheken ihrer
+/// Gruppe. Implementierung seit dem Zusammenbau 0.2.56: <see cref="LibraryScopePlacesScope"/>.
 /// </summary>
 public interface IPlacesScope
 {
     Task<IReadOnlyList<int>> GetLibraryIdsAsync(CancellationToken ct);
 }
 
-/// <summary>Bereich = die aktive Bibliothek (leer ohne Bibliothek).</summary>
-public sealed class ActiveLibraryPlacesScope : IPlacesScope
+/// <summary>
+/// Bereich aus <see cref="ILibraryScope"/> (frisch je Aufruf, leer ohne Bibliothek). Die Seite lädt bei
+/// <c>ActiveLibraryChangedMessage</c> neu — die senden Bibliothekswechsel, „Alle verknüpften“, Verknüpfen und Lösen.
+/// </summary>
+public sealed class LibraryScopePlacesScope : IPlacesScope
 {
-    private readonly ILibraryService _libraries;
+    private readonly ILibraryScope _scope;
 
-    public ActiveLibraryPlacesScope(ILibraryService libraries)
+    public LibraryScopePlacesScope(ILibraryScope scope)
     {
-        _libraries = libraries;
+        _scope = scope;
     }
 
     public async Task<IReadOnlyList<int>> GetLibraryIdsAsync(CancellationToken ct)
     {
-        var active = await _libraries.GetActiveAsync(ct).ConfigureAwait(false);
-        return active is null ? [] : [active.Id];
+        var scope = await _scope.GetCurrentAsync(ct).ConfigureAwait(false);
+        return scope.HasLibrary ? scope.LibraryIds : [];
     }
 }
 

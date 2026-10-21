@@ -90,10 +90,10 @@ public sealed record LibraryUnlinkPreview(
     int Persons);
 
 /// <summary>Ergebnis des Verknüpfens (Zähler für Log und Meldung).</summary>
-public sealed record LibraryLinkResult(int GroupId, int TagsMerged, int CategoriesMerged, int RelationsMerged, int PersonsMerged, int PersonsKeptApart);
+public sealed record LibraryLinkResult(int GroupId, int TagsMerged, int CategoriesMerged, int RelationsMerged, int PersonsMerged, int PersonsKeptApart, int MotifTermsMerged = 0);
 
 /// <summary>Ergebnis des Lösens.</summary>
-public sealed record LibraryUnlinkResult(int NewGroupId, int TagsCopied, int CategoriesCopied, int RelationsCopied, int PersonsCopied);
+public sealed record LibraryUnlinkResult(int NewGroupId, int TagsCopied, int CategoriesCopied, int RelationsCopied, int PersonsCopied, int MotifTermsCopied = 0);
 
 /// <summary>
 /// Verknüpfungen haben sich geändert (verknüpft, gelöst, Gruppe umbenannt) — Umschalter und Einstellungen lesen neu.

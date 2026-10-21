@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using PhotoViewerV3.Services.Library;
 
 namespace PhotoViewerV3.Services.Motifs;
 
@@ -10,6 +11,9 @@ namespace PhotoViewerV3.Services.Motifs;
 /// das Modell vorhanden ist — den Text-Vektor neu (Sprachmodell auf dem Prozessor) und danach nur die Treffer aus den
 /// gespeicherten Bild-Vektoren; kein Foto wird dafür neu analysiert. Meldet <see cref="MotifTermsChangedMessage"/> und
 /// <see cref="MotifsChangedMessage"/>. Alle Methoden laufen asynchron außerhalb des UI-Threads.
+/// Bibliotheks-Trennung (ADR-0048, seit 0.2.56): Begriffe gehören der Gruppe der übergebenen Bibliothek; Zähler und
+/// Bildinhalt-Suche gelten für den aktuellen Bereich, wenn die Bibliothek dessen aktive ist („Alle verknüpften“: alle
+/// Bibliotheken der Gruppe), sonst nur für die Bibliothek selbst. Nachrichten nennen eine Bibliothek der Gruppe.
 /// </summary>
 public interface IMotifTermService
 {
@@ -54,6 +58,7 @@ public sealed class MotifTermService : IMotifTermService, IDisposable
     private readonly IMotifSettingsStore _settings;
     private readonly ILogger _logger;
     private readonly IMessenger _messenger;
+    private readonly ILibraryScope? _scope;
     private readonly SemaphoreSlim _encoderLock = new(1, 1);
     private IMotifTextEncoder? _textEncoder;
     private string? _textEncoderVersion;
@@ -65,8 +70,10 @@ public sealed class MotifTermService : IMotifTermService, IDisposable
         IMotifEncoderFactory encoders,
         IMotifSettingsStore settings,
         ILogger<MotifTermService>? logger = null,
-        IMessenger? messenger = null)
+        IMessenger? messenger = null,
+        ILibraryScope? scope = null)
     {
+        _scope = scope;
         _store = store;
         _encoders = encoders;
         _settings = settings;
@@ -79,7 +86,8 @@ public sealed class MotifTermService : IMotifTermService, IDisposable
     public async Task<IReadOnlyList<MotifTermInfo>> GetTermsAsync(int libraryId, CancellationToken ct = default)
     {
         await _store.EnsureDefaultsAsync(libraryId, ct).ConfigureAwait(false);
-        return await _store.GetTermsAsync(libraryId, _encoders.ModelVersion, ct).ConfigureAwait(false);
+        var scope = await ScopeLibrariesAsync(libraryId, ct).ConfigureAwait(false);
+        return await _store.GetTermsAsync(libraryId, scope, _encoders.ModelVersion, ct).ConfigureAwait(false);
     }
 
     public async Task<int> AddTermAsync(int libraryId, string name, string? prompt = null, CancellationToken ct = default)
@@ -168,7 +176,23 @@ public sealed class MotifTermService : IMotifTermService, IDisposable
         }
 
         var vector = (await EncodeTextsAsync([text.Trim()], ct).ConfigureAwait(false))[0];
-        return await _store.SearchAsync(libraryId, vector, _encoders.ModelVersion, limit, ct).ConfigureAwait(false);
+        var scope = await ScopeLibrariesAsync(libraryId, ct).ConfigureAwait(false);
+        return await _store.SearchAsync(scope, vector, _encoders.ModelVersion, limit, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Bibliotheken für Zähler und Suche: der aktuelle Bereich, wenn <paramref name="libraryId"/> dessen aktive Bibliothek
+    /// ist (Ansicht „Alle verknüpften“ → alle der Gruppe), sonst nur die Bibliothek selbst — nie mehr als der Bereich.
+    /// </summary>
+    private async Task<IReadOnlyList<int>> ScopeLibrariesAsync(int libraryId, CancellationToken ct)
+    {
+        if (_scope is null)
+        {
+            return [libraryId];
+        }
+
+        var current = await _scope.GetCurrentAsync(ct).ConfigureAwait(false);
+        return current.LibraryId == libraryId && current.LibraryIds.Count > 0 ? current.LibraryIds : [libraryId];
     }
 
     /// <summary>Nach Anlegen/Ändern: fehlende Vektoren rechnen (inkl. Treffer) und melden; ohne Modell nur melden.</summary>

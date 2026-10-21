@@ -132,3 +132,55 @@ Personen-Seite die Begriffe und Namen aus A (mit 0 Treffern), und die Eindeutigk
   `Wpf/Folders/FolderTreeViewModel.cs`
 - Tests: `LibraryScopingTests`, `LibraryScopingMigrationTests`, `GalleryLibraryScopeTests`; Rauchtest-Schritt
   „Bibliotheks-Trennung“
+
+## Nachtrag 0.2.56: Motive und Orte (Zusammenbau Welle 10)
+
+Motive (ADR-0052), Orte (ADR-0050) und die Weltkarte (ADR-0051) entstanden parallel zu dieser Entscheidung und kannten die
+Gruppen nur als Regel (Begriffe mit `LibraryId`, Bereich = aktive Bibliothek). Beim Zusammenbau gilt für sie dasselbe
+Muster:
+
+1. **Motiv-Begriffe je Gruppe** (Migration `MotifTermsByGroup`): `MotifTerms.GroupId` per `ALTER TABLE … ADD COLUMN`
+   (kein Neuaufbau — `FileMotifs` hängt per Kaskade an `MotifTerms`), befüllt aus `Libraries.GroupId`; Eindeutigkeit
+   `UX_MotifTerms_Group_Name` statt `(LibraryId, Name)`. Gleichnamige Begriffe einer schon verknüpften Gruppe werden eins
+   (kleinste Id bleibt, Treffer wandern, höhere Wahrscheinlichkeit gewinnt); in verknüpften Gruppen verfallen die
+   Text-Vektoren, damit der Motiv-Dienst Vektoren und Treffer aus den gespeicherten Bild-Vektoren neu rechnet. Merker der
+   Start-Liste je Gruppe (`motifs.seeded.g{GroupId}`), damit gelöschte Standard-Begriffe auch über eine andere Bibliothek
+   der Gruppe nicht wiederkommen. `Down` wirft (wie `AddLibraryScoping`).
+2. **`MotifTerms.LibraryId` bleibt als Anker** des Fremdschlüssels aus `AddMotifs` (`ON DELETE CASCADE`) und wird für den
+   Bereich nie gelesen. Begründung: die Spalte zu entfernen hieße die Tabelle neu aufbauen — genau das Kaskaden-Risiko,
+   das diese Entscheidung vermeidet. Damit die Kaskade keine gemeinsamen Begriffe mitnimmt, liegt der Anker immer in der
+   Gruppe des Begriffs: beim Entfernen einer Bibliothek und beim Lösen wandert er an eine andere Bibliothek der Gruppe
+   (`LibraryGroupStore.ReanchorMotifTerms`); ist sie die letzte, gehen die Begriffe mit der Gruppe (auch in
+   `DeleteGroupIfEmpty`). `AdoptOrphans` gibt Motiv-Begriffe ohne Gruppe der Gruppe ihrer Anker-Bibliothek, nie einer
+   fremden.
+3. **Verknüpfen/Lösen** (`LibraryLinkStore`): gleichnamige Motiv-Begriffe werden eins (Treffer umgehängt), die übrigen
+   wandern. Ein Begriff wurde bisher nur gegen die Fotos seiner eigenen Bibliothek verglichen — wo Fotos hinzukommen, die
+   er nie gesehen hat (Begriff nur auf einer Seite oder gleichnamig mit anderer Beschreibung/Schwelle/Modell-Version),
+   verfällt sein Text-Vektor; der Index rechnet ihn beim nächsten Start samt Treffern aus den gespeicherten Bild-Vektoren
+   neu (kein Foto wird neu analysiert). Gleiche Begriffe auf beiden Seiten (Start-Liste) bleiben unverändert. Lösen
+   kopiert alle Begriffe MIT Text-Vektor (Anker = die herausgelöste Bibliothek), ihre Treffer zeigen auf die Kopien,
+   der Merker der Start-Liste wird mitkopiert. Bild-Vektoren (`FileEmbeddings`) hängen an der Datei und bleiben.
+4. **Motiv-Abfragen**: Begriffe über `GroupId` (Galerie: `GroupId = (SELECT GroupId FROM Libraries WHERE Id = $libId)`),
+   Treffer-Neuberechnung über alle Bibliotheken der Gruppe, Zähler und Bildinhalt-Suche über die Bibliotheken des
+   Bereichs (`IMotifTermService` liest den Bereich über `ILibraryScope`: ist die Bibliothek die aktive, gilt „Alle
+   verknüpften“). Eine verknüpfte Bibliothek einzeln zählt nur ihre eigenen Treffer (über Files); deckt der Bereich die
+   ganze Gruppe ab, zählt der Index `IX_FileMotifs_Term_File` allein. Schreibwege legen eine fehlende Gruppe an, damit
+   zwei Bibliotheken ohne Gruppe nie dieselben Begriffe sehen.
+5. **Orte und Karte über den Bereich**: `IPlacesScope` ist jetzt `LibraryScopePlacesScope` (`ILibraryScope`, frisch je
+   Aufruf); die Seite „Orte“ lädt bei `ActiveLibraryChangedMessage` neu (die senden Bibliothekswechsel, „Alle verknüpften“,
+   Verknüpfen und Lösen). Galerie: Ortszähler, Flyout „Ort“ und „zuletzt verwendete Orte“ mit den Bereichs-Ids,
+   `GeoLocationsChangedMessage` nur für Bibliotheken des Bereichs. Verorten in „Alle verknüpften“ ist erlaubt (jede Datei
+   hat ihre Bibliothek; `IGeoTagService` sperrt je Datei-Bibliothek). Vorschaubilder der Karte kommen schon aus dem Cache
+   der Datei-Bibliothek (`PlacesFileInfo.LibraryId`).
+6. **Versteckte Bibliothek** (ADR-0049): der versteckte Katalog legt seine Bibliothek über `LibraryService.CreateAsync`
+   an und bekommt die Gruppe dabei sofort (nicht erst beim ersten Bereichs-Zugriff); Verknüpfen und „Alle verknüpften“
+   sind dort gesperrt, Motiv-Begriffe und Orte landen nur im Katalog des Containers (Test
+   `Hidden_library_gets_its_group_cannot_be_linked_and_keeps_motifs_and_places_in_its_catalog`).
+
+**Nicht geändert (bewusst):** Motiv-Index, Gesichter-Index und Ortsnachtrag arbeiten weiter auf der aktiven Bibliothek
+(in „Alle verknüpften“ werden die übrigen erst einzeln geöffnet analysiert, siehe Konsequenzen). „Rückgängig“ von „Ort
+setzen“ (wie „Datum setzen“) nimmt den jüngsten Batch des Katalogs, nicht des Bereichs — offen in CHANGELOG 0.2.56.
+
+Tests: `MotifPlacesScopingTests` (Services: zwei Bibliotheken mit Motiven und Orten getrennt → verknüpft → „Alle
+verknüpften“ → gelöst, Entfernen mit Anker, Migration), `GalleryPageSourceMotifTests.Begriffe_je_Gruppe_Zaehler_und_Suche_je_Bereich`,
+`PlacesScopeTests`, `HiddenCatalogTests`; Rauchtest-Schritt „Bibliotheks-Trennung“ um Motiv-Begriff und Ort ergänzt.

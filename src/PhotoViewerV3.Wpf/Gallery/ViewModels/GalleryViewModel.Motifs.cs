@@ -226,7 +226,7 @@ public sealed partial class GalleryViewModel
 
         try
         {
-            var rows = await _source.GetMotifCountsAsync(_libraryId, CancellationToken.None);
+            var rows = await _source.GetMotifCountsAsync(ScopeLibraryIds, CancellationToken.None);
             if (rows.Count == MotifFilterEntries.Count && rows.Select(r => (r.Id, r.Name)).SequenceEqual(MotifFilterEntries.Select(e => (e.TermId, e.Name))))
             {
                 // Gleiche Begriffe (Index läuft): nur die Zähler nachziehen
@@ -306,7 +306,7 @@ public sealed partial class GalleryViewModel
     /// </summary>
     private Task HandleMotifsChangedAsync(MotifsChangedMessage m)
     {
-        if (!HasLibrary || m.LibraryId != _libraryId)
+        if (!HasLibrary || !InMotifGroup(m.LibraryId))
         {
             return Task.CompletedTask;
         }
@@ -323,7 +323,7 @@ public sealed partial class GalleryViewModel
 
     private async Task HandleMotifTermsChangedAsync(MotifTermsChangedMessage m)
     {
-        if (!HasLibrary || m.LibraryId != _libraryId)
+        if (!HasLibrary || !InMotifGroup(m.LibraryId))
         {
             return;
         }
@@ -335,6 +335,12 @@ public sealed partial class GalleryViewModel
             ScheduleReload(); // gewählter Begriff gelöscht
         }
     }
+
+    /// <summary>
+    /// Betrifft die Nachricht die Begriffe dieses Bereichs? Motiv-Begriffe gehören der Gruppe (ADR-0048) — Nachrichten
+    /// nennen eine Bibliothek der Gruppe (bei Begriffsänderungen den Anker, beim Index die analysierte Bibliothek).
+    /// </summary>
+    private bool InMotifGroup(int libraryId) => InScope(libraryId) || _scope.GroupLibraryIds.Contains(libraryId);
 
     private void ScheduleMotifCountsRefresh()
     {

@@ -51,8 +51,8 @@ public sealed partial class GalleryViewModel
     /// <summary>Text der Bedingung „Kartenausschnitt (12 Dateien)“.</summary>
     public string MapAreaText => _geoFilter is { FileIds: { Count: > 0 } ids } ? $"Kartenausschnitt ({ids.Count:N0} Dateien)" : "Kartenausschnitt";
 
-    /// <summary>Bibliotheksbereich der Abfragen (bis zum Zusammenbau mit der Bereichs-Logik: die aktive Bibliothek).</summary>
-    private IReadOnlyCollection<int> PlaceLibraryIds => HasLibrary ? [_libraryId] : [];
+    /// <summary>Bibliotheksbereich der Ortszähler und „zuletzt verwendeten Orte“ (ADR-0048): aktive Bibliothek bzw. alle der Gruppe in „Alle verknüpften“.</summary>
+    private IReadOnlyCollection<int> PlaceLibraryIds => HasLibrary ? ScopeLibraryIds : [];
 
     private void InitPlaces(PlaceActions? actions)
     {
@@ -330,7 +330,7 @@ public sealed partial class GalleryViewModel
 
     private async Task HandleGeoLocationsChangedAsync(GeoLocationsChangedMessage m)
     {
-        if (!HasLibrary || m.LibraryId != _libraryId)
+        if (!HasLibrary || !InScope(m.LibraryId))
         {
             return;
         }

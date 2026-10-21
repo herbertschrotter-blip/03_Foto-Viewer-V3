@@ -12,8 +12,14 @@ internal static class LibraryGroupStore
     /// <summary>Settings-Schlüssel der Ansicht „Alle verknüpften“: Wert = Gruppen-Id; fehlt = einzelne Bibliothek.</summary>
     public const string ViewAllLinkedKey = "Library.ViewAllLinkedGroup";
 
-    /// <summary>Tabellen mit benutzerdefinierten Begriffen je Gruppe (CategoryValues hängen an Categories).</summary>
-    public static readonly string[] TermTables = ["Tags", "Categories", "PersonRelations", "Persons"];
+    /// <summary>
+    /// Tabellen mit benutzerdefinierten Begriffen je Gruppe (CategoryValues hängen an Categories). MotifTerms (0.2.56) hat
+    /// zusätzlich eine Anker-Bibliothek für den Fremdschlüssel (<see cref="ReanchorMotifTerms"/>).
+    /// </summary>
+    public static readonly string[] TermTables = ["Tags", "Categories", "PersonRelations", "Persons", "MotifTerms"];
+
+    /// <summary>Settings-Merker „Start-Liste der Motive angelegt“ je Gruppe (ADR-0052, seit 0.2.56 je Gruppe).</summary>
+    public static string MotifSeededKey(int groupId) => "motifs.seeded.g" + groupId.ToString(CultureInfo.InvariantCulture);
 
     /// <summary>Aktive Bibliothek (jüngstes LastOpenedAt, sonst CreatedAt, sonst Id — wie LibraryService) oder null.</summary>
     public static (int LibraryId, int GroupId)? ReadActive(SqliteConnection connection, SqliteTransaction? tx = null)
@@ -117,14 +123,40 @@ internal static class LibraryGroupStore
         return groupId;
     }
 
-    /// <summary>Begriffe ohne Gruppe (GroupId 0) gehören ab jetzt <paramref name="groupId"/>.</summary>
+    /// <summary>
+    /// Begriffe ohne Gruppe (GroupId 0) gehören ab jetzt <paramref name="groupId"/>. Motiv-Begriffe ohne Gruppe folgen
+    /// stattdessen ihrer Anker-Bibliothek (sie entstehen nur für eine Bibliothek, nie „ohne Bibliothek“) — die einer
+    /// anderen Bibliothek ohne Gruppe bleiben bei 0, bis diese ihre Gruppe bekommt.
+    /// </summary>
     public static void AdoptOrphans(SqliteConnection connection, SqliteTransaction tx, int groupId)
     {
         foreach (var table in TermTables)
         {
+            if (table == "MotifTerms")
+            {
+                Execute(connection, tx, """
+                    UPDATE MotifTerms SET GroupId = (SELECT l.GroupId FROM Libraries l WHERE l.Id = MotifTerms.LibraryId)
+                    WHERE GroupId = 0 AND (SELECT l.GroupId FROM Libraries l WHERE l.Id = MotifTerms.LibraryId) <> 0;
+                    """);
+                continue;
+            }
+
             Execute(connection, tx, $"UPDATE {table} SET GroupId = $g WHERE GroupId = 0;", ("$g", groupId));
         }
     }
+
+    /// <summary>
+    /// Motiv-Begriffe, deren Anker <paramref name="libraryId"/> ist, bekommen eine andere Bibliothek ihrer Gruppe als
+    /// Anker (vor dem Entfernen der Bibliothek bzw. nach dem Lösen) — sonst nähme die Kaskade des Fremdschlüssels
+    /// <c>MotifTerms.LibraryId</c> gemeinsame Begriffe samt Treffern der übrigen Bibliotheken mit. Ohne andere Bibliothek in
+    /// der Gruppe bleibt der Anker (die Begriffe gehen dann mit der Gruppe).
+    /// </summary>
+    public static int ReanchorMotifTerms(SqliteConnection connection, SqliteTransaction tx, int libraryId)
+        => Execute(connection, tx, """
+            UPDATE MotifTerms SET LibraryId = (SELECT MIN(l.Id) FROM Libraries l WHERE l.GroupId = MotifTerms.GroupId AND l.Id <> $lib)
+            WHERE LibraryId = $lib
+              AND EXISTS (SELECT 1 FROM Libraries l WHERE l.GroupId = MotifTerms.GroupId AND l.Id <> $lib);
+            """, ("$lib", libraryId));
 
     /// <summary>
     /// Löscht eine Gruppe ohne Bibliotheken samt ihrer Begriffe (Zuordnungen per Kaskade, Gesichter behalten nichts —
@@ -144,6 +176,8 @@ internal static class LibraryGroupStore
         Execute(connection, tx, "DELETE FROM Categories WHERE GroupId = $g;", ("$g", groupId));
         Execute(connection, tx, "DELETE FROM Persons WHERE GroupId = $g;", ("$g", groupId)); // Faces: SET NULL, Ablehnungen: Kaskade
         Execute(connection, tx, "DELETE FROM PersonRelations WHERE GroupId = $g;", ("$g", groupId));
+        Execute(connection, tx, "DELETE FROM MotifTerms WHERE GroupId = $g;", ("$g", groupId)); // Treffer per Kaskade (0.2.56)
+        Execute(connection, tx, "DELETE FROM Settings WHERE Key = $k;", ("$k", MotifSeededKey(groupId)));
         Execute(connection, tx, "DELETE FROM LibraryGroups WHERE Id = $g;", ("$g", groupId));
         if (ReadViewAllLinked(connection, tx) == groupId)
         {

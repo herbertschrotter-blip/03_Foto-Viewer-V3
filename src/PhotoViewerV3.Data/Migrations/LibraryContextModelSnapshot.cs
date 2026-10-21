@@ -636,6 +636,9 @@ namespace PhotoViewerV3.Data.Migrations
                     b.Property<long>("CreatedAtUtc")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("GroupId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("LibraryId")
                         .HasColumnType("INTEGER");
 
@@ -661,9 +664,12 @@ namespace PhotoViewerV3.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("LibraryId", "Name")
+                    b.HasIndex("LibraryId")
+                        .HasDatabaseName("IX_MotifTerms_Library");
+
+                    b.HasIndex("GroupId", "Name")
                         .IsUnique()
-                        .HasDatabaseName("UX_MotifTerms_Library_Name");
+                        .HasDatabaseName("UX_MotifTerms_Group_Name");
 
                     b.ToTable("MotifTerms", (string)null);
                 });

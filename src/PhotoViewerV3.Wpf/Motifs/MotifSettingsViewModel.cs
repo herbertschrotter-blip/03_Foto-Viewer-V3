@@ -116,7 +116,9 @@ public sealed partial class MotifSettingsViewModel : ObservableObject, IDisposab
         _messenger.Register<MotifSettingsViewModel, MotifModelChangedMessage>(this, static (r, _) => UiThread.Post(r.RefreshModel));
         _messenger.Register<MotifSettingsViewModel, MotifTermsChangedMessage>(this, static (r, m) => UiThread.Post(() =>
         {
-            if (m.LibraryId == r._libraryId)
+            // Begriffe gehören der Bibliotheks-Gruppe (ADR-0048, 0.2.56): die Nachricht nennt irgendeine Bibliothek der Gruppe
+            // (den Anker des Begriffs) — neu gelesen wird ohnehin nur der eigene Bereich.
+            if (r._libraryId != 0)
             {
                 _ = r.LoadTermsAsync();
             }

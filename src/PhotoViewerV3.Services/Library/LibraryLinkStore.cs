@@ -177,6 +177,9 @@ internal static class LibraryLinkStore
 
         Execute(connection, tx, "UPDATE Persons SET GroupId = $t WHERE GroupId = $s;", p);
 
+        // ---- Motiv-Begriffe (0.2.56)
+        var motifTermsMerged = LinkMotifTerms(connection, tx, targetGroup, sourceGroup);
+
         // ---- Bibliotheken und Gruppe
         Execute(connection, tx, "UPDATE Libraries SET GroupId = $t WHERE GroupId = $s;", p);
         Execute(connection, tx, "DELETE FROM LibraryGroups WHERE Id = $s;", p);
@@ -186,7 +189,49 @@ internal static class LibraryLinkStore
         }
 
         Execute(connection, tx, "DROP TABLE temp._LinkMap;");
-        return new LibraryLinkResult(targetGroup, tagsMerged, categoriesMerged, relationsMerged, personsMerged, keptApart);
+        return new LibraryLinkResult(targetGroup, tagsMerged, categoriesMerged, relationsMerged, personsMerged, keptApart, motifTermsMerged);
+    }
+
+    /// <summary>
+    /// Motiv-Begriffe beim Verknüpfen (ADR-0048 Nachtrag 0.2.56): gleichnamige werden eins (die der Zielgruppe bleiben,
+    /// Treffer wandern, höhere Wahrscheinlichkeit gewinnt), die übrigen wandern hinter die der Zielgruppe. Bisher wurde jeder
+    /// Begriff nur gegen die Fotos seiner eigenen Bibliothek verglichen — wo jetzt Fotos hinzukommen, die er nie gesehen
+    /// hat (Begriff nur auf einer Seite, oder gleichnamig mit anderer Beschreibung/Schwelle), verfällt sein Text-Vektor: der
+    /// Motiv-Dienst rechnet Vektor und Treffer beim nächsten Start des Index aus den gespeicherten Bild-Vektoren neu (kein
+    /// Foto wird neu analysiert). Gleiche Begriffe auf beiden Seiten (z. B. die Start-Liste) bleiben unverändert.
+    /// Merker der Start-Liste: hatte eine Seite ihn, hat ihn die Zielgruppe.
+    /// </summary>
+    private static int LinkMotifTerms(SqliteConnection connection, SqliteTransaction tx, int targetGroup, int sourceGroup)
+    {
+        var p = new (string, object)[] { ("$t", targetGroup), ("$s", sourceGroup) };
+        var merged = Execute(connection, tx,
+            "INSERT INTO _LinkMap SELECT 'M', s.Id, t.Id FROM MotifTerms s JOIN MotifTerms t ON t.GroupId = $t AND t.Name = s.Name WHERE s.GroupId = $s;", p);
+        Execute(connection, tx, """
+            UPDATE MotifTerms SET TextEmbedding = NULL, TextModelVersion = NULL
+            WHERE (GroupId = $t AND Id NOT IN (SELECT TargetId FROM _LinkMap WHERE Kind = 'M'))
+               OR (GroupId = $s AND Id NOT IN (SELECT SourceId FROM _LinkMap WHERE Kind = 'M'))
+               OR Id IN (SELECT m.TargetId FROM _LinkMap m
+                         JOIN MotifTerms src ON src.Id = m.SourceId JOIN MotifTerms dst ON dst.Id = m.TargetId
+                         WHERE m.Kind = 'M'
+                           AND (COALESCE(src.Prompt, '') <> COALESCE(dst.Prompt, '') OR COALESCE(src.Threshold, -1) <> COALESCE(dst.Threshold, -1)
+                                OR COALESCE(src.TextModelVersion, '') <> COALESCE(dst.TextModelVersion, '')));
+            INSERT INTO FileMotifs (FileId, TermId, Score)
+                SELECT fm.FileId, m.TargetId, fm.Score FROM FileMotifs fm JOIN _LinkMap m ON m.Kind = 'M' AND m.SourceId = fm.TermId WHERE 1
+                ON CONFLICT(FileId, TermId) DO UPDATE SET Score = MAX(Score, excluded.Score);
+            DELETE FROM FileMotifs WHERE TermId IN (SELECT SourceId FROM _LinkMap WHERE Kind = 'M');
+            DELETE FROM MotifTerms WHERE Id IN (SELECT SourceId FROM _LinkMap WHERE Kind = 'M');
+            """, p);
+        var offset = Scalar(connection, tx, "SELECT COALESCE(MAX(SortOrder), -1) + 1 FROM MotifTerms WHERE GroupId = $t;", p);
+        Execute(connection, tx, "UPDATE MotifTerms SET GroupId = $t, SortOrder = SortOrder + $o WHERE GroupId = $s;",
+            ("$t", targetGroup), ("$s", sourceGroup), ("$o", offset));
+
+        if (Scalar(connection, tx, "SELECT COUNT(*) FROM Settings WHERE Key = $k;", ("$k", MotifSeededKey(sourceGroup))) > 0)
+        {
+            Execute(connection, tx, "INSERT OR IGNORE INTO Settings (Key, Value) VALUES ($k, 'true');", ("$k", MotifSeededKey(targetGroup)));
+        }
+
+        Execute(connection, tx, "DELETE FROM Settings WHERE Key = $k;", ("$k", MotifSeededKey(sourceGroup)));
+        return merged;
     }
 
     /// <summary>
@@ -323,8 +368,27 @@ internal static class LibraryLinkStore
               AND PersonId IN (SELECT OldId FROM _CopyMap WHERE Kind = 'P');
             """, p);
 
+        // Motiv-Begriffe (0.2.56): Kopien mit Text-Vektor (die Treffer bleiben gültig), Anker = die herausgelöste
+        // Bibliothek; ihre Treffer zeigen auf die Kopien. Die Originale bekommen einen Anker in der alten Gruppe.
+        var motifTerms = Execute(connection, tx, """
+            INSERT INTO _CopyMap SELECT 'M', Id, (SELECT COALESCE(MAX(Id), 0) FROM MotifTerms) + ROW_NUMBER() OVER (ORDER BY Id) FROM MotifTerms WHERE GroupId = $from;
+            """, p);
+        Execute(connection, tx, """
+            INSERT INTO MotifTerms (Id, LibraryId, GroupId, Name, Prompt, Threshold, SortOrder, TextEmbedding, TextModelVersion, CreatedAtUtc)
+            SELECT m.NewId, $lib, $to, t.Name, t.Prompt, t.Threshold, t.SortOrder, t.TextEmbedding, t.TextModelVersion, t.CreatedAtUtc
+            FROM _CopyMap m JOIN MotifTerms t ON t.Id = m.OldId WHERE m.Kind = 'M';
+            UPDATE FileMotifs SET TermId = (SELECT m.NewId FROM _CopyMap m WHERE m.Kind = 'M' AND m.OldId = FileMotifs.TermId)
+            WHERE FileId IN (SELECT Id FROM Files WHERE LibraryId = $lib)
+              AND TermId IN (SELECT OldId FROM _CopyMap WHERE Kind = 'M');
+            """, p);
+        ReanchorMotifTerms(connection, tx, libraryId);
+        if (Scalar(connection, tx, "SELECT COUNT(*) FROM Settings WHERE Key = $k;", ("$k", MotifSeededKey(fromGroup))) > 0)
+        {
+            Execute(connection, tx, "INSERT OR IGNORE INTO Settings (Key, Value) VALUES ($k, 'true');", ("$k", MotifSeededKey(toGroup)));
+        }
+
         Execute(connection, tx, "DROP TABLE temp._CopyMap;");
-        return new LibraryUnlinkResult(toGroup, tags, categories, relations, persons);
+        return new LibraryUnlinkResult(toGroup, tags, categories, relations, persons, motifTerms);
     }
 
     private static List<(int Source, int Target)> ReadMap(SqliteConnection connection, SqliteTransaction tx, string kind)

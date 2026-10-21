@@ -27,8 +27,8 @@ public static class PlacesMapServiceCollectionExtensions
 
         // Ablage außerhalb des Katalogs: ICatalogStoragePaths kommt aus der Katalog-Sitzung (ADR-0049, AddHiddenCatalog…)
 
-        // Bereich und Datenschutz-Merkmal (ZUSAMMENBAU: T → IPlacesScope; IMapPrivacyContext aus ICatalogContext)
-        services.TryAddSingleton<IPlacesScope, ActiveLibraryPlacesScope>();
+        // Bereich (ILibraryScope, ADR-0048: aktive Bibliothek bzw. „Alle verknüpften“) und Datenschutz-Merkmal (ICatalogContext)
+        services.TryAddSingleton<IPlacesScope, LibraryScopePlacesScope>();
         services.TryAddSingleton<IMapPrivacyContext, CatalogMapPrivacyContext>();
 
         // Kartenkacheln: OSM mit Platten-Cache (500 MB, LRU) — abgeschaltet mit PHOTOVIEWERV3_MAP_TILES=off und im Rauchtest

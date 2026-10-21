@@ -68,6 +68,8 @@ public sealed class GalleryPageSourceMotifTests : IAsyncLifetime
 
         using var connection = _factory.OpenSqliteConnection();
         Exec(connection, "INSERT INTO FilesFts(rowid, Name, Extension) SELECT Id, Name, Extension FROM Files;");
+        // Jede Bibliothek ihre eigene Gruppe (ADR-0048) — Motiv-Begriffe gehören seit 0.2.56 der Gruppe
+        Exec(connection, "INSERT INTO LibraryGroups (Id, Name, CreatedAtUtc) SELECT Id, Name, 0 FROM Libraries; UPDATE Libraries SET GroupId = Id;");
         _dog = InsertTerm(connection, _libraryId, "Hund", 0);
         _beach = InsertTerm(connection, _libraryId, "Strand", 1);
         InsertTerm(connection, _libraryId, "Katze", 2);
@@ -155,6 +157,39 @@ public sealed class GalleryPageSourceMotifTests : IAsyncLifetime
         rows.Should().NotContain(r => r.FileId == _ids["d"]);
     }
 
+    /// <summary>
+    /// Zusammenbau 0.2.56 (ADR-0048): Begriffe gehören der Gruppe. Verknüpft (U in die Gruppe von T, „Hund“ eins) zählt jede
+    /// Bibliothek einzeln nur ihre eigenen Treffer, „Alle verknüpften“ die Summe; Suche nach dem Begriff bzw. „Motiv: …“
+    /// findet je Bereich nur dessen Dateien. Getrennt sieht U die Begriffe von T nie (auch nicht mit 0).
+    /// </summary>
+    [Fact]
+    public async Task Begriffe_je_Gruppe_Zaehler_und_Suche_je_Bereich()
+    {
+        (await _source.GetMotifCountsAsync([_otherLibraryId], CancellationToken.None)).Select(c => c.Name).Should().Equal(["Hund"], "getrennt: nur der eigene Begriff");
+
+        using (var connection = _factory.OpenSqliteConnection())
+        {
+            Exec(connection, $"""
+                UPDATE FileMotifs SET TermId = {_dog} WHERE TermId = {_otherDog};
+                DELETE FROM MotifTerms WHERE Id = {_otherDog};
+                UPDATE Libraries SET GroupId = {_libraryId} WHERE Id = {_otherLibraryId};
+                """);
+        }
+
+        (await _source.GetMotifCountsAsync([_otherLibraryId], CancellationToken.None)).Select(c => (c.Name, c.FileCount))
+            .Should().Equal(("Hund", 1), ("Strand", 0), ("Katze", 0));
+        (await _source.GetMotifCountsAsync([_libraryId], CancellationToken.None)).Select(c => (c.Name, c.FileCount))
+            .Should().Equal(("Hund", 2), ("Strand", 2), ("Katze", 0));
+        (await _source.GetMotifCountsAsync([_libraryId, _otherLibraryId], CancellationToken.None)).Select(c => (c.Name, c.FileCount))
+            .Should().Equal(("Hund", 3), ("Strand", 2), ("Katze", 0));
+
+        var other = new GalleryQuery(_otherLibraryId, GalleryFilterState.None, "Motiv: hund", Sort: GallerySort.NameAsc);
+        (await NamesAsync(other)).Should().Equal("IMG_x.jpg");
+        (await NamesAsync(other with { SearchTerm = "strand" })).Should().BeEmpty("Treffer aus T bleiben in U unsichtbar");
+        (await NamesAsync(Query("Motiv: hund") with { LibraryIds = [_libraryId, _otherLibraryId] })).Should().Equal("IMG_a.jpg", "IMG_b.jpg", "IMG_x.jpg");
+        (await NamesAsync(Motifs(GalleryMotifMode.Any, _dog) with { LibraryIds = [_libraryId, _otherLibraryId] })).Should().Equal("IMG_a.jpg", "IMG_b.jpg", "IMG_x.jpg");
+    }
+
     [Fact]
     public async Task Filter_und_Suche_lesen_Treffer_ueber_den_Index()
     {
@@ -188,7 +223,7 @@ public sealed class GalleryPageSourceMotifTests : IAsyncLifetime
     private static int InsertTerm(SqliteConnection connection, int libraryId, string name, int sort)
     {
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = "INSERT INTO MotifTerms (LibraryId, Name, Prompt, Threshold, SortOrder, CreatedAtUtc) VALUES ($lib, $name, NULL, NULL, $sort, 0); SELECT last_insert_rowid();";
+        cmd.CommandText = "INSERT INTO MotifTerms (LibraryId, GroupId, Name, Prompt, Threshold, SortOrder, CreatedAtUtc) VALUES ($lib, (SELECT GroupId FROM Libraries WHERE Id = $lib), $name, NULL, NULL, $sort, 0); SELECT last_insert_rowid();";
         cmd.Parameters.AddWithValue("$lib", libraryId);
         cmd.Parameters.AddWithValue("$name", name);
         cmd.Parameters.AddWithValue("$sort", sort);

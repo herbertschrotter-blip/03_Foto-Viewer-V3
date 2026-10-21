@@ -3,6 +3,54 @@
 Alle nennenswerten Änderungen an Lumora (bis 0.2.48 „PhotoViewer V3“). Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.56] — 2026-10-21
+
+### Fix (ADR-0048 Nachtrag) — Zusammenbau Welle 10: Bibliotheks-Trennung gilt auch für Orte, Karte und Motive
+- **Zusammenbau 0.2.50 + 0.2.52 + 0.2.54 + 0.2.53 + 0.2.55 + 0.2.51** (Branch `integration-w10`): Platzhalter zwischen
+  Orte-Daten und Karte entfernt, `IMapPicker` an die Schnittstelle der Orte-Daten angepasst, DI der Karte heißt
+  `AddPlacesMap()`, der doppelte `Services.Library.ICatalogContext` ist weg — die Bibliotheks-Trennung nutzt
+  `Services.Infrastructure.ICatalogContext` (IsHidden je Katalog-Sitzung, Tests mit `TestCatalogContext`), ModelSnapshot
+  geprüft. README: doppelte Navigationszeile aus dem Zusammenführen bereinigt.
+- **Motiv-Begriffe gehören der Bibliotheks-Gruppe** wie Tags: Migration **`MotifTermsByGroup`** — `MotifTerms.GroupId`
+  per `ADD COLUMN` (kein Tabellen-Neuaufbau, Treffer hängen per Kaskade daran), befüllt aus `Libraries.GroupId`,
+  eindeutig je (GroupId, Name); gleichnamige Begriffe schon verknüpfter Bibliotheken werden eins (Treffer umgehängt),
+  Merker der Start-Liste je Gruppe (`motifs.seeded.g{GroupId}`). `LibraryId` bleibt nur als Anker des Fremdschlüssels
+  und wandert beim Entfernen einer Bibliothek bzw. beim Lösen an eine andere Bibliothek der Gruppe — die Kaskade nimmt
+  gemeinsame Begriffe nie mit.
+- **Verknüpfen** führt gleichnamige Motiv-Begriffe zusammen; wo ein Begriff Fotos dazubekommt, die er nie gesehen hat,
+  rechnet der Index Text-Vektor und Treffer beim nächsten Start aus den gespeicherten Bild-Vektoren nach (kein Foto wird
+  neu analysiert). **Lösen** kopiert alle Motiv-Begriffe samt Text-Vektor in die herausgelöste Bibliothek, ihre Treffer
+  zeigen auf die Kopien. Protokoll nennt die Zahl der Motiv-Begriffe.
+- **Motive im Bereich**: Galerie-Flyout „Motive“, Suche nach Begriffen und „Motiv: …“ lesen die Begriffe der Gruppe;
+  Zähler (Galerie und Einstellungen › Motive) und Bildinhalt-Suche zählen bzw. suchen nur in den Bibliotheken des
+  Bereichs — eine verknüpfte Bibliothek einzeln nur ihre eigenen Fotos, „Alle verknüpften“ die Summe. Begriffsänderungen
+  rechnen die Treffer aller Bibliotheken der Gruppe neu.
+- **Orte und Karte im Bereich**: die Seite **Orte** (Karte, „Ohne Ort“, Ortssuche, Kartenfenster „Ort wählen“) nimmt den
+  Bereich aus `ILibraryScope` (`LibraryScopePlacesScope`) und zeigt in „Alle verknüpften“ alle Bibliotheken der Gruppe;
+  Galerie-Filter „Ort“, Ortszähler und „zuletzt verwendete Orte“ ebenso. Verorten in „Alle verknüpften“ geht (jede Datei
+  in ihrer Bibliothek).
+- **Versteckte Bibliothek**: bekommt ihre Gruppe schon beim Anlegen; Verknüpfen und „Alle verknüpften“ bleiben gesperrt,
+  Motiv-Begriffe und Orte liegen nur im Katalog des Containers (geprüft).
+
+### Tests
+- `tests/PhotoViewerV3.Tests`: 886 (+4, 1 übersprungen ohne Modell) — `Libraries/MotifPlacesScopingTests` (zwei
+  Bibliotheken mit eigenen Begriffen, Bild-Vektoren und Orten: nichts aus A in B bei Begriffen, Zählern, Treffern,
+  Bildinhalt-Suche, Kartenpunkten, Ortszählern; verknüpft → Start-Listen eins, fehlender Treffer nachgerechnet, B einzeln
+  zählt nur B; „Alle verknüpften“ = Summe; gelöst → Begriffe mit Vektor in beiden, gelöschter Standard-Begriff kommt nicht
+  wieder; Bibliothek entfernen behält gemeinsame Begriffe (Anker); Migration mit Duplikaten und Merkern),
+  `HiddenCatalogTests` (Gruppe beim Anlegen, Verknüpfen/„Alle verknüpften“ gesperrt, Begriffe nur im Container).
+- `tests/PhotoViewerV3.Wpf.Tests`: 867 (+2, 5 übersprungen ohne Modell/Stichprobe), dreimal hintereinander grün —
+  `GalleryPageSourceMotifTests.Begriffe_je_Gruppe_Zaehler_und_Suche_je_Bereich`, `Places/PlacesScopeTests`.
+- Rauchtest 39/39 OK, 0 Binding-Fehler: Schritt **„Bibliotheks-Trennung“** um Motiv-Begriff in A (in B weder in den
+  Einstellungen noch im Flyout) und Ort an einem Foto aus B (in A weder auf der Karte noch im Ort-Flyout) ergänzt;
+  verknüpft bzw. „Alle verknüpften“ sichtbar, gelöst Begriff in beiden, Ort vor dem Entfernen zurückgenommen.
+
+### Offen
+- „Rückgängig“ von „Ort setzen“ und „Datum setzen“ nimmt den jüngsten Eintrag des Katalogs, nicht des Bereichs (bestand
+  schon vorher; betrifft nur mehrere Bibliotheken im selben Katalog).
+- Motiv-Index, Gesichter-Index und Ortsnachtrag laufen weiter nur auf der aktiven Bibliothek (wie in ADR-0048
+  beschrieben); der Bestätigungsdialog „Verknüpfen“ nennt die Motiv-Begriffe noch nicht.
+
 ## [0.2.55] — 2026-10-21
 
 ### Feature (ADR-0052) — Motive: Fotos lokal nach Inhalt erkennen (Sonnenuntergang, Meer, Hund …) und filtern
