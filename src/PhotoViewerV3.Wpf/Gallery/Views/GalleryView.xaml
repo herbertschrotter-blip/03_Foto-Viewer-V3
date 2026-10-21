@@ -262,6 +262,19 @@
                                 <TextBlock Text="{Binding Persons.ConfirmedCount}" FontSize="10"
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                             </StackPanel>
+                            <!-- Unbenannte Gesichter (0.2.39): dezentes graues Symbol mit Anzahl (unbestätigt/Vorschlag), ignorierte zählen nicht -->
+                            <StackPanel DockPanel.Dock="Right"
+                                        Orientation="Horizontal"
+                                        Margin="6,0,0,0"
+                                        VerticalAlignment="Center"
+                                        Background="Transparent"
+                                        ToolTip="{Binding Persons.UnnamedToolTip}"
+                                        Visibility="{Binding Persons.HasUnnamed, Converter={StaticResource BoolToVis}}">
+                                <ui:SymbolIcon Symbol="PersonQuestionMark16" FontSize="11" Margin="0,0,2,0"
+                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                                <TextBlock Text="{Binding Persons.UnnamedCount}" FontSize="10"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                            </StackPanel>
                             <!-- Tag-Punkte (Hover zeigt den Namen) -->
                             <tags:TagChipsControl DockPanel.Dock="Right"
                                                   Tags="{Binding Tags}"

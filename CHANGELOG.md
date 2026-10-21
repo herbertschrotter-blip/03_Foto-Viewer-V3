@@ -3,6 +3,28 @@
 Alle nennenswerten Änderungen an PhotoViewer V3. Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.2.39] — 2026-10-21
+
+### Neu — Gesichter sichtbar machen (Galerie und Lightbox)
+- **Personen-Filter „alle Fotos mit Gesichtern“** (neuer `GalleryPersonMode.AnyFace`): Fotos mit mindestens einem
+  erkannten Gesicht im Zustand unbestätigt, Vorschlag oder bestätigt — ignorierte zählen nicht, gewählte Personen und
+  „auch Vorschläge“ spielen keine Rolle. Je Datei eine abdeckende Index-Suche in `IX_Faces_File_State_Person`
+  (`GalleryPageSource.FaceMarks.cs`, EXPLAIN-QUERY-PLAN-Test). „Nur Fotos mit unbenannten Gesichtern“ zählt ignorierte
+  weiterhin nicht (Test).
+- **Kachel-Markierung für unbenannte Gesichter**: neben dem Personen-Symbol ein graues Gesichts-Symbol
+  (`PersonQuestionMark16`) mit der Zahl der unbenannten Gesichter (unbestätigt, Vorschlag oder bestätigt ohne Person —
+  wie der Filter), Tooltip „2 Gesichter noch nicht benannt“ plus Vorschläge. Nur ignorierte Gesichter → kein Symbol.
+  Geladen in derselben Abfrage je Seite wie die Personen-Namen (`GetFaceMarksForFilesAsync`, 500 Dateien je Abfrage;
+  `GetPersonsForFilesAsync` liefert unverändert die Namen). Die Kachel bleibt Automation-Blatt; ihr HelpText nennt
+  Personen und unbenannte Gesichter.
+- **Lightbox: Taste F gemerkt** — Settings-Schlüssel `ui.lightbox.showFaces` (über `IGalleryViewSettingsStore`), jede
+  Taste F schreibt ihn, ein neues Lightbox-Fenster stellt ihn wieder her (`LightboxFacesViewModel.RestoreAsync`; drückt
+  der Benutzer F vorher, gilt seine Taste). Beim Blättern bleiben die Rahmen an; ignorierte Gesichter zeigen keinen Rahmen.
+- Tests: `GalleryFaceMarksTests` (migrierte DB mit Gesichtern aller vier Zustände: Filter, Zählung, Index-Plan,
+  Kachel-Daten, Automation-Text), `LightboxFacesPersistenceTests` (Speichern, Wiederherstellen, Blättern, Reihenfolge,
+  echte Settings-Tabelle). Rauchtest „Personen in Galerie/Lightbox“ prüft zusätzlich die Kachel-Markierung, den neuen
+  Filter (Erwartung aus dem DB-Stand) und die gemerkte Taste F beim erneuten Öffnen.
+
 ## [0.2.38] — 2026-10-21
 
 ### Zusammenführung mit 0.2.37

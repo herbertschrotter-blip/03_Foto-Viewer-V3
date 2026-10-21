@@ -201,5 +201,16 @@ public sealed class GalleryListBoxItem : ListBoxItem
 
             return base.GetNameCore();
         }
+
+        /// <summary>Personen und unbenannte Gesichter (0.2.39) als HelpText — die Kachel bleibt ein Blatt.</summary>
+        protected override string GetHelpTextCore()
+        {
+            if ((Owner as ListBoxItem)?.DataContext is ViewModels.GalleryItem item && item.Persons.AutomationText is { Length: > 0 } text)
+            {
+                return text;
+            }
+
+            return base.GetHelpTextCore();
+        }
     }
 }

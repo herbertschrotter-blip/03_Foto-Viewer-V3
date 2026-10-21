@@ -80,7 +80,8 @@ public sealed partial class LightboxViewModel : ObservableObject, IDisposable
         ICategoryService? categories = null,
         ICategoryPickerService? categoryPicker = null,
         PhotoViewerV3.Services.Faces.Assignment.IFaceRecognitionService? faceRecognition = null,
-        PhotoViewerV3.Shell.IDialogService? dialogs = null)
+        PhotoViewerV3.Shell.IDialogService? dialogs = null,
+        Gallery.ListView.IGalleryViewSettingsStore? viewSettings = null)
     {
         _vlc = vlc;
         _contextFactory = contextFactory;
@@ -98,7 +99,7 @@ public sealed partial class LightboxViewModel : ObservableObject, IDisposable
             static (recipient, message) => ((LightboxViewModel)recipient).OnFilesChanged(message));
         InitTags(tags, tagPicker); // Tags anzeigen/bearbeiten (LightboxViewModel.Tags.cs, ADR-0021)
         InitCategories(categories, categoryPicker); // Kategorie-Werte anzeigen/zuweisen (LightboxViewModel.Categories.cs, ADR-0027)
-        InitFaces(faceRecognition, dialogs); // Gesichtsrahmen, Taste F (LightboxViewModel.Faces.cs, 0.2.38)
+        InitFaces(faceRecognition, dialogs, viewSettings); // Gesichtsrahmen, Taste F gemerkt (LightboxViewModel.Faces.cs, 0.2.38/0.2.39)
     }
 
     // ----- Anbindung an das Fenster (View-Mechanik) -----

@@ -47,7 +47,7 @@ public sealed partial class GalleryViewModel
     private bool _personFilterIncludeSuggestions;
 
     public bool HasPersonFilter
-        => PersonFilterMode is GalleryPersonMode.NoPerson or GalleryPersonMode.UnnamedFaces || PersonFilterEntries.Any(e => e.IsSelected);
+        => PersonFilterMode.IgnoresPersonSelection() || PersonFilterEntries.Any(e => e.IsSelected);
 
     /// <summary>Beschriftung des Filter-Knopfs: „Personen“ oder „Personen: Anna, Bert (UND)“.</summary>
     public string PersonFilterText
@@ -61,6 +61,8 @@ public sealed partial class GalleryViewModel
                     return "Personen: ohne Person" + suffix;
                 case GalleryPersonMode.UnnamedFaces:
                     return "Personen: unbenannte Gesichter" + suffix;
+                case GalleryPersonMode.AnyFace:
+                    return "Personen: alle Fotos mit Gesichtern"; // „auch Vorschläge“ ändert hier nichts (0.2.39)
             }
 
             var names = PersonFilterEntries.Where(e => e.IsSelected).Select(e => e.Name).ToList();
@@ -81,6 +83,7 @@ public sealed partial class GalleryViewModel
         {
             GalleryPersonMode.NoPerson => "Auf allen Fotos ist mindestens eine Person bestätigt.",
             GalleryPersonMode.UnnamedFaces => "Keine Fotos mit unbenannten Gesichtern — alle erkannten Gesichter sind benannt oder ignoriert.",
+            GalleryPersonMode.AnyFace => "Keine Fotos mit Gesichtern — noch nicht analysiert, keine erkannt oder alle ignoriert.",
             _ => "Keine Dateien mit diesem Personen-Filter.",
         };
 
@@ -88,7 +91,7 @@ public sealed partial class GalleryViewModel
     {
         // Nur neu laden, wenn der Filter vorher oder nachher wirkt (ODER ↔ UND ohne Häkchen ändert nichts).
         var anySelected = PersonFilterEntries.Any(e => e.IsSelected);
-        static bool Active(GalleryPersonMode mode, bool selected) => mode is GalleryPersonMode.NoPerson or GalleryPersonMode.UnnamedFaces || selected;
+        static bool Active(GalleryPersonMode mode, bool selected) => mode.IgnoresPersonSelection() || selected;
         if (!_suppressReload && _isInitialized && (Active(oldValue, anySelected) || Active(newValue, anySelected)))
         {
             FireAndForget(ChangeQueryAsync);
@@ -98,7 +101,7 @@ public sealed partial class GalleryViewModel
     partial void OnPersonFilterIncludeSuggestionsChanged(bool value)
     {
         OnPropertyChanged(nameof(PersonFilterText));
-        if (!_suppressReload && _isInitialized && HasPersonFilter)
+        if (!_suppressReload && _isInitialized && HasPersonFilter && PersonFilterMode != GalleryPersonMode.AnyFace)
         {
             FireAndForget(ChangeQueryAsync);
         }
@@ -215,20 +218,21 @@ public sealed partial class GalleryViewModel
         var sequence = Interlocked.Increment(ref _personsRequestSequence);
         try
         {
-            var rows = await _source.GetPersonsForFilesAsync(fileIds, ct);
+            // Seit 0.2.39 mit der Zahl unbenannter Gesichter (Kachel-Markierung) — weiterhin eine Abfrage je Seite.
+            var marks = await _source.GetFaceMarksForFilesAsync(fileIds, ct);
             if (ct.IsCancellationRequested)
             {
                 return;
             }
 
-            var byFile = rows.ToLookup(r => r.FileId);
+            var byFile = marks.Persons.ToLookup(r => r.FileId);
             await DispatchAsync(() =>
             {
                 foreach (var id in fileIds)
                 {
                     if (_currentItems.TryGetValue(id, out var item) && item.PersonsSequence < sequence)
                     {
-                        item.Persons = byFile.Contains(id) ? GalleryItemPersons.From(byFile[id]) : GalleryItemPersons.Empty;
+                        item.Persons = GalleryItemPersons.From(byFile[id], marks.UnnamedCount(id));
                         item.PersonsSequence = sequence;
                     }
                 }

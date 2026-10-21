@@ -56,6 +56,11 @@
                                      IsChecked="{Binding PersonFilterMode, Converter={StaticResource EnumEquals}, ConverterParameter=Any}" />
                         <RadioButton Content="alle gewählten Personen (UND)" GroupName="PersonMode"
                                      IsChecked="{Binding PersonFilterMode, Converter={StaticResource EnumEquals}, ConverterParameter=All}" />
+                        <!-- 0.2.39: jedes erkannte, nicht ignorierte Gesicht (benannt, Vorschlag oder unbenannt) -->
+                        <RadioButton Content="alle Fotos mit Gesichtern" GroupName="PersonMode"
+                                     AutomationProperties.Name="Alle Fotos mit Gesichtern"
+                                     ToolTip="Fotos mit mindestens einem erkannten Gesicht — ignorierte Gesichter zählen nicht"
+                                     IsChecked="{Binding PersonFilterMode, Converter={StaticResource EnumEquals}, ConverterParameter=AnyFace}" />
                         <RadioButton Content="nur Fotos ohne Person" GroupName="PersonMode"
                                      IsChecked="{Binding PersonFilterMode, Converter={StaticResource EnumEquals}, ConverterParameter=NoPerson}" />
                         <RadioButton Content="nur Fotos mit unbenannten Gesichtern" GroupName="PersonMode"

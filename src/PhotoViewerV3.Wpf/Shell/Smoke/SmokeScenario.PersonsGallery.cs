@@ -93,6 +93,7 @@ internal sealed partial class SmokeScenario
         await WaitUntilAsync(() => annaItem!.Persons.HasConfirmed && bertItem!.Persons.HasSuggestions, ShortWait, "Personen der Kacheln geladen").ConfigureAwait(true);
         Check(annaItem!.Persons.ConfirmedText == "Smokeperson Anna" && annaItem.Persons.ConfirmedCount == 1, $"Kachel: Personen-Symbol 1, Tooltip „{annaItem.Persons.ToolTip}“");
         Check(!bertItem!.Persons.HasConfirmed && bertItem.Persons.SuggestionsText == "Smokeperson Bert?", $"Vorschlag: „{bertItem.Persons.SuggestionsText}“, kein Kachel-Symbol");
+        await CheckUnnamedFaceMarksAsync(annaItem, bertItem).ConfigureAwait(true); // 0.2.39
 
         // Filter: ODER, mit Vorschlägen, ohne Person, unbenannte Gesichter
         _gallery.PersonFilterEntries.First(e => e.PersonId == anna).IsSelected = true;
@@ -127,6 +128,7 @@ internal sealed partial class SmokeScenario
         _gallery.PersonFilterMode = GalleryPersonMode.UnnamedFaces;
         await WaitForGalleryAsync("unbenannte Gesichter").ConfigureAwait(true);
         Check(_gallery.TotalCount == unnamedExpected && unnamedExpected > 0, $"„unbenannte Gesichter“: {_gallery.TotalCount} (erwartet {unnamedExpected})");
+        await CheckAnyFaceFilterAsync().ConfigureAwait(true); // 0.2.39
         await _gallery.ClearPersonFilterCommand.ExecuteAsync(null).ConfigureAwait(true);
         await WaitForGalleryAsync("Personen-Filter zurückgesetzt").ConfigureAwait(true);
 
@@ -179,6 +181,7 @@ internal sealed partial class SmokeScenario
             () => _gallery.PersonFilterEntries.Any(e => e.PersonId == bert && e.FileCount == 1) && bertItem.Persons.HasConfirmed,
             ShortWait,
             "Galerie: Bert bestätigt (Filter-Zähler, Kachel)").ConfigureAwait(true);
+        await CheckLightboxFacesRememberedAsync(bertItem).ConfigureAwait(true); // 0.2.39
 
         // Einstellungen: „Gesichtsdaten löschen“ (Bestätigung ist ein echter Dialog — hier direkt nach der Bestätigung)
         _navigation.NavigateTo(NavigationTags.Settings);

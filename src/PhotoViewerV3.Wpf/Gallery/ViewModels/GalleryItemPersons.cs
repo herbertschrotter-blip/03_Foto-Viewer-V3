@@ -11,21 +11,23 @@ namespace PhotoViewerV3.Gallery.ViewModels;
 /// Bestätigte Personen (Listenspalte normal, Kachel-Symbol mit Anzahl) und Vorschläge (Listenspalte kursiv/grau mit „?“)
 /// jeweils nach Name sortiert.
 /// </summary>
-public sealed class GalleryItemPersons
+public sealed partial class GalleryItemPersons
 {
     public static GalleryItemPersons Empty { get; } = new([], []);
 
-    public GalleryItemPersons(IReadOnlyList<string> confirmed, IReadOnlyList<string> suggested)
+    /// <param name="unnamedCount">Unbenannte Gesichter der Datei (0.2.39, <c>GalleryItemFaceMarks.cs</c>).</param>
+    public GalleryItemPersons(IReadOnlyList<string> confirmed, IReadOnlyList<string> suggested, int unnamedCount = 0)
     {
         Confirmed = confirmed ?? throw new ArgumentNullException(nameof(confirmed));
         Suggested = suggested ?? throw new ArgumentNullException(nameof(suggested));
+        UnnamedCount = Math.Max(0, unnamedCount);
     }
 
-    /// <summary>Aus den Zeilen einer Datei (<see cref="GalleryPageSource.GetPersonsForFilesAsync"/>).</summary>
-    public static GalleryItemPersons From(IEnumerable<GalleryFacePersonRow> rows)
+    /// <summary>Aus den Zeilen einer Datei (<see cref="GalleryPageSource.GetFaceMarksForFilesAsync"/>).</summary>
+    public static GalleryItemPersons From(IEnumerable<GalleryFacePersonRow> rows, int unnamedCount = 0)
     {
         var list = rows.ToList();
-        if (list.Count == 0)
+        if (list.Count == 0 && unnamedCount <= 0)
         {
             return Empty;
         }
@@ -33,7 +35,7 @@ public sealed class GalleryItemPersons
         static List<string> Names(IEnumerable<GalleryFacePersonRow> r)
             => r.Select(x => x.Name).Distinct(StringComparer.CurrentCultureIgnoreCase).OrderBy(n => n, StringComparer.CurrentCultureIgnoreCase).ToList();
 
-        return new GalleryItemPersons(Names(list.Where(r => r.IsConfirmed)), Names(list.Where(r => !r.IsConfirmed)));
+        return new GalleryItemPersons(Names(list.Where(r => r.IsConfirmed)), Names(list.Where(r => !r.IsConfirmed)), unnamedCount);
     }
 
     /// <summary>Namen der bestätigten Personen.</summary>

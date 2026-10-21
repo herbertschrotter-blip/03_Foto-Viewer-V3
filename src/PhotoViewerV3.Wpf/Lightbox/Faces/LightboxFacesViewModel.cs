@@ -10,6 +10,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using PhotoViewerV3.Gallery.ListView;
 using PhotoViewerV3.Services.Faces.Assignment;
 using PhotoViewerV3.Services.Faces.Indexing;
 using PhotoViewerV3.Shell;
@@ -45,8 +46,10 @@ public sealed partial class LightboxFacesViewModel : ObservableObject, IDisposab
         IDialogService? dialogs = null,
         ILogger? logger = null,
         IMessenger? messenger = null,
-        Dispatcher? dispatcher = null)
+        Dispatcher? dispatcher = null,
+        IGalleryViewSettingsStore? settings = null)
     {
+        _settings = settings; // Zustand der Taste F merken (0.2.39, LightboxFacesViewModel.Persistence.cs)
         _service = service;
         _dialogs = dialogs;
         _logger = logger ?? NullLogger.Instance;
@@ -103,11 +106,19 @@ public sealed partial class LightboxFacesViewModel : ObservableObject, IDisposab
         }
 
         IsVisible = !IsVisible;
+        _toggledByUser = true; // ein noch laufendes Wiederherstellen (RestoreAsync) überschreibt die Taste nicht mehr
         if (!IsVisible)
         {
             _loadVersion++;
             Boxes.Clear();
+            await SaveVisibilityAsync().ConfigureAwait(true);
             return;
+        }
+
+        await SaveVisibilityAsync().ConfigureAwait(true);
+        if (!IsVisible)
+        {
+            return; // während des Speicherns schon wieder ausgeschaltet
         }
 
         if (!_isImage)

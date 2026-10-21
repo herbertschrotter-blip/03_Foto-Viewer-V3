@@ -22,6 +22,20 @@ public enum GalleryPersonMode
 
     /// <summary>Nur Dateien mit mindestens einem noch unbenannten Gesicht — gewählte Personen werden ignoriert.</summary>
     UnnamedFaces,
+
+    /// <summary>
+    /// Alle Dateien mit mindestens einem erkannten, nicht ignorierten Gesicht (Zustand 0, 1 oder 2) — gewählte Personen
+    /// und „auch Vorschläge“ werden ignoriert (0.2.39, <c>GalleryPageSource.FaceMarks.cs</c>).
+    /// </summary>
+    AnyFace,
+}
+
+/// <summary>Hilfen zu <see cref="GalleryPersonMode"/> (0.2.39).</summary>
+public static class GalleryPersonModeExtensions
+{
+    /// <summary>True für Modi, die ohne gewählte Personen wirken (ohne Person, unbenannte Gesichter, alle mit Gesichtern).</summary>
+    public static bool IgnoresPersonSelection(this GalleryPersonMode mode)
+        => mode is GalleryPersonMode.NoPerson or GalleryPersonMode.UnnamedFaces or GalleryPersonMode.AnyFace;
 }
 
 /// <summary>
@@ -30,7 +44,7 @@ public enum GalleryPersonMode
 /// </summary>
 public sealed record GalleryPersonFilter(IReadOnlyList<int> PersonIds, GalleryPersonMode Mode, bool IncludeSuggestions = false)
 {
-    public bool IsActive => Mode is GalleryPersonMode.NoPerson or GalleryPersonMode.UnnamedFaces || PersonIds.Count > 0;
+    public bool IsActive => Mode.IgnoresPersonSelection() || PersonIds.Count > 0;
 }
 
 /// <summary>Eintrag des Personen-Filters: Person mit Anzahl Dateien der Bibliothek, auf denen sie bestätigt ist.</summary>
@@ -104,56 +118,70 @@ public sealed partial class GalleryPageSource
     /// <summary>
     /// Bestätigte Personen und Vorschläge je Datei (Listenspalte „Personen“, Kachel-Symbol) — eine Abfrage je 500
     /// Dateien über <c>IX_Faces_File_State_Person</c>. Eine Person, die auf einem Foto bestätigt ist, erscheint dort
-    /// nicht zusätzlich als Vorschlag; mehrere Gesichter derselben Person zählen einmal.
+    /// nicht zusätzlich als Vorschlag; mehrere Gesichter derselben Person zählen einmal. Seit 0.2.39 liefert
+    /// <see cref="GetFaceMarksForFilesAsync"/> aus derselben Abfrage zusätzlich die unbenannten Gesichter je Datei.
     /// </summary>
     public Task<IReadOnlyList<GalleryFacePersonRow>> GetPersonsForFilesAsync(IReadOnlyCollection<int> fileIds, CancellationToken ct)
-        => RunAsync<IReadOnlyList<GalleryFacePersonRow>>(conn =>
+        => RunAsync(conn => ReadFaceMarks(conn, fileIds, ct).Persons, ct);
+
+    /// <summary>
+    /// Personen, Vorschläge und Anzahl unbenannter Gesichter je Datei — eine Abfrage je 500 Dateien über
+    /// <c>IX_Faces_File_State_Person</c> (Zustand 0, 1, 2; ignorierte Gesichter werden nicht gelesen).
+    /// </summary>
+    private static GalleryFaceMarks ReadFaceMarks(SqliteConnection conn, IReadOnlyCollection<int> fileIds, CancellationToken ct)
+    {
+        var result = new List<GalleryFacePersonRow>();
+        var unnamed = new Dictionary<int, int>();
+        foreach (var chunk in fileIds.Distinct().Chunk(InChunkSize))
         {
-            var result = new List<GalleryFacePersonRow>();
-            foreach (var chunk in fileIds.Distinct().Chunk(InChunkSize))
+            ct.ThrowIfCancellationRequested();
+            using var cmd = conn.CreateCommand();
+            var inList = BindInList(cmd, chunk, "$pf");
+            cmd.CommandText = $"""
+                SELECT fa.FileId, fa.State, fa.PersonId, p.Name, fa.SuggestedPersonId, s.Name
+                FROM Faces fa
+                LEFT JOIN Persons p ON p.Id = fa.PersonId
+                LEFT JOIN Persons s ON s.Id = fa.SuggestedPersonId
+                WHERE fa.FileId IN ({inList}) AND fa.State IN (0, 1, 2);
+                """;
+            var confirmed = new HashSet<(int, int)>();
+            var suggested = new List<(int FileId, int PersonId, string Name)>();
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
             {
-                ct.ThrowIfCancellationRequested();
-                using var cmd = conn.CreateCommand();
-                var inList = BindInList(cmd, chunk, "$pf");
-                cmd.CommandText = $"""
-                    SELECT fa.FileId, fa.State, fa.PersonId, p.Name, fa.SuggestedPersonId, s.Name
-                    FROM Faces fa
-                    LEFT JOIN Persons p ON p.Id = fa.PersonId
-                    LEFT JOIN Persons s ON s.Id = fa.SuggestedPersonId
-                    WHERE fa.FileId IN ({inList}) AND fa.State IN (1, 2);
-                    """;
-                var confirmed = new HashSet<(int, int)>();
-                var suggested = new List<(int FileId, int PersonId, string Name)>();
-                using var reader = cmd.ExecuteReader();
-                while (reader.Read())
+                var fileId = reader.GetInt32(0);
+                var state = reader.GetInt32(1);
+                if (state != 2 || reader.IsDBNull(2))
                 {
-                    var fileId = reader.GetInt32(0);
-                    var state = reader.GetInt32(1);
-                    if (state == 2 && !reader.IsDBNull(2) && !reader.IsDBNull(3))
-                    {
-                        if (confirmed.Add((fileId, reader.GetInt32(2))))
-                        {
-                            result.Add(new GalleryFacePersonRow(fileId, true, reader.GetInt32(2), reader.GetString(3)));
-                        }
-                    }
-                    else if (state == 1 && !reader.IsDBNull(4) && !reader.IsDBNull(5))
-                    {
-                        suggested.Add((fileId, reader.GetInt32(4), reader.GetString(5)));
-                    }
+                    // Unbenannt wie im Filter „unbenannte Gesichter“: unbestätigt, Vorschlag, bestätigt ohne (gelöschte) Person.
+                    unnamed[fileId] = unnamed.GetValueOrDefault(fileId) + 1;
                 }
 
-                var seenSuggestions = new HashSet<(int, int)>();
-                foreach (var (fileId, personId, name) in suggested)
+                if (state == 2 && !reader.IsDBNull(2) && !reader.IsDBNull(3))
                 {
-                    if (!confirmed.Contains((fileId, personId)) && seenSuggestions.Add((fileId, personId)))
+                    if (confirmed.Add((fileId, reader.GetInt32(2))))
                     {
-                        result.Add(new GalleryFacePersonRow(fileId, false, personId, name));
+                        result.Add(new GalleryFacePersonRow(fileId, true, reader.GetInt32(2), reader.GetString(3)));
                     }
+                }
+                else if (state == 1 && !reader.IsDBNull(4) && !reader.IsDBNull(5))
+                {
+                    suggested.Add((fileId, reader.GetInt32(4), reader.GetString(5)));
                 }
             }
 
-            return result;
-        }, ct);
+            var seenSuggestions = new HashSet<(int, int)>();
+            foreach (var (fileId, personId, name) in suggested)
+            {
+                if (!confirmed.Contains((fileId, personId)) && seenSuggestions.Add((fileId, personId)))
+                {
+                    result.Add(new GalleryFacePersonRow(fileId, false, personId, name));
+                }
+            }
+        }
+
+        return new GalleryFaceMarks(result, unnamed);
+    }
 
     /// <summary>
     /// Personen-Filter als Bedingung auf <c>f.Id</c>. ODER/UND: Gesichter der gewählten Personen über
@@ -180,6 +208,8 @@ public sealed partial class GalleryPageSource
                 return filter.IncludeSuggestions
                     ? "AND EXISTS (SELECT 1 FROM Faces fa WHERE fa.FileId = f.Id AND (fa.State = 0 OR (fa.State = 1 AND fa.SuggestedPersonId IS NULL) OR (fa.State = 2 AND fa.PersonId IS NULL)))"
                     : "AND EXISTS (SELECT 1 FROM Faces fa WHERE fa.FileId = f.Id AND (fa.State IN (0, 1) OR (fa.State = 2 AND fa.PersonId IS NULL)))";
+            case GalleryPersonMode.AnyFace:
+                return AnyFaceClause; // 0.2.39, GalleryPageSource.FaceMarks.cs
         }
 
         var inList = string.Join(",", Enumerable.Range(0, filter.PersonIds.Count).Select(i => "$person" + i));
@@ -198,8 +228,7 @@ public sealed partial class GalleryPageSource
 
     private static void BindPersonParams(SqliteCommand cmd, GalleryQuery query)
     {
-        if (query.PersonFilter is not { IsActive: true } filter
-            || filter.Mode is GalleryPersonMode.NoPerson or GalleryPersonMode.UnnamedFaces)
+        if (query.PersonFilter is not { IsActive: true } filter || filter.Mode.IgnoresPersonSelection())
         {
             return;
         }

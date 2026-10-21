@@ -1,5 +1,6 @@
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Input;
+using PhotoViewerV3.Gallery.ListView;
 using PhotoViewerV3.Lightbox.Faces;
 using PhotoViewerV3.Services.Faces.Assignment;
 using PhotoViewerV3.Shell;
@@ -16,9 +17,11 @@ public sealed partial class LightboxViewModel
     /// <summary>Gesichtsrahmen des aktuellen Fotos (Fenster bindet <c>Faces.Boxes</c> und <c>Faces.ShowBoxes</c>).</summary>
     public LightboxFacesViewModel Faces { get; private set; } = null!;
 
-    private void InitFaces(IFaceRecognitionService? faceRecognition, IDialogService? dialogs)
+    /// <param name="settings">Seit 0.2.39: Taste F wird in <c>ui.lightbox.showFaces</c> gemerkt und hier wiederhergestellt.</param>
+    private void InitFaces(IFaceRecognitionService? faceRecognition, IDialogService? dialogs, IGalleryViewSettingsStore? settings)
     {
-        Faces = new LightboxFacesViewModel(faceRecognition, dialogs, _logger) { ShowStatus = ShowStatus };
+        Faces = new LightboxFacesViewModel(faceRecognition, dialogs, _logger, settings: settings) { ShowStatus = ShowStatus };
+        _ = Faces.RestoreAsync(); // fängt Fehler selbst ab
     }
 
     /// <summary>Beim Blättern: Rahmen der neuen Datei (nur Fotos) laden, wenn eingeschaltet.</summary>

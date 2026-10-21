@@ -401,17 +401,23 @@ Gelernt wird **nur aus dem, was du bestätigst** — eigene Vorschläge lernen n
 Sobald Gesichter erkannt oder Personen benannt sind (ADR-0038). Als Person zählt nur ein **bestätigtes** Gesicht;
 Vorschläge der Erkennung werden getrennt gezeigt.
 - **Filter „Personen“** (Galerie-Kopfzeile, neben „Tags“): Häkchen je Person mit Anzahl Fotos dieser Bibliothek,
-  Verknüpfung **ODER** / **UND**, **nur Fotos ohne Person**, **nur Fotos mit unbenannten Gesichtern** und die Option
-  **auch Vorschläge** (Standard aus). Ausgeblendete Personen stehen nicht in der Liste.
+  Verknüpfung **ODER** / **UND**, **alle Fotos mit Gesichtern** (jedes erkannte Gesicht — benannt, vorgeschlagen oder
+  unbenannt), **nur Fotos ohne Person**, **nur Fotos mit unbenannten Gesichtern** und die Option **auch Vorschläge**
+  (Standard aus). Als „Kein Gesicht“ ignorierte Erkennungen zählen in keinem Filter. Ausgeblendete Personen stehen nicht
+  in der Liste.
 - **Suche** findet auch Personennamen (Teil des Namens genügt, ohne Groß-/Kleinschreibung) — wie Tags und Kategorien.
 - **Listenansicht**: Spalte **Personen** (Kopfzeile rechts klicken → einblenden): bestätigte Namen, Vorschläge kursiv und
   grau mit „?“; Klick auf die Kopfzeile sortiert innerhalb der Seite.
-- **Kachel**: kleines Personen-Symbol mit Anzahl, wenn bestätigte Personen auf dem Foto sind (Tooltip: Namen).
+- **Kachel**: kleines Personen-Symbol mit Anzahl, wenn bestätigte Personen auf dem Foto sind (Tooltip: Namen), daneben
+  ein graues Gesichts-Symbol mit der Zahl der noch **unbenannten** Gesichter (unbestätigt oder nur vorgeschlagen;
+  Tooltip z. B. „2 Gesichter noch nicht benannt“ und die Vorschläge). Ignorierte Gesichter bekommen kein Symbol.
 - **Lightbox**: Taste **F** (oder Knopf „Gesichter“) zeigt Rahmen über den erkannten Gesichtern — grün mit Namen,
   gelb „Vorschlag: X?“, weiß „Unbekannt“; die Rahmen zoomen und schwenken mit. Klick auf einen Rahmen: **Ist X**
   (Vorschlag bestätigen), **Nicht X** (Vorschlag ablehnen), **Ist …** (Person wählen oder Namen eingeben — ein
   vorhandener Name wird zugeordnet, sonst entsteht eine neue Person), **Kein Gesicht** (Rahmen verschwindet). Vollbild
-  liegt jetzt nur noch auf **F11**.
+  liegt jetzt nur noch auf **F11**. Die Rahmen bleiben beim Weiterblättern an, und PhotoViewer merkt sich die Taste F
+  dauerhaft: wer sie eingeschaltet lässt, sieht die Rahmen beim nächsten Öffnen der Lightbox (auch nach Neustart) sofort.
+  Ignorierte Gesichter zeigen keinen Rahmen.
 - **Einstellungen → Gesichtserkennung → Gesichtsdaten löschen…**: nach Bestätigung werden für die aktive Bibliothek
   alle Gesichter mit Fingerabdrücken, Zuordnungen, abgelehnte Vorschläge, der Gesichter-Cache und Personen, die danach
   in keiner Bibliothek mehr vorkommen, gelöscht; die Gesichtserkennung wird ausgeschaltet. Fotos, Bewertungen, Tags und
