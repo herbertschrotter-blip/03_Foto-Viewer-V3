@@ -92,12 +92,33 @@ public sealed class CatalogSessionManagerTests : IDisposable
     }
 
     [Fact]
+    public async Task Locking_ends_hidden_mode_until_restart()
+    {
+        // Herbert (0.4.14): nach dem Zusperren zeigt Lumora nichts mehr von versteckten Bibliotheken, wie ein normaler Start
+        var manager = CreateManager();
+        var folder = NewContainerFolder();
+        await manager.CreateAsync(folder, "Tresor", "kennwort-1");
+        manager.IsHiddenModeEnabled.Should().BeTrue();
+
+        (await manager.LockAsync()).Success.Should().BeTrue();
+
+        manager.IsHiddenModeEnabled.Should().BeFalse("Zusperren beendet den versteckten Modus für diese Laufzeit");
+        (await manager.FindAsync()).Should().BeEmpty("kein Suchen nach versteckten Bibliotheken mehr");
+        _switcher.Calls.Clear();
+        var reopen = await manager.OpenAsync(new HiddenLibraryInfo(folder, "Tresor"), "kennwort-1");
+        reopen.Success.Should().BeFalse("wieder öffnen nur nach einem Neustart mit _hidden");
+        _switcher.Calls.Should().BeEmpty();
+        CreateManager().IsHiddenModeEnabled.Should().BeTrue("ein neuer Start mit _hidden zeigt sie wieder");
+    }
+
+    [Fact]
     public async Task Wrong_password_does_not_switch_and_correct_password_reuses_the_catalog_without_scan()
     {
         var manager = CreateManager();
         var folder = NewContainerFolder();
         await manager.CreateAsync(folder, "Tresor", "kennwort-1");
         await manager.LockAsync();
+        manager = CreateManager(); // Neustart mit „_hidden“ — Zusperren beendet den versteckten Modus (0.4.14)
         _switcher.Calls.Clear();
         var info = new HiddenLibraryInfo(folder, "Tresor");
 
@@ -163,6 +184,7 @@ public sealed class CatalogSessionManagerTests : IDisposable
         var folder = NewContainerFolder();
         await manager.CreateAsync(folder, "Tresor", "kennwort-1");
         await manager.LockAsync();
+        manager = CreateManager(); // Neustart mit „_hidden“ — Zusperren beendet den versteckten Modus (0.4.14)
         // Katalog kennt die Bibliothek unter X:\Fotos (Container damals als X: eingehängt)
         var libraries = _switcher.LibrariesOf(Path.Combine(folder, ".lumora", "library.db"));
         libraries.Items[0] = FakeHostSwitcher.NewInfo(1, "Tresor", @"X:\Fotos");
@@ -198,6 +220,7 @@ public sealed class CatalogSessionManagerTests : IDisposable
         await manager.CreateAsync(folder, "Tresor", "kennwort-1");
         _containers.DismountSucceeds = false;
         var locked = await manager.LockAsync();
+        manager = CreateManager(); // Neustart mit „_hidden“ — Zusperren beendet den versteckten Modus (0.4.14)
         locked.Success.Should().BeTrue();
         locked.Message.Should().Contain("geöffnet");
 
@@ -218,6 +241,7 @@ public sealed class CatalogSessionManagerTests : IDisposable
         var folder = NewContainerFolder();
         await manager.CreateAsync(folder, "Tresor", "vergessen-1");
         await manager.LockAsync();
+        manager = CreateManager(); // Neustart mit „_hidden“ — Zusperren beendet den versteckten Modus (0.4.14)
         var info = new HiddenLibraryInfo(folder, "Tresor");
 
         (await manager.ResetPasswordAndOpenAsync(info, "neu-123456")).Success.Should().BeFalse();
@@ -236,6 +260,7 @@ public sealed class CatalogSessionManagerTests : IDisposable
         var folder = NewContainerFolder();
         await manager.CreateAsync(folder, "Tresor", "kennwort-1");
         await manager.LockAsync();
+        manager = CreateManager(); // Neustart mit „_hidden“ — Zusperren beendet den versteckten Modus (0.4.14)
         _switcher.FailNextHidden = true;
 
         var result = await manager.OpenAsync(new HiddenLibraryInfo(folder, "Tresor"), "kennwort-1");

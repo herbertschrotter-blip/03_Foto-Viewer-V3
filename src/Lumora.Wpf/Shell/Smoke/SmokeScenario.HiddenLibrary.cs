@@ -105,6 +105,9 @@ internal sealed partial class SmokeScenario
             Check(locked && !sessions.IsHiddenSessionActive && !HiddenSessionPrivacy.IsHiddenSessionActive, "nach Untätigkeit zugesperrt");
             Check(containers.Dismounted.Count == 1, "Aushängen beim Zusperren angestoßen (Fake)");
             Check(!switcher.CurrentServices.GetRequiredService<ICatalogContext>().IsHidden, "wieder im normalen Katalog");
+            // Zusperren beendet den versteckten Modus (0.4.14): keine Spur in Umschalter und Einstellungen
+            Check(!sessions.IsHiddenModeEnabled && (await sessions.FindAsync().ConfigureAwait(true)).Count == 0, "nach dem Zusperren versteckter Modus beendet");
+            (sessions as CatalogSessionManager ?? throw new SmokeCheckException("Sitzungsverwalter unbekannt")).RestartHiddenModeForSmoke(); // = Neustart mit „_hidden“
 
             // (3) Falsches Kennwort
             var info = new HiddenLibraryInfo(libraryFolder, name);
@@ -120,6 +123,7 @@ internal sealed partial class SmokeScenario
             // (5) Zusperren von Hand
             var manual = await sessions.LockAsync().ConfigureAwait(true);
             Check(manual.Success && !sessions.IsHiddenSessionActive && containers.Dismounted.Count == 2, "von Hand zugesperrt, Aushängen angestoßen");
+            Check(!sessions.IsHiddenModeEnabled, "nach dem Zusperren von Hand versteckter Modus beendet");
         }
         finally
         {

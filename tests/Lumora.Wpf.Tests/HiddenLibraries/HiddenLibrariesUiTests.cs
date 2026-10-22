@@ -63,7 +63,7 @@ public sealed class HiddenLibrariesUiTests : IDisposable
     }
 
     [Fact]
-    public Task Settings_tab_exists_only_with_start_switch_and_sits_before_info() => OnUiAsync(() =>
+    public Task Settings_tab_exists_only_in_an_open_hidden_library_and_sits_before_info() => OnUiAsync(async () =>
     {
         TabControl NewTabs()
         {
@@ -78,15 +78,26 @@ public sealed class HiddenLibrariesUiTests : IDisposable
         HiddenLibrariesUi.AddSettingsTab(off, null);
         off.Items.Count.Should().Be(2, "ohne _hidden keinerlei Spur");
 
+        // Mit _hidden, aber in der normalen Bibliothek: auch kein Reiter (0.4.14, Herbert) — Anlegen/Öffnen über den Umschalter
+        var manager = CreateManager(enabled: true);
+        var normal = NewTabs();
+        HiddenLibrariesUi.AddSettingsTab(normal, CreateViewModel(manager, new(), new()));
+        normal.Items.Count.Should().Be(2, "in der normalen Bibliothek nie ein Reiter");
+
+        await manager.CreateAsync(Path.Combine(_root, "Tresor"), "Tresor", "kennwort-1");
         var on = NewTabs();
-        var vm = CreateViewModel(CreateManager(enabled: true), new(), new());
+        var vm = CreateViewModel(manager, new(), new());
         HiddenLibrariesUi.AddSettingsTab(on, vm);
         on.Items.Count.Should().Be(3);
         var tab = (TabItem)on.Items[1];
         tab.Tag.Should().Be(NavigationTags.SettingsHiddenLibraries);
         tab.Header.Should().Be("Versteckte Bibliotheken");
         ((System.Windows.FrameworkElement)tab.Content).DataContext.Should().BeSameAs(vm);
-        return Task.CompletedTask;
+
+        await manager.LockAsync();
+        var afterLock = NewTabs();
+        HiddenLibrariesUi.AddSettingsTab(afterLock, CreateViewModel(manager, new(), new()));
+        afterLock.Items.Count.Should().Be(2, "nach dem Zusperren keinerlei Spur");
     });
 
     [Fact]
@@ -138,6 +149,12 @@ public sealed class HiddenLibrariesUiTests : IDisposable
 
         await vm.LockCommand.ExecuteAsync(null);
         manager.IsHiddenSessionActive.Should().BeFalse();
+
+        // Nach dem Zusperren zeigt der Umschalter nichts mehr davon (0.4.14)
+        var switcher = new LibrarySwitcherViewModel(new InMemoryLibraries(), new RecordingNavigationService(), new ScriptedDialogs(), NullLogger<LibrarySwitcherViewModel>.Instance, new WeakReferenceMessenger(),
+            hidden: CreateViewModel(manager, new(), new()));
+        await switcher.RefreshAsync();
+        switcher.HasChoices.Should().BeFalse("nach dem Zusperren wie ein normaler Start");
     }
 
     [Fact]

@@ -10,7 +10,9 @@ public static class HiddenLibrariesUi
     /// <summary>Fügt den Reiter „Versteckte Bibliotheken“ vor „Info“ ein — nur mit Startschalter <c>_hidden</c>.</summary>
     public static void AddSettingsTab(TabControl tabs, HiddenLibrariesViewModel? viewModel)
     {
-        if (viewModel is not { IsHiddenModeEnabled: true })
+        // Nur während eine versteckte Bibliothek geöffnet ist (0.4.14, Herbert): In der normalen Bibliothek gibt es den
+        // Reiter auch mit „_hidden“ nicht — Anlegen, Öffnen und „Container öffnen…“ laufen über den Bibliotheks-Umschalter.
+        if (viewModel is not { IsHiddenModeEnabled: true, IsHiddenSessionActive: true })
         {
             return;
         }

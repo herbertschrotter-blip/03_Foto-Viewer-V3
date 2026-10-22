@@ -815,7 +815,7 @@ selbst einhängen) und von denen Lumora im Alltag **nichts zeigt** (ADR-0049).
   Verlauf); nicht über Win+R (Windows merkt sich die Eingabe) und nicht in PowerShell (Befehlsverlauf).
 - **Container nie in OneDrive** oder einem anderen Cloud-Ordner ablegen. Lumora verschlüsselt selbst nichts: der
   Container schützt Originale, Katalog, Vorschaubilder, Gesichter und Protokolle.
-- **Anlegen:** Bibliotheks-Umschalter (oben links) bzw. **Einstellungen › Versteckte Bibliotheken → Versteckte Bibliothek
+- **Anlegen:** Bibliotheks-Umschalter (oben links) → **Versteckte Bibliothek
   anlegen…** → Laufwerk des eingehängten Containers wählen, optional einen Ordnernamen direkt darauf (z. B. `X:\Fotos`;
   tiefer geht nicht, sonst fände Lumora ihn nicht wieder), Name, Lumora-Kennwort zweimal (mindestens 6 Zeichen). Lumora
   legt im Ordner den versteckten Katalogordner `.lumora` an, wechselt in die neue Bibliothek und scannt sie. Der Ort
@@ -828,6 +828,10 @@ selbst einhängen) und von denen Lumora im Alltag **nichts zeigt** (ADR-0049).
   Jetzt zusperren**, automatisch nach einstellbarer Untätigkeit (Standard 10 Minuten ohne Maus/Tastatur in Lumora; ein
   laufender Scan oder Datei-Vorgang wird erst fertig) und beim Beenden. Danach ist der versteckte Katalog vollständig
   geschlossen (Fenster, Lightbox, Verbindungen, Bilder im Speicher).
+  **Zusperren beendet den versteckten Modus bis zum nächsten Start:** danach zeigt Lumora nichts mehr davon — kein
+  Eintrag im Umschalter, kein Reiter —, wie ein normaler Start. Wieder öffnen nur nach einem Neustart mit `_hidden`.
+- **Einstellungen › Versteckte Bibliotheken** (Kennwort, Zusperr-Zeit, Aushängen) gibt es nur, solange eine versteckte
+  Bibliothek geöffnet ist; in der normalen Bibliothek nie.
 - **Container aushängen** (Standard an, in den Einstellungen der geöffneten versteckten Bibliothek abschaltbar): beim
   Zusperren und Beenden hängt Lumora ein VeraCrypt-Volume über die VeraCrypt-Befehlszeile bzw. eine eingehängte VHDX
   über `Dismount-DiskImage` aus; sind noch Dateien offen oder ist es kein erkennbarer Container, erscheint ein Hinweis.

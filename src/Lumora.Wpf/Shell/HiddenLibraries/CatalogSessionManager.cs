@@ -133,6 +133,7 @@ public sealed class CatalogSessionManager : ICatalogSessionManager
     private DispatcherTimer? _idleTimer;
     private bool _inputHooked;
     private int _switching;
+    private bool _modeEnded;
     private HiddenLibraryInfo? _pendingExitDismount;
 
     public CatalogSessionManager(
@@ -152,7 +153,15 @@ public sealed class CatalogSessionManager : ICatalogSessionManager
         Idle = new IdleLockMonitor(time, TimeSpan.FromMinutes(HiddenLibraryManifest.DefaultAutoLockMinutes));
     }
 
-    public bool IsHiddenModeEnabled => _options.Enabled;
+    /// <summary>
+    /// Startschalter gesetzt und seit dem Start noch nicht zugesperrt: Zusperren beendet den versteckten Modus für den
+    /// Rest der Laufzeit — danach zeigt Lumora nichts mehr davon, wie ein normaler Start (0.4.14, Herbert). Wieder
+    /// öffnen nur nach einem Neustart mit <c>_hidden</c>.
+    /// </summary>
+    public bool IsHiddenModeEnabled => _options.Enabled && !_modeEnded;
+
+    /// <summary>Nur Rauchtest: simuliert nach dem Zusperren einen Neustart mit <c>_hidden</c> (0.4.14).</summary>
+    internal void RestartHiddenModeForSmoke() => _modeEnded = false;
 
     public bool IsHiddenSessionActive => ActiveLibrary is not null;
 
@@ -408,6 +417,8 @@ public sealed class CatalogSessionManager : ICatalogSessionManager
         try
         {
             StopIdleWatch();
+            // Vor dem Aufbau der normalen Oberfläche: Umschalter und Einstellungen der neuen Sitzung zeigen nichts mehr
+            _modeEnded = true;
             await Switcher.SwitchToNormalAsync().ConfigureAwait(true);
         }
         catch (Exception ex)

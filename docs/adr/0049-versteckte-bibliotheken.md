@@ -1,6 +1,6 @@
 # ADR-0049: Versteckte Bibliotheken im verschlüsselten Container
 
-- **Status:** Accepted
+- **Status:** Accepted (Nachtrag 0.4.14: Zusperren beendet den versteckten Modus, Reiter nur in geöffneter versteckter Bibliothek)
 - **Datum:** 2026-10-21
 - **Entscheider:** Herbert Schrotter (Anforderungen: Container, `_hidden`, Kennwort, Zusperren, Aushängen, Spurenfreiheit),
   Claude (Umsetzung und Detailentscheidungen ohne Rückfrage, siehe unten)
@@ -116,3 +116,19 @@ muss deshalb vollständig getrennt laufen — ohne Neustart, ohne Spuren außerh
   Rauchtest-Schritt in `Shell/Smoke/SmokeScenario.HiddenLibrary.cs`
 - OWASP Password Storage Cheat Sheet (PBKDF2-HMAC-SHA256: 600 000 Iterationen); VeraCrypt-Dokumentation
   „Command Line Usage“ (`/volume`, `/letter`, `/dismount`, `/quit`, `/silent`)
+
+## Nachtrag 0.4.14 — Nach dem Zusperren keine Spur mehr (Herbert, 2026-10-22)
+
+Herbert startete mit `_hidden`, sperrte zu und sah in der normalen Bibliothek weiter den Reiter „Versteckte
+Bibliotheken“ (und Einträge im Umschalter): Wer danach an den PC kommt, erfährt so, dass es versteckte Bibliotheken gibt.
+Entscheidung per Auswahl:
+- **Zusperren beendet den versteckten Modus für den Rest der Laufzeit** (`CatalogSessionManager.IsHiddenModeEnabled`
+  = Startschalter und noch nicht zugesperrt). Die normale Sitzung danach sieht aus wie ein normaler Start: kein Reiter,
+  keine Einträge im Bibliotheks-Umschalter, kein Suchen auf den Laufwerken. Wieder öffnen nur nach einem Neustart mit
+  `_hidden` — gilt für Zusperren von Hand, nach Untätigkeit und über „Zusperren (zurück zur normalen Bibliothek)“.
+- **Der Reiter „Versteckte Bibliotheken“ erscheint nur, solange eine versteckte Bibliothek geöffnet ist**
+  (Kennwort, Zusperr-Zeit, Aushängen, Jetzt zusperren). In der normalen Bibliothek mit `_hidden` laufen Anlegen,
+  Öffnen und „Container öffnen…“ über den Bibliotheks-Umschalter.
+- Rauchtest: nach dem ersten Zusperren wird der Modus geprüft und ein Neustart mit `_hidden` simuliert
+  (`RestartHiddenModeForSmoke`, nur Rauchtest), dann weiter wie bisher.
+

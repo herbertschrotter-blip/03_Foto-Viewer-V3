@@ -3,6 +3,21 @@
 Alle nennenswerten Änderungen an Lumora (bis 0.2.48 „PhotoViewer V3“). Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.4.14] — 2026-10-22
+
+### Change (ADR-0049, Nachtrag) — Versteckte Bibliotheken: nach dem Zusperren keine Spur mehr
+- Herbert: Mit `_hidden` gestartet und zurück zur normalen Bibliothek gewechselt, stand in den Einstellungen weiter der
+  Reiter „Versteckte Bibliotheken“ — „das darf auf keinen Fall sein“.
+- **Zusperren beendet den versteckten Modus für den Rest der Laufzeit** (von Hand, nach Untätigkeit, über den
+  Umschalter): danach kein Reiter, keine Einträge im Bibliotheks-Umschalter, kein Suchen auf den Laufwerken — wie ein
+  normaler Start. Wieder öffnen nur nach einem Neustart mit `_hidden`.
+- **Reiter „Versteckte Bibliotheken“ nur in einer geöffneten versteckten Bibliothek**; in der normalen Bibliothek mit
+  `_hidden` laufen Anlegen, Öffnen und „Container öffnen…“ über den Bibliotheks-Umschalter.
+- Tests: neuer `Locking_ends_hidden_mode_until_restart`, Reiter-Test erweitert (normal: nie, versteckt: ja, nach dem
+  Zusperren: nie), Umschalter nach dem Zusperren leer; Wieder-Öffnen-Tests simulieren den Neustart mit einem neuen
+  Sitzungsverwalter. Rauchtest prüft das Ende des Modus und simuliert dann den Neustart (`RestartHiddenModeForSmoke`).
+- README (Versteckte Bibliotheken) und ADR-0049 (Nachtrag) angepasst.
+
 ## [0.4.13] — 2026-10-22
 
 ### Fix — Dialoge ohne leeren Raum unter den Knöpfen
