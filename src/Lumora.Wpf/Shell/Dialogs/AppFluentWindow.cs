@@ -1,4 +1,5 @@
 using System;
+using System.Windows;
 using System.Windows.Interop;
 using Wpf.Ui.Controls;
 
@@ -33,6 +34,32 @@ public class AppFluentWindow : FluentWindow
 
     /// <summary>true, sobald <c>Closed</c> ausgelöst wurde.</summary>
     public bool IsClosed { get; private set; }
+
+    protected override void OnInitialized(EventArgs e)
+    {
+        base.OnInitialized(e);
+        DropStyleMinHeightForContentSizedWindow();
+    }
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        DropStyleMinHeightForContentSizedWindow(); // falls SizeToContent erst nach dem Laden aus XAML gesetzt wurde
+        base.OnSourceInitialized(e);
+    }
+
+    /// <summary>
+    /// Der FluentWindow-Stil von WPF-UI gibt jedem Fenster eine Mindesthöhe (320 px). Fenster, deren Höhe sich nach dem
+    /// Inhalt richtet (Dialoge), zeigten dadurch leeren Raum unter der Knopfleiste (0.4.13). Eine eigene Mindesthöhe aus
+    /// XAML oder Code (lokaler Wert) bleibt unangetastet.
+    /// </summary>
+    private void DropStyleMinHeightForContentSizedWindow()
+    {
+        if (SizeToContent is SizeToContent.Height or SizeToContent.WidthAndHeight
+            && DependencyPropertyHelper.GetValueSource(this, MinHeightProperty).BaseValueSource < BaseValueSource.Local)
+        {
+            MinHeight = 0; // lokaler Wert: übersteht ein erneutes Anwenden des Stils (Farbschema-Wechsel)
+        }
+    }
 
     protected override void OnClosed(EventArgs e)
     {

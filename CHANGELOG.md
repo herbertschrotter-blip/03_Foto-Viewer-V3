@@ -3,6 +3,19 @@
 Alle nennenswerten Änderungen an Lumora (bis 0.2.48 „PhotoViewer V3“). Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.4.13] — 2026-10-22
+
+### Fix — Dialoge ohne leeren Raum unter den Knöpfen
+- Herbert: „die ganzen Entfernen-Dialoge sehen unschön aus“ — unter der Knopfleiste blieb eine große leere Fläche.
+  Ursache: Der FluentWindow-Stil von WPF-UI gibt jedem Fenster eine Mindesthöhe von 320 px; der Entfernen-Dialog
+  braucht nur ≈ 222 px.
+- `AppFluentWindow` hebt diese Mindesthöhe für Fenster mit Höhe aus dem Inhalt (`SizeToContent`) auf; eine eigene
+  Mindesthöhe aus XAML/Code bleibt. Betrifft alle 11 Dialoge: Bestätigungen/Meldungen (`AppDialogWindow`), Tags,
+  Kategorien, Personen (Auswahl, Details), Aufnahmedatum, Ort setzen, Verorten, Entpacken, Bibliotheken verknüpfen,
+  versteckte Bibliothek. Lightbox und Hauptfenster unverändert.
+- Neue Tests `ContentSizedWindowHeightTests` (Dialoghöhe = Inhaltshöhe, eigene Mindesthöhe bleibt, Fenster mit fester
+  Höhe behalten die Mindesthöhe).
+
 ## [0.4.11] — 2026-10-22
 
 ### Docs — Projektordner `D:\Code\Lumora` mit `repo\` und `werkzeuge\`
