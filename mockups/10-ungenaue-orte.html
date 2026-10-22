@@ -15,6 +15,9 @@
    je Ausflug und „Alle sicheren übernehmen“, Vorschlag von Hand ziehen, Speichern „nur im Katalog“ oder „auch ins
    Foto schreiben (EXIF)“, Rückgängig; Lightbox-Hinweis „Position geschätzt“ mit Begründung und Vorschlag.
    Bewusst weggelassen: Import von GPX-Spur oder Google-Standortverlauf (später möglich).
+   ERWEITERUNG ABGENOMMEN von Herbert am 2026-10-22: Garmin-Spuren als beste Quelle (Stufe „Garmin-Spur“, Spur auf der Karte,
+   Lightbox-Begründung) und Einstellungen › Orte mit Garmin-Datenexport (Link, ZIP einlesen, Ordner/USB) und Zeitabgleich.
+   Kein API-Schlüssel: Garmin vergibt die Connect-API nur an Firmen (Programm derzeit pausiert).
    ===================================================================== */
 :root {
   --mica-base:#F3F3F3; --layer-default:rgba(255,255,255,0.7); --layer-card:#FFFFFF; --layer-subtle:rgba(0,0,0,0.026);
@@ -105,6 +108,32 @@ body.dark .seg button.on { background:#3A3A3A; }
 .lg-new { width:12px; height:12px; border-radius:50%; background:var(--accent); border:2px solid #fff; box-shadow:0 0 0 1px rgba(0,0,0,.2); }
 .lg-gps { width:8px; height:8px; border-radius:50%; background:var(--success); }
 .lg-line { width:22px; border-top:2px dashed var(--accent); }
+.lg-trk { width:22px; border-top:3px solid var(--brand-coral); border-radius:2px; }
+.b-garmin { background:rgba(249,115,98,0.14); color:#C2412F; }
+body.dark .b-garmin { color:var(--brand-coral); }
+.side .hint { margin-top:8px; font-size:12px; color:var(--text-secondary); line-height:1.5; }
+/* Einstellungen › Orte */
+.set { position:absolute; inset:0; background:var(--mica-base); z-index:25; display:flex; flex-direction:column; overflow:auto; }
+.set .tabs { display:flex; gap:4px; padding:0 24px 10px; border-bottom:1px solid var(--stroke-divider); }
+.set .tabs span { padding:6px 12px; border-radius:4px; color:var(--text-secondary); }
+.set .tabs span.on { color:var(--text-primary); font-weight:600; box-shadow:inset 0 -3px 0 var(--accent); }
+.set-body { padding:14px 24px 24px; display:grid; gap:12px; max-width:920px; }
+.card { background:var(--layer-card); border:1px solid var(--stroke-card); border-radius:8px; box-shadow:var(--shadow-card); padding:14px 16px; }
+.card h2 { font-size:15px; margin:0 0 6px; display:flex; gap:10px; align-items:center; }
+.card .muted, .set .muted { color:var(--text-secondary); font-size:12px; line-height:1.5; }
+.card p { margin:0 0 10px; }
+.steps { display:grid; gap:10px; }
+.step { display:grid; grid-template-columns:26px 1fr auto; gap:10px; align-items:start; padding:10px; border-radius:6px; background:var(--layer-subtle); }
+.step .num { width:22px; height:22px; border-radius:50%; background:var(--accent-soft-2); color:var(--accent); display:grid; place-items:center; font-weight:700; font-size:12px; }
+.row2 { display:flex; gap:8px; margin-top:8px; align-items:center; }
+.field { display:inline-block; min-width:220px; padding:5px 10px; border:1px solid var(--stroke-default); border-bottom-color:var(--ctl-bottom); border-radius:4px; background:var(--layer-card); font-size:13px; }
+.tg { display:flex; gap:8px; align-items:center; margin-top:8px; font-size:13px; }
+.sw { width:36px; height:18px; border-radius:9px; border:1px solid var(--text-secondary); position:relative; flex:none; }
+.sw::after { content:''; position:absolute; top:3px; left:3px; width:10px; height:10px; border-radius:50%; background:var(--text-secondary); }
+.sw.on { background:var(--accent); border-color:var(--accent); } .sw.on::after { left:21px; background:#fff; }
+.stat { display:flex; gap:8px; align-items:center; margin-top:12px; padding-top:10px; border-top:1px solid var(--stroke-divider); font-size:13px; }
+.kv2 { display:grid; grid-template-columns:160px 1fr; gap:10px 14px; align-items:center; font-size:13px; }
+.cams { border-collapse:collapse; } .cams td { padding:3px 14px 3px 0; } .cams a { color:var(--accent); cursor:pointer; }
 .tip { position:absolute; background:var(--layer-card); border:1px solid var(--stroke-card); border-radius:8px; box-shadow:var(--shadow-flyout); padding:8px 10px; font-size:12px; pointer-events:none; width:240px; }
 .tip b { display:block; font-size:13px; margin-bottom:2px; }
 .tip .muted { color:var(--text-secondary); }
@@ -169,7 +198,7 @@ body.dark .b-done { color:var(--accent-light); }
 <div class="mock-bar">
   <span><b>Mockup 10 · Ungenaue Orte verbessern · Entwurf</b></span>
   <span class="grp">Design: <button id="mbLight" class="on">Hell</button><button id="mbDark">Dunkel</button></span>
-  <span class="grp">Ansicht: <button data-v="list" class="on">Ungenau</button><button data-v="applied">Nach dem Übernehmen</button><button data-v="lightbox">Hinweis in der Lightbox</button></span>
+  <span class="grp">Ansicht: <button data-v="list" class="on">Ungenau</button><button data-v="applied">Nach dem Übernehmen</button><button data-v="lightbox">Hinweis in der Lightbox</button><button data-v="settings">Einstellungen › Orte</button></span>
   <span class="note">Karte schematisch · Beispiel Wanderung Weinebene (Orte und Abstände ungefähr) · Fotos sind Platzhalter</span>
 </div>
 
@@ -201,7 +230,8 @@ body.dark .b-done { color:var(--accent-light); }
         <svg viewBox="0 0 800 560" preserveAspectRatio="xMidYMid slice" id="svg"></svg>
         <div class="tools"><span class="ic">&#xE710;</span><span class="ic">&#xE738;</span><span class="ic">&#xE81E;</span></div>
         <div class="legend">
-          <div><span class="lg-gps"></span>Foto mit echtem GPS (Weg der Wanderung)</div>
+          <div><span class="lg-trk"></span>Garmin-Spur „Wanderung Weinebene“ 13:55–16:30</div>
+          <div><span class="lg-gps"></span>Foto mit echtem GPS</div>
           <div><span class="lg-old"></span>Gespeicherte, geschätzte Position</div>
           <div><span class="lg-new"></span>Vorschlag (ziehen zum Verschieben)</div>
           <div><span class="lg-line"></span>Korrektur</div>
@@ -214,11 +244,13 @@ body.dark .b-done { color:var(--accent-light); }
       <div class="side">
         <div class="top">
           <div class="seg"><button>Ohne Ort <small>808</small></button><button class="on">Ungenau <small>158</small></button></div>
-          <div class="sum"><b>158 Fotos</b> mit geschätzter Position (ohne GPS-Höhe/-Zeit oder unmöglicher Sprung). Vorschläge aus Fotos mit echtem GPS, die zeitnah aufgenommen wurden:
-            <b style="color:var(--success)">87 sicher</b> · <b style="color:#B08A00">25 wahrscheinlich</b> · 46 ohne Vorschlag.</div>
+          <div class="sum"><b>158 Fotos</b> mit geschätzter Position (ohne GPS-Höhe/-Zeit oder unmöglicher Sprung). Vorschläge zuerst aus Ihren
+            <b>Garmin-Spuren</b>, sonst aus zeitnahen Fotos mit echtem GPS:
+            <b style="color:var(--brand-coral)">64 Garmin-Spur</b> · <b style="color:var(--success)">38 sicher</b> · <b style="color:#B08A00">20 wahrscheinlich</b> · 36 ohne Vorschlag.</div>
           <div class="chips" id="chips">
-            <span class="chip on" data-f="all">Alle</span><span class="chip" data-f="sure">Sicher 87</span><span class="chip" data-f="likely">Wahrscheinlich 25</span><span class="chip" data-f="none">Ohne Vorschlag 46</span>
+            <span class="chip on" data-f="all">Alle</span><span class="chip" data-f="garmin">Garmin-Spur 64</span><span class="chip" data-f="sure">Sicher 38</span><span class="chip" data-f="likely">Wahrscheinlich 20</span><span class="chip" data-f="none">Ohne Vorschlag 36</span>
           </div>
+          <div class="hint"><span class="ic s">&#xE946;</span>Auch <b>214 Fotos ohne Ort</b> liegen in einer Garmin-Aktivität — unter „Ohne Ort“ mit Vorschlag.</div>
         </div>
         <div class="list" id="list"></div>
         <div class="foot">
@@ -226,8 +258,8 @@ body.dark .b-done { color:var(--accent-light); }
             <label data-save="cat"><span class="radio on"></span>nur im Katalog</label>
             <label data-save="file"><span class="radio"></span>auch ins Foto schreiben (EXIF)</label></div>
           <div class="btns">
-            <button class="btn-acc" data-act="allSure"><span class="ic s">&#xE73E;</span>Alle sicheren übernehmen (87)</button>
-            <button class="btn-std" data-act="trip">Ausflug übernehmen (5)</button>
+            <button class="btn-acc" data-act="allSure"><span class="ic s">&#xE73E;</span>Garmin + sichere übernehmen (102)</button>
+            <button class="btn-std" data-act="trip">Ausflug (4)</button>
           </div>
         </div>
       </div>
@@ -244,14 +276,51 @@ body.dark .b-done { color:var(--accent-light); }
         <div class="warn">
           <div class="h"><span class="ic s">&#xE7BA;</span>Position geschätzt</div>
           <div class="t">Das Handy hat nur Breite/Länge gespeichert — ohne GPS-Höhe und -Zeit. Das deutet auf eine Schätzung über Mobilfunk/WLAN hin.
-            Fotos mit echtem GPS um <b>14:41</b> und <b>15:02</b> liegen <b>≈ 4,8 km westlich</b> bei der Handalm.</div>
+            Laut Ihrer <b>Garmin-Spur</b> („Wanderung Weinebene“, Fenix) waren Sie um 14:56 <b>≈ 4,8 km westlich</b> beim Gipfel der Handalm (1 853 m).</div>
           <div class="b"><button class="p">Vorschlag übernehmen</button><button>Auf der Karte zeigen</button><button>Ort setzen…</button></div>
         </div>
       </div>
     </div>
+
+    <!-- Einstellungen › Orte (Garmin-Spuren) -->
+    <div class="set hidden" id="set">
+      <div class="phead" style="padding-bottom:6px"><div><h1>Einstellungen</h1></div></div>
+      <div class="tabs"><span>Allgemein</span><span>Bibliotheken</span><span>Darstellung</span><span>Storys</span><span class="on">Orte</span><span>Gesichter</span><span>Motive</span></div>
+      <div class="set-body">
+        <section class="card">
+          <h2><span class="ic" style="color:var(--brand-coral)">&#xE81D;</span>Garmin-Aktivitäten (GPS-Spuren der Uhr)</h2>
+          <p class="muted">Lumora vergleicht die Aufnahmezeit jedes Fotos mit Ihren Aktivitäten und setzt den Ort laut Uhr. Garmin bietet für
+            Privatpersonen keinen API-Schlüssel an — deshalb liest Lumora Ihren <b>Garmin-Datenexport</b> bzw. FIT/GPX-Dateien ein.
+            Es wird nichts an Garmin gesendet.</p>
+          <div class="steps">
+            <div class="step"><span class="num">1</span><div><b>Export bei Garmin anfordern</b><div class="muted">Im Garmin-Konto unter Datenverwaltung › „Daten exportieren“. Garmin schickt nach einiger Zeit einen Download-Link per E-Mail (ZIP mit allen Aktivitäten).</div></div>
+              <button class="btn-std"><span class="ic s">&#xE8A7;</span>Garmin-Datenexport öffnen</button></div>
+            <div class="step"><span class="num">2</span><div><b>ZIP einlesen</b><div class="muted">Die heruntergeladene ZIP-Datei auswählen. Lumora liest die FIT-Dateien daraus (einmalig, dauert einige Minuten).</div></div>
+              <button class="btn-acc"><span class="ic s">&#xE8E5;</span>Export-ZIP einlesen…</button></div>
+            <div class="step"><span class="num">3</span><div><b>Neue Touren laufend ergänzen</b><div class="muted">Ordner mit FIT/GPX-Dateien beobachten, oder die Uhr per USB anschließen.</div>
+              <div class="row2"><span class="field">D:\Sport\Garmin</span><button class="btn-std">Ordner…</button></div>
+              <label class="tg"><span class="sw on"></span>Garmin-Uhr per USB erkennen und neue Aktivitäten einlesen (vorher fragen)</label></div></div>
+          </div>
+          <div class="stat"><span class="ic s" style="color:var(--success)">&#xE73E;</span><b>1 284 Aktivitäten</b> · 2014–2026 · Fenix 5, Fenix 7 · zuletzt eingelesen 22.10.2026
+            <span style="margin-left:auto;display:flex;gap:8px"><button class="btn-std">Aktivitäten anzeigen</button><button class="btn-std">Spuren entfernen…</button></span></div>
+        </section>
+        <section class="card">
+          <h2><span class="ic">&#xE916;</span>Zeitabgleich</h2>
+          <div class="kv2">
+            <span>Zeitzone der Fotos</span><span><span class="field">Automatisch (aus Spur und Handy-Zeitangabe)</span></span>
+            <span>Toleranz</span><span><span class="field">2 Minuten</span> <span class="muted">Fotos bis 2 min vor/nach einer Aktivität zählen noch</span></span>
+            <span>Kamera-Abweichung</span><span>
+              <table class="cams"><tr><td>Handy</td><td>± 0 s</td><td class="muted">passt</td></tr>
+                <tr><td>Kompaktkamera</td><td>+ 3 min 12 s</td><td class="muted">aus Spur ermittelt · <a>übernehmen</a></td></tr>
+                <tr><td>Actioncam</td><td>– 1 h 00 min</td><td class="muted">Sommerzeit nicht umgestellt · <a>übernehmen</a></td></tr></table></span>
+            <span>Vorrang</span><span class="muted">Garmin-Spur › Foto mit echtem GPS › Handy-Schätzung. Von Hand gesetzte Orte werden nie überschrieben.</span>
+          </div>
+        </section>
+      </div>
+    </div>
   </main>
 
-  <div class="statusbar"><span>Familienfotos</span><span>Orte: 158 geschätzt · 112 Vorschläge</span><div class="r"><span>0.4.x</span></div></div>
+  <div class="statusbar"><span>Familienfotos</span><span>Orte: 158 geschätzt · 122 Vorschläge · 1 284 Garmin-Aktivitäten</span><div class="r"><span>0.4.x</span></div></div>
 </div>
 </div></div>
 
@@ -263,11 +332,11 @@ const thumb=(h1,h2)=>`linear-gradient(180deg, ${h1}, ${h2} 60%, #8a8f6a 61%)`;
 // Beispiel: Wanderung Weinebene → Handalm (Koordinaten im SVG-Raster, nur schematisch)
 const track=[[150,250,'14:05'],[200,262,'14:18'],[255,290,'14:29'],[300,318,'14:41'],[318,330,'15:02'],[290,350,'15:20'],[220,330,'15:44'],[160,290,'16:05']];
 const ITEMS=[
-  {id:1, trip:0, time:'14:56', name:'Gipfelkreuz', why:'ohne GPS-Höhe/-Zeit', conf:'sure', old:[610,300], neu:[309,324], dist:'4,8 km', from:'14:41 und 15:02', col:['#6FB1E8','#F3F6FA']},
-  {id:2, trip:0, time:'14:58', name:'Aussicht Süd', why:'ohne GPS-Höhe/-Zeit', conf:'sure', old:[612,304], neu:[311,326], dist:'4,8 km', from:'14:41 und 15:02', col:['#8EC5FC','#E8EEF4']},
-  {id:3, trip:0, time:'15:31', name:'Abstieg', why:'Sprung 5,1 km in 11 min', conf:'sure', old:[605,410], neu:[262,342], dist:'5,6 km', from:'15:20 und 15:44', col:['#9FD3F5','#DDE8D2']},
-  {id:4, trip:0, time:'16:40', name:'Hütte', why:'ohne GPS-Höhe/-Zeit', conf:'likely', old:[560,200], neu:[160,290], dist:'6,4 km', from:'16:05 (35 min davor)', col:['#F3D9B1','#C9A27A']},
-  {id:5, trip:0, time:'13:20', name:'Parkplatz', why:'ohne GPS-Höhe/-Zeit', conf:'none', old:[585,180], neu:null, dist:'', from:'kein genaues Foto innerhalb 30 min', col:['#C8D4E0','#9AA6B2']},
+  {id:1, trip:0, time:'14:56', name:'Gipfelkreuz', why:'ohne GPS-Höhe/-Zeit', conf:'garmin', old:[610,300], neu:[322,326], dist:'4,8 km', from:'Garmin-Spur 14:56:10', col:['#6FB1E8','#F3F6FA']},
+  {id:2, trip:0, time:'14:58', name:'Aussicht Süd', why:'ohne GPS-Höhe/-Zeit', conf:'garmin', old:[612,304], neu:[326,334], dist:'4,8 km', from:'Garmin-Spur 14:58:02', col:['#8EC5FC','#E8EEF4']},
+  {id:3, trip:0, time:'15:31', name:'Abstieg', why:'Sprung 5,1 km in 11 min', conf:'garmin', old:[605,410], neu:[262,342], dist:'5,6 km', from:'Garmin-Spur 15:31:40', col:['#9FD3F5','#DDE8D2']},
+  {id:4, trip:0, time:'16:40', name:'Hütte', why:'ohne GPS-Höhe/-Zeit · nach Ende der Aktivität', conf:'likely', old:[560,200], neu:[160,290], dist:'6,4 km', from:'Foto 16:05 (35 min davor)', col:['#F3D9B1','#C9A27A']},
+  {id:5, trip:0, time:'13:20', name:'Parkplatz', why:'ohne GPS-Höhe/-Zeit · vor Start der Aktivität', conf:'none', old:[585,180], neu:null, dist:'', from:'kein genaues Foto innerhalb 30 min', col:['#C8D4E0','#9AA6B2']},
 ];
 const GROUPS=[{t:'Sonntag, 15. März 2020', d:'Weinebene · 5 Fotos, 4 Vorschläge'},
               {t:'Samstag, 8. August 2020', d:'Grado · 12 Fotos, 11 Vorschläge'},
@@ -291,7 +360,10 @@ function drawMap(){
   const lab=(x,y,t,b)=>{ const e=el('text',{x,y,'font-size':b?15:12,'font-weight':b?600:400,fill:css('--map-label'),'font-family':'Segoe UI'},s); e.textContent=t; };
   lab(118,232,'Weinebene',1); lab(300,300,'▲ Handalm',1); lab(586,172,'Glashütten',1); lab(612,452,'Trahütten');
   // Weg der Wanderung (echtes GPS)
-  el('polyline',{points:track.map(p=>p[0]+','+p[1]).join(' '),fill:'none',stroke:css('--success'),'stroke-width':2.5,'stroke-dasharray':'1 0',opacity:.7},s);
+  // Garmin-Spur (Fenix, sekundengenau) als glatte Linie unter den Foto-Punkten
+  el('path',{d:'M150,250 C175,252 190,262 205,264 C230,270 245,284 258,291 C280,300 296,312 312,320 C322,326 330,332 326,336 C318,344 300,350 285,350 C262,346 240,338 220,330 C196,318 176,302 160,290 C152,284 150,272 150,262',
+    fill:'none',stroke:css('--brand-coral'),'stroke-width':3.5,'stroke-linecap':'round',opacity:.85},s);
+  el('polyline',{points:track.map(p=>p[0]+','+p[1]).join(' '),fill:'none',stroke:css('--success'),'stroke-width':1.5,'stroke-dasharray':'2 4',opacity:.6},s);
   track.forEach(p=>{ el('circle',{cx:p[0],cy:p[1],r:4.5,fill:css('--success'),stroke:'#fff','stroke-width':1.5},s);
     const t=el('text',{x:p[0]+7,y:p[1]-6,'font-size':10,fill:css('--map-label')},s); t.textContent=p[2]; });
   // Korrekturen
@@ -317,10 +389,10 @@ function drawMap(){
 function tip(it,e,old){
   const t=$('#tip'), r=$('#map').getBoundingClientRect(), s=scale;
   t.innerHTML = old ? `<b>${it.time} · ${it.name}</b><span class="muted">Gespeicherte Position (geschätzt): ${it.why}</span>`
-                    : `<b>Vorschlag für ${it.time} · ${it.name}</b><span class="muted">aus Fotos mit GPS um ${it.from} · ${it.dist} vom gespeicherten Punkt · ziehen zum Verschieben</span>`;
+                    : `<b>Vorschlag für ${it.time} · ${it.name}</b><span class="muted">Quelle: ${it.from} · ${it.dist} vom gespeicherten Punkt · ziehen zum Verschieben</span>`;
   t.style.left=((e.clientX-r.left)/s+12)+'px'; t.style.top=((e.clientY-r.top)/s+12)+'px'; t.classList.remove('hidden');
 }
-const CONF={sure:['b-sure','sicher'],likely:['b-likely','wahrscheinlich'],none:['b-none','kein Vorschlag']};
+const CONF={garmin:['b-garmin','Garmin-Spur'],sure:['b-sure','sicher'],likely:['b-likely','wahrscheinlich'],none:['b-none','kein Vorschlag']};
 function renderList(){
   const L=$('#list'); let h='';
   GROUPS.forEach((g,gi)=>{
@@ -330,7 +402,7 @@ function renderList(){
       const done=applied.has(it.id), [cls,txt]=done?['b-done','übernommen']:CONF[it.conf];
       h+=`<div class="row${it.id===selected?' sel':''}" data-id="${it.id}"><div class="thumb" style="background:${thumb(it.col[0],it.col[1])}"></div>
         <div><div class="t1">${it.time} · ${it.name} <span class="badge ${cls}">${txt}</span></div>
-        <div class="t2">${done?'korrigiert, '+(save==='file'?'ins Foto geschrieben':'nur im Katalog'):it.why}${it.neu&&!done?' → '+it.dist+' korrigieren':''}${!it.neu?' · '+it.from:''}</div></div>
+        <div class="t2">${done?'korrigiert, '+(save==='file'?'ins Foto geschrieben':'nur im Katalog'):it.why}${it.neu&&!done?' → '+it.dist+' korrigieren':''}${it.conf==='garmin'&&!done?' · Fenix':''}${!it.neu?' · '+it.from:''}</div></div>
         <div class="acts">${done?'<button class="ibtn" title="Rückgängig" data-undo="'+it.id+'"><span class="ic s">&#xE7A7;</span></button>'
           : it.neu?'<button class="ibtn" title="Übernehmen" data-ok="'+it.id+'"><span class="ic s">&#xE73E;</span></button><button class="ibtn" title="Ablehnen (bleibt, wie es ist)"><span class="ic s">&#xE711;</span></button>'
           :'<button class="ibtn" title="Ort setzen…"><span class="ic s">&#xE707;</span></button>'}</div></div>`;
@@ -353,12 +425,12 @@ document.addEventListener('click',e=>{
   if(r){ select(+r.dataset.id); return; }
   const c=e.target.closest('.chip'); if(c){ filter=c.dataset.f; $$('.chip').forEach(x=>x.classList.toggle('on',x===c)); renderList(); drawMap(); return; }
   const sv=e.target.closest('[data-save]'); if(sv){ save=sv.dataset.save; $$('[data-save] .radio').forEach(x=>x.classList.toggle('on',x.parentElement===sv)); renderList(); return; }
-  const a=e.target.closest('[data-act]'); if(a){ apply(a.dataset.act==='allSure'?ITEMS.filter(i=>i.conf==='sure').map(i=>i.id):ITEMS.filter(i=>i.neu).map(i=>i.id), a.dataset.act==='allSure'?'87 sichere Orte übernommen':'Ausflug: 4 Orte übernommen'); return; }
+  const a=e.target.closest('[data-act]'); if(a){ apply(a.dataset.act==='allSure'?ITEMS.filter(i=>i.conf==='sure'||i.conf==='garmin').map(i=>i.id):ITEMS.filter(i=>i.neu).map(i=>i.id), a.dataset.act==='allSure'?'102 Orte übernommen (Garmin-Spur und sicher)':'Ausflug: 4 Orte übernommen'); return; }
   const v=e.target.closest('[data-v]'); if(v){ view(v.dataset.v); return; }
 });
 function view(v){
   $$('.mock-bar [data-v]').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
-  $('#lb').classList.toggle('hidden', v!=='lightbox');
+  $('#lb').classList.toggle('hidden', v!=='lightbox'); $('#set').classList.toggle('hidden', v!=='settings'); $$('.nav-item').forEach(n=>n.classList.toggle('active', v==='settings' ? n.textContent.includes('Einstellungen') : n.textContent.includes('Orte')));
   if(v==='applied'){ applied=new Set([1,2,3]); renderList(); drawMap(); } else if(v==='list'){ applied=new Set(); renderList(); drawMap(); }
 }
 let scale=1;

@@ -3,6 +3,18 @@
 Alle nennenswerten Änderungen an Lumora (bis 0.2.48 „PhotoViewer V3“). Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.4.17] — 2026-10-22
+
+### Docs — Mockup 10 um Garmin-Spuren erweitert, abgenommen
+- Beste Quelle für ungenaue Orte und Fotos ohne Ort sind die **GPS-Spuren der Garmin-Uhr**: Stufe „Garmin-Spur“ über
+  „sicher“, Spur der Aktivität auf der Karte, Begründung im Lightbox-Hinweis; Fotos vor Start bzw. nach Ende einer
+  Aktivität fallen auf die bisherigen Vorschläge zurück.
+- **Einstellungen › Orte:** Link zum Garmin-Datenexport, „Export-ZIP einlesen…“ (FIT-Dateien), Ordner mit FIT/GPX
+  beobachten, Uhr per USB erkennen (vorher fragen), Stand der Aktivitäten, Spuren entfernen; Zeitabgleich mit Zeitzone
+  automatisch, Toleranz, Kamera-Abweichung aus der Spur ermittelt; Vorrang Garmin-Spur › Foto mit GPS › Handy-Schätzung,
+  von Hand gesetzte Orte nie überschreiben. Nichts wird an Garmin gesendet.
+- Kein API-Schlüssel: Garmin vergibt die Connect-API nur an Firmen und Einrichtungen, das Programm ist derzeit pausiert.
+
 ## [0.4.16] — 2026-10-22
 
 ### Docs — Mockup 10 „Ungenaue Orte verbessern“, abgenommen
