@@ -3,6 +3,15 @@
 Alle nennenswerten Änderungen an Lumora (bis 0.2.48 „PhotoViewer V3“). Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.4.21] — 2026-10-22
+
+### Docs — Geplante Vorhaben in PLAN.md, neu: Nutzungs-Signale
+- PLAN.md Kap. 7 „Geplante Vorhaben“: Stand der laufenden und geplanten Arbeiten (Ungenaue Orte + GPS-Spuren, Story-
+  Assistent, App-Verbindung, Android, Foto verbessern, Update-Manager).
+- Neu eingeplant (Herbert): **Nutzungs-Signale** — lokal messen, wie oft und wie lange Fotos angesehen, gezoomt,
+  verwendet, gedruckt oder geteilt werden; nur Tagessummen, abschaltbar und löschbar; fließt gedämpft in die Auswahl
+  „die schönsten“ ein und ermöglicht die Story-Art „Vergessene Schätze“.
+
 ## [0.4.20] — 2026-10-22
 
 ### Docs — Mockup 12 „Story-Assistent“ (Welle 6b), abgenommen
