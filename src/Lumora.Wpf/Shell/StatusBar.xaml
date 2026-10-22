@@ -256,6 +256,17 @@
                     <Border Style="{StaticResource StatusSeparator}" />
                 </StackPanel>
 
+                <!-- Ungenaue Orte und GPS-Spuren (ADR-0062): Einlesen, Prüfung, „Orte: n geschätzt · m Vorschläge · k Garmin-Aktivitäten“ -->
+                <StackPanel Orientation="Horizontal"
+                            AutomationProperties.Name="GPS-Spuren und ungenaue Orte"
+                            AutomationProperties.AutomationId="StatusGeoTracks"
+                            ToolTip="Ungenaue Orte und GPS-Spuren: alles wird nur auf diesem PC gelesen und berechnet (Seite Orte › Ungenau, Einstellungen › Orte)."
+                            Visibility="{Binding GeoTracksText, Converter={StaticResource NullToVis}}">
+                    <ui:SymbolIcon Symbol="LocationArrow20" Style="{StaticResource StatusIcon}" />
+                    <TextBlock Style="{StaticResource StatusText}" Text="{Binding GeoTracksText}" />
+                    <Border Style="{StaticResource StatusSeparator}" />
+                </StackPanel>
+
                 <!-- Doppelte (Services/Duplicates, ADR-0053): Hinweis „im Eingang schon in der Bibliothek — Anzeigen“, Fortschritt -->
                 <StackPanel Orientation="Horizontal"
                             AutomationProperties.Name="Doppelte im Eingang"

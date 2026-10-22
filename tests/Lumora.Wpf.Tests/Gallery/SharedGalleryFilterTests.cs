@@ -180,6 +180,39 @@ public sealed class SharedGalleryFilterTests : IAsyncLifetime
     });
 
     [Fact]
+    public Task Schnelle_Bereichswechsel_der_zuletzt_angestossene_gewinnt() => OnUiAsync(async () =>
+    {
+        // „Lösen“ meldet verzögert die alte aktive Bibliothek, gleich danach kommt der Wechsel zurück (Rauchtest 0.4.23):
+        // die Galerie darf nicht auf dem Bereich der zuerst gemeldeten, aber zuletzt fertig geladenen Bibliothek landen.
+        var other = Path.Combine(_db.ArchiveDir, "Zweite");
+        Directory.CreateDirectory(other);
+        int otherId;
+        using (var connection = _db.Factory.OpenSqliteConnection())
+        using (var cmd = connection.CreateCommand())
+        {
+            cmd.CommandText = "INSERT INTO Libraries (Name, RootPath, CreatedAt, LastOpenedAt) VALUES ('Zweite', $root, 0, 0); SELECT last_insert_rowid();";
+            cmd.Parameters.AddWithValue("$root", other);
+            otherId = Convert.ToInt32(cmd.ExecuteScalar());
+        }
+
+        var gallery = CreateGallery(new SharedGalleryFilter(), new RecordingNavigation());
+        await gallery.EnsureInitializedAsync();
+        await WaitAsync(() => !gallery.IsLoading && gallery.TotalCount > 0, "erste Seite");
+        var own = gallery.TotalCount;
+
+        for (var i = 0; i < 5; i++)
+        {
+            WeakReferenceMessenger.Default.Send(new ActiveLibraryChangedMessage(otherId));
+            WeakReferenceMessenger.Default.Send(new ActiveLibraryChangedMessage(_db.LibraryId));
+        }
+
+        await WaitAsync(() => !gallery.IsLoading && gallery.TotalCount == own, "eigene Bibliothek wieder geladen");
+        await Task.Delay(300); // überholte Ladevorgänge laufen aus
+        gallery.TotalCount.Should().Be(own, "der zuletzt angestoßene Wechsel gewinnt");
+        gallery.LibraryNameDisplay.Should().NotContain("Zweite");
+    });
+
+    [Fact]
     public Task Karte_zaehlt_genau_die_Galerie_Treffer_mit_Koordinaten() => OnUiAsync(async () =>
     {
         var shared = new SharedGalleryFilter();

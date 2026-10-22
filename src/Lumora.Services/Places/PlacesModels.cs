@@ -18,6 +18,8 @@ public sealed record FileGeoInfo(int FileId, double? Latitude, double? Longitude
         GeoSource.Exif => "EXIF",
         GeoSource.Video => "Video",
         GeoSource.Manual => "manuell",
+        GeoSource.Track => "aus GPS-Spur", // ADR-0062
+        GeoSource.Neighbors => "aus Nachbarfotos", // ADR-0062
         _ => null,
     };
 }

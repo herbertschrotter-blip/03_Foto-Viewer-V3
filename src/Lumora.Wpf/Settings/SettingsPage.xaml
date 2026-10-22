@@ -9,6 +9,7 @@
              xmlns:sections="clr-namespace:Lumora.Settings.Sections"
              xmlns:info="clr-namespace:Lumora.Settings.Info"
              xmlns:stories="clr-namespace:Lumora.Stories"
+             xmlns:tracks="clr-namespace:Lumora.Places.TrackSettings"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance local:SettingsViewModel}"
              d:DesignWidth="1000"
@@ -103,6 +104,10 @@
             <!-- Storys (ADR-0060): Story-Arten, Erkennung, Highlights, Diashow; DataContext = StorySettingsViewModel (Code-Behind) -->
             <TabItem Header="Storys" Tag="{x:Static shell:NavigationTags.SettingsStories}">
                 <stories:SettingsStoriesSection x:Name="StoriesView" />
+            </TabItem>
+            <!-- Orte (ADR-0062): Garmin-Aktivitäten und Zeitabgleich; DataContext = PlacesSettingsViewModel (Code-Behind) -->
+            <TabItem Header="Orte" Tag="{x:Static shell:NavigationTags.SettingsPlaces}">
+                <tracks:SettingsPlacesSection x:Name="PlacesView" />
             </TabItem>
             <TabItem Header="Speicher &amp; Wartung" Tag="{x:Static shell:NavigationTags.SettingsStorage}">
                 <sections:SettingsStorageSection />

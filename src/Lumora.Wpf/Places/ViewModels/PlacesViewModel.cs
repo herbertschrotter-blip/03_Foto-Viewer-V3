@@ -74,7 +74,8 @@ public sealed partial class PlacesViewModel : ObservableObject
         MapTileProvider? tiles = null,
         IMessenger? messenger = null,
         ISharedGalleryFilter? filter = null,
-        IMapStyleService? styles = null)
+        IMapStyleService? styles = null,
+        Lumora.Places.Suggestions.PlacesSuggestionContext? suggestions = null)
     {
         _scope = scope;
         _geo = geo;
@@ -100,6 +101,7 @@ public sealed partial class PlacesViewModel : ObservableObject
         }
 
         InitFilterAndStyles(filter, styles); // gemeinsamer Filter und Kartenstil (ADR-0055)
+        InitSuggestions(suggestions); // ungenaue Orte und GPS-Spuren (ADR-0062, PlacesViewModel.Suggestions.cs)
 
         _messenger.Register<PlacesViewModel, ActiveLibraryChangedMessage>(this, static (r, _) => UiThread.Post(() => r.OnLibraryChanged()));
         _messenger.Register<PlacesViewModel, LibraryRootsChangedMessage>(this, static (r, m) => UiThread.Post(() => r.OnCatalogChanged(m.LibraryId, ownChange: false)));
@@ -299,6 +301,7 @@ public sealed partial class PlacesViewModel : ObservableObject
                 "Orte: {Located} verortete Fotos in {Millis} ms gruppiert ({Unlocated} ohne Ort, {Libraries} Bibliothek(en))",
                 index.PhotoCount, millis, unlocated.Count, libraries.Count);
             Apply(index, mediaById, unlocated, extentTask.Result, version);
+            _ = RefreshSuggestions(); // Zähler „geschätzt“ und Vorschläge (ADR-0062)
         }
         catch (Exception ex)
         {
@@ -478,6 +481,8 @@ public sealed partial class PlacesViewModel : ObservableObject
                 tile.Image = _images.TryGet(id);
             }
         }
+
+        ApplyRowImages(fileIds); // Vorschlagsliste (ADR-0062)
     }
 
     /// <summary>

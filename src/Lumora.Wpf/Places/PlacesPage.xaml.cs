@@ -51,6 +51,9 @@ public partial class PlacesPage : UserControl
         Map.ContextRequested += OnMapContextRequested;
         // Nicht im OLE-Drop-Rückruf einen modalen Dialog öffnen (DoDragDrop liefe sonst bis zum Schließen weiter)
         Map.FilesDropped += (_, e) => Dispatcher.BeginInvoke(() => _ = _viewModel.AssignAsync(e.FileIds, e.Latitude, e.Longitude));
+        // Ungenaue Orte (ADR-0062): Vorschlag ziehen bzw. Punkt anklicken
+        Map.SuggestionMoved += (_, e) => _viewModel.MoveSuggestion(e.Id, e.Latitude, e.Longitude);
+        Map.OverlayClicked += (_, e) => _viewModel.SelectRowByFileId(e.Id);
     }
 
     public PlacesViewModel ViewModel => _viewModel;

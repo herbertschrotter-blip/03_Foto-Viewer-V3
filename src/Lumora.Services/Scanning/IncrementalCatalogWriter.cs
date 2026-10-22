@@ -48,11 +48,16 @@ internal static class IncrementalCatalogWriter
             CapturedAtPrecision = CASE WHEN CapturedAtSource = 4 OR (Size = $size AND ModifiedAtUtc = $modified) THEN CapturedAtPrecision ELSE 0 END,
             CapturedAtOffset = CASE WHEN CapturedAtSource = 4 OR (Size = $size AND ModifiedAtUtc = $modified) THEN CapturedAtOffset END,
             CapturedAtSource = CASE WHEN CapturedAtSource = 4 OR (Size = $size AND ModifiedAtUtc = $modified) THEN CapturedAtSource END,
-            -- Orte (ADR-0050): ebenso neu lesen, außer manuell gesetzt/entfernt (GeoSource 3)
-            Latitude = CASE WHEN GeoSource = 3 OR (Size = $size AND ModifiedAtUtc = $modified) THEN Latitude END,
-            Longitude = CASE WHEN GeoSource = 3 OR (Size = $size AND ModifiedAtUtc = $modified) THEN Longitude END,
-            PlaceId = CASE WHEN GeoSource = 3 OR (Size = $size AND ModifiedAtUtc = $modified) THEN PlaceId END,
-            GeoSource = CASE WHEN GeoSource = 3 OR (Size = $size AND ModifiedAtUtc = $modified) THEN GeoSource END
+            -- Orte (ADR-0050): ebenso neu lesen, außer in Lumora gesetzt/entfernt bzw. übernommen (GeoSource 3–5, ADR-0062)
+            Latitude = CASE WHEN GeoSource >= 3 OR (Size = $size AND ModifiedAtUtc = $modified) THEN Latitude END,
+            Longitude = CASE WHEN GeoSource >= 3 OR (Size = $size AND ModifiedAtUtc = $modified) THEN Longitude END,
+            PlaceId = CASE WHEN GeoSource >= 3 OR (Size = $size AND ModifiedAtUtc = $modified) THEN PlaceId END,
+            GeoSource = CASE WHEN GeoSource >= 3 OR (Size = $size AND ModifiedAtUtc = $modified) THEN GeoSource END,
+            -- Genauigkeit (ADR-0062): bei geändertem Inhalt neu bewerten
+            GeoAccuracyReason = CASE WHEN Size = $size AND ModifiedAtUtc = $modified THEN GeoAccuracyReason END,
+            GpsTimeUtc = CASE WHEN Size = $size AND ModifiedAtUtc = $modified THEN GpsTimeUtc END,
+            ExifTimeOffset = CASE WHEN Size = $size AND ModifiedAtUtc = $modified THEN ExifTimeOffset END,
+            GeoAccuracy = CASE WHEN Size = $size AND ModifiedAtUtc = $modified THEN GeoAccuracy END
         WHERE Id = $id;
         """;
 

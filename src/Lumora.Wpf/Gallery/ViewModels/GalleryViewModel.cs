@@ -107,6 +107,12 @@ public sealed partial class GalleryViewModel : ObservableObject
 
     private CancellationTokenSource? _activeLoadCts;
     private CancellationTokenSource? _reloadDebounceCts;
+
+    /// <summary>
+    /// Zähler der Bibliotheks-Ladevorgänge: der zuletzt angestoßene gewinnt. Zwei Bereichswechsel kurz hintereinander (z. B.
+    /// „Lösen“ meldet verzögert die alte aktive Bibliothek, gleich danach der Wechsel) dürfen sich nicht überholen.
+    /// </summary>
+    private int _libraryLoadGeneration;
     private DateTime _resultStatusUntil;
     private bool _isInitialized;
     private bool _suppressReload;
@@ -386,11 +392,12 @@ public sealed partial class GalleryViewModel : ObservableObject
     /// </summary>
     private async Task ReloadLibraryAsync(int? libraryId, bool reloadTerms = false)
     {
+        var generation = ++_libraryLoadGeneration;
         _activeLoadCts?.Cancel();
         _reloadDebounceCts?.Cancel();
         ResetViewState();
 
-        if (!await LoadLibraryAsync(libraryId))
+        if (!await LoadLibraryAsync(libraryId, generation))
         {
             return;
         }
@@ -414,6 +421,11 @@ public sealed partial class GalleryViewModel : ObservableObject
             // Tags und Kategorien gehören der Gruppe der Bibliothek (ADR-0048); Häkchen bleiben nur für vorhandene (ADR-0055)
             await LoadTagsAsync();
             await LoadCategoriesAsync();
+        }
+
+        if (generation != _libraryLoadGeneration)
+        {
+            return; // ein neuerer Bereichswechsel lädt schon
         }
 
         if (HasAlbumFilter)
@@ -464,7 +476,7 @@ public sealed partial class GalleryViewModel : ObservableObject
     }
 
     /// <summary>Lädt die Library mit der Id bzw. (null) die aktive Library (ADR-0003: jüngstes LastOpenedAt).</summary>
-    private async Task<bool> LoadLibraryAsync(int? libraryId)
+    private async Task<bool> LoadLibraryAsync(int? libraryId, int generation)
     {
         try
         {
@@ -476,6 +488,11 @@ public sealed partial class GalleryViewModel : ObservableObject
                     .OrderByDescending(l => l.LastOpenedAt)
                     .ThenByDescending(l => l.CreatedAt))
                 .FirstOrDefaultAsync();
+
+            if (generation != _libraryLoadGeneration)
+            {
+                return false; // überholt: ein neuerer Bereichswechsel setzt Bibliothek und Bereich
+            }
 
             if (lib is null)
             {
@@ -492,6 +509,11 @@ public sealed partial class GalleryViewModel : ObservableObject
             _libraryId = lib.Id;
             _libraryRootPath = lib.RootPath;
             await LoadScopeAsync(lib.Id); // Bereich: Bibliothek bzw. „Alle verknüpften“ (ADR-0048, GalleryViewModel.Scope.cs)
+            if (generation != _libraryLoadGeneration)
+            {
+                return false;
+            }
+
             LibraryNameDisplay = ScopeDisplayName($"{lib.Name}  ·  {lib.RootPath}");
             HasLibrary = true;
 

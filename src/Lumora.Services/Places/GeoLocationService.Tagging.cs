@@ -18,7 +18,8 @@ public sealed partial class GeoLocationService
 {
     private sealed record TargetRow(int Id, int LibraryId, string Path, int MediaType, bool Missing, double? Latitude, double? Longitude, int? Source, int? PlaceId);
 
-    private sealed record Change(TargetRow Row, GeoFileWrite Write);
+    /// <summary>Eine geschriebene Datei samt neuem Katalogwert (je Datei, seit ADR-0062 auch mit eigener Herkunft).</summary>
+    private sealed record Change(TargetRow Row, GeoFileWrite Write, GeoCoordinate? Value, GeoSource Source, int? PlaceId);
 
     public Task<GeoTagResult> SetLocationAsync(IReadOnlyCollection<int> fileIds, double latitude, double longitude, bool keepModifiedTime, CancellationToken ct)
     {
@@ -77,7 +78,7 @@ public sealed partial class GeoLocationService
 
                             try
                             {
-                                changes.Add(new Change(row, GeoFileWriter.Write(row.Path, row.MediaType, value, keepModifiedTime, scope)));
+                                changes.Add(new Change(row, GeoFileWriter.Write(row.Path, row.MediaType, value, keepModifiedTime, scope), value, GeoSource.Manual, place?.PlaceId));
                             }
                             catch (GeoWriteException ex)
                             {
@@ -96,7 +97,10 @@ public sealed partial class GeoLocationService
 
                 if (changes.Count > 0)
                 {
-                    await WriteCatalogAsync(changes, value, place, ct).ConfigureAwait(false);
+                    var description = value is { } v2
+                        ? $"Ort setzen: {PlaceText.Short(place) ?? v2.DisplayText} ({changes.Count} Datei(en))"
+                        : $"Ort entfernen ({changes.Count} Datei(en))";
+                    await WriteCatalogAsync(changes, description, ct).ConfigureAwait(false);
                 }
             }
             finally
@@ -130,22 +134,21 @@ public sealed partial class GeoLocationService
         return new GeoTagResult(written, catalogOnly, errors.Count, errors);
     }
 
-    private async Task WriteCatalogAsync(IReadOnlyList<Change> changes, GeoCoordinate? value, PlaceInfo? place, CancellationToken ct)
+    /// <summary>Protokoll + neue Katalogwerte in EINER Transaktion; liefert die Batch-Id. Scheitert sie, werden die Dateien zurückgesetzt.</summary>
+    private async Task<int> WriteCatalogAsync(IReadOnlyList<Change> changes, string description, CancellationToken ct)
     {
         try
         {
-            await Task.Run(
+            return await Task.Run(
                 async () =>
                 {
                     using var connection = _factory.OpenSqliteConnection();
                     using var tx = await _factory.BusyRetry.BeginTransactionAsync(connection, CancellationToken.None).ConfigureAwait(false);
                     var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                    var description = value is { } v
-                        ? $"Ort setzen: {PlaceText.Short(place) ?? v.DisplayText} ({changes.Count} Datei(en))"
-                        : $"Ort entfernen ({changes.Count} Datei(en))";
                     var batchId = InsertBatch(connection, tx, now, description);
-                    WriteChanges(connection, tx, batchId, now, changes, value, place?.PlaceId);
+                    WriteChanges(connection, tx, batchId, now, changes);
                     tx.Commit();
+                    return batchId;
                 },
                 CancellationToken.None).ConfigureAwait(false);
         }
@@ -174,7 +177,7 @@ public sealed partial class GeoLocationService
     }
 
     /// <summary>Je Datei: FileOperation (Applied) + GeoTagUndo + neue Katalogwerte (bei JPEG auch Größe/Änderungszeit).</summary>
-    private static void WriteChanges(SqliteConnection connection, SqliteTransaction tx, int batchId, long now, IReadOnlyList<Change> changes, GeoCoordinate? value, int? placeId)
+    private static void WriteChanges(SqliteConnection connection, SqliteTransaction tx, int batchId, long now, IReadOnlyList<Change> changes)
     {
         using var op = connection.CreateCommand();
         op.Transaction = tx;
@@ -209,7 +212,7 @@ public sealed partial class GeoLocationService
         var sModified = size.Parameters.Add("$modified", SqliteType.Integer);
         var sId = size.Parameters.Add("$id", SqliteType.Integer);
 
-        foreach (var (row, write) in changes)
+        foreach (var (row, write, value, source, placeId) in changes)
         {
             pFile.Value = row.Id;
             pPath.Value = row.Path;
@@ -232,7 +235,7 @@ public sealed partial class GeoLocationService
             u["$oldSize"].Value = (object?)write.OldSize ?? DBNull.Value;
             undo.ExecuteNonQuery();
 
-            SetGeoUpdate(geo, row.Id, value?.Latitude, value?.Longitude, (int)GeoSource.Manual, value is null ? null : placeId);
+            SetGeoUpdate(geo, row.Id, value?.Latitude, value?.Longitude, (int)source, value is null ? null : placeId);
             geo.ExecuteNonQuery();
 
             if (write.Kind == GeoTagWriteKind.JpegExif && write.NewSize is { } newSize && write.NewModifiedAt is { } newModified)
@@ -250,7 +253,7 @@ public sealed partial class GeoLocationService
     private void RollBackFiles(IReadOnlyList<Change> changes)
     {
         using var scope = _ownChanges?.Begin();
-        foreach (var (row, write) in changes)
+        foreach (var (row, write, _, _, _) in changes)
         {
             if (write.Kind == GeoTagWriteKind.CatalogOnly)
             {

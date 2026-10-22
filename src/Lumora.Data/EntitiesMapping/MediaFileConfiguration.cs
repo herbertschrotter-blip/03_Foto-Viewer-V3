@@ -57,5 +57,15 @@ internal sealed class MediaFileConfiguration : IEntityTypeConfiguration<MediaFil
         b.HasIndex(x => new { x.LibraryId, x.PlaceId })
             .HasFilter("PlaceId IS NOT NULL")
             .HasDatabaseName("IX_Files_Library_Place");
+
+        // Ungenaue Orte (ADR-0062, Migration AddGpsTracks, nur ADD COLUMN): Zähler „n mit geschätzter Position“ und die
+        // Liste „Ungenau“ über einen gefilterten Index; GeoSuggestionState mit DB-Default, damit Raw-INSERTs ihn weglassen.
+        b.Property(x => x.GeoAccuracy).HasConversion<int?>();
+        b.Property(x => x.GeoAccuracyReason).HasConversion<int?>();
+        b.Property(x => x.GpsTimeUtc).HasConversion(ValueConverters.NullableDateTimeToUnixSeconds);
+        b.Property(x => x.GeoSuggestionState).HasDefaultValue(0);
+        b.HasIndex(x => new { x.LibraryId, x.GeoAccuracy })
+            .HasFilter("GeoAccuracy = 2")
+            .HasDatabaseName("IX_Files_Library_GeoEstimated");
     }
 }

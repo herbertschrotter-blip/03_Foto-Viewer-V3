@@ -756,6 +756,43 @@ springt zum ersten Treffer).
   Gruppen funktionieren weiter. Bei einer versteckten Bibliothek weist eine Leiste darauf hin, dass der Kartenserver den
   betrachteten Ausschnitt sieht. Abschalten: `LUMORA_MAP_TILES=off`.
 
+#### Ungenaue Orte verbessern und Garmin-Spuren (seit 0.4.23, ADR-0062)
+Viele Handy-Fotos haben nur einen **geschätzten Ort** (Mobilfunk/WLAN, oft Kilometer daneben): erkennbar daran, dass das
+Handy nur Breite/Länge gespeichert hat — ohne GPS-Höhe und -Zeit —, an einer Ortung „NETWORK/WLAN“, einem großen
+Fehlerradius oder einem unmöglichen Sprung zu zeitnahen Fotos mit echtem GPS. Lumora prüft das im Hintergrund
+(Statusleiste „Orte prüfen: n / m“); oben steht dann „… · **n mit geschätzter Position**“.
+- **Seite Orte › Ungenau** (Umschalter rechts „Ohne Ort n | Ungenau m“): Erklärung mit Zählern, Filter **Alle,
+  Garmin-Spur, Sicher, Wahrscheinlich, Ohne Vorschlag**, Liste nach Tagen bzw. Ausflügen. Vorschläge in dieser
+  Reihenfolge: **Garmin-Spur** (Ihre Uhr war zur Aufnahmezeit dort), **sicher** (zwischen zwei Fotos mit echtem GPS
+  höchstens 30 min auseinander), **wahrscheinlich** (ein Foto mit echtem GPS wenige Minuten entfernt bzw. Spur mit
+  Lücke). Auf der Karte: gespeicherter Punkt grau, Vorschlag farbig, gestrichelte Korrektur, die Spur der Aktivität;
+  den Vorschlag der ausgewählten Zeile kann man **ziehen**. Je Zeile ✓ **Übernehmen** bzw. ✕ **Ablehnen** (bleibt, wird
+  nicht mehr vorgeschlagen), ohne Vorschlag **Ort setzen…**; unten **Garmin + sichere übernehmen (n)** und **Ausflug (n)**.
+  **Speichern:** „nur im Katalog“ (Standard, die Datei bleibt unberührt) oder „auch ins Foto schreiben (EXIF)“. Nach dem
+  Übernehmen: Hinweis mit **Rückgängig** (auch die Galerie-Rückgängig-Taste nimmt es zurück). Von Hand gesetzte Orte
+  werden nie überschrieben.
+- Auch **Fotos ohne Ort**, die in einer Aktivität bzw. nahe an Fotos mit GPS liegen, bekommen Vorschläge: unter „Ohne
+  Ort“ → **Vorschläge zeigen**.
+- **Lightbox (Taste I):** „Position geschätzt“ mit Begründung und Vorschlag („Laut Ihrer GPS-Spur … waren Sie um 14:56
+  ≈ 4,8 km westlich …“), **Vorschlag übernehmen**, **Auf der Karte zeigen**, **Ort setzen…**.
+- **Garmin-Spuren einlesen (Einstellungen › Orte)** — Garmin vergibt für Privatpersonen **keinen API-Schlüssel**, Lumora
+  braucht auch keinen und sendet nichts an Garmin:
+  1. **Garmin-Datenexport öffnen** → im Garmin-Konto unter Datenverwaltung › „Daten exportieren“ anfordern; Garmin
+     schickt nach einiger Zeit einen Download-Link per E-Mail.
+  2. **Export-ZIP einlesen…** → die heruntergeladene ZIP-Datei wählen; Lumora liest die FIT-Dateien daraus (auch aus den
+     inneren ZIPs) im Hintergrund mit Fortschritt und **Abbrechen**; schon eingelesene Aktivitäten werden übersprungen.
+     Einzelne **FIT/GPX/TCX-Dateien** gehen ebenso.
+  3. **Laufend ergänzen:** einen **Ordner beobachten** (z. B. den Ablageordner von Garmin Express) oder die Uhr per
+     **USB** anschließen — Lumora fragt vorher. Das geht nur bei Uhren, die als Laufwerk mit `GARMIN\Activity`
+     erscheinen; neuere Uhren (z. B. Fenix 6/7) melden sich per MTP und sind kein Laufwerk → Export bzw. Garmin Express.
+  Darunter der Stand („1 284 Aktivitäten · 2014–2026 · Fenix 5, Fenix 7 · zuletzt eingelesen …“), **Aktivitäten
+  anzeigen** und **Spuren entfernen…**. Spuren gehören der Bibliothek bzw. Gruppe (Verknüpfen führt zusammen, Lösen
+  kopiert); eine versteckte Bibliothek hat ihre eigenen im Container.
+- **Zeitabgleich (Einstellungen › Orte):** die Aufnahmezeit wird so in UTC umgerechnet: Zeitzonen-Angabe der Datei ›
+  GPS-Zeit des Fotos › **Zeitzone der Fotos** (Standard: Windows-Zeitzone mit Sommerzeit je Datum). **Toleranz**
+  (Standard 2 min) vor/nach einer Aktivität. **Kamera-Abweichung** je Kamera (z. B. „+3:12“, wenn die Kamera-Uhr
+  3 min 12 s vorgeht) — bei Kameras mit eigenem GPS-Zeitstempel schlägt Lumora den Wert vor („übernehmen“).
+
 #### Kartenstile: Schlüssel anfordern (0.4.1)
 - **CARTO** (Voyager, Positron, Dark Matter, „Automatisch“): unter **carto.com/basemaps** den kostenlosen Schlüssel
   per E-Mail anfordern (kommt nach etwa einer Minute, kein Konto nötig). Der Schlüssel muss dein eigener sein; frei
@@ -839,6 +876,8 @@ auf einen laufenden Scan derselben Bibliothek wartet — „Wartet auf laufenden
 wird dann verworfen, bevor sie etwas ändert (beim Sortierer entfallen die restlichen Ziele; schon verschobene Dateien
 bleiben verschoben und sind rückgängig machbar). Rechts: Hinweise
 (Ordnerüberwachung: Countdown, laufende/abgeschlossene automatische Aktualisierung, angehaltene Automatik;
+Orte: „GPS-Spuren: n / m Dateien“ beim Einlesen, „Orte prüfen: n / m“, sonst „Orte: n geschätzt · m Vorschläge · k
+Garmin-Aktivitäten“;
 Fortschritt der Doppelten-Erkennung und „N Dateien im Eingang sind schon in der Bibliothek — Anzeigen“;
 unvollständige oder fehlgeschlagene Dateivorgänge mit Details im Tooltip; Bibliothek offline) und die
 Hintergrund-Aktivität („Bereit“, wenn nichts läuft).

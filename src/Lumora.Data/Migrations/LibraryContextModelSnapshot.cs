@@ -658,6 +658,74 @@ namespace Lumora.Data.Migrations
                     b.ToTable("GeoTagUndo", (string)null);
                 });
 
+            modelBuilder.Entity("Lumora.Domain.Entities.GpsTrack", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<byte[]>("Checksum")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
+
+                    b.Property<string>("Device")
+                        .HasColumnType("TEXT");
+
+                    b.Property<double>("DistanceMeters")
+                        .HasColumnType("REAL");
+
+                    b.Property<long>("EndUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("GroupId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ImportedAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<double>("MaxLatitude")
+                        .HasColumnType("REAL");
+
+                    b.Property<double>("MaxLongitude")
+                        .HasColumnType("REAL");
+
+                    b.Property<double>("MinLatitude")
+                        .HasColumnType("REAL");
+
+                    b.Property<double>("MinLongitude")
+                        .HasColumnType("REAL");
+
+                    b.Property<string>("Name")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("PointCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<byte[]>("Points")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Sport")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("StartUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GroupId", "Checksum")
+                        .IsUnique()
+                        .HasDatabaseName("UX_GpsTracks_Group_Checksum");
+
+                    b.HasIndex("GroupId", "StartUtc", "EndUtc")
+                        .HasDatabaseName("IX_GpsTracks_Group_Time");
+
+                    b.ToTable("GpsTracks", (string)null);
+                });
+
             modelBuilder.Entity("Lumora.Domain.Entities.Library", b =>
                 {
                     b.Property<int>("Id")
@@ -749,6 +817,9 @@ namespace Lumora.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("CameraModel")
+                        .HasColumnType("TEXT");
+
                     b.Property<long?>("CapturedAt")
                         .HasColumnType("INTEGER");
 
@@ -772,6 +843,9 @@ namespace Lumora.Data.Migrations
                     b.Property<int?>("DurationMs")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int?>("ExifTimeOffset")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Extension")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -779,7 +853,21 @@ namespace Lumora.Data.Migrations
                     b.Property<int>("FolderId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int?>("GeoAccuracy")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("GeoAccuracyReason")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int?>("GeoSource")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("GeoSuggestionState")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0);
+
+                    b.Property<long?>("GpsTimeUtc")
                         .HasColumnType("INTEGER");
 
                     b.Property<int?>("Height")
@@ -829,6 +917,10 @@ namespace Lumora.Data.Migrations
 
                     b.HasIndex("LibraryId", "FolderId")
                         .HasDatabaseName("IX_Files_Library_Folder");
+
+                    b.HasIndex("LibraryId", "GeoAccuracy")
+                        .HasDatabaseName("IX_Files_Library_GeoEstimated")
+                        .HasFilter("GeoAccuracy = 2");
 
                     b.HasIndex("LibraryId", "IsFavorite")
                         .HasDatabaseName("IX_Files_Library_Favorite");

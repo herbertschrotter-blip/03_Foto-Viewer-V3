@@ -118,6 +118,9 @@ src/
     Messaging/                        # Nachrichten-Records für WeakReferenceMessenger (ADR-0017)
     Operations/                       # FileOperationService, WindowsRecycleBin (ADR-0012/0018)
     Places/Clustering/                # GeoClusterIndex (Morton-Raster, Gruppen je Zoomstufe), MercatorProjection (ADR-0051)
+    Places/Accuracy/                  # Ungenaue Orte (ADR-0062): GeoAccuracyRules, GeoJumpDetector (rein), GeoAccuracyService (Hintergrund)
+    Places/Tracks/                    # GPS-Spuren (ADR-0062): TrackCodec, FitTrackReader, XmlTrackReader (GPX/TCX), GpsTrackStore, GpsTrackImportService (ZIP), GpsTrackAutoImport (Ordner/USB), GeoTrackSettings
+    Places/Suggestions/               # Vorschläge (ADR-0062): PhotoTimeResolver, CameraOffsetEstimator, GeoSuggestionEngine (rein), GeoSuggestionService
     Scanning/                         # ScanService, FolderEnumerator, IncrementalScanRunner, RootAvailabilityProbe, MassMissingGuard (ADR-0019)
     Sorter/                           # FileSorterService, FlattenService, SorterPatternEngine, SorterProfileStore
     Stories/                          # Storys (ADR-0058): StoryDetector (rein), StoryReconciler (Signatur + gemeinsame Dateien), StoryTitleBuilder (sachliche Überschriften), StoryIndexService (Hintergrund, voll/inkrementell), StoryService (IStoryService für die Story-Seite), StorySettingsStore (stories.*), BasicHighlightSelector (Ersatz bis ADR-0057)
@@ -131,7 +134,7 @@ src/
     Library/                          # Bibliotheks-Seite (Namespace Lumora.Libraries)
     Lightbox/                         # LightboxWindow/-ViewModel/-Service, ZoomPanControl (+ Overlay), LibVlcHost, Imaging, Faces (Gesichtsrahmen, Taste F)
     Persons/                          # Seite „Personen“ (ADR-0037): PersonsViewModel, TileListBox, PersonPickerDialog, PersonDetailsDialog (ADR-0045), WicFaceCropRenderer
-    Places/                           # Seite „Orte“ (ADR-0051): MapControl (eigene Kachelkarte), MapViewport, Tiles (OSM, Platten-Cache), „Ohne Ort“, MapPickerWindow
+    Places/                           # Seite „Orte“ (ADR-0051): MapControl (eigene Kachelkarte), MapViewport, Tiles (OSM, Platten-Cache), „Ohne Ort“, MapPickerWindow; Suggestions/ (Bereich „Ungenau“, Überlagerung der Karte) und TrackSettings/ (Einstellungen › Orte, ADR-0062)
     Settings/                         # Einstellungen, ThemeService, FaceData („Gesichtsdaten löschen…“), PersonRelations („Personen & Beziehungen“, ADR-0045)
     Shell/                            # Navigation, DialogService, StatusBar, Converters, Smoke/ (Rauchtest)
     Slideshow/                        # Diashow (ADR-0059): ISlideshowService, SlideshowWindow/-ViewModel/-Overlay, KenBurnsPlanner, Item-Loader, Einstellungen slideshow.*
@@ -318,6 +321,21 @@ FilesFts           -- FTS5 virtual table (Files.Name, Extension)
   `stories.pauseHours` (6), `stories.minFiles` (12), `stories.home` (auto | place:<id> | geo:<lat>,<lon>),
   `stories.minPersonFiles` (30), `stories.highlightShare` (0,15). Rückblicke werden je Tag berechnet und erst beim
   Öffnen als Story (Kind 2) gespeichert.
+- Ungenaue Orte und GPS-Spuren — umgesetzt in 0.4.23 (Migration `AddGpsTracks`, ADR-0062, nur ADD COLUMN/CREATE TABLE):
+  an `Files` `GeoAccuracy` (NULL = noch nicht bewertet, 0 nicht bewertbar, 1 genau, 2 geschätzt), `GeoAccuracyReason`
+  (Bitmaske 1 ohne Höhe/Zeit, 2 Netzwerk-Verfahren, 4 Fehlerradius > 500 m, 8 unmöglicher Sprung), `GpsTimeUtc`
+  (GPS-Zeitstempel, Unix-Sekunden), `ExifTimeOffset` (OffsetTimeOriginal in Minuten, NULL ohne), `CameraModel`
+  („Hersteller Modell“), `GeoSuggestionState` (NOT NULL DEFAULT 0, 1 = Vorschlag abgelehnt); gefilterter Index
+  `IX_Files_Library_GeoEstimated ON Files(LibraryId, GeoAccuracy) WHERE GeoAccuracy = 2`. `Files.GeoSource` zusätzlich
+  4 = aus GPS-Spur übernommen, 5 = aus Nachbarfotos übernommen (wie 3: überleben Inhaltsänderungen und „Neu aufbauen“).
+  `GpsTracks (Id AUTOINCREMENT, GroupId (ohne Fremdschlüssel, in LibraryGroupStore.TermTables), StartUtc/EndUtc
+  (Unix-Sekunden), MinLatitude/MinLongitude/MaxLatitude/MaxLongitude, PointCount, DistanceMeters, Sport NULL, Device
+  NULL, Name NULL, Source 1 FIT | 2 GPX | 3 TCX, Checksum BLOB (SHA-256 über Zeit + Mikrograd), Points BLOB
+  (TrackCodec v1: ZigZag-Varint-Differenzen Zeit/1e-6°/dm, Deflate), ImportedAtUtc; UX_GpsTracks_Group_Checksum
+  (GroupId, Checksum) eindeutig, IX_GpsTracks_Group_Time (GroupId, StartUtc, EndUtc))` — eine Zeile je Aktivität.
+  Settings: `places.tracks.timeZone` (leer = Windows), `places.tracks.toleranceSeconds` (120),
+  `places.tracks.cameraOffsets` (JSON Kamera → Sekunden), `places.tracks.watchFolder`, `places.tracks.usb` (Standard an),
+  `places.suggestions.saveToFile` (Standard aus), Merker `places.tracks.watchLastScan`, `places.tracks.usbLastImport`.
 
 ### Pflicht-Indizes V0.1
 ```sql
@@ -436,7 +454,7 @@ Status (Stand 0.2.0): ✅ umgesetzt · 🟡 teilweise · ⬜ offen
 
 | Status | Vorhaben | Inhalt | Grundlage |
 |---|---|---|---|
-| 🟡 | **Ungenaue Orte + GPS-Spuren** | geschätzte Handy-Positionen erkennen, Vorschläge aus Garmin-Spuren (Export-ZIP/FIT/GPX/USB) und Nachbarfotos, Einstellungen › Orte | Mockup 10, ADR-0062 (im Bau) |
+| ✅ | **Ungenaue Orte + GPS-Spuren** | geschätzte Handy-Positionen erkennen, Vorschläge aus Garmin-Spuren (Export-ZIP/FIT/GPX/USB) und Nachbarfotos, Einstellungen › Orte | Mockup 10, ADR-0062, umgesetzt in 0.4.23 |
 | 🟡 | **Welle 6b Story-Assistent** | Sätze → lokale Sprach-KI (Ollama) → Filter + Aktion, Verständnis zur Bestätigung, Tags/Kategorien/Orte/Motive/Personen, Collage-Bild | Mockup 12, ADR-0063 (im Bau) |
 | ⬜ | **App-Verbindung (Gipfelbuch)** | lokale Schnittstelle 127.0.0.1, Kopplung, Rechte, Hintergrundstart, Reiter „Verbundene Apps“ | Mockup 11, Vertrag `herbertschrotter-blip/app-verbindung` v0.1 (Entwurf) |
 | ⬜ | **Nutzungs-Signale** | lokal messen, was Herbert mag: Öffnen, Ansehdauer (aktiv, 1 s–2 min, kein Durchblättern), Zoom, Wiederkehr an anderen Tagen, Verwendung in Album/Story/Collage/Titelbild, Drucken/Teilen/Exportieren über Lumora, später Handy (Welle 7). Nicht zählen: Sortieren, Doppelte, Suche nach einem Foto. Nur Tagessummen je Foto (kein Ereignisprotokoll), je Katalog, versteckt nur im Container, abschaltbar + „Nutzungsdaten löschen“, nichts im Protokoll. Nutzung: kleiner Zuschlag in der Highlight-Auswahl (ADR-0057) mit Grund („oft angesehen“, „3× geteilt“), gedämpft gegen Selbstverstärkung (Ansehen in Storys zählt weniger), fehlende Nutzung ist kein Abzug; neue Story-Art „Vergessene Schätze“ | Herbert 2026-10-22; Mockup folgt |

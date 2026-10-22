@@ -334,6 +334,9 @@ public partial class App : Application, ICatalogHostSwitcher
 
         // Orte (ADR-0050): Koordinaten nachtragen im Hintergrund, Ortsnamen (GeoNames) vorladen
         _host.Services.GetRequiredService<Lumora.Services.Places.IGeoBackfillService>().Start();
+        // Ungenaue Orte und GPS-Spuren (ADR-0062): Genauigkeit prüfen, beobachteten Ordner/USB-Uhr einlesen
+        Lumora.Services.Places.Tracks.PlacesTracksServiceCollectionExtensions.StartPlacesTracks(_host.Services);
+        _host.Services.GetService<Lumora.Places.TrackSettings.GarminDevicePrompt>()?.Start();
 
         // Doppelte (ADR-0053): Prüfsummen und Bild-Fingerabdrücke im Hintergrund nach jedem Scan und einmalig für bestehende Kataloge
         _host.Services.GetRequiredService<Lumora.Services.Duplicates.IDuplicateIndexService>().Start();

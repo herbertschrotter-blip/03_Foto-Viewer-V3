@@ -190,11 +190,11 @@ internal sealed class PlacesHarness
     /// <summary>Gemeinsamer Galerie-Filter (ADR-0055) — echter Speicher, die Galerie veröffentlicht per <c>Publish</c>.</summary>
     public SharedGalleryFilter Filter { get; } = new();
 
-    public PlacesViewModel Create(IMapTileSource? tiles = null, Lumora.Places.Styles.IMapStyleService? styles = null)
+    public PlacesViewModel Create(IMapTileSource? tiles = null, Lumora.Places.Styles.IMapStyleService? styles = null, Lumora.Places.Suggestions.PlacesSuggestionContext? suggestions = null)
     {
         var source = tiles ?? new DisabledMapTileSource();
         var vm = new PlacesViewModel(World, World, World, World, World, Images, Dialogs, Lightbox, Navigation, Privacy,
-            NullLogger<PlacesViewModel>.Instance, new MapTileProvider(source, new MapTileOptions { Enabled = false }), Messenger, Filter, styles);
+            NullLogger<PlacesViewModel>.Instance, new MapTileProvider(source, new MapTileOptions { Enabled = false }), Messenger, Filter, styles, suggestions);
         vm.Viewport.SetSize(1000, 700);
         return vm;
     }

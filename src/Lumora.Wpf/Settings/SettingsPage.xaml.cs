@@ -30,7 +30,8 @@ public partial class SettingsPage : UserControl
         Shell.HiddenLibraries.HiddenLibrariesViewModel? hiddenLibraries = null,
         Motifs.MotifSettingsViewModel? motifs = null,
         Places.Styles.MapStyleSettingsViewModel? mapStyles = null,
-        Stories.StorySettingsViewModel? stories = null)
+        Stories.StorySettingsViewModel? stories = null,
+        Places.TrackSettings.PlacesSettingsViewModel? places = null)
     {
         _sections = sections;
         InitializeComponent();
@@ -39,6 +40,7 @@ public partial class SettingsPage : UserControl
         AppearanceView.MapSection.DataContext = mapStyles; // Darstellung › Karte (ADR-0055); ohne Dienst ausgeblendet
         AppearanceView.MapSection.Visibility = mapStyles is null ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;
         StoriesView.DataContext = stories; // Reiter „Storys“ samt Diashow (ADR-0060, ADR-0059); ohne Dienst leer
+        PlacesView.DataContext = places; // Reiter „Orte“: Garmin-Aktivitäten, Zeitabgleich (ADR-0062); ohne Dienst leer
 
         LibraryTab.Content = library;
         TagsTab.Content = tags;

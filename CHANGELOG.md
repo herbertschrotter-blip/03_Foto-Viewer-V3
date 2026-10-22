@@ -3,6 +3,59 @@
 Alle nennenswerten Änderungen an Lumora (bis 0.2.48 „PhotoViewer V3“). Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.4.23] — 2026-10-23
+
+### Feature (ADR-0062) — Ungenaue Orte verbessern und Garmin-Spuren (Mockup 10)
+- **„Position geschätzt“ erkennen:** im Hintergrund (Statusleiste „Orte prüfen: n / m“, Scan-Sperre und Katalog-Umzug
+  beachtet) liest Lumora GPS-Höhe, GPS-Zeit, Verfahren und Fehlerradius: nur Breite/Länge ohne Höhe und Zeit,
+  NETWORK/CELLID/WLAN/WIFI oder > 500 m → geschätzt; dazu ein **unmöglicher Sprung** (> 150 km/h, > 2 km) zu genauen
+  Fotos ≤ 30 min. Neue Spalten `Files.GeoAccuracy/-Reason/GpsTimeUtc/ExifTimeOffset/CameraModel/GeoSuggestionState`
+  (Migration `AddGpsTracks`, nur ADD COLUMN). Kopf der Seite Orte: „… · **n mit geschätzter Position**“.
+- **GPS-Spuren** je Bibliotheks-Gruppe in `GpsTracks` — eine Zeile je Aktivität, Punkte delta-kodiert und komprimiert
+  (5 000 verrauschte Punkte ≈ 13 KB), Prüfsumme gegen Doppel-Import; Verknüpfen führt zusammen, Lösen kopiert, leere Gruppe
+  löscht. **Einlesen:** Garmin-Datenexport-ZIP (innere `UploadedFiles_*.zip` gestreamt, Temp nur im Katalog bzw.
+  Container), einzelne **FIT/GPX/TCX**-Dateien, **beobachteter Ordner**, **Uhr per USB** (nur als Laufwerk mit
+  `GARMIN\Activity`, vorher fragen) — im Hintergrund mit Fortschritt und Abbrechen, Doppelte übersprungen. Eigener,
+  kleiner **FIT-Leser** statt Garmin FIT SDK (Lizenz verbietet die Weitergabe mit der portablen Version). Kein
+  API-Schlüssel, kein Login — nichts wird an Garmin gesendet.
+- **Zeitabgleich:** OffsetTimeOriginal › GPS-Zeit des Fotos › Zeitzone der Fotos (Standard Windows mit Sommerzeit je
+  Datum), dann **Kamera-Abweichung je Kamera** (Vorschlag „aus GPS-Zeit ermittelt“ für Kameras mit GPS-Zeitstempel);
+  Toleranz vor/nach einer Aktivität (Standard 2 min).
+- **Vorschläge mit Stufen** (rein, getestet): **Garmin-Spur** (Interpolation zwischen Spurpunkten mit kurzer Lücke bzw.
+  in einer Pause) › **sicher** (zwischen zwei genauen Fotos ≤ 30 min, plausible Geschwindigkeit) › **wahrscheinlich**
+  (Nachbarfoto ≤ 15 min bzw. Spur mit langer Lücke) › kein Vorschlag — für „Ungenau“ und für „Ohne Ort“.
+- **Seite Orte:** Umschalter **„Ohne Ort n | Ungenau m“**, Erklärung, Filter-Chips, Liste nach Tagen/Ausflügen mit
+  Plaketten, ✓ Übernehmen / ✕ Ablehnen / Ort setzen…, **„Garmin + sichere übernehmen (n)“**, **„Ausflug (n)“**,
+  Speichern **nur im Katalog** oder **auch ins Foto schreiben (EXIF)**, Hinweis mit **Rückgängig**; Karte mit Spur
+  (korallenrot), gespeichertem Punkt (grau), Vorschlag (Akzent, **ziehbar**), gestrichelter Korrektur und Legende.
+  Übernommene Orte tragen die neue Herkunft **„aus GPS-Spur“** bzw. **„aus Nachbarfotos“** (`GeoSource` 4/5), überleben
+  Inhaltsänderungen und „Neu aufbauen“ und werden nie automatisch überschrieben. Unter „Ohne Ort“: „n Fotos … mit
+  Vorschlag — **Vorschläge zeigen**“.
+- **Lightbox:** Hinweis „Position geschätzt“ mit Begründung, Vorschlag samt Quelle und Entfernung, **Vorschlag
+  übernehmen**, **Auf der Karte zeigen**, **Ort setzen…**.
+- **Einstellungen › Orte (neuer Reiter):** Garmin-Aktivitäten (Erklärung, **Garmin-Datenexport öffnen**, **Export-ZIP
+  einlesen…**, FIT/GPX-Dateien, Ordner beobachten, USB-Erkennung, Stand, **Aktivitäten anzeigen**, **Spuren entfernen…**)
+  und Zeitabgleich (Zeitzone, Toleranz, Kamera-Abweichungen, Vorrang). Statusleiste: „GPS-Spuren: n / m Dateien“ bzw.
+  „Orte: n geschätzt · m Vorschläge · k Garmin-Aktivitäten“.
+- Rauchtest-Schritt **„Ungenaue Orte“** vor „Versteckte Bibliothek“ (synthetische GPX-Spur im Lauf, kein Netz).
+
+### Fix beim Einspielen — Galerie: schnelle Bereichswechsel
+- Zwei `ActiveLibraryChangedMessage` kurz hintereinander (z. B. „Lösen“ meldet verzögert die alte aktive Bibliothek,
+  gleich danach der Wechsel) liefen in der Galerie parallel; der zuletzt **fertige** Ladevorgang gewann, sodass die
+  Galerie (Ort-Flyout, Bereich) auf der falschen Bibliothek landen konnte — im Rauchtest „Bibliotheks-Trennung: gelöst: A
+  wieder ohne den Ort aus B“ mit vier Folgefehlern (in 2 von 6 Läufen). Jetzt gewinnt der zuletzt **angestoßene**
+  (Generationszähler in `GalleryViewModel.ReloadLibraryAsync`/`LoadLibraryAsync`); Test
+  `Schnelle_Bereichswechsel_der_zuletzt_angestossene_gewinnt`.
+
+### Offen
+- Rauchtest „Story-Seite“: einmal (1 von 2 Läufen beim Einspielen) „Übersicht: Story unter „Angeheftet““ rot, direkt nach
+  Diashow + Zurück — vermutlich Neuladen der Übersicht parallel zum Rauchtest-`LoadAsync`; Story-Seite unverändert seit 0.4.15.
+- **MTP-Uhren** (Fenix 6/7 u. a. melden sich wie ein Handy, nicht als Laufwerk) werden nicht direkt gelesen — Weg über
+  den Garmin-Datenexport bzw. den Ablageordner von Garmin Express.
+- **Zeitzone aus dem Ort** statt aus der Einstellung/Windows (Urlaubsfotos von Kameras ohne Zonenangabe).
+- **Google-Standortverlauf** (Timeline) als weitere Spur-Quelle importieren.
+- Von Lumora ins EXIF geschriebene Orte enthalten nur Breite/Länge — in einem fremden Katalog gälten sie als „geschätzt“.
+
 ## [0.4.22] — 2026-10-23
 
 ### Docs — Mockup 13 „Foto verbessern“ (Welle 8), abgenommen

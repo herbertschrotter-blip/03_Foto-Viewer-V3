@@ -41,13 +41,16 @@ public static class NavigationTags
 
     /// <summary>Einstellungen › Storys (ADR-0060): Story-Arten, Erkennung, Highlights, Diashow.</summary>
     public const string SettingsStories = "settings-stories";
+
+    /// <summary>Einstellungen › Orte (ADR-0062): Garmin-Aktivitäten (GPS-Spuren) und Zeitabgleich.</summary>
+    public const string SettingsPlaces = "settings-places";
     public const string SettingsStorage = "settings-storage";
     public const string SettingsInfo = "settings-info";
 
     /// <summary>Alle Reiter der Einstellungen in Anzeigereihenfolge.</summary>
     public static IReadOnlyList<string> SettingsSections { get; } =
     [
-        Library, Tags, Categories, SettingsFaces, SettingsMotifs, SettingsArchives, SettingsAppearance, SettingsStories, SettingsStorage, SettingsInfo,
+        Library, Tags, Categories, SettingsFaces, SettingsMotifs, SettingsArchives, SettingsAppearance, SettingsStories, SettingsPlaces, SettingsStorage, SettingsInfo,
     ];
 
     /// <summary>

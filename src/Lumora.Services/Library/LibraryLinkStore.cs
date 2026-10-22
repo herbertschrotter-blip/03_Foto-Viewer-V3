@@ -181,6 +181,7 @@ internal static class LibraryLinkStore
         var motifTermsMerged = LinkMotifTerms(connection, tx, targetGroup, sourceGroup);
         Albums.AlbumGroupStore.Link(connection, tx, targetGroup, sourceGroup, sourceLibraryName); // Alben (ADR-0054)
         Stories.StoryGroupStore.Link(connection, tx, targetGroup, sourceGroup); // Storys (ADR-0058): gleiche Signatur = eine Story
+        Places.Tracks.GpsTrackGroupStore.Link(connection, tx, targetGroup, sourceGroup); // GPS-Spuren (ADR-0062): gleiche Prüfsumme = eine Spur
 
         // ---- Bibliotheken und Gruppe
         Execute(connection, tx, "UPDATE Libraries SET GroupId = $t WHERE GroupId = $s;", p);
@@ -393,6 +394,7 @@ internal static class LibraryLinkStore
         Stories.StoryGroupStore.CopyForLibrary(connection, tx, fromGroup, toGroup, libraryId); // Storys (ADR-0058), braucht noch _CopyMap (Personen)
         Execute(connection, tx, "DROP TABLE temp._CopyMap;");
         Albums.AlbumGroupStore.CopyForLibrary(connection, tx, fromGroup, toGroup, libraryId); // Alben (ADR-0054)
+        Places.Tracks.GpsTrackGroupStore.CopyForLibrary(connection, tx, fromGroup, toGroup); // GPS-Spuren (ADR-0062): Kopie für die gelöste Bibliothek
         return new LibraryUnlinkResult(toGroup, tags, categories, relations, persons, motifTerms);
     }
 

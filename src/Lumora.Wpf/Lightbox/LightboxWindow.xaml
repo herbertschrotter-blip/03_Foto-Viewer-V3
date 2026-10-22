@@ -162,6 +162,45 @@
                         <TextBlock Style="{StaticResource InfoHeader}" Text="DATEI" />
                         <ItemsControl ItemsSource="{Binding FileInfoRows}" ItemTemplate="{StaticResource InfoRowTemplate}" />
 
+                        <!-- „Position geschätzt“ mit Begründung und Vorschlag (ADR-0062, Mockup 10) -->
+                        <Border Margin="0,10,0,0" Padding="10,8" CornerRadius="8" BorderThickness="1"
+                                AutomationProperties.AutomationId="LightboxGeoHint"
+                                BorderBrush="{DynamicResource SystemFillColorCautionBrush}"
+                                Background="{DynamicResource SystemFillColorCautionBackgroundBrush}"
+                                Visibility="{Binding HasGeoHint, Converter={StaticResource BoolToVis}}">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:SymbolIcon Symbol="Warning16" Margin="0,0,6,0" Foreground="{DynamicResource SystemFillColorCautionBrush}" />
+                                    <TextBlock Text="{Binding GeoHintTitle}" FontWeight="SemiBold" FontSize="12"
+                                               Foreground="{DynamicResource SystemFillColorCautionBrush}" />
+                                </StackPanel>
+                                <TextBlock Margin="0,6,0,0" Text="{Binding GeoHintText}" FontSize="12" TextWrapping="Wrap" LineHeight="18"
+                                           Foreground="{DynamicResource LightboxTextBrush}" />
+                                <WrapPanel Margin="0,8,0,0">
+                                    <Button Style="{StaticResource LightboxOverlayButton}" Padding="10,4" MinHeight="28" Margin="0,0,6,6"
+                                            Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                            AutomationProperties.Name="Vorschlag übernehmen"
+                                            Visibility="{Binding HasGeoHintSuggestion, Converter={StaticResource BoolToVis}}"
+                                            Command="{Binding ApplyGeoHintCommand}">
+                                        <TextBlock Text="Vorschlag übernehmen" FontSize="12" Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                                    </Button>
+                                    <Button Style="{StaticResource LightboxOverlayButton}" Padding="10,4" MinHeight="28" Margin="0,0,6,6"
+                                            Background="{DynamicResource LightboxChipBrush}"
+                                            AutomationProperties.Name="Auf der Karte zeigen"
+                                            Command="{Binding ShowGeoHintOnMapCommand}">
+                                        <TextBlock Text="Auf der Karte zeigen" FontSize="12" Foreground="{DynamicResource LightboxTextBrush}" />
+                                    </Button>
+                                    <Button Style="{StaticResource LightboxOverlayButton}" Padding="10,4" MinHeight="28" Margin="0,0,6,6"
+                                            Background="{DynamicResource LightboxChipBrush}"
+                                            AutomationProperties.Name="Ort setzen"
+                                            Visibility="{Binding CanSetPlaceFromHint, Converter={StaticResource BoolToVis}}"
+                                            Command="{Binding SetPlaceFromHintCommand}">
+                                        <TextBlock Text="Ort setzen…" FontSize="12" Foreground="{DynamicResource LightboxTextBrush}" />
+                                    </Button>
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+
                         <TextBlock Style="{StaticResource InfoHeader}"
                                    Text="{Binding MediaInfoHeader}"
                                    Margin="0,14,0,8" />

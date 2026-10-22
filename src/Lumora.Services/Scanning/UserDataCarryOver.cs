@@ -62,6 +62,7 @@ public sealed partial class UserDataCarryOver
             Longitude REAL,
             PlaceId INTEGER,
             ManualGeo INTEGER NOT NULL DEFAULT 0,
+            GeoSuggestionState INTEGER NOT NULL DEFAULT 0,
             UNIQUE(FolderKey, NameKey));
         CREATE TEMP TABLE pv_carry_tags(
             OldFileId INTEGER NOT NULL,
@@ -83,13 +84,13 @@ public sealed partial class UserDataCarryOver
     // Nur Dateien mit Benutzerdaten. Bei kollidierenden Schlüsseln (nur auf case-sensitiven Ordnern möglich) gewinnt
     // die vorhandene vor der „fehlt“-markierten Zeile, sonst die ältere.
     private const string CaptureFilesSql = """
-        INSERT OR IGNORE INTO temp.pv_carry_files(OldFileId, FolderKey, NameKey, Name, IsFavorite, Rating, CapturedAt, CapturedAtPrecision, CapturedAtOffset, ManualDate, Latitude, Longitude, PlaceId, ManualGeo)
+        INSERT OR IGNORE INTO temp.pv_carry_files(OldFileId, FolderKey, NameKey, Name, IsFavorite, Rating, CapturedAt, CapturedAtPrecision, CapturedAtOffset, ManualDate, Latitude, Longitude, PlaceId, ManualGeo, GeoSuggestionState)
         SELECT f.Id, pv_casefold(d.Path), pv_casefold(f.Name), f.Name, f.IsFavorite, f.Rating,
                f.CapturedAt, f.CapturedAtPrecision, f.CapturedAtOffset, CASE WHEN f.CapturedAtSource = 4 THEN 1 ELSE 0 END,
-               f.Latitude, f.Longitude, f.PlaceId, CASE WHEN f.GeoSource = 3 THEN 1 ELSE 0 END
+               f.Latitude, f.Longitude, f.PlaceId, CASE WHEN f.GeoSource IN (3, 4, 5) THEN f.GeoSource ELSE 0 END, f.GeoSuggestionState
         FROM Files f JOIN Folders d ON d.Id = f.FolderId
         WHERE f.LibraryId = $lib
-          AND (f.IsFavorite <> 0 OR f.Rating IS NOT NULL OR f.CapturedAtSource = 4 OR f.GeoSource = 3
+          AND (f.IsFavorite <> 0 OR f.Rating IS NOT NULL OR f.CapturedAtSource = 4 OR f.GeoSource IN (3, 4, 5) OR f.GeoSuggestionState <> 0 -- ADR-0062
                OR EXISTS (SELECT 1 FROM FileTags t WHERE t.FileId = f.Id)
                OR EXISTS (SELECT 1 FROM FileCategoryValues v WHERE v.FileId = f.Id)
                OR EXISTS (SELECT 1 FROM FaceScans s WHERE s.FileId = f.Id)
@@ -155,11 +156,15 @@ public sealed partial class UserDataCarryOver
         WHERE Files.Id = m.NewFileId AND c.ManualDate = 1;
         """;
 
-    // Manuell gesetzter bzw. entfernter Ort (ADR-0050) bleibt erhalten; alle übrigen liest das Nachtragen neu.
+    // Manuell gesetzter bzw. entfernter Ort (ADR-0050) und übernommene Vorschläge (GeoSource 4/5, ADR-0062) bleiben
+    // erhalten — ManualGeo trägt die Herkunft; alle übrigen liest das Nachtragen neu. Abgelehnte Vorschläge ebenso.
     private const string RestoreGeoSql = """
-        UPDATE Files SET Latitude = c.Latitude, Longitude = c.Longitude, PlaceId = c.PlaceId, GeoSource = 3
+        UPDATE Files SET Latitude = c.Latitude, Longitude = c.Longitude, PlaceId = c.PlaceId, GeoSource = c.ManualGeo
         FROM temp.pv_carry_map m CROSS JOIN temp.pv_carry_files c ON c.OldFileId = m.OldFileId
-        WHERE Files.Id = m.NewFileId AND c.ManualGeo = 1;
+        WHERE Files.Id = m.NewFileId AND c.ManualGeo <> 0;
+        UPDATE Files SET GeoSuggestionState = c.GeoSuggestionState
+        FROM temp.pv_carry_map m CROSS JOIN temp.pv_carry_files c ON c.OldFileId = m.OldFileId
+        WHERE Files.Id = m.NewFileId AND c.GeoSuggestionState <> 0;
         """;
 
     // Ein während des Scans gelöschtes Tag fällt still heraus (sonst verletzt die Zuweisung den Fremdschlüssel).

@@ -84,7 +84,8 @@ public sealed partial class LightboxViewModel : ObservableObject, IDisposable
         Gallery.ListView.IGalleryViewSettingsStore? viewSettings = null,
         Lumora.Services.Places.IGeoCatalogReader? geoReader = null,
         Lumora.Services.Motifs.IMotifTermService? motifs = null,
-        Lumora.Slideshow.ISlideshowService? slideshow = null)
+        Lumora.Slideshow.ISlideshowService? slideshow = null,
+        Lumora.Places.Suggestions.PlacesSuggestionContext? geoSuggestions = null)
     {
         _slideshow = slideshow; // „Diashow ab hier“ (ADR-0059, LightboxViewModel.Slideshow.cs)
         _vlc = vlc;
@@ -107,6 +108,7 @@ public sealed partial class LightboxViewModel : ObservableObject, IDisposable
         InitCaptureDate(); // Zeile „Aufgenommen“ (LightboxViewModel.CaptureDate.cs, ADR-0046)
         InitPlaces(geoReader); // Zeile „Ort“ (LightboxViewModel.Places.cs, ADR-0050,
         InitMotifs(motifs); // Info-Panel „Motive“ (LightboxViewModel.Motifs.cs, ADR-0052)
+        InitGeoHint(geoSuggestions); // Hinweis „Position geschätzt“ mit Vorschlag (LightboxViewModel.GeoAccuracy.cs, ADR-0062)
     }
 
     // ----- Anbindung an das Fenster (View-Mechanik) -----

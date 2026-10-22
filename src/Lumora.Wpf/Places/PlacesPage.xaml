@@ -9,6 +9,7 @@
              xmlns:vm="clr-namespace:Lumora.Places.ViewModels"
              xmlns:gallery="clr-namespace:Lumora.Gallery.Controls"
              xmlns:pctl="clr-namespace:Lumora.Persons.Controls"
+             xmlns:sugg="clr-namespace:Lumora.Places.Suggestions"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance vm:PlacesViewModel}"
              d:DesignWidth="1100"
@@ -17,6 +18,11 @@
          (eigene Kachelkarte MapControl, OSM-Kacheln, Zuordnung unten rechts) und Seitenleiste „Ohne Ort“ (TileListBox mit
          Blatt-Peers + VirtualizingTilePanel; Ziehen auf die Karte verortet). -->
     <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!-- Ungenaue Orte (ADR-0062, Mockup 10): Plaketten, Zeilen, Umschalter, Legende -->
+                <ResourceDictionary Source="Suggestions/PlacesSuggestionResources.xaml" />
+            </ResourceDictionary.MergedDictionaries>
         <shell:BoolToVisibilityConverter x:Key="BoolToVis" />
         <shell:BoolToVisibilityConverter x:Key="InverseBoolToVis" Invert="True" />
         <shell:NullToVisibilityConverter x:Key="NullToVis" />
@@ -89,6 +95,7 @@
                 </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
+        </ResourceDictionary>
     </UserControl.Resources>
 
     <Grid Margin="24,12,24,8">
@@ -103,8 +110,12 @@
         <gallery:ToolbarFlowPanel Grid.Row="0" Margin="0,0,0,12" Spacing="12">
             <StackPanel VerticalAlignment="Center" Margin="0,0,12,0">
                 <ui:TextBlock FontTypography="Title" Text="Orte" />
-                <TextBlock Margin="0,2,0,0" FontSize="13" AutomationProperties.AutomationId="PlacesResultLine"
-                           Text="{Binding SummaryText}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                <TextBlock Margin="0,2,0,0" FontSize="13" Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                    <Run AutomationProperties.AutomationId="PlacesResultLine" Text="{Binding SummaryText, Mode=OneWay}" />
+                    <!-- Ungenaue Orte (ADR-0062): „· 158 mit geschätzter Position“ in Warnfarbe -->
+                    <Run Text="{Binding EstimatedText, Mode=OneWay, StringFormat=' · {0}'}" FontWeight="SemiBold"
+                         Foreground="{DynamicResource SystemFillColorCautionBrush}" />
+                </TextBlock>
             </StackPanel>
             <!-- Abstandhalter: schiebt die Suchfelder nach rechts -->
             <Border gallery:ToolbarFlowPanel.Fill="True" MinWidth="0" Height="1" />
@@ -182,7 +193,7 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="12" />
-                <ColumnDefinition Width="300" />
+                <ColumnDefinition Width="{Binding SidePanelWidth}" />
             </Grid.ColumnDefinitions>
 
             <!-- ===== Karte ===== -->
@@ -193,7 +204,11 @@
                                     AutomationProperties.Name="Karte"
                                     AutomationProperties.AutomationId="PlacesMap"
                                     Viewport="{Binding Viewport}"
-                                    Markers="{Binding Markers}"
+                                    Markers="{Binding MapMarkers}"
+                                    Overlay="{Binding MapOverlay}"
+                                    TrackBrush="{StaticResource PlacesTrackBrush}"
+                                    StoredBrush="{StaticResource PlacesStoredBrush}"
+                                    ExactBrush="{DynamicResource SystemFillColorSuccessBrush}"
                                     Tiles="{Binding Tiles}"
                                     MapBackground="{DynamicResource SolidBackgroundFillColorSecondaryBrush}"
                                     GridBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
@@ -265,6 +280,23 @@
                         <TextBlock Text="{Binding TileStatusText}" FontSize="11" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                     </Border>
 
+                    <!-- Ungenaue Orte (ADR-0062): Legende unten links, Hinweis mit „Rückgängig“ unten in der Mitte -->
+                    <sugg:SuggestionMapLegend HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="12,0,0,30"
+                                              Visibility="{Binding IsSuggestionMode, Converter={StaticResource BoolToVis}}" />
+                    <Border Style="{StaticResource SuggestionToast}" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,30"
+                            AutomationProperties.AutomationId="PlacesSuggestionToast"
+                            Visibility="{Binding HasToast, Converter={StaticResource BoolToVis}}">
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="Checkmark24" Margin="0,0,8,0" Foreground="{DynamicResource SystemFillColorSuccessBrush}" />
+                            <TextBlock Text="{Binding ToastText}" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="420" />
+                            <ui:Button Content="Rückgängig" Appearance="Transparent" Margin="12,0,0,0" Padding="8,2"
+                                       FontWeight="SemiBold" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                       AutomationProperties.Name="Rückgängig" Command="{Binding UndoToastCommand}" />
+                            <ui:Button Icon="{ui:SymbolIcon Dismiss16}" Appearance="Transparent" Padding="4" Margin="2,0,0,0"
+                                       ToolTip="Schließen" AutomationProperties.Name="Hinweis schließen" Command="{Binding DismissToastCommand}" />
+                        </StackPanel>
+                    </Border>
+
                     <!-- Namensnennung des Stils (OSM, CARTO, MapTiler) unten rechts, immer gut sichtbar (ADR-0051/0055) -->
                     <Border Padding="6,2" CornerRadius="4,0,0,0" HorizontalAlignment="Right" VerticalAlignment="Bottom"
                             Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}" Opacity="0.92">
@@ -278,11 +310,32 @@
                 </Grid>
             </Border>
 
-            <!-- ===== Seitenleiste „Ohne Ort“ ===== -->
+            <!-- ===== Seitenleiste „Ohne Ort | Ungenau“ ===== -->
             <Border Grid.Column="2" CornerRadius="8" BorderThickness="1" Padding="10"
                     Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
-                <DockPanel>
+              <DockPanel>
+                <!-- Umschalter (ADR-0062, Mockup 10): „Ohne Ort n | Ungenau m“ -->
+                <Border DockPanel.Dock="Top" Style="{StaticResource SuggestionSegment}" Margin="0,0,0,10"
+                        HorizontalAlignment="Left"
+                        Visibility="{Binding HasSuggestions, Converter={StaticResource BoolToVis}}">
+                    <StackPanel Orientation="Horizontal">
+                        <RadioButton Style="{StaticResource SuggestionSegmentButton}" GroupName="PlacesSide"
+                                     AutomationProperties.AutomationId="PlacesModeUnlocated"
+                                     AutomationProperties.Name="Ohne Ort"
+                                     Content="{Binding UnlocatedButtonText}"
+                                     IsChecked="{Binding IsUnlocatedMode, Mode=OneWay}"
+                                     Command="{Binding ShowUnlocatedModeCommand}" />
+                        <RadioButton Style="{StaticResource SuggestionSegmentButton}" GroupName="PlacesSide"
+                                     AutomationProperties.AutomationId="PlacesModeInaccurate"
+                                     AutomationProperties.Name="Ungenau"
+                                     Content="{Binding InaccurateButtonText}"
+                                     IsChecked="{Binding IsInaccurateMode, Mode=OneWay}"
+                                     Command="{Binding ShowInaccurateModeCommand}" />
+                    </StackPanel>
+                </Border>
+                <!-- „Ohne Ort“: Kacheln zum Ziehen (ADR-0051) -->
+                <DockPanel Visibility="{Binding IsUnlocatedMode, Converter={StaticResource BoolToVis}}">
                     <StackPanel DockPanel.Dock="Top" Margin="2,0,2,8">
                         <DockPanel>
                             <ui:Button DockPanel.Dock="Right" Padding="8,3" Content="Auswahl aufheben" FontSize="12"
@@ -293,6 +346,21 @@
                         </DockPanel>
                         <TextBlock Margin="0,4,0,0" Text="{Binding SelectionText}" TextWrapping="Wrap" FontSize="11"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        <!-- Fotos ohne Ort mit Vorschlag (ADR-0062) -->
+                        <Border Margin="0,8,0,0" Padding="10,8" CornerRadius="6"
+                                Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                                AutomationProperties.AutomationId="PlacesUnlocatedHint"
+                                Visibility="{Binding HasUnlocatedHint, Converter={StaticResource BoolToVis}}">
+                            <DockPanel>
+                                <ui:Button DockPanel.Dock="Bottom" HorizontalAlignment="Left" Margin="0,6,0,0" Padding="10,3" FontSize="12"
+                                           Content="Vorschläge zeigen" AutomationProperties.Name="Vorschläge für Fotos ohne Ort zeigen"
+                                           Command="{Binding ShowUnlocatedSuggestionsCommand}" />
+                                <ui:SymbolIcon DockPanel.Dock="Left" Symbol="Info16" Margin="0,1,6,0" VerticalAlignment="Top"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                <TextBlock Text="{Binding UnlocatedHint}" TextWrapping="Wrap" FontSize="12"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                            </DockPanel>
+                        </Border>
                     </StackPanel>
                     <Grid>
                         <TextBlock Text="Alle Fotos sind verortet." FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,20,0,0"
@@ -313,6 +381,9 @@
                         </pctl:TileListBox>
                     </Grid>
                 </DockPanel>
+                <!-- „Ungenau“ bzw. „Ohne Ort“ mit Vorschlag (ADR-0062) -->
+                <sugg:SuggestionPanel Visibility="{Binding IsSuggestionMode, Converter={StaticResource BoolToVis}}" />
+              </DockPanel>
             </Border>
         </Grid>
     </Grid>

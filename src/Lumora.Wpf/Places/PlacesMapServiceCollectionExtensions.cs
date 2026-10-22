@@ -94,6 +94,10 @@ public static class PlacesMapServiceCollectionExtensions
         services.TryAddSingleton<IPlacesImageSource, PlacesThumbnailProvider>();
         services.TryAddSingleton<IPlacesDialogs, PlacesDialogs>();
         services.TryAddSingleton<IMapPicker, MapPickerService>();
+        services.TryAddSingleton<Lumora.Places.Suggestions.PlacesSuggestionContext>(); // ungenaue Orte (ADR-0062)
+        services.TryAddSingleton<Lumora.Places.TrackSettings.IGpsTrackFilePicker, Lumora.Places.TrackSettings.GpsTrackFilePicker>();
+        services.TryAddSingleton<Lumora.Places.TrackSettings.PlacesSettingsViewModel>(); // Einstellungen › Orte (ADR-0062)
+        services.TryAddSingleton<Lumora.Places.TrackSettings.GarminDevicePrompt>(); // Uhr per USB: vorher fragen (ADR-0062)
         services.TryAddSingleton<PlacesViewModel>();
         services.TryAddSingleton<PlacesPage>();
         return services;

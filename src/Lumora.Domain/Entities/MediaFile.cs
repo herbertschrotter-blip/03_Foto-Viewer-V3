@@ -52,4 +52,24 @@ public sealed class MediaFile
 
     /// <summary>Nächster Ort aus den eingebetteten GeoNames-Daten (GeoNames-Id), null ohne Koordinaten bzw. ohne Ort in der Nähe.</summary>
     public int? PlaceId { get; set; }
+
+    // ---- Ungenaue Orte und GPS-Spuren (ADR-0062) ----
+
+    /// <summary>Genauigkeit der gelesenen Koordinaten; null = noch nicht bewertet (Nachtragen im Hintergrund).</summary>
+    public GeoAccuracy? GeoAccuracy { get; set; }
+
+    /// <summary>Gründe für „geschätzt“ (Bitmaske <see cref="Enums.GeoAccuracyReason"/>), null ohne.</summary>
+    public GeoAccuracyReason? GeoAccuracyReason { get; set; }
+
+    /// <summary>GPS-Zeitstempel der Datei (EXIF-GPS-Tags 29 + 7) als UTC, null ohne.</summary>
+    public DateTime? GpsTimeUtc { get; set; }
+
+    /// <summary>Abstand zu UTC laut <c>OffsetTimeOriginal</c> (EXIF 36881) in Minuten, null wenn die Datei keinen nennt.</summary>
+    public int? ExifTimeOffset { get; set; }
+
+    /// <summary>Kamera („Hersteller Modell“ aus IFD0 Make/Model) für die Kamera-Abweichung des Zeitabgleichs, null ohne.</summary>
+    public string? CameraModel { get; set; }
+
+    /// <summary>1 = Vorschlag für den Ort abgelehnt (wird nicht mehr vorgeschlagen), 0 sonst.</summary>
+    public int GeoSuggestionState { get; set; }
 }

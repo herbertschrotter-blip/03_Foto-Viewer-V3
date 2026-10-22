@@ -1,0 +1,221 @@
+<UserControl x:Class="Lumora.Places.Suggestions.SuggestionPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:shell="clr-namespace:Lumora.Shell"
+             xmlns:local="clr-namespace:Lumora.Places.Suggestions"
+             xmlns:vm="clr-namespace:Lumora.Places.ViewModels"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:PlacesViewModel}"
+             d:DesignWidth="400" d:DesignHeight="700">
+    <!-- Seitenleiste „Ungenau“ bzw. „Ohne Ort“ mit Vorschlag (ADR-0062, Mockup 10): Erklärung mit Zählern, Filter-Chips,
+         Liste nach Tagen/Ausflügen (virtualisiert), Speichern „nur im Katalog“ / „auch ins Foto schreiben (EXIF)“,
+         „Garmin + sichere übernehmen“ und „Ausflug“. DataContext = PlacesViewModel (geerbt). -->
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="PlacesSuggestionResources.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <shell:BoolToVisibilityConverter x:Key="BoolToVis" />
+            <shell:BoolToVisibilityConverter x:Key="InverseBoolToVis" Invert="True" />
+            <shell:NullToVisibilityConverter x:Key="NullToVis" />
+
+            <Style x:Key="RowButton" TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
+                <Setter Property="Appearance" Value="Transparent" />
+                <Setter Property="Width" Value="28" />
+                <Setter Property="Height" Value="28" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="Margin" Value="2,0,0,0" />
+                <Setter Property="HorizontalContentAlignment" Value="Center" />
+            </Style>
+
+            <Style x:Key="RowContainer" TargetType="ListBoxItem">
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="Margin" Value="0" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                <EventSetter Event="PreviewMouseLeftButtonDown" Handler="OnRowMouseDown" />
+                <EventSetter Event="KeyDown" Handler="OnRowKeyDown" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ListBoxItem">
+                            <ContentPresenter />
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <DataTemplate DataType="{x:Type local:SuggestionGroupRow}">
+                <Border Padding="4,10,4,6" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}">
+                    <DockPanel>
+                        <ui:Button DockPanel.Dock="Right" Content="Übernehmen" FontSize="12" Padding="10,3" VerticalAlignment="Center"
+                                   ToolTip="Alle Vorschläge dieses Tages übernehmen"
+                                   AutomationProperties.Name="Ausflug übernehmen"
+                                   Visibility="{Binding CanApply, Converter={StaticResource BoolToVis}}"
+                                   Command="{Binding DataContext.ApplyGroupCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                   CommandParameter="{Binding}" />
+                        <ui:SymbolIcon DockPanel.Dock="Left" Symbol="CalendarLtr16" Margin="0,2,8,0" VerticalAlignment="Top"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        <StackPanel>
+                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding Detail}" FontSize="12" TextTrimming="CharacterEllipsis"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+            </DataTemplate>
+
+            <DataTemplate DataType="{x:Type local:SuggestionItemRow}">
+                <Border x:Name="Row" Padding="4,6" CornerRadius="4" Background="Transparent" Cursor="Hand"
+                        AutomationProperties.Name="{Binding AutomationName}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="44" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Border Width="44" Height="44" CornerRadius="4" ClipToBounds="True"
+                                Background="{DynamicResource ControlFillColorSecondaryBrush}">
+                            <Grid>
+                                <ui:SymbolIcon Symbol="Image24" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                                <Image Source="{Binding Image}" Stretch="UniformToFill"
+                                       Visibility="{Binding Image, Converter={StaticResource NullToVis}}" />
+                            </Grid>
+                        </Border>
+                        <StackPanel Grid.Column="1" Margin="10,0,6,0" VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding Title}" FontSize="13" TextTrimming="CharacterEllipsis" MaxWidth="190" />
+                                <Border Style="{StaticResource SuggestionBadge}">
+                                    <TextBlock Text="{Binding BadgeText}" />
+                                </Border>
+                            </StackPanel>
+                            <TextBlock Text="{Binding Detail}" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap"
+                                       ToolTip="{Binding SourceText}"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                            <!-- Übernommen: Rückgängig -->
+                            <ui:Button Style="{StaticResource RowButton}" Icon="{ui:SymbolIcon ArrowUndo16}" ToolTip="Rückgängig"
+                                       AutomationProperties.Name="Rückgängig"
+                                       Visibility="{Binding IsApplied, Converter={StaticResource BoolToVis}}"
+                                       Command="{Binding DataContext.UndoRowCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                       CommandParameter="{Binding}" />
+                            <!-- Mit Vorschlag: übernehmen / ablehnen -->
+                            <StackPanel Orientation="Horizontal" Visibility="{Binding CanApply, Converter={StaticResource BoolToVis}}">
+                                <ui:Button Style="{StaticResource RowButton}" Icon="{ui:SymbolIcon Checkmark16}" ToolTip="Übernehmen"
+                                           AutomationProperties.Name="Vorschlag übernehmen"
+                                           Command="{Binding DataContext.ApplyRowCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                           CommandParameter="{Binding}" />
+                                <ui:Button Style="{StaticResource RowButton}" Icon="{ui:SymbolIcon Dismiss16}" ToolTip="Ablehnen (bleibt, wie es ist)"
+                                           AutomationProperties.Name="Vorschlag ablehnen"
+                                           Command="{Binding DataContext.RejectRowCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                           CommandParameter="{Binding}" />
+                            </StackPanel>
+                            <!-- Ohne Vorschlag: Ort setzen -->
+                            <ui:Button x:Name="SetPlace" Style="{StaticResource RowButton}" Icon="{ui:SymbolIcon Location16}" ToolTip="Ort setzen…"
+                                       AutomationProperties.Name="Ort setzen" Visibility="Collapsed"
+                                       Command="{Binding DataContext.SetPlaceForRowCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                       CommandParameter="{Binding}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+                <DataTemplate.Triggers>
+                    <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                        <Setter TargetName="Row" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                        <Setter TargetName="Row" Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                        <Setter TargetName="Row" Property="BorderThickness" Value="3,0,0,0" />
+                    </DataTrigger>
+                    <MultiDataTrigger>
+                        <MultiDataTrigger.Conditions>
+                            <Condition Binding="{Binding HasSuggestion}" Value="False" />
+                            <Condition Binding="{Binding IsApplied}" Value="False" />
+                        </MultiDataTrigger.Conditions>
+                        <Setter TargetName="SetPlace" Property="Visibility" Value="Visible" />
+                    </MultiDataTrigger>
+                </DataTemplate.Triggers>
+            </DataTemplate>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <DockPanel>
+        <!-- Kopf: zurück (nur „Ohne Ort“ mit Vorschlag), Erklärung, Filter -->
+        <StackPanel DockPanel.Dock="Top" Margin="2,0,2,8">
+            <ui:Button HorizontalAlignment="Left" Padding="8,3" FontSize="12" Margin="0,0,0,6"
+                       Icon="{ui:SymbolIcon ArrowLeft16}" Content="Alle Fotos ohne Ort"
+                       AutomationProperties.Name="Zurück zu allen Fotos ohne Ort"
+                       Visibility="{Binding IsInaccurateMode, Converter={StaticResource InverseBoolToVis}}"
+                       Command="{Binding ShowUnlocatedModeCommand}" />
+            <TextBlock Text="{Binding SuggestionSummary}" TextWrapping="Wrap" FontSize="12" LineHeight="18"
+                       AutomationProperties.AutomationId="PlacesSuggestionSummary"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+            <ItemsControl Margin="0,8,0,0" ItemsSource="{Binding FilterChips}" AutomationProperties.Name="Filter der Vorschläge">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="{x:Type local:SuggestionFilterChip}">
+                        <Button Style="{StaticResource SuggestionChip}" Content="{Binding Text}"
+                                AutomationProperties.Name="{Binding Label}"
+                                Command="{Binding DataContext.SelectFilterCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                CommandParameter="{Binding}" />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Margin="0,2,0,0" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                       Visibility="{Binding HasNoActivities, Converter={StaticResource BoolToVis}}"
+                       Text="Noch keine GPS-Spuren — in Einstellungen › Orte den Garmin-Datenexport bzw. FIT/GPX-Dateien einlesen." />
+        </StackPanel>
+
+        <!-- Fuß: Speichern + Übernehmen -->
+        <Border DockPanel.Dock="Bottom" Margin="-10,8,-10,-10" Padding="12,10,12,12" CornerRadius="0,0,8,8" BorderThickness="0,1,0,0"
+                BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+                Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+            <StackPanel>
+                <WrapPanel>
+                    <TextBlock Text="Speichern:" FontSize="12" Margin="0,0,10,4" VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    <RadioButton GroupName="SuggestionSave" Content="nur im Katalog" FontSize="12" Margin="0,0,12,4" MinWidth="0"
+                                 AutomationProperties.AutomationId="PlacesSaveCatalog"
+                                 IsChecked="{Binding SaveToCatalogOnly}" />
+                    <RadioButton GroupName="SuggestionSave" Content="auch ins Foto schreiben (EXIF)" FontSize="12" Margin="0,0,0,4" MinWidth="0"
+                                 AutomationProperties.AutomationId="PlacesSaveFile"
+                                 ToolTip="JPEG: GPS ins EXIF (verlustfrei, rückgängig machbar); RAW/HEIC/PNG/WebP: XMP-Begleitdatei; Videos: nur Katalog."
+                                 IsChecked="{Binding SaveToFile}" />
+                </WrapPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                    <ui:Button Appearance="Primary" Icon="{ui:SymbolIcon Checkmark16}" Content="{Binding ApplyTrackAndSureText}"
+                               AutomationProperties.AutomationId="PlacesApplyTrackAndSure"
+                               AutomationProperties.Name="Garmin und sichere übernehmen"
+                               Command="{Binding ApplyTrackAndSureCommand}" />
+                    <ui:Button Margin="8,0,0,0" Content="{Binding ApplyGroupText}"
+                               ToolTip="Alle Vorschläge des Tages der ausgewählten Zeile übernehmen"
+                               AutomationProperties.Name="Ausflug übernehmen"
+                               Command="{Binding ApplyGroupCommand}" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <Grid>
+            <TextBlock FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,20,0,0" TextWrapping="Wrap" TextAlignment="Center"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       Visibility="{Binding HasSuggestionRows, Converter={StaticResource InverseBoolToVis}}"
+                       Text="{Binding EmptySuggestionText}" />
+            <ListBox x:Name="Rows"
+                     AutomationProperties.Name="Fotos mit Vorschlag"
+                     AutomationProperties.AutomationId="PlacesSuggestionList"
+                     ItemsSource="{Binding SuggestionRows}"
+                     ItemContainerStyle="{StaticResource RowContainer}"
+                     Background="Transparent" BorderThickness="0" Padding="0"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     ScrollViewer.CanContentScroll="True"
+                     VirtualizingPanel.IsVirtualizing="True"
+                     VirtualizingPanel.VirtualizationMode="Recycling"
+                     VirtualizingPanel.ScrollUnit="Pixel" />
+        </Grid>
+    </DockPanel>
+</UserControl>

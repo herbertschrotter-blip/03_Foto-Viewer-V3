@@ -47,7 +47,7 @@ public sealed class MapDropEventArgs(IReadOnlyList<int> fileIds, double latitude
 /// ist im UI-Automation-Baum ein Blatt (CLAUDE.md: keine tausend Peers), Treffer prüft <see cref="MarkerAt"/>.
 /// Klick auf einen Marker wird um die Doppelklickzeit verzögert gemeldet, damit ein Doppelklick ihn ersetzt.
 /// </summary>
-public sealed class MapControl : FrameworkElement
+public sealed partial class MapControl : FrameworkElement
 {
     /// <summary>Datenformat beim Ziehen aus „Ohne Ort“: <c>int[]</c> mit FileIds.</summary>
     public const string FileIdsDataFormat = "Lumora.Places.FileIds";
@@ -261,6 +261,7 @@ public sealed class MapControl : FrameworkElement
 
         DrawTiles(dc, vp, size);
         DrawMarkers(dc, vp);
+        DrawOverlay(dc, vp); // ungenaue Orte (ADR-0062, MapControl.Overlay.cs)
         if (Pin is { } pin)
         {
             var (px, py) = vp.UnitToScreen(pin.X, pin.Y);
@@ -468,6 +469,12 @@ public sealed class MapControl : FrameworkElement
             return;
         }
 
+        if (OverlayMouseDown(pos)) // Vorschlag ziehen bzw. Punkt anklicken (ADR-0062)
+        {
+            e.Handled = true;
+            return;
+        }
+
         _down = pos;
         _last = pos;
         _dragging = false;
@@ -480,6 +487,11 @@ public sealed class MapControl : FrameworkElement
     {
         base.OnMouseMove(e);
         var pos = e.GetPosition(this);
+        if (OverlayMouseMove(pos))
+        {
+            return;
+        }
+
         if (_pressed && e.LeftButton == MouseButtonState.Pressed)
         {
             if (!_dragging && (pos - _down).Length > 4)
@@ -497,6 +509,11 @@ public sealed class MapControl : FrameworkElement
             return;
         }
 
+        if (OverlayHover(pos))
+        {
+            return;
+        }
+
         var hover = MarkerAt(pos);
         if (!ReferenceEquals(hover, _hover))
         {
@@ -510,6 +527,12 @@ public sealed class MapControl : FrameworkElement
     protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
     {
         base.OnMouseLeftButtonUp(e);
+        if (OverlayMouseUp(e.GetPosition(this)))
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (!_pressed)
         {
             return;

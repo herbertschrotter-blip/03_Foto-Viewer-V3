@@ -46,6 +46,7 @@ public sealed class LibraryContext : DbContext
     public DbSet<FileQuality> FileQuality => Set<FileQuality>(); // Foto-Güte (ADR-0057)
     public DbSet<Story> Stories => Set<Story>(); // Storys (ADR-0058)
     public DbSet<StoryItem> StoryItems => Set<StoryItem>();
+    public DbSet<GpsTrack> GpsTracks => Set<GpsTrack>(); // GPS-Spuren (ADR-0062)
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

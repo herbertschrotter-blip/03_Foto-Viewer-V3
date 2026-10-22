@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Lumora.Services.Metadata;
+using Lumora.Services.Places.Tracks;
 
 namespace Lumora.Services.Places;
 
@@ -24,6 +25,7 @@ public static class PlacesServiceCollectionExtensions
         services.TryAddSingleton<IGeoTagService>(sp => sp.GetRequiredService<GeoLocationService>());
         services.TryAddSingleton<IGeoTagUndoService>(sp => sp.GetRequiredService<GeoLocationService>());
         services.TryAddSingleton<IGeoBackfillService>(sp => sp.GetRequiredService<GeoLocationService>());
+        services.AddPlacesTracks(); // Ungenaue Orte und GPS-Spuren (ADR-0062)
         return services;
     }
 }
