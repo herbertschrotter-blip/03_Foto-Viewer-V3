@@ -3,6 +3,17 @@
 Alle nennenswerten Änderungen an Lumora (bis 0.2.48 „PhotoViewer V3“). Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.4.20] — 2026-10-22
+
+### Docs — Mockup 12 „Story-Assistent“ (Welle 6b), abgenommen
+- `mockups/12-story-assistent.html`: Sätze in eigenen Worten auf der Seite Storys („Collage mit meiner Schwester bis
+  20 Jahre“) → lokale Sprach-KI (Ollama, kleines Modell) übersetzt nur in Filter und Aktion, sieht keine Fotos;
+  Lumora zeigt das Verständnis (Person mit Beziehung, Zeitraum aus Geburtsdatum, Medien, Story/Collage/Album/
+  Diashow) mit Treffern zur Bestätigung, fragt bei Mehrdeutigkeit nach und merkt sich die Antwort; Verlauf.
+- Dialog **„Als Collage-Bild speichern“** (Format, Größe, Anzahl, Anordnung, sachliche Überschrift, Neu mischen,
+  Fotos tauschen) und Einstellungen › **Assistent** (Ollama und Modell nur nach Bestätigung mit Name, Quelle, Größe;
+  Grafikkarte teilen; Verlauf; Ausprobieren ohne Erstellen).
+
 ## [0.4.19] — 2026-10-22
 
 ### Docs — Mockup 11 „Verbundene Apps“, abgenommen

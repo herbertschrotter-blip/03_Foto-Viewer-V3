@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lumora — Story-Assistent (Entwurf 12)</title>
+<style>
+/* =====================================================================
+   Mockup 12 · Welle 6b „Assistent“ auf der Seite Storys. Tokens 1:1 aus 08–11.
+   Anweisung in eigenen Worten → lokale Sprach-KI (Ollama, kleines Modell) übersetzt NUR in Filter + Aktion,
+   sieht keine Fotos; Lumora zeigt das Verständnis zur Bestätigung, fragt bei Mehrdeutigkeit nach;
+   kein erfundener Text (Überschriften sachlich). Dazu „Als Collage-Bild speichern“ und Einstellungen › Assistent.
+   Personennamen und Fotos sind Platzhalter. Hell/Dunkel über „dark“ am body.
+   ABGENOMMEN von Herbert am 2026-10-22: Eingabeleiste mit Beispielen auf der Seite Storys, Karte „So habe ich es
+   verstanden“ (Person/Beziehung, Zeitraum aus Geburtsdatum, Medien, was entsteht; jeder Punkt änderbar; Treffer +
+   Vorschau; Erstellen / Nur Fotos zeigen / Satz ändern), Rückfrage bei Mehrdeutigkeit (Antwort wird gemerkt), Verlauf,
+   Dialog „Als Collage-Bild speichern“ (Format, Größe, Anzahl, Anordnung, sachliche Überschrift, Neu mischen),
+   Einstellungen › Assistent (Ollama + Modell nur nach Bestätigung mit Name/Quelle/Größe, Grafikkarte, Verlauf,
+   Ausprobieren). Bewusst nicht: erfundener Text, Fotos an die Sprach-KI.
+   ===================================================================== */
+:root {
+  --mica-base:#F3F3F3; --layer-default:rgba(255,255,255,0.7); --layer-card:#FFFFFF; --layer-subtle:rgba(0,0,0,0.026);
+  --layer-secondary:rgba(0,0,0,0.04); --layer-tertiary:rgba(0,0,0,0.06);
+  --text-primary:#1A1A1A; --text-secondary:#5C5C5C; --text-tertiary:#8B8B8B; --text-on-accent:#FFFFFF;
+  --stroke-default:rgba(0,0,0,0.0578); --stroke-divider:rgba(0,0,0,0.0803); --stroke-card:rgba(0,0,0,0.0578); --ctl-bottom:rgba(0,0,0,0.16);
+  --accent:#5B5FC7; --accent-light:#7579D8; --accent-dark:#4145A0; --accent-soft:rgba(91,95,199,0.08); --accent-soft-2:rgba(91,95,199,0.16);
+  --success:#107C10; --success-soft:rgba(16,124,16,0.10); --warning:#C29C00; --warning-soft:rgba(194,156,0,0.14); --danger:#C42B1C;
+  --shadow-card:0 2px 4px rgba(0,0,0,0.02), 0 1px 2px rgba(0,0,0,0.03); --shadow-flyout:0 8px 16px rgba(0,0,0,0.14);
+  --brand-indigo:#5B5FC7; --brand-violet:#8B5CF6; --brand-coral:#F97362; --brand-amber:#F5A524;
+  --page-bg:#E4E4EA; --smoke:rgba(0,0,0,0.3);
+}
+body.dark {
+  color-scheme:dark;
+  --mica-base:#202020; --layer-default:rgba(43,43,43,0.7); --layer-card:#2C2C2C; --layer-subtle:rgba(255,255,255,0.03);
+  --layer-secondary:rgba(255,255,255,0.0418); --layer-tertiary:rgba(255,255,255,0.0605);
+  --text-primary:#FFFFFF; --text-secondary:#D0D0D0; --text-tertiary:#A0A0A0;
+  --stroke-default:rgba(255,255,255,0.0837); --stroke-divider:rgba(255,255,255,0.0837); --stroke-card:rgba(255,255,255,0.0578); --ctl-bottom:rgba(255,255,255,0.22);
+  --accent:#818CF8; --accent-light:#A5B0FF; --accent-dark:#6066D8; --accent-soft:rgba(129,140,248,0.12); --accent-soft-2:rgba(129,140,248,0.24);
+  --success:#6CCB5F; --success-soft:rgba(108,203,95,0.12); --warning:#FCE100; --warning-soft:rgba(252,225,0,0.14); --danger:#FF6B5E;
+  --shadow-card:0 2px 4px rgba(0,0,0,0.18), 0 1px 2px rgba(0,0,0,0.22); --shadow-flyout:0 8px 16px rgba(0,0,0,0.4);
+  --brand-indigo:#818CF8; --brand-violet:#A78BFA; --brand-coral:#FB8A7A; --brand-amber:#FBBF24;
+  --page-bg:#121214; --smoke:rgba(0,0,0,0.55);
+}
+* { box-sizing:border-box; } html,body { margin:0; }
+body { background:var(--page-bg); color:var(--text-primary); font-family:'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; font-size:14px; }
+button,input { font:inherit; color:inherit; }
+.ic { font-family:'Segoe Fluent Icons','Segoe MDL2 Assets'; font-size:16px; line-height:1; font-style:normal; }
+.ic.s { font-size:12px; }
+.hidden { display:none !important; }
+.mock-bar { position:sticky; top:0; z-index:100; display:flex; gap:16px; align-items:center; flex-wrap:wrap; padding:7px 20px; background:#2B2B33; color:#EEE; font-size:12px; }
+.mock-bar .grp { display:flex; gap:4px; align-items:center; }
+.mock-bar button { background:#44444F; color:#EEE; border:1px solid #5A5A66; border-radius:4px; padding:3px 9px; cursor:pointer; font-size:12px; }
+.mock-bar button.on { background:#5B5FC7; border-color:#7579D8; }
+.mock-bar .note { margin-left:auto; color:#AAB; }
+.stage-wrap { padding:16px 20px 32px; display:flex; justify-content:center; }
+.win-box { position:relative; flex:none; }
+.window { position:absolute; left:0; top:0; transform-origin:0 0; background:var(--mica-base); border-radius:8px; border:1px solid var(--stroke-default);
+  box-shadow:0 16px 48px rgba(0,0,0,0.22); overflow:hidden; display:grid; grid-template-columns:232px 1fr; grid-template-rows:36px 1fr 30px; }
+.titlebar { grid-column:1/-1; display:flex; align-items:center; gap:10px; padding-left:14px; font-size:12px; color:var(--text-secondary); }
+.titlebar .tile { width:16px; height:16px; border-radius:4px; background:linear-gradient(135deg,#6366F1,#4145A0); }
+.titlebar .wc { margin-left:auto; display:flex; height:100%; } .titlebar .wc span { width:46px; display:grid; place-items:center; font-family:'Segoe Fluent Icons'; font-size:10px; color:var(--text-primary); }
+.nav { padding:2px 8px 10px; display:flex; flex-direction:column; gap:2px; }
+.wbs { font-family:'Segoe UI Variable Display','Segoe UI',sans-serif; font-size:22px; padding:2px 12px 10px;
+  background:linear-gradient(100deg,var(--brand-indigo),var(--brand-violet) 45%,var(--brand-coral) 75%,var(--brand-amber)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+.lib-switch { margin:0 2px 8px; padding:8px 10px; border-radius:6px; background:var(--layer-card); border:1px solid var(--stroke-card); box-shadow:var(--shadow-card); display:flex; gap:10px; align-items:center; }
+.lib-switch b { display:block; font-weight:600; } .lib-switch small { display:block; color:var(--text-tertiary); font-size:11px; }
+.nav-item { display:flex; align-items:center; gap:12px; padding:9px 12px; border-radius:4px; position:relative; white-space:nowrap; }
+.nav-item.active { background:var(--layer-secondary); }
+.nav-item.active::before { content:''; position:absolute; left:0; top:10px; bottom:10px; width:3px; border-radius:2px; background:var(--accent); }
+.nav .spacer { flex:1; }
+.content { position:relative; min-width:0; min-height:0; background:var(--layer-default); border-top-left-radius:8px; border-left:1px solid var(--stroke-default); border-top:1px solid var(--stroke-default); overflow:auto; }
+.statusbar { grid-column:1/-1; display:flex; align-items:center; gap:18px; padding:0 14px; font-size:12px; color:var(--text-secondary); border-top:1px solid var(--stroke-divider); background:var(--mica-base); }
+.statusbar .r { margin-left:auto; }
+.btn-acc { background:var(--accent); color:var(--text-on-accent); border:1px solid transparent; border-radius:4px; padding:5px 14px; font-size:13px; cursor:pointer; display:inline-flex; gap:6px; align-items:center; white-space:nowrap; }
+body.dark .btn-acc { color:#111; } .btn-acc:hover { background:var(--accent-light); }
+.btn-std { background:var(--layer-card); border:1px solid var(--stroke-divider); border-bottom-color:var(--ctl-bottom); border-radius:4px; padding:5px 12px; font-size:13px; cursor:pointer; display:inline-flex; gap:6px; align-items:center; white-space:nowrap; }
+.btn-std:hover { background:var(--layer-subtle); }
+.muted { color:var(--text-secondary); font-size:12px; line-height:1.5; }
+.phead { display:flex; align-items:flex-end; gap:14px; padding:18px 24px 10px; }
+.phead h1 { font-size:28px; font-weight:600; margin:0; } .phead .sub { color:var(--text-secondary); font-size:13px; margin-top:4px; }
+.wrap { padding:0 24px 24px; display:grid; gap:14px; }
+
+/* Assistent-Leiste */
+.ask { background:var(--layer-card); border:1px solid var(--stroke-card); border-radius:10px; box-shadow:var(--shadow-card); padding:12px 14px; display:grid; gap:10px; }
+.ask-row { display:flex; gap:10px; align-items:center; }
+.spark { width:32px; height:32px; border-radius:8px; display:grid; place-items:center; color:#fff; flex:none;
+  background:linear-gradient(135deg,var(--brand-indigo),var(--brand-violet) 60%,var(--brand-coral)); }
+.inp { flex:1; height:38px; border:1px solid var(--stroke-default); border-bottom:2px solid var(--accent); border-radius:6px; padding:0 12px; display:flex; align-items:center; background:var(--layer-card); font-size:14px; }
+.inp .ph { color:var(--text-tertiary); }
+.examples { display:flex; gap:6px; flex-wrap:wrap; }
+.ex { font-size:12px; border:1px solid var(--stroke-divider); border-radius:13px; padding:3px 10px; cursor:pointer; color:var(--text-secondary); background:var(--layer-subtle); }
+.ex:hover { border-color:var(--accent); color:var(--accent); }
+.local { font-size:11px; color:var(--text-tertiary); display:flex; gap:6px; align-items:center; }
+
+/* Verständnis */
+.understood { border:1px solid var(--accent); background:var(--accent-soft); border-radius:10px; padding:14px 16px; display:grid; gap:12px; }
+.understood h3 { margin:0; font-size:14px; display:flex; gap:8px; align-items:center; }
+.facts { display:grid; grid-template-columns:150px 1fr; gap:8px 12px; align-items:center; font-size:13px; }
+.facts > span:nth-child(odd) { color:var(--text-secondary); }
+.tok { display:inline-flex; gap:6px; align-items:center; background:var(--layer-card); border:1px solid var(--stroke-divider); border-radius:6px; padding:3px 9px; margin:0 4px 2px 0; cursor:pointer; }
+.tok .ic { color:var(--text-tertiary); font-size:10px; }
+.tok.person::before { content:''; width:18px; height:18px; border-radius:50%; background:linear-gradient(135deg,#F3C9A8,#C98E6A); }
+.result { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.big { font-size:22px; font-weight:600; }
+.strip { display:flex; gap:4px; } .strip span { width:46px; height:46px; border-radius:4px; }
+.acts { display:flex; gap:8px; flex-wrap:wrap; }
+
+/* Rückfrage */
+.question { border:1px solid var(--warning); background:var(--warning-soft); border-radius:10px; padding:14px 16px; display:grid; gap:10px; }
+.question h3 { margin:0; font-size:14px; display:flex; gap:8px; align-items:center; }
+.choices { display:flex; gap:10px; flex-wrap:wrap; }
+.choice { display:flex; gap:10px; align-items:center; background:var(--layer-card); border:1px solid var(--stroke-divider); border-radius:8px; padding:8px 12px; cursor:pointer; }
+.choice:hover { border-color:var(--accent); }
+.face { width:36px; height:36px; border-radius:50%; flex:none; }
+.choice b { display:block; font-size:13px; } .choice small { color:var(--text-secondary); font-size:11px; }
+
+/* Verlauf */
+.hist h2 { font-size:15px; margin:4px 0 8px; }
+.hrow { display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:center; padding:8px 0; border-top:1px solid var(--stroke-divider); font-size:13px; }
+.hrow q { color:var(--text-secondary); }
+
+/* Collage-Dialog */
+.smoke { position:absolute; inset:0; background:var(--smoke); z-index:40; display:grid; place-items:center; }
+.dlg { width:900px; background:var(--layer-card); border:1px solid var(--stroke-card); border-radius:8px; box-shadow:0 24px 48px rgba(0,0,0,.3); overflow:hidden; }
+body.dark .dlg { background:#2B2B2B; }
+.dlg { max-width:calc(100% - 40px); }
+.dlg .in { padding:18px 22px; display:grid; grid-template-columns:minmax(0,1fr) 290px; gap:20px; }
+.opts > * { min-width:0; }
+.dlg h2 { margin:0 0 12px; font-size:20px; font-weight:600; grid-column:1/-1; }
+.dlg .ft { display:flex; gap:8px; justify-content:flex-end; padding:12px 22px; background:var(--layer-subtle); border-top:1px solid var(--stroke-divider); }
+.canvas { background:#fff; border-radius:4px; box-shadow:0 2px 10px rgba(0,0,0,.18); padding:10px; aspect-ratio:16/9; display:grid; grid-template-columns:2fr 1fr 1fr 1fr; grid-template-rows:auto 1fr 1fr 1fr; gap:6px; }
+.canvas .ttl { grid-column:1/-1; font-family:'Segoe UI Variable Display','Segoe UI'; color:#222; font-size:15px; font-weight:600; display:flex; justify-content:space-between; }
+.canvas .ttl small { font-weight:400; color:#777; font-size:11px; }
+.canvas span { border-radius:2px; }
+.canvas .hero { grid-row:2 / span 2; }
+.opts { display:grid; gap:12px; align-content:start; font-size:13px; }
+.opts label { color:var(--text-secondary); font-size:12px; display:block; margin-bottom:4px; }
+.seg { display:inline-flex; background:var(--layer-secondary); border-radius:6px; padding:2px; gap:2px; flex-wrap:wrap; }
+.seg button { border:0; background:transparent; padding:4px 10px; border-radius:4px; cursor:pointer; font-size:12px; }
+.seg button.on { background:var(--layer-card); box-shadow:0 1px 2px rgba(0,0,0,.12); color:var(--accent); font-weight:600; }
+body.dark .seg button.on { background:#3A3A3A; }
+.field { display:block; padding:5px 10px; border:1px solid var(--stroke-default); border-bottom-color:var(--ctl-bottom); border-radius:4px; background:var(--layer-card); font-size:13px; }
+.tg { display:flex; gap:8px; align-items:center; }
+.sw { width:36px; height:18px; border-radius:9px; border:1px solid var(--text-secondary); position:relative; flex:none; cursor:pointer; }
+.sw::after { content:''; position:absolute; top:3px; left:3px; width:10px; height:10px; border-radius:50%; background:var(--text-secondary); }
+.sw.on { background:var(--accent); border-color:var(--accent); } .sw.on::after { left:21px; background:#fff; }
+
+/* Einstellungen */
+.tabs { display:flex; gap:4px; padding:0 24px 10px; border-bottom:1px solid var(--stroke-divider); flex-wrap:wrap; }
+.tabs span { padding:6px 12px; border-radius:4px; color:var(--text-secondary); }
+.tabs span.on { color:var(--text-primary); font-weight:600; box-shadow:inset 0 -3px 0 var(--accent); }
+.card { background:var(--layer-card); border:1px solid var(--stroke-card); border-radius:8px; box-shadow:var(--shadow-card); padding:14px 16px; }
+.card h2 { font-size:15px; margin:0 0 6px; display:flex; gap:10px; align-items:center; }
+.opt { display:grid; grid-template-columns:1fr auto; gap:12px; align-items:center; padding:10px 0; border-top:1px solid var(--stroke-divider); }
+.opt b { font-weight:600; font-size:13px; display:block; }
+.state { font-size:11px; font-weight:700; border-radius:9px; padding:2px 8px; display:inline-flex; gap:5px; align-items:center; }
+.state::before { content:''; width:7px; height:7px; border-radius:50%; background:currentColor; }
+.st-ok { background:var(--success-soft); color:var(--success); }
+.st-miss { background:var(--warning-soft); color:#8A6D00; } body.dark .st-miss { color:var(--warning); }
+.dl { border:1px dashed var(--stroke-divider); border-radius:8px; padding:12px; display:grid; gap:6px; font-size:13px; margin-top:8px; }
+.dl .kv { display:grid; grid-template-columns:110px 1fr; gap:3px 10px; font-size:12px; } .dl .kv span:nth-child(odd) { color:var(--text-secondary); }
+.page { display:none; } .page.on { display:block; }
+</style>
+</head>
+<body>
+<div class="mock-bar">
+  <span><b>Mockup 12 · Story-Assistent (Welle 6b) · Entwurf</b></span>
+  <span class="grp">Design: <button id="mbLight" class="on">Hell</button><button id="mbDark">Dunkel</button></span>
+  <span class="grp">Ansicht: <button data-v="ask" class="on">Eingabe</button><button data-v="understood">Verstanden</button><button data-v="question">Rückfrage</button><button data-v="collage">Als Collage-Bild speichern</button><button data-v="settings">Einstellungen › Assistent</button></span>
+  <span class="note">Namen und Fotos sind Platzhalter</span>
+</div>
+
+<div class="stage-wrap"><div class="win-box" id="winBox">
+<div class="window" id="win">
+  <div class="titlebar"><span class="tile"></span> Lumora<span class="wc"><span>&#xE921;</span><span>&#xE922;</span><span>&#xE8BB;</span></span></div>
+  <nav class="nav">
+    <div class="wbs">lumora</div>
+    <div class="lib-switch"><span class="ic">&#xE8F1;</span><div><b>Familienfotos</b><small>Bibliothek wechseln</small></div></div>
+    <div class="nav-item"><span class="ic">&#xE91B;</span>Galerie</div>
+    <div class="nav-item"><span class="ic">&#xE8B7;</span>Ordner</div>
+    <div class="nav-item"><span class="ic">&#xE8F1;</span>Alben</div>
+    <div class="nav-item active" id="navStories"><span class="ic">&#xE786;</span>Storys</div>
+    <div class="nav-item"><span class="ic">&#xE716;</span>Personen</div>
+    <div class="nav-item"><span class="ic">&#xE707;</span>Orte</div>
+    <div class="nav-item"><span class="ic">&#xE8C8;</span>Doppelte</div>
+    <div class="nav-item"><span class="ic">&#xE8CB;</span>Sortieren</div>
+    <div class="spacer"></div>
+    <div class="nav-item" id="navSettings"><span class="ic">&#xE713;</span>Einstellungen</div>
+  </nav>
+
+  <main class="content">
+    <!-- ===== Storys mit Assistent ===== -->
+    <section class="page on" id="pStories">
+      <div class="phead"><div><h1>Storys</h1><div class="sub">214 Storys · automatisch aus Datum, Ort, Personen und Motiven — oder in eigenen Worten</div></div></div>
+      <div class="wrap">
+        <div class="ask">
+          <div class="ask-row">
+            <span class="spark"><span class="ic">&#xE945;</span></span>
+            <div class="inp" id="inp"><span class="ph">Was möchten Sie sehen? z. B. „Collage mit meiner Schwester aus meiner Kindheit bis 20 Jahre“</span></div>
+            <button class="btn-acc" data-v="understood"><span class="ic s">&#xE724;</span>Los</button>
+          </div>
+          <div class="examples">
+            <span class="ex" data-v="understood">Collage mit meiner Schwester bis 20 Jahre</span>
+            <span class="ex">Story von allen Sonnenuntergängen am Meer</span>
+            <span class="ex">Diashow: Papa und ich, die besten 50</span>
+            <span class="ex">Album mit allen Fotos vom Hund 2022</span>
+            <span class="ex" data-v="question">Weihnachten bei Oma, alle Jahre</span>
+          </div>
+          <div class="local"><span class="ic s">&#xE72E;</span>Läuft nur auf diesem PC. Die Sprach-KI liest nur Ihren Satz, nie Ihre Fotos — sie übersetzt ihn in Filter, Lumora sucht die Fotos.</div>
+        </div>
+
+        <!-- Verstanden -->
+        <div class="understood hidden" id="cUnderstood">
+          <h3><span class="ic s" style="color:var(--accent)">&#xE73E;</span>So habe ich es verstanden — stimmt das?</h3>
+          <div class="facts">
+            <span>Person</span><span><span class="tok person">Anna <small class="muted">· Schwester</small> <span class="ic">&#xE70F;</span></span></span>
+            <span>Zeitraum</span><span><span class="tok">1985 – 2005 <small class="muted">· Geburt bis 20 Jahre (aus Annas Geburtsdatum)</small> <span class="ic">&#xE70F;</span></span></span>
+            <span>Weitere Personen</span><span><span class="tok">egal <span class="ic">&#xE70F;</span></span></span>
+            <span>Medien</span><span><span class="tok">Fotos und Videos <span class="ic">&#xE70F;</span></span></span>
+            <span>Was entsteht</span><span><span class="tok">Story „Anna · 1985–2005“ <span class="ic">&#xE70F;</span></span><span class="tok">+ Collage-Bild <span class="ic">&#xE70F;</span></span></span>
+          </div>
+          <div class="result">
+            <span class="big">312</span><span class="muted">Fotos und Videos gefunden · davon die besten <b>36</b> für die Collage (Schärfe, Gesichter, keine Doppelten)</span>
+            <span class="strip" id="strip"></span>
+          </div>
+          <div class="acts">
+            <button class="btn-acc" data-v="collage"><span class="ic s">&#xE73E;</span>Erstellen</button>
+            <button class="btn-std"><span class="ic s">&#xE8A9;</span>Nur Fotos zeigen (Galerie)</button>
+            <button class="btn-std"><span class="ic s">&#xE70F;</span>Satz ändern</button>
+            <button class="btn-std">Abbrechen</button>
+          </div>
+        </div>
+
+        <!-- Rückfrage -->
+        <div class="question hidden" id="cQuestion">
+          <h3><span class="ic s">&#xE897;</span>Wer ist „Oma“?</h3>
+          <div class="muted">In Ihren Personen gibt es zwei mit der Beziehung „Oma“. Die Antwort merkt sich Lumora für „Oma“ in künftigen Sätzen (änderbar unter Personen).</div>
+          <div class="choices">
+            <div class="choice" data-v="understood"><span class="face" style="background:linear-gradient(135deg,#E9D7C3,#B48A6C)"></span><div><b>Maria</b><small>Oma (mütterlicherseits) · 418 Fotos</small></div></div>
+            <div class="choice" data-v="understood"><span class="face" style="background:linear-gradient(135deg,#D9CFC9,#8F7D73)"></span><div><b>Theresia</b><small>Oma (väterlicherseits) · 205 Fotos</small></div></div>
+            <div class="choice" data-v="understood"><span class="face" style="background:var(--layer-tertiary)"></span><div><b>Beide</b><small>eine Story mit beiden</small></div></div>
+          </div>
+          <div class="muted">Zeitraum verstanden als: jedes Jahr 24.–26. Dezember · Ort: egal</div>
+        </div>
+
+        <div class="hist">
+          <h2>Zuletzt gefragt</h2>
+          <div class="hrow"><span class="ic s">&#xE81C;</span><q>Story von allen Sonnenuntergängen am Meer</q><button class="btn-std">Öffnen</button></div>
+          <div class="hrow"><span class="ic s">&#xE81C;</span><q>Diashow: Papa und ich, die besten 50</q><button class="btn-std">Wieder abspielen</button></div>
+        </div>
+      </div>
+
+      <!-- Collage-Dialog -->
+      <div class="smoke hidden" id="dCollage">
+        <div class="dlg">
+          <div class="in">
+            <h2>Als Collage-Bild speichern</h2>
+            <div class="canvas" id="canvas"><div class="ttl">Anna · 1985 – 2005 <small>36 Fotos</small></div></div>
+            <div class="opts">
+              <div><label>Format</label><div class="seg"><button class="on">16:9</button><button>A4 quer</button><button>A4 hoch</button><button>Quadrat</button></div></div>
+              <div><label>Größe</label><div class="seg"><button>Full HD</button><button class="on">4K</button><button>Druck 300 dpi</button></div></div>
+              <div><label>Fotos</label><div class="seg"><button>12</button><button>24</button><button class="on">36</button><button>48</button></div></div>
+              <div><label>Anordnung</label><div class="seg"><button class="on">Großes Titelbild</button><button>Raster</button><button>Zeitstrahl</button></div></div>
+              <div class="tg"><span class="sw on"></span>Überschrift (Name · Zeitraum) <span class="muted">sachlich, kein erfundener Text</span></div>
+              <div class="tg"><span class="sw"></span>Datum unter jedem Foto</div>
+              <div><label>Speichern unter</label><span class="field">Bilder\Lumora\Collagen\Anna 1985-2005.jpg</span></div>
+              <div class="muted">„Neu mischen“ wählt andere gute Fotos; einzelne Fotos per Klick tauschen.</div>
+            </div>
+          </div>
+          <div class="ft"><button class="btn-std">Neu mischen</button><button class="btn-std" data-v="understood">Abbrechen</button><button class="btn-acc" data-v="understood"><span class="ic s">&#xE74E;</span>Speichern</button></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Einstellungen › Assistent ===== -->
+    <section class="page" id="pSettings">
+      <div class="phead"><div><h1>Einstellungen</h1></div></div>
+      <div class="tabs"><span>Allgemein</span><span>Bibliotheken</span><span>Darstellung</span><span>Storys</span><span class="on">Assistent</span><span>Orte</span><span>Gesichter</span><span>Motive</span><span>Verbundene Apps</span></div>
+      <div class="wrap" style="padding-top:14px;max-width:960px">
+        <section class="card">
+          <h2><span class="spark" style="width:26px;height:26px"><span class="ic s">&#xE945;</span></span>Story-Assistent</h2>
+          <div class="muted">Versteht Sätze in eigenen Worten und macht daraus Story, Collage, Album oder Diashow. Die Sprach-KI läuft lokal über
+            <b>Ollama</b> und bekommt nur Ihren Satz plus die Namen und Beziehungen Ihrer Personen — nie Fotos, Pfade oder Orte. Nichts geht ins Internet.</div>
+          <div class="opt"><div><b>Assistent verwenden</b><span class="muted">Aus = keine Eingabeleiste auf der Seite Storys.</span></div><span class="sw on"></span></div>
+          <div class="opt"><div><b>Ollama</b><span class="muted">Lokaler Dienst für Sprachmodelle. Installation über winget nach Ihrer Bestätigung (Name, Quelle, Größe).</span></div>
+            <span><span class="state st-miss">nicht installiert</span> <button class="btn-std" style="margin-left:8px">Ollama installieren…</button></span></div>
+          <div class="opt"><div><b>Sprachmodell</b><span class="muted">Klein und schnell genug für Ihre Grafikkarte; nur für das Übersetzen in Filter.</span>
+              <div class="dl"><div class="kv"><span>Modell</span><span>kleines Instruct-Modell (Auswahl im Bau, z. B. Qwen 2.5 3B)</span><span>Quelle</span><span>Ollama-Bibliothek (ollama.com)</span><span>Größe</span><span>≈ 2 GB — genaue Zahl vor dem Download</span><span>Lizenz</span><span>wird vor dem Download angezeigt</span></div></div></div>
+            <span><span class="state st-miss">nicht geladen</span> <button class="btn-std" style="margin-left:8px">Herunterladen…</button></span></div>
+          <div class="opt"><div><b>Grafikkarte nutzen</b><span class="muted">Teilt sich die Grafikkarte mit Gesichts- und Motiv-Erkennung (nacheinander).</span></div><span class="sw on"></span></div>
+          <div class="opt"><div><b>Zuletzt gefragte Sätze merken</b><span class="muted">Nur im Katalog dieser Bibliothek; „Verlauf löschen“ jederzeit.</span></div><span><span class="sw on"></span> <button class="btn-std" style="margin-left:8px">Verlauf löschen</button></span></div>
+          <div class="opt"><div><b>Ausprobieren</b><span class="muted">Zeigt nur, wie ein Satz verstanden wird — erstellt nichts.</span>
+              <div class="row2" style="display:flex;gap:8px;margin-top:6px"><span class="field" style="flex:1">Alle Fotos vom Hund am See</span><button class="btn-std">Prüfen</button></div></div><span></span></div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <div class="statusbar"><span>Familienfotos</span><span>Storys aktuell</span><div class="r">0.4.x</div></div>
+</div>
+</div></div>
+
+<script>
+const $=(s)=>document.querySelector(s), $$=(s)=>[...document.querySelectorAll(s)];
+const ph=['#F2C6A0,#A86F4C','#9EC9E8,#3F7FB2','#F7D99A,#C78F2B','#C8E0B5,#5E8B47','#E6B8C8,#A0567A','#D8D3EC,#6E64A8','#F3B9A8,#B4553F','#BFD9DA,#3E8287'];
+$('#strip').innerHTML=ph.map(c=>`<span style="background:linear-gradient(160deg,${c})"></span>`).join('');
+let cv=''; for(let i=0;i<10;i++){ const c=ph[i%ph.length]; cv+=`<span class="${i===0?'hero':''}" style="background:linear-gradient(160deg,${c})"></span>`; } $('#canvas').insertAdjacentHTML('beforeend',cv);
+function view(v){
+  $$('.mock-bar [data-v]').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+  const st = v!=='settings';
+  $('#pStories').classList.toggle('on',st); $('#pSettings').classList.toggle('on',!st);
+  $('#navStories').classList.toggle('active',st); $('#navSettings').classList.toggle('active',!st);
+  $('#cUnderstood').classList.toggle('hidden', !(v==='understood'||v==='collage'));
+  $('#cQuestion').classList.toggle('hidden', v!=='question');
+  $('#dCollage').classList.toggle('hidden', v!=='collage');
+  $('#inp').innerHTML = v==='ask' ? '<span class="ph">Was möchten Sie sehen? z. B. „Collage mit meiner Schwester aus meiner Kindheit bis 20 Jahre“</span>'
+    : v==='question' ? 'Weihnachten bei Oma, alle Jahre' : 'Collage mit meiner Schwester aus meiner Kindheit bis 20 Jahre';
+}
+document.addEventListener('click',e=>{
+  const v=e.target.closest('[data-v]'); if(v){ view(v.dataset.v); return; }
+  const s=e.target.closest('.sw'); if(s){ s.classList.toggle('on'); return; }
+  const b=e.target.closest('.seg button'); if(b){ b.parentElement.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b)); }
+});
+function fit(){ const w=1280,h=800,win=$('#win'); win.style.width=w+'px'; win.style.height=h+'px'; const s=Math.min(1,(document.documentElement.clientWidth-40)/w);
+  win.style.transform=`scale(${s})`; $('#winBox').style.width=w*s+'px'; $('#winBox').style.height=h*s+'px'; }
+function theme(d){ document.body.classList.toggle('dark',d); $('#mbLight').classList.toggle('on',!d); $('#mbDark').classList.toggle('on',d); }
+$('#mbLight').onclick=()=>theme(false); $('#mbDark').onclick=()=>theme(true);
+window.addEventListener('resize',fit); fit(); theme(window.matchMedia('(prefers-color-scheme: dark)').matches);
+</script>
+</body>
+</html>
