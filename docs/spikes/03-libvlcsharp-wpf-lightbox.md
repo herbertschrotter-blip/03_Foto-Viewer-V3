@@ -116,7 +116,7 @@ Freigabe für:
 ## Reproduzierbarkeit
 
 ```powershell
-cd "D:\Code\Lumora"
+cd "D:\Code\Lumora\repo"
 dotnet run --project src\Lumora.Wpf -c Debug
 ```
 

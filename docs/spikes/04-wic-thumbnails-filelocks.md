@@ -133,7 +133,7 @@ Freigabe für:
 ## Reproduzierbarkeit
 
 ```powershell
-cd "D:\Code\Lumora"
+cd "D:\Code\Lumora\repo"
 dotnet run --project tests\Lumora.PerfTests -c Release -- spike04-wic-benchmark --count 100
 ```
 

@@ -140,7 +140,7 @@ Pflicht-Implementierung in V0.1 (sonst gelb-Wert würde rot werden):
 Voraussetzung: Spike-#1-DB existiert. Falls noch nicht vorhanden, aus eigener (nicht-AppContainer-isolierter) PowerShell:
 
 ```powershell
-cd "D:\Code\Lumora"
+cd "D:\Code\Lumora\repo"
 dotnet run --project tests\Lumora.PerfTests -c Release -- spike01-sqlite-bulk --rows 500000 --folders 10000
 ```
 

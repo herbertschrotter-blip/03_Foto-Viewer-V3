@@ -61,7 +61,7 @@
 | Path | Profile | Erreichbar | Dauer | Grund |
 |---|---|---|---|---|
 | `C:\Windows\system32` (Cold-Start) | `LocalSsd` | true | **180 ms** | MSFT_PhysicalDisk MediaType=4 (SSD): Samsung SSD 960 PRO 1TB |
-| `D:\Code\Lumora` | `LocalHddOrUsb` | true | **56 ms** | Win32_DiskDrive Model-Heuristik: `Microsoft Storage Space Device (SCSI)` → konservativ HDD |
+| `D:\Code\Lumora\repo` | `LocalHddOrUsb` | true | **56 ms** | Win32_DiskDrive Model-Heuristik: `Microsoft Storage Space Device (SCSI)` → konservativ HDD |
 | `D:\OneDrive` | `LocalHddOrUsb` | true | **57 ms** | dito |
 | `C:\Users\herbe` (Warm-Cache) | `LocalSsd` | true | **59 ms** | MSFT_PhysicalDisk MediaType=4 (SSD): Samsung SSD 960 PRO 1TB |
 | `\\nonexistent-spike-host\share` (offline) | `NetworkShare` | false | **2.511 ms** | UNC-Prefix, Root NICHT erreichbar (Timeout 2,5 s) |
@@ -107,7 +107,7 @@ Freigabe für:
 ## Reproduzierbarkeit
 
 ```powershell
-cd "D:\Code\Lumora"
+cd "D:\Code\Lumora\repo"
 dotnet run --project tests\Lumora.PerfTests -c Release -- spike06-storage-detection [--path C:\foo --path D:\bar ...]
 ```
 

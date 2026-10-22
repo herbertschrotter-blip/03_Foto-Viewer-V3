@@ -121,7 +121,7 @@ Bei kleinen Datenmengen dominiert der **Setup-Overhead** (Transaction-Begin, Con
 ## Reproduzierbarkeit
 
 ```powershell
-cd "D:\Code\Lumora"
+cd "D:\Code\Lumora\repo"
 dotnet run --project tests\Lumora.PerfTests --no-build -c Release -- spike-v01-scan --root "PATH_TO_PHOTO_FOLDER" --name "LibraryName" --clear
 ```
 

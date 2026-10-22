@@ -66,7 +66,7 @@ Version übernimmt der erste Start automatisch; läuft dabei noch die ältere Ve
 ## Build & Start
 
 ```powershell
-cd "D:\Code\Lumora"
+cd "D:\Code\Lumora\repo"
 dotnet build Lumora.slnx -c Debug --nologo
 dotnet run --project src/Lumora.Wpf -c Debug
 ```

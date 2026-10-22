@@ -3,6 +3,15 @@
 Alle nennenswerten Änderungen an Lumora (bis 0.2.48 „PhotoViewer V3“). Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.4.11] — 2026-10-22
+
+### Docs — Projektordner `D:\Code\Lumora` mit `repo\` und `werkzeuge\`
+- Herbert: ein Hauptordner pro Projekt. Das Git-Repo liegt jetzt in `D:\Code\Lumora\repo` (vorher direkt
+  `D:\Code\Lumora`), die Werkzeuge in `D:\Code\Lumora\werkzeuge` (vorher `D:\Code\Lumora-Werkzeuge`).
+- Pfade nachgezogen: CLAUDE.md, README (Build & Start), Spikes, ADR-0056, Rauchtest-Skript und Agenten-Regeln in den
+  Werkzeugen. Debug-Build jetzt unter `repo\src\Lumora.Wpf\bin\Debug\net10.0-windows\Lumora.exe`.
+- Geprüft am neuen Ort: Build 0 Warnungen/0 Fehler, Rauchtest 43/43. Datenordner `%LocalAppData%\Lumora` unverändert.
+
 ## [0.4.10] — 2026-10-22
 
 ### Fix — Rauchtest: Spurenprüfung der versteckten Bibliothek wackelte unter Last

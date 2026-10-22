@@ -32,7 +32,7 @@ Agenten-Zweigen bedeutet hätte. Zum Stand 0.4.2 gibt es keine offenen Zweige me
      neuer Ordner zählt nicht — er wird entfernt und der alte umbenannt (sonst startete Lumora mit leerem Katalog).
    - Mit `LUMORA_APPDATA` (Tests, Rauchtests) findet kein Umzug statt.
 3. **Umgebungsvariablen** `PHOTOVIEWERV3_*` und `PV3_*` → `LUMORA_*` (ohne Rückfall auf die alten Namen). Die
-   Rauchtest-Skripte (`build/run-smoke.ps1`, `Lumora-Werkzeuge\scripts\run-smoke-v.ps1`) setzen die alten Rauchtest-Variablen
+   Rauchtest-Skripte (`build/run-smoke.ps1`, `D:\Code\Lumora\werkzeuge\scripts\run-smoke-v.ps1`) setzen die alten Rauchtest-Variablen
    zusätzlich, damit ein älteres Paket nie den echten Katalog nimmt.
 4. **Protokolle** `logs\photoviewer-*.log` → `logs\lumora-*.log`; alte Protokolle ziehen mit dem Ordner um und laufen wie
    bisher nach der Aufbewahrungsfrist aus. Weitere technische Namen: Rauchtest-Arbeitsordner `%TEMP%\Lumora-smoke-*`,

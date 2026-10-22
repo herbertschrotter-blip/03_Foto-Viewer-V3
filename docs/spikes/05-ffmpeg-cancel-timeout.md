@@ -105,7 +105,7 @@ Freigabe für:
 Voraussetzung: FFmpeg im PATH (z.B. `winget install Gyan.FFmpeg`) und Sintel-Sample aus Spike #3.
 
 ```powershell
-cd "D:\Code\Lumora"
+cd "D:\Code\Lumora\repo"
 dotnet run --project tests\Lumora.PerfTests -c Release -- spike05-ffmpeg-cancel
 ```
 
