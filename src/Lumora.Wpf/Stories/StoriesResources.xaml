@@ -1,0 +1,186 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                    xmlns:shell="clr-namespace:Lumora.Shell"
+                    xmlns:local="clr-namespace:Lumora.Stories">
+    <!-- Gemeinsame Stile der Story-Seite (ADR-0060, Mockup 09): Glas-Knöpfe auf Bildern, Segment-Knöpfe, Chips,
+         Links, Karten- und Kachel-Knöpfe (Automation-Blätter), Personen-Rundbilder. Farben nur über DynamicResource
+         (hell/dunkel); Bilder als ImageBrush in Borders, damit die runden Ecken sie beschneiden. -->
+    <shell:BoolToVisibilityConverter x:Key="BoolToVis" />
+    <shell:BoolToVisibilityConverter x:Key="InvBoolToVis" Invert="True" />
+    <shell:NullToVisibilityConverter x:Key="NullToVis" />
+    <shell:NullToVisibilityConverter x:Key="InvNullToVis" Invert="True" />
+    <shell:NullToBoolConverter x:Key="NullToBool" />
+
+    <LinearGradientBrush x:Key="StoryCaptionShade" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#00000000" Offset="0" />
+        <GradientStop Color="#B0000000" Offset="1" />
+    </LinearGradientBrush>
+
+    <!-- Glas-Knopf auf Bildern (Banner, Titelbild, Karten-Diashow) -->
+    <Style x:Key="StoryGlassButton" TargetType="Button">
+        <Setter Property="Foreground" Value="White" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Padding" Value="12,5" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd" CornerRadius="4" BorderThickness="1" Padding="{TemplateBinding Padding}"
+                            Background="#38FFFFFF" BorderBrush="#59FFFFFF">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" TextElement.Foreground="White" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="#55FFFFFF" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="White" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Segment-Knopf (Art-Filter, Highlights/Alle Fotos); gewählt über IsChecked (StorySelectButton) -->
+    <Style x:Key="StorySegButton" TargetType="local:StorySelectButton">
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Padding" Value="11,5" />
+        <Setter Property="Margin" Value="0,0,2,0" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:StorySelectButton">
+                    <Border x:Name="Bd" CornerRadius="4" Padding="{TemplateBinding Padding}" Background="Transparent">
+                        <ContentPresenter VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                            <Setter Property="FontWeight" Value="SemiBold" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Chip (Jahre, Tage); gewählt über IsChecked (StorySelectButton) -->
+    <Style x:Key="StoryChipButton" TargetType="local:StorySelectButton">
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Height" Value="28" />
+        <Setter Property="Padding" Value="11,0" />
+        <Setter Property="Margin" Value="0,0,6,0" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:StorySelectButton">
+                    <Border x:Name="Bd" CornerRadius="14" BorderThickness="1" Padding="{TemplateBinding Padding}"
+                            Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}">
+                        <ContentPresenter VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                            <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                            <Setter Property="FontWeight" Value="SemiBold" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Text-Link in Akzentfarbe („Alle anzeigen“, „Alle 58 Fotos dieses Abschnitts“) -->
+    <Style x:Key="StoryLinkButton" TargetType="Button">
+        <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="Transparent" Padding="2">
+                        <ContentPresenter x:Name="Cp" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorSecondaryBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Karte: Rahmen mit Hover-Linie; Inhalt im DataTemplate -->
+    <Style x:Key="StoryCardButton" TargetType="local:StoryLeafButton">
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="VerticalContentAlignment" Value="Stretch" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:StoryLeafButton">
+                    <Border x:Name="Frame" CornerRadius="8" BorderThickness="1"
+                            BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                            Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
+                        <ContentPresenter />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource ControlStrongStrokeColorDefaultBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Foto-Kachel: nur der Inhalt (Bild, Hinweise) -->
+    <Style x:Key="StoryTileButton" TargetType="local:StoryLeafButton">
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Focusable" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="local:StoryLeafButton">
+                    <ContentPresenter />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Kleines Abzeichen auf Bildern (Art, Dauer, „+4 ähnliche“, „warum ausgewählt“) -->
+    <Style x:Key="StoryImageBadge" TargetType="Border">
+        <Setter Property="Background" Value="#8C000000" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="Padding" Value="7,1" />
+        <Setter Property="Margin" Value="8" />
+        <Setter Property="IsHitTestVisible" Value="False" />
+    </Style>
+
+    <!-- Personen-Rundbild (Gesicht, sonst Anfangsbuchstabe) -->
+    <DataTemplate x:Key="StoryAvatarTemplate" DataType="{x:Type local:StoryAvatarViewModel}">
+        <Grid Width="22" Height="22" Margin="-6,0,0,0" ToolTip="{Binding Name}">
+            <Ellipse Fill="{DynamicResource AccentFillColorDefaultBrush}" Stroke="{DynamicResource CardBackgroundFillColorDefaultBrush}" StrokeThickness="2" />
+            <TextBlock Text="{Binding Initial}" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+            <local:StoryImage Source="{Binding Image}" CornerRadius="11" />
+            <Ellipse Stroke="{DynamicResource CardBackgroundFillColorDefaultBrush}" StrokeThickness="2" />
+        </Grid>
+    </DataTemplate>
+</ResourceDictionary>

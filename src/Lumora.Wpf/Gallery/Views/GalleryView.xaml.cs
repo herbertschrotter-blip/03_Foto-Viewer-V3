@@ -27,16 +27,18 @@ public partial class GalleryView : UserControl
     private readonly GalleryViewModel _viewModel;
     private readonly INavigationService _navigation;
     private readonly ILogger<GalleryView> _logger;
+    private readonly Lumora.Stories.StoryGalleryBridge? _stories;
     private Stopwatch? _gridStopwatch;
 
     /// <summary>Kachel bzw. Listenzeile, auf der das Kontextmenü geöffnet wurde (null beim Knopf „Tags“ der Aktionsleiste).</summary>
     private GalleryItem? _menuTarget;
 
-    public GalleryView(GalleryViewModel viewModel, INavigationService navigation, ILogger<GalleryView> logger)
+    public GalleryView(GalleryViewModel viewModel, INavigationService navigation, ILogger<GalleryView> logger, Lumora.Stories.StoryGalleryBridge? stories = null)
     {
         _viewModel = viewModel;
         _navigation = navigation;
         _logger = logger;
+        _stories = stories; // „Als Story…“, „In Storys zeigen“ (ADR-0060)
         InitializeComponent();
         DataContext = viewModel;
         Loaded += OnLoaded;
@@ -341,6 +343,7 @@ public partial class GalleryView : UserControl
         if (target is not null)
         {
             AddSlideshowAction(menu, target); // Diashow (ADR-0059, GalleryView.Slideshow.cs)
+            _stories?.AddMenuItems(menu, _viewModel.SelectedIdsInPageOrder(), target.Id); // Storys (ADR-0060)
             AddFileActions(menu, target);
             AddAlbumActions(menu, target); // Alben und Verknüpfungen (ADR-0054)
             menu.Items.Add(new Separator());

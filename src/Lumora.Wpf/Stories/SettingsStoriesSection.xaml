@@ -1,0 +1,119 @@
+<UserControl x:Class="Lumora.Stories.SettingsStoriesSection"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:local="clr-namespace:Lumora.Stories"
+             xmlns:slideshow="clr-namespace:Lumora.Slideshow"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance local:StorySettingsViewModel, IsDesignTimeCreatable=False}"
+             d:DesignWidth="1000">
+    <!-- Einstellungen › Storys (ADR-0060, Mockup 09): Automatische Storys, Erkennung (Zu Hause, Pause, Mindestgröße),
+         Highlights, Diashow (aus „Darstellung“ hierher verschoben). DataContext = StorySettingsViewModel (SettingsPage). -->
+    <UserControl.Resources>
+        <ResourceDictionary Source="../Settings/Sections/SettingsStyles.xaml" />
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Style="{StaticResource SectionPanel}">
+            <TextBlock Style="{StaticResource Lead}"
+                       Text="Lumora bildet Storys automatisch aus Datum, Ort und Personen — Überschriften nur sachlich (Datum, Orte, Namen). Jede Änderung gilt sofort; die Storys werden im Hintergrund neu berechnet. Angeheftete, ausgeblendete und eigene Storys bleiben." />
+
+            <!-- Automatische Storys -->
+            <Border Style="{StaticResource SectionCard}" AutomationProperties.AutomationId="SettingsStoriesKinds">
+                <StackPanel>
+                    <ui:TextBlock Style="{StaticResource SectionTitle}" Text="Automatische Storys" />
+                    <ui:ToggleSwitch Content="Ereignisse &amp; Reisen" IsChecked="{Binding EventsEnabled, Mode=TwoWay}" AutomationProperties.Name="Ereignisse und Reisen" />
+                    <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0" Text="Fotos nach Zeit und Ort zusammenfassen; mehrere Tage weg von zu Hause = Reise." />
+                    <ui:ToggleSwitch Margin="0,12,0,0" Content="Rückblicke" IsChecked="{Binding MemoriesEnabled, Mode=TwoWay}" AutomationProperties.Name="Rückblicke" />
+                    <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0" Text="„Heute vor … Jahren“ und dieser Monat in früheren Jahren." />
+                    <ui:ToggleSwitch Margin="0,12,0,0" Content="Personen-Storys" IsChecked="{Binding PersonsEnabled, Mode=TwoWay}" AutomationProperties.Name="Personen-Storys" />
+                    <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0" Text="{Binding PersonsHint}" />
+                    <ui:ToggleSwitch Margin="0,12,0,0" Content="Orte-Storys" IsChecked="{Binding PlacesEnabled, Mode=TwoWay}" AutomationProperties.Name="Orte-Storys" />
+                    <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0" Text="Orte mit Besuchen in mindestens drei verschiedenen Jahren (nicht zu Hause)." />
+                </StackPanel>
+            </Border>
+
+            <!-- Erkennung -->
+            <Border Style="{StaticResource SectionCard}" AutomationProperties.AutomationId="SettingsStoriesDetection">
+                <StackPanel>
+                    <ui:TextBlock Style="{StaticResource SectionTitle}" Text="Erkennung" />
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource Label}" Text="Zu Hause" Width="250" />
+                        <TextBlock Style="{StaticResource ValueText}" Text="{Binding HomeText}" MaxWidth="320" AutomationProperties.AutomationId="SettingsStoriesHome" />
+                        <ui:Button Margin="12,0,0,0" Content="Ort wählen…" Icon="{ui:SymbolIcon Location24}"
+                                   Visibility="{Binding CanSearchPlaces, Converter={StaticResource BoolToVis}}"
+                                   Command="{Binding ChooseHomeCommand}" />
+                        <ui:Button Margin="6,0,0,0" Content="Automatisch"
+                                   Visibility="{Binding IsHomeAutomatic, Converter={StaticResource InvBoolToVis}}"
+                                   Command="{Binding SetHomeAutomaticCommand}" />
+                    </StackPanel>
+                    <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0" Text="Wird nicht als Reise gezählt · automatisch = häufigster Ort deiner Fotos." />
+                    <!-- Ortssuche -->
+                    <Border Margin="0,8,0,0" Padding="12" CornerRadius="6" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
+                            Visibility="{Binding IsChoosingHome, Converter={StaticResource BoolToVis}}">
+                        <StackPanel>
+                            <DockPanel>
+                                <ui:Button DockPanel.Dock="Right" Margin="8,0,0,0" Content="Abbrechen" Command="{Binding CancelChooseHomeCommand}" />
+                                <ui:TextBox PlaceholderText="Ort suchen, z. B. Graz" Icon="{ui:SymbolIcon Search24}"
+                                            AutomationProperties.Name="Ort für Zu Hause suchen"
+                                            Text="{Binding HomeSearch, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            </DockPanel>
+                            <ItemsControl Margin="0,6,0,0" ItemsSource="{Binding HomeCandidates}" Focusable="False">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type local:StoryHomeCandidate}">
+                                        <ui:Button Appearance="Transparent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Margin="0,1"
+                                                   Content="{Binding Label}"
+                                                   Command="{Binding DataContext.SetHomeCommand, RelativeSource={RelativeSource AncestorType=local:SettingsStoriesSection}}"
+                                                   CommandParameter="{Binding}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                        <TextBlock Style="{StaticResource Label}" Text="Neues Ereignis nach einer Pause von" Width="250" />
+                        <ComboBox Width="200" ItemsSource="{Binding PauseOptions}" DisplayMemberPath="Label"
+                                  SelectedItem="{Binding SelectedPause, Mode=TwoWay}"
+                                  AutomationProperties.AutomationId="SettingsStoriesPause"
+                                  AutomationProperties.Name="Pause bis zum neuen Ereignis" />
+                    </StackPanel>
+                    <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0" Text="… oder sobald die Fotos weiter als 30 km entfernt aufgenommen wurden." />
+                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                        <TextBlock Style="{StaticResource Label}" Text="Mindestgröße einer Story" Width="250" />
+                        <ComboBox Width="200" ItemsSource="{Binding MinFilesOptions}" DisplayMemberPath="Label"
+                                  SelectedItem="{Binding SelectedMinFiles, Mode=TwoWay}"
+                                  AutomationProperties.AutomationId="SettingsStoriesMinFiles"
+                                  AutomationProperties.Name="Mindestgröße einer Story" />
+                    </StackPanel>
+                    <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0" Text="Kleinere Gruppen bleiben nur in der Galerie." />
+                </StackPanel>
+            </Border>
+
+            <!-- Highlights -->
+            <Border Style="{StaticResource SectionCard}" AutomationProperties.AutomationId="SettingsStoriesHighlights">
+                <StackPanel>
+                    <ui:TextBlock Style="{StaticResource SectionTitle}" Text="Highlights" />
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource Label}" Text="Auswahl" Width="250" />
+                        <ComboBox Width="200" ItemsSource="{Binding ShareOptions}" DisplayMemberPath="Label"
+                                  SelectedItem="{Binding SelectedShare, Mode=TwoWay}"
+                                  AutomationProperties.AutomationId="SettingsStoriesShare"
+                                  AutomationProperties.Name="Anteil der Highlights" />
+                    </StackPanel>
+                    <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0"
+                               Text="Schärfe, Belichtung, Bildwirkung, bestätigte Personen, Favoriten und Bewertung; Serien und Doppelte nur einmal. Unscharfe und dunkle Fotos werden nie automatisch Titelbild, wenn es eine Alternative gibt — das Titelbild lässt sich je Story selbst wählen." />
+                </StackPanel>
+            </Border>
+
+            <!-- Diashow (ADR-0059), aus „Darstellung“ hierher verschoben; DataContext = SlideshowSettingsViewModel -->
+            <slideshow:SettingsSlideshowSection x:Name="SlideshowSection" DataContext="{Binding Slideshow}"
+                                                Visibility="{Binding DataContext.HasSlideshow, RelativeSource={RelativeSource AncestorType=local:SettingsStoriesSection}, Converter={StaticResource BoolToVis}}" />
+
+            <TextBlock Style="{StaticResource Hint}" Text="{Binding SavedText}" Margin="0,0,0,12"
+                       Visibility="{Binding SavedText, Converter={StaticResource NullToVis}}" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

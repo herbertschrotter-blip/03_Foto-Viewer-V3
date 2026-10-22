@@ -6,7 +6,6 @@
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:settings="clr-namespace:Lumora.Settings"
              xmlns:local="clr-namespace:Lumora.Settings.Sections"
-             xmlns:slideshow="clr-namespace:Lumora.Slideshow"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance settings:SettingsViewModel}"
              d:DesignWidth="1000">
@@ -32,8 +31,7 @@
             </Border>
             <!-- Karte (ADR-0055): Kartenstil und API-Schlüssel; DataContext setzt die SettingsPage -->
             <local:SettingsMapSection x:Name="MapSection" />
-            <!-- Diashow (ADR-0059): vorerst hier, die Story-Seite verschiebt den Abschnitt nach „Storys“; DataContext setzt die SettingsPage -->
-            <slideshow:SettingsSlideshowSection x:Name="SlideshowSection" />
+            <!-- Diashow (ADR-0059): seit 0.4.15 unter Einstellungen › Storys (ADR-0060) -->
         </StackPanel>
     </ScrollViewer>
 </UserControl>

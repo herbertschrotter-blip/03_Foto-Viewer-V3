@@ -115,9 +115,9 @@ außerhalb von OneDrive), `-NoZip` lässt das ZIP weg, `-FrameworkDependent` bau
 
 ### Navigation (seit 0.2.44, ADR-0042)
 Die linke Leiste zeigt ganz oben das App-Symbol mit dem Schriftzug „lumora“, darunter den **Bibliotheks-Umschalter** (Name der aktiven Bibliothek; Klick → andere Bibliothek
-wählen, verknüpfte Bibliotheken als **Alle verknüpften (Name)** gemeinsam ansehen oder **Bibliotheken verwalten…**), darunter **Galerie, Ordner, Alben, Personen, Orte, Doppelte, Sortieren** und unten
+wählen, verknüpfte Bibliotheken als **Alle verknüpften (Name)** gemeinsam ansehen oder **Bibliotheken verwalten…**), darunter **Galerie, Ordner, Alben, Storys, Personen, Orte, Doppelte, Sortieren** und unten
 **Einstellungen**. Bibliothek, Tags und Kategorien richtet man selten ein — sie sind Reiter der Einstellungen:
-**Bibliotheken & Eingänge · Tags · Kategorien · Gesichter · Archive · Darstellung · Speicher & Wartung · Info**.
+**Bibliotheken & Eingänge · Tags · Kategorien · Gesichter · Motive · Archive · Darstellung · Storys · Speicher & Wartung · Info**.
 Tags und Kategorien **vergeben** geht wie bisher in der Galerie (Rechtsklick, Strg+T, Strg+K, Lightbox); „Tags
 verwalten…“ bzw. „Kategorien verwalten…“ im Galerie-Menü öffnen den passenden Reiter. Ohne Bibliothek startet die App
 in Einstellungen › Bibliotheken & Eingänge.
@@ -398,7 +398,7 @@ letzten Bild beginnt sie von vorn.
 - **Bedienleiste** unten mittig (blendet sich mit dem Mauszeiger nach 2 s ohne Bewegung aus, Bewegung holt sie zurück):
   Zurück, Pause/Weiter, Weiter, Position „12 / 64“, Anzeigedauer 3 s / 5 s / 8 s, **Zoom** an/aus, **Datum & Ort** an/aus,
   Beenden. Der gelbe Balken am unteren Rand zeigt die verbleibende Zeit des Fotos.
-- **Einstellungen › Darstellung › Diashow:** Anzeigedauer, Reihenfolge (wie die Ansicht oder zufällig, das Startbild zuerst),
+- **Einstellungen › Storys › Diashow** (bis 0.4.11 unter „Darstellung“): Anzeigedauer, Reihenfolge (wie die Ansicht oder zufällig, das Startbild zuerst),
   langsamer Zoom, Videos abspielen und Höchstdauer, Datum und Ort einblenden. Änderungen in der Leiste werden ebenfalls
   gemerkt.
 
@@ -408,6 +408,41 @@ letzten Bild beginnt sie von vorn.
 | Leertaste | Pause / Weiter |
 | Pos1 / Ende | Erstes / letztes |
 | Esc | Diashow beenden |
+
+### Storys (seit 0.4.15, ADR-0058/0060)
+Lumora fasst Fotos und Videos im Hintergrund selbst zu **Storys** zusammen — Ereignisse und Reisen (nach Zeit und Ort,
+mehrere Tage weg von zu Hause = Reise), Rückblicke („Heute vor 3 Jahren“, „Oktober in früheren Jahren“), Personen-Storys
+(„Anna · 2019“) und Orte-Storys („Grado · 2014–2025“). Überschriften sind nur sachlich (Datum, Orte, Namen); einen eigenen
+Titel gibt man selbst. Der Eintrag **Storys** in der Leiste zeigt, wie viele seit dem letzten Besuch neu sind („3 neu“); die
+Statusleiste meldet „Storys aktuell“ bzw. „Storys werden berechnet …“.
+
+- **Übersicht:** oben das Banner **Heute vor N Jahren** (nur wenn es an diesem Kalendertag in früheren Jahren genug Fotos
+  gibt; **Öffnen** oder **Diashow**), darunter **Angeheftet**, **Neu**, **Reisen & Ereignisse** mit Jahres-Chips,
+  **Personen**, **Orte** und **Eigene Storys**. Filter nach Art (Alle, Ereignisse & Reisen, Rückblicke, Personen, Orte), Suche
+  nach Ort, Person oder Jahr. Karte anklicken öffnet die Story; überfahren zeigt **Diashow**; Rechtsklick: Öffnen, Diashow,
+  Anheften/Lösen, Ausblenden. **Ausgeblendet (n)** zeigt die ausgeblendeten mit **Wieder zeigen**.
+- **Story:** großes Titelbild mit Art, Überschrift, Orten, Zählern und Personen; **Titelbild** (dann ein Foto anklicken,
+  „Automatisch“ setzt zurück) und **Anheften**. Die Leiste bleibt beim Scrollen oben: **Highlights / Alle Fotos** (mit
+  Zählern), Tages-Chips (springen zum Tag, eingeklappte Tage klappen auf), **Diashow** (startet mit den Highlights bzw. im
+  Modus „Alle Fotos“ mit allen). Je Tag eine Collage der Highlights — Panoramen über die volle Breite, Hochformate
+  nebeneinander, Videos mit ▶ und Dauer, „+4 ähnliche“ bei Serien, beim Überfahren **warum ausgewählt**, ★ für Favoriten;
+  **Alle n Fotos dieses Abschnitts** klappt den Tag dicht auf (Fotos, die keine Highlights sind, blass). Lange Reisen zeigen
+  die ersten drei Tage, der Rest steht unter „n weitere Tage … **Anzeigen**“. Eine Story über einen einzigen Tag (z. B. ein
+  Rückblick) ist nach Tageszeit geteilt (Vormittag, Nachmittag, Abend). **Doppelklick** auf ein Foto öffnet die Lightbox
+  mit den Fotos der Story; Rechtsklick: Als Titelbild, Aus Story entfernen. Unten: wie viele Highlights und wie viele
+  ähnliche weggelassen, **Als Album speichern**, **Diashow**. Öffnen markiert die Story als gesehen.
+- **Menü „…“** am Titelbild: Titel ändern (nur eigener Text; leer = sachliche Überschrift), Titelbild wählen, Fotos
+  hinzufügen (in der Galerie auswählen → Rechtsklick **Zur Story „…“ hinzufügen**), Fotos entfernen (anklicken →
+  **Entfernen**; sie bleiben in der Galerie), Anheften, Als Album speichern (verknüpft, keine Kopien), In der Galerie zeigen,
+  Ausblenden, Neu berechnen, Story löschen (nur eigene Storys und gespeicherte Rückblicke). **Als Collage-Bild speichern…**
+  ist sichtbar, kommt aber erst mit Welle 6b.
+- **Galerie:** Rechtsklick auf eine Auswahl → **Als Story…** legt eine eigene Story an (eigener Titel optional) und öffnet
+  sie; **In Storys zeigen** listet die Storys, in denen das Foto steht.
+- **Einstellungen › Storys:** Ereignisse & Reisen, Rückblicke, Personen- und Orte-Storys an/aus; **Zu Hause** (automatisch =
+  häufigster Ort, oder **Ort wählen…** über die Ortssuche); neues Ereignis nach einer Pause von 3/6/12/24 Stunden;
+  Mindestgröße 8/12/20/40 Fotos; Highlights knapp (~8 %), automatisch (~15 %) oder großzügig (~30 %); dazu die Karte
+  **Diashow**. Jede Änderung gilt sofort, die Storys werden im Hintergrund neu berechnet; angeheftete, ausgeblendete und
+  eigene Storys bleiben.
 
 ### Archive
 Archive (`.zip .rar .7z .tar .gz .tgz .bz2 .xz`) nimmt der Scan wie Fotos in den Katalog auf; sie bekommen kein
@@ -517,6 +552,8 @@ Reiter oben (ADR-0042):
 - **Archive** — automatisch entpacken (je Bibliothek), vorhandene Archive nachholen.
 - **Darstellung** — Farbschema (Hell/Dunkel/System folgt Windows live); Karte **Karte (Seite „Orte“)**: Kartenstil
   und die API-Schlüssel für CARTO und MapTiler (seit 0.4.1, siehe „Kartenstile: Schlüssel anfordern“).
+- **Storys** (seit 0.4.15) — Story-Arten an/aus, Zu Hause, Pause, Mindestgröße, Highlights-Anteil und die Karte
+  **Diashow** (siehe „Storys“).
 - **Speicher & Wartung** — Speicherorte mit „Ordner öffnen“ und **Ändern…** (siehe „Speicherort des Katalogs“),
   Thumbnail-Cache (Belegung, **Cache leeren** — Vorschaubilder werden bei Bedarf neu erzeugt), FFmpeg-Status mit
   kopierbarem winget-Befehl, unterstützte Bild- und Videoformate.

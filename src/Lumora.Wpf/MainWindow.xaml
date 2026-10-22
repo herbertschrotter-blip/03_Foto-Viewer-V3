@@ -13,12 +13,18 @@
                  xmlns:duplicates="clr-namespace:Lumora.Duplicates"
                  xmlns:albums="clr-namespace:Lumora.Albums"
                  xmlns:branding="clr-namespace:Lumora.Shell.Branding"
+                 xmlns:stories="clr-namespace:Lumora.Stories"
                  Title="{x:Static branding:LumoraBrand.ProductName}"
                  Height="800"
                  Width="1280"
                  WindowStartupLocation="CenterScreen"
                  WindowBackdropType="Mica"
                  ExtendsContentIntoTitleBar="True">
+
+    <!-- Zähler „n neu“ an „Storys“ (ADR-0060) -->
+    <dialogs:AppFluentWindow.Resources>
+        <shell:BoolToVisibilityConverter x:Key="StoriesBadgeVis" />
+    </dialogs:AppFluentWindow.Resources>
 
     <Grid>
         <Grid.RowDefinitions>
@@ -70,6 +76,20 @@
                     <ui:NavigationViewItem.Icon>
                         <ui:SymbolIcon Symbol="Album24" />
                     </ui:NavigationViewItem.Icon>
+                </ui:NavigationViewItem>
+                <!-- Storys: Ereignisse, Reisen, Rückblicke, Personen, Orte mit Zähler „n neu“ (ADR-0060) -->
+                <ui:NavigationViewItem Content="Storys"
+                                       TargetPageTag="stories"
+                                       TargetPageType="{x:Type stories:StoriesPage}">
+                    <ui:NavigationViewItem.Icon>
+                        <ui:SymbolIcon Symbol="BookOpen24" />
+                    </ui:NavigationViewItem.Icon>
+                    <ui:NavigationViewItem.InfoBadge>
+                        <ui:InfoBadge Severity="Informational"
+                                      Value="{Binding Text, Source={x:Static stories:StoriesNavigationBadge.Shared}}"
+                                      Visibility="{Binding HasNew, Source={x:Static stories:StoriesNavigationBadge.Shared}, Converter={StaticResource StoriesBadgeVis}}"
+                                      AutomationProperties.AutomationId="StoriesNewBadge" />
+                    </ui:NavigationViewItem.InfoBadge>
                 </ui:NavigationViewItem>
                 <!-- Personen (Gesichtserkennung, ADR-0037) -->
                 <ui:NavigationViewItem Content="Personen"

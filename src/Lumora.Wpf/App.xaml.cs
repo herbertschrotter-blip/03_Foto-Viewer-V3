@@ -187,6 +187,7 @@ public partial class App : Application, ICatalogHostSwitcher
         services.AddDuplicatesUi(); // Seite „Doppelte“ (Wpf/Duplicates, ADR-0053)
         services.AddAlbumsUi(); // Seite „Alben“, Album-Filter, Ordner-Verknüpfungen, intelligente Alben (Wpf/Albums, ADR-0054)
         Lumora.Slideshow.SlideshowServiceCollectionExtensions.AddSlideshow(services); // Diashow für Galerie, Album, Lightbox und später Storys (Wpf/Slideshow, ADR-0059)
+        Lumora.Stories.StoriesUiServiceCollectionExtensions.AddStoriesUi(services); // Seite „Storys“, Reiter „Storys“, Galerie-Menü „Als Story…“ (Wpf/Stories, ADR-0060)
 
         services.AddSingleton<MainWindow>();
     }
@@ -341,6 +342,8 @@ public partial class App : Application, ICatalogHostSwitcher
         _host.Services.GetRequiredService<Lumora.Services.Quality.IFileQualityIndexService>().Start();
         // Storys (ADR-0058): Erkennung im Hintergrund nach Scan, Aufnahmedatum-/Orts-Nachtrag und Gesichtern
         _host.Services.GetRequiredService<Lumora.Services.Stories.IStoryIndexService>().Start();
+        // Story-Seite (ADR-0060): Zähler „n neu“ an „Storys“ in der Navigation
+        _host.Services.GetRequiredService<Lumora.Stories.StoriesNavigationBadgeUpdater>().Start();
     }
 
     // ----- Katalogwechsel (ADR-0049) -----

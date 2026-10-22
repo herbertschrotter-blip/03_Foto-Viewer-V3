@@ -135,6 +135,7 @@ src/
     Settings/                         # Einstellungen, ThemeService, FaceData („Gesichtsdaten löschen…“), PersonRelations („Personen & Beziehungen“, ADR-0045)
     Shell/                            # Navigation, DialogService, StatusBar, Converters, Smoke/ (Rauchtest)
     Slideshow/                        # Diashow (ADR-0059): ISlideshowService, SlideshowWindow/-ViewModel/-Overlay, KenBurnsPlanner, Item-Loader, Einstellungen slideshow.*
+    Stories/                          # Story-Seite (ADR-0060): StoriesPage/-ViewModel (Übersicht), StoryView/-ViewModel (Story), StoryLayoutEngine (Collage-Blöcke, rein), StoryDaySections, Media-Loader, Bild-Lieferung, StoryGalleryBridge (Galerie-Menü), Einstellungen › Storys, Zähler „n neu“
     Sorter/                           # Sortieren-Seite (File Sorter, Flatten & Move)
     Thumbnails/                       # WicImageThumbnailRenderer (WIC lebt im Wpf-Projekt, Interface in Services)
 tests/

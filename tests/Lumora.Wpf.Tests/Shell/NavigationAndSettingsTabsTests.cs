@@ -26,7 +26,7 @@ public sealed class NavigationAndSettingsTabsTests
     {
         NavigationTags.SettingsSections.Should().Equal(
             NavigationTags.Library, NavigationTags.Tags, NavigationTags.Categories, NavigationTags.SettingsFaces,
-            NavigationTags.SettingsMotifs, NavigationTags.SettingsArchives, NavigationTags.SettingsAppearance, NavigationTags.SettingsStorage, NavigationTags.SettingsInfo);
+            NavigationTags.SettingsMotifs, NavigationTags.SettingsArchives, NavigationTags.SettingsAppearance, NavigationTags.SettingsStories, NavigationTags.SettingsStorage, NavigationTags.SettingsInfo);
         NavigationTags.SettingsSections.Should().OnlyHaveUniqueItems();
         NavigationTags.IsSettingsSection(NavigationTags.Tags).Should().BeTrue();
         NavigationTags.IsSettingsSection(NavigationTags.SettingsInfo).Should().BeTrue();

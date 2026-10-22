@@ -1,0 +1,385 @@
+<UserControl x:Class="Lumora.Stories.StoriesPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:local="clr-namespace:Lumora.Stories"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance local:StoriesViewModel, IsDesignTimeCreatable=False}"
+             d:DesignWidth="1100"
+             d:DesignHeight="760">
+    <!-- Seite „Storys“ (ADR-0060, Mockup 09): Übersicht als virtualisierte Liste von Zeilen (Banner, Abschnitte,
+         Jahres-Chips, Kartenreihen); eine geöffnete Story ersetzt die Übersicht (StoryView). -->
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="StoriesResources.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- Karte einer Story -->
+            <DataTemplate x:Key="StoryCardTemplate" DataType="{x:Type local:StoryCardViewModel}">
+                <local:StoryLeafButton Style="{StaticResource StoryCardButton}"
+                                       Width="{Binding Width}"
+                                       Margin="0,0,16,16"
+                                       AutomationProperties.Name="{Binding AutomationText}"
+                                       Command="{Binding Owner.OpenCardCommand}"
+                                       CommandParameter="{Binding}">
+                    <local:StoryLeafButton.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Öffnen" Icon="{ui:SymbolIcon Open24}"
+                                      Command="{Binding Owner.OpenCardCommand}"
+                                      CommandParameter="{Binding}" />
+                            <MenuItem Header="Diashow" Icon="{ui:SymbolIcon Play24}"
+                                      Visibility="{Binding Owner.HasSlideshow, Converter={StaticResource BoolToVis}}"
+                                      Command="{Binding Owner.StartCardSlideshowCommand}"
+                                      CommandParameter="{Binding}" />
+                            <MenuItem Header="Anheften" Icon="{ui:SymbolIcon Pin24}"
+                                      Visibility="{Binding IsPinned, Converter={StaticResource InvBoolToVis}}"
+                                      Command="{Binding Owner.TogglePinCommand}"
+                                      CommandParameter="{Binding}" />
+                            <MenuItem Header="Lösen" Icon="{ui:SymbolIcon PinOff24}"
+                                      Visibility="{Binding IsPinned, Converter={StaticResource BoolToVis}}"
+                                      Command="{Binding Owner.TogglePinCommand}"
+                                      CommandParameter="{Binding}" />
+                            <Separator />
+                            <MenuItem Header="Ausblenden" Icon="{ui:SymbolIcon EyeOff24}"
+                                      Visibility="{Binding IsHidden, Converter={StaticResource InvBoolToVis}}"
+                                      Command="{Binding Owner.HideCommand}"
+                                      CommandParameter="{Binding}" />
+                            <MenuItem Header="Wieder zeigen" Icon="{ui:SymbolIcon Eye24}"
+                                      Visibility="{Binding IsHidden, Converter={StaticResource BoolToVis}}"
+                                      Command="{Binding Owner.UnhideCommand}"
+                                      CommandParameter="{Binding}" />
+                        </ContextMenu>
+                    </local:StoryLeafButton.ContextMenu>
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="150" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <!-- Titelbild-Collage: groß links, zwei klein rechts -->
+                        <Grid x:Name="Cover">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="2*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <Border Grid.ColumnSpan="2" Grid.RowSpan="2" CornerRadius="7,7,0,0" Background="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                            <local:StoryImage Grid.RowSpan="2" CornerRadius="7,0,0,0" Source="{Binding Image1}" />
+                            <local:StoryImage Grid.Column="1" Margin="2,0,0,1" CornerRadius="0,7,0,0" Source="{Binding Image2}" />
+                            <local:StoryImage Grid.Column="1" Grid.Row="1" Margin="2,1,0,0" Source="{Binding Image3}" />
+                            <!-- Art-Abzeichen -->
+                            <Border Grid.ColumnSpan="2" Style="{StaticResource StoryImageBadge}" HorizontalAlignment="Left" VerticalAlignment="Top">
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:SymbolIcon Symbol="{Binding KindSymbol}" FontSize="11" Foreground="White" Margin="0,0,5,0" />
+                                    <TextBlock Text="{Binding KindLabel}" FontSize="11" FontWeight="SemiBold" Foreground="White" />
+                                </StackPanel>
+                            </Border>
+                            <!-- Angeheftet -->
+                            <Border Grid.ColumnSpan="2" Width="24" Height="24" CornerRadius="12" Margin="8" Background="#8C000000"
+                                    HorizontalAlignment="Right" VerticalAlignment="Top" ToolTip="Angeheftet"
+                                    Visibility="{Binding IsPinned, Converter={StaticResource BoolToVis}}">
+                                <ui:SymbolIcon Symbol="Pin16" FontSize="12" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <!-- Diashow beim Überfahren -->
+                            <Button Grid.ColumnSpan="2" Grid.RowSpan="2" Margin="8" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                    Style="{StaticResource StoryGlassButton}" Padding="9,3" ToolTip="Diashow"
+                                    Command="{Binding Owner.StartCardSlideshowCommand}"
+                                    CommandParameter="{Binding}">
+                                <Button.Visibility>
+                                    <MultiBinding Converter="{x:Static local:StoryVisibility.AllTrue}">
+                                        <Binding Path="IsMouseOver" RelativeSource="{RelativeSource AncestorType=local:StoryLeafButton}" />
+                                        <Binding Path="Owner.HasSlideshow" />
+                                        <Binding Path="IsHidden" Converter="{x:Static local:StoryVisibility.Not}" />
+                                    </MultiBinding>
+                                </Button.Visibility>
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:SymbolIcon Symbol="Play16" FontSize="12" Foreground="White" Margin="0,0,5,0" />
+                                    <TextBlock Text="Diashow" FontSize="12" />
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+                        <!-- Gesicht der Person (Personen-Story) -->
+                        <Grid Grid.Row="1" Width="52" Height="52" Margin="12,-26,0,0" HorizontalAlignment="Left" VerticalAlignment="Top"
+                              Visibility="{Binding IsPerson, Converter={StaticResource BoolToVis}}">
+                            <Ellipse Fill="{DynamicResource AccentFillColorDefaultBrush}" Stroke="{DynamicResource CardBackgroundFillColorDefaultBrush}" StrokeThickness="3" />
+                            <ui:SymbolIcon Symbol="Person24" FontSize="22" Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <local:StoryImage Source="{Binding PersonFace}" CornerRadius="26" />
+                            <Ellipse Stroke="{DynamicResource CardBackgroundFillColorDefaultBrush}" StrokeThickness="3" />
+                        </Grid>
+                        <StackPanel Grid.Row="1" Margin="12,10,12,12">
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsPerson}" Value="True">
+                                            <Setter Property="Margin" Value="12,30,12,12" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
+                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="14" TextTrimming="CharacterEllipsis"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                            <TextBlock Text="{Binding Subtitle}" FontSize="13" Margin="0,1,0,0" TextTrimming="CharacterEllipsis"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       Visibility="{Binding Subtitle, Converter={StaticResource NullToVis}}" />
+                            <DockPanel Margin="0,6,0,0" LastChildFill="True">
+                                <ItemsControl DockPanel.Dock="Right" ItemsSource="{Binding Avatars}" ItemTemplate="{StaticResource StoryAvatarTemplate}"
+                                              Margin="6,0,0,0" Focusable="False">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Orientation="Horizontal" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                </ItemsControl>
+                                <TextBlock Text="{Binding CountsText}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                            </DockPanel>
+                            <!-- Ausgeblendet: „Wieder zeigen“ -->
+                            <ui:Button Margin="0,8,0,0" Content="Wieder zeigen" Icon="{ui:SymbolIcon Eye24}"
+                                       Visibility="{Binding IsHidden, Converter={StaticResource BoolToVis}}"
+                                       Command="{Binding Owner.UnhideCommand}"
+                                       CommandParameter="{Binding}" />
+                        </StackPanel>
+                    </Grid>
+                </local:StoryLeafButton>
+            </DataTemplate>
+
+            <!-- Zeile: Rückblick-Banner -->
+            <DataTemplate DataType="{x:Type local:OverviewMemoryRow}">
+                <local:StoryLeafButton Style="{StaticResource StoryTileButton}" Height="268" Margin="0,0,16,20"
+                                       AutomationProperties.Name="{Binding Memory.AutomationText}"
+                                       AutomationProperties.AutomationId="StoriesMemoryBanner"
+                                       Loaded="OnMemoryRowLoaded"
+                                       Command="{Binding Owner.OpenMemoryCommand}"
+                                       CommandParameter="{Binding Memory}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="2*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <Border Grid.ColumnSpan="3" Grid.RowSpan="2" CornerRadius="10" Background="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                        <local:StoryImage Grid.RowSpan="2" CornerRadius="10,0,0,10" Source="{Binding Memory.Image1}" />
+                        <local:StoryImage Grid.Column="1" Margin="3,0,0,1.5" Source="{Binding Memory.Image2}" />
+                        <local:StoryImage Grid.Column="2" Margin="3,0,0,1.5" CornerRadius="0,10,0,0" Source="{Binding Memory.Image3}" />
+                        <local:StoryImage Grid.Column="1" Grid.Row="1" Margin="3,1.5,0,0" Source="{Binding Memory.Image4}" />
+                        <local:StoryImage Grid.Column="2" Grid.Row="1" Margin="3,1.5,0,0" CornerRadius="0,0,10,0" Source="{Binding Memory.Image5}" />
+                        <Border Grid.ColumnSpan="3" Grid.RowSpan="2" CornerRadius="0,0,10,10" VerticalAlignment="Bottom" Height="140"
+                                Background="{StaticResource StoryCaptionShade}" IsHitTestVisible="False" />
+                        <StackPanel Grid.ColumnSpan="3" Grid.RowSpan="2" VerticalAlignment="Bottom" Margin="20,0,240,16" IsHitTestVisible="False">
+                            <TextBlock Text="{Binding Memory.Kicker}" FontSize="12" FontWeight="SemiBold" Foreground="White" Opacity="0.9" />
+                            <TextBlock Text="{Binding Memory.Title}" FontSize="26" FontWeight="SemiBold" Foreground="White" Margin="0,2,0,0"
+                                       TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding Memory.MetaText}" FontSize="13" Foreground="White" Opacity="0.9" Margin="0,2,0,0"
+                                       TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                        <StackPanel Grid.ColumnSpan="3" Grid.RowSpan="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="16">
+                            <Button Style="{StaticResource StoryGlassButton}" Margin="0,0,8,0"
+                                    Visibility="{Binding Owner.HasSlideshow, Converter={StaticResource BoolToVis}}"
+                                    Command="{Binding Owner.StartMemorySlideshowCommand}"
+                                    CommandParameter="{Binding Memory}">
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:SymbolIcon Symbol="Play16" FontSize="12" Foreground="White" Margin="0,0,6,0" />
+                                    <TextBlock Text="Diashow" />
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource StoryGlassButton}" Content="Öffnen"
+                                    Command="{Binding Owner.OpenMemoryCommand}"
+                                    CommandParameter="{Binding Memory}" />
+                        </StackPanel>
+                    </Grid>
+                </local:StoryLeafButton>
+            </DataTemplate>
+
+            <!-- Zeile: Abschnitts-Kopf -->
+            <DataTemplate DataType="{x:Type local:OverviewSectionRow}">
+                <DockPanel Margin="0,10,0,10" LastChildFill="False">
+                    <TextBlock DockPanel.Dock="Left" Text="{Binding Title}" FontSize="20" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                    <TextBlock DockPanel.Dock="Left" Text="{Binding CountText}" FontSize="13" Margin="10,0,0,2" VerticalAlignment="Bottom"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                               Visibility="{Binding CountText, Converter={StaticResource NullToVis}}" />
+                    <Button DockPanel.Dock="Right" Style="{StaticResource StoryLinkButton}" Content="{Binding MoreText}" Margin="0,0,16,0"
+                            VerticalAlignment="Bottom"
+                            Visibility="{Binding HasMore, Converter={StaticResource BoolToVis}}"
+                            Command="{Binding Owner.ShowMoreCommand}"
+                            CommandParameter="{Binding}" />
+                </DockPanel>
+            </DataTemplate>
+
+            <!-- Zeile: Jahres-Chips -->
+            <DataTemplate DataType="{x:Type local:OverviewYearsRow}">
+                <ItemsControl ItemsSource="{Binding Chips}" Margin="0,0,0,12" Focusable="False">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type local:StoryYearChip}">
+                            <local:StorySelectButton Style="{StaticResource StoryChipButton}" IsChecked="{Binding IsSelected, Mode=OneWay}"
+                                    AutomationProperties.Name="{Binding Label}"
+                                    Command="{Binding Owner.SelectYearCommand}"
+                                    CommandParameter="{Binding}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding Label}" FontSize="13" />
+                                    <TextBlock Text="{Binding Count}" FontSize="12" Margin="6,0,0,0" Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                                </StackPanel>
+                            </local:StorySelectButton>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </DataTemplate>
+
+            <!-- Zeile: Karten -->
+            <DataTemplate DataType="{x:Type local:OverviewCardRow}">
+                <ItemsControl ItemsSource="{Binding Cards}" ItemTemplate="{StaticResource StoryCardTemplate}" Focusable="False"
+                              Loaded="OnCardRowLoaded">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                </ItemsControl>
+            </DataTemplate>
+
+            <!-- Zeile: Hinweis -->
+            <DataTemplate DataType="{x:Type local:OverviewNoteRow}">
+                <Border Margin="0,8,16,16" Padding="18,14" CornerRadius="8" BorderThickness="1"
+                        BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                        Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}">
+                    <StackPanel>
+                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <TextBlock Text="{Binding Text}" FontSize="13" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                </Border>
+            </DataTemplate>
+
+            <DataTemplate DataType="{x:Type local:StoryViewModel}">
+                <local:StoryView />
+            </DataTemplate>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <Grid>
+        <!-- Übersicht -->
+        <Grid x:Name="OverviewRoot" Margin="24,16,8,0"
+              Visibility="{Binding IsStoryOpen, Converter={StaticResource InvBoolToVis}}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- Kopf: Titel, Zähler, Suche -->
+            <Grid Margin="0,0,16,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <ui:TextBlock FontTypography="Title" Text="Storys" />
+                    <TextBlock Text="{Binding SummaryText}" FontSize="13" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"
+                               AutomationProperties.AutomationId="StoriesSummary"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+                <ui:TextBox Grid.Column="1" Width="320" VerticalAlignment="Center"
+                            PlaceholderText="Story suchen – Ort, Person, Jahr"
+                            Icon="{ui:SymbolIcon Search24}"
+                            ClearButtonEnabled="True"
+                            AutomationProperties.AutomationId="StoriesSearch"
+                            AutomationProperties.Name="Story suchen"
+                            Text="{Binding SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+            </Grid>
+
+            <!-- Werkzeugleiste: Art-Filter, Story aus Auswahl, Ausgeblendet -->
+            <Grid Grid.Row="1" Margin="0,0,16,14">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Border HorizontalAlignment="Left" CornerRadius="6" Padding="2" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+                    <ItemsControl ItemsSource="{Binding KindOptions}" Focusable="False" AutomationProperties.AutomationId="StoriesKindFilter">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type local:StoryKindOption}">
+                                <local:StorySelectButton Style="{StaticResource StorySegButton}" IsChecked="{Binding IsSelected, Mode=OneWay}"
+                                        AutomationProperties.Name="{Binding Label}"
+                                        Command="{Binding Owner.SelectKindCommand}"
+                                        CommandParameter="{Binding}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding Label}" />
+                                        <TextBlock Text="{Binding Count}" Margin="6,0,0,0" FontWeight="Normal" Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                                    </StackPanel>
+                                </local:StorySelectButton>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Border>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <ui:Button Content="Story aus Auswahl…" Icon="{ui:SymbolIcon Add24}" Margin="0,0,6,0"
+                               ToolTip="In der Galerie Fotos markieren → Rechtsklick „Als Story…“"
+                               Command="{Binding StoryFromSelectionHintCommand}" />
+                    <ui:Button Appearance="Transparent" Icon="{ui:SymbolIcon EyeOff24}" Content="{Binding HiddenText}"
+                               AutomationProperties.AutomationId="StoriesHidden"
+                               Visibility="{Binding HasHidden, Converter={StaticResource BoolToVis}}"
+                               Command="{Binding ToggleHiddenCommand}" />
+                </StackPanel>
+            </Grid>
+
+            <StackPanel Grid.Row="2" Margin="0,0,16,0">
+                <ui:InfoBar Message="{Binding ErrorText}" Severity="Error" IsClosable="False" Margin="0,0,0,8"
+                            IsOpen="{Binding ErrorText, Converter={StaticResource NullToBool}, Mode=OneWay}"
+                            Visibility="{Binding ErrorText, Converter={StaticResource NullToVis}}" />
+                <ui:InfoBar Message="{Binding StatusText}" Severity="Informational" IsClosable="False" Margin="0,0,0,8"
+                            AutomationProperties.AutomationId="StoriesStatus"
+                            IsOpen="{Binding StatusText, Converter={StaticResource NullToBool}, Mode=OneWay}"
+                            Visibility="{Binding StatusText, Converter={StaticResource NullToVis}}" />
+            </StackPanel>
+
+            <Grid Grid.Row="3">
+                <ItemsControl x:Name="OverviewList" ItemsSource="{Binding Rows}" Focusable="False"
+                              AutomationProperties.AutomationId="StoriesOverviewList"
+                              VirtualizingPanel.IsVirtualizing="True"
+                              VirtualizingPanel.VirtualizationMode="Standard"
+                              VirtualizingPanel.ScrollUnit="Pixel"
+                              ScrollViewer.CanContentScroll="True"
+                              SizeChanged="OnOverviewSizeChanged">
+                    <ItemsControl.Template>
+                        <ControlTemplate TargetType="ItemsControl">
+                            <ScrollViewer CanContentScroll="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+                                <ItemsPresenter />
+                            </ScrollViewer>
+                        </ControlTemplate>
+                    </ItemsControl.Template>
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <VirtualizingStackPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                </ItemsControl>
+                <ui:ProgressRing IsIndeterminate="True" Width="28" Height="28" VerticalAlignment="Top" Margin="0,24,0,0"
+                                 Visibility="{Binding IsLoading, Converter={StaticResource BoolToVis}}" />
+            </Grid>
+        </Grid>
+
+        <!-- Geöffnete Story -->
+        <ContentControl x:Name="StoryHost" Content="{Binding CurrentStory}" Focusable="False"
+                        Visibility="{Binding IsStoryOpen, Converter={StaticResource BoolToVis}}" />
+    </Grid>
+</UserControl>

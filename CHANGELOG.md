@@ -3,6 +3,47 @@
 Alle nennenswerten Änderungen an Lumora (bis 0.2.48 „PhotoViewer V3“). Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.4.15] — 2026-10-22
+
+### Feature (ADR-0060) — Story-Seite (Welle 6, Phase 2, Mockup 09)
+- **Navigation „Storys“** nach „Alben“ mit Zähler **„n neu“** (ungesehene Storys, aktualisiert nach jeder Änderung und
+  beim Bibliothekswechsel); Statusleiste **„Storys aktuell“ / „Storys werden berechnet …“**.
+- **Übersicht** als virtualisierte Liste: Kopf mit Zählern und Suche (Ort, Person, Jahr), Art-Filter mit Zählern (Alle,
+  Ereignisse & Reisen, Rückblicke, Personen, Orte), Banner **„Heute vor N Jahren“** (nur wenn es heute einen gibt; Öffnen,
+  Diashow), Angeheftet, Neu, Reisen & Ereignisse mit Jahres-Chips, Personen (Karte mit Gesicht), Orte, eigene Storys;
+  Karten mit Titelbild-Collage, Art-Abzeichen, Anheft-Symbol, Zählern, Personen-Rundbildern und „Diashow“ beim Überfahren;
+  **Ausgeblendet (n)** mit „Wieder zeigen“; „Story aus Auswahl…“ als Hinweis. Bilder und Personen erst für sichtbare Reihen.
+- **Story-Ansicht:** Brotkrumen, großes Titelbild (scharf aus dem Original) mit sachlicher Überschrift, Orten, Zählern und
+  Personen, Knöpfe Titelbild/Anheften und Menü „…“ (Titel ändern = nur eigener Text, Titelbild wählen, Fotos
+  hinzufügen/entfernen, Anheften, Als Album speichern, In der Galerie zeigen, Ausblenden, Neu berechnen, Löschen für eigene
+  Storys/Rückblicke, **„Als Collage-Bild speichern…“ deaktiviert — Welle 6b**). Fixierte Leiste Highlights/Alle Fotos mit
+  Zählern, Tages-Chips (Sprung, klappt eingeklappte Tage auf), Diashow (Highlights bzw. alle, ab Anfang). Tagesabschnitte
+  mit **Collage-Blöcken** aus der neuen, reinen `StoryLayoutEngine` (groß+2, 3er, 4er, 2+groß im Wechsel, Panoramen über die
+  volle Breite, Hochformate nebeneinander, lückenlos auf ganze DIP), Videos mit ▶ und Dauer, „+n ähnliche“, „warum
+  ausgewählt“ beim Überfahren, Favoriten-Stern; „Alle n Fotos dieses Abschnitts“ klappt dicht auf (Nicht-Highlights blass);
+  ab fünf Tagen die ersten drei offen, Rest „n weitere Tage … Anzeigen“; Ende-Kasten mit Zählern, Album, Diashow.
+  Doppelklick → Lightbox mit den Fotos der Story. Öffnen markiert als gesehen. Eine Story über einen Tag (Rückblick) ist nach
+  Tageszeit geteilt (Vormittag/Nachmittag/Abend).
+- **Galerie-Kontextmenü:** **Als Story…** (Auswahl → eigene Story, danach geöffnet), **In Storys zeigen**, bei „Fotos
+  hinzufügen…“ **Zur Story „…“ hinzufügen**.
+- **Einstellungen › Storys** (neuer Reiter nach „Darstellung“): Story-Arten an/aus, Zu Hause (automatisch mit erkanntem Ort
+  oder Ort über die Offline-Ortssuche), Pause, Mindestgröße, Highlights-Anteil; der Abschnitt **Diashow** ist aus
+  „Darstellung“ hierher gezogen. „Unscharfe/dunkle nie als Titelbild“ ist kein Schalter (der Dienst kennt keine solche
+  Einstellung; die Titelbild-Wahl tut es immer) — als Hinweis in der Karte „Highlights“.
+- Kacheln und Karten sind UI-Automation-Blätter (`StoryLeafButton`), Bilder zeichnet `StoryImage` (keine gebundenen
+  `ImageBrush` in virtualisierten Vorlagen). Keine Migration, keine neue Abhängigkeit.
+- Rauchtest: neuer Schritt **„Story-Seite“** nach „Diashow“, vor „Versteckte Bibliothek“ (Übersicht, Story, Highlights ↔
+  Alle, Anheften, Diashow + Esc, zurück; Screenshots 62–66 hell/dunkel). Neue Wpf-Tests unter `tests/Lumora.Wpf.Tests/Stories`.
+
+### Offen
+- „In der Galerie zeigen“ einer Story nutzt den Datei-Filter der Karte; die Bedingung heißt in der Galerie deshalb
+  „Kartenausschnitt (n Dateien)“ — ein eigener Galerie-Filter „Story“ wäre ein Folgeschritt.
+- Im Rauchtest scheiterte der Schritt „Motive“ („eigener Begriff gelöscht“: die Liste in Einstellungen › Motive zeigte den
+  gelöschten Begriff weiter), solange ein schon beim Start erzeugtes Story-ViewModel bei jedem Bibliothekswechsel die
+  Übersicht lud. Behoben, indem die Seite erst nach dem ersten Anzeigen lädt; die Ursache (vermutlich eine Wettlaufsituation
+  im Neuladen der Motiv-Begriffe, `MotifSettingsViewModel.LoadTermsAsync` ohne Reihenfolge-Schutz) ist nicht abschließend
+  geklärt.
+
 ## [0.4.14] — 2026-10-22
 
 ### Change (ADR-0049, Nachtrag) — Versteckte Bibliotheken: nach dem Zusperren keine Spur mehr

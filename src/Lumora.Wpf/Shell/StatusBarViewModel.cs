@@ -117,6 +117,7 @@ public sealed partial class StatusBarViewModel : ObservableObject, IDisposable
         InitPlaces(); // Orte nachtragen (ADR-0050, StatusBarViewModel.Places.cs)
         InitDuplicates(duplicates); // Doppelte: Fortschritt + Eingang-Hinweis (ADR-0053, StatusBarViewModel.Duplicates.cs)
         InitQuality(); // Foto-Güte: Fortschritt (ADR-0057, StatusBarViewModel.Quality.cs)
+        InitStories(); // Story-Erkennung: „Storys aktuell“ (ADR-0060, StatusBarViewModel.Stories.cs)
     }
 
     /// <summary>Datei-Operationen, die auf einen laufenden Scan derselben Bibliothek warten (Hinweis + „Abbrechen“).</summary>

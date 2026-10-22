@@ -56,7 +56,7 @@ internal sealed partial class SmokeScenario
         {
             var items = main.MainNav.MenuItems.OfType<NavigationViewItem>().Select(i => i.TargetPageTag).ToList();
             var footer = main.MainNav.FooterMenuItems.OfType<NavigationViewItem>().Select(i => i.TargetPageTag).ToList();
-            Check(items.SequenceEqual([NavigationTags.Gallery, NavigationTags.Folders, NavigationTags.Albums /* ADR-0054 */, NavigationTags.Persons, NavigationTags.Places, NavigationTags.Duplicates /* ADR-0053 */, NavigationTags.Sorter]),
+            Check(items.SequenceEqual([NavigationTags.Gallery, NavigationTags.Folders, NavigationTags.Albums /* ADR-0054 */, NavigationTags.Stories /* ADR-0060 */, NavigationTags.Persons, NavigationTags.Places, NavigationTags.Duplicates /* ADR-0053 */, NavigationTags.Sorter]),
                 $"Navigation: {string.Join(", ", items)}");
             Check(footer.SequenceEqual([NavigationTags.Settings]), $"Fußleiste: {string.Join(", ", footer)}");
             Check(main.MainNav.PaneHeader is LibrarySwitcher, "Bibliotheks-Umschalter oben in der Leiste");

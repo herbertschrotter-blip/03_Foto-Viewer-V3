@@ -17,6 +17,7 @@ public static class NavigationTags
     public const string Places = "places"; // Seite „Orte“ (ADR-0051)
     public const string Duplicates = "duplicates"; // Seite „Doppelte“ (ADR-0053)
     public const string Albums = "albums"; // Seite „Alben“ (ADR-0054)
+    public const string Stories = "stories"; // Seite „Storys“ (ADR-0060)
     public const string Sorter = "sorter";
     public const string Settings = "settings";
 
@@ -37,13 +38,16 @@ public static class NavigationTags
     public const string SettingsMotifs = "settings-motifs";
     public const string SettingsArchives = "settings-archives";
     public const string SettingsAppearance = "settings-appearance";
+
+    /// <summary>Einstellungen › Storys (ADR-0060): Story-Arten, Erkennung, Highlights, Diashow.</summary>
+    public const string SettingsStories = "settings-stories";
     public const string SettingsStorage = "settings-storage";
     public const string SettingsInfo = "settings-info";
 
     /// <summary>Alle Reiter der Einstellungen in Anzeigereihenfolge.</summary>
     public static IReadOnlyList<string> SettingsSections { get; } =
     [
-        Library, Tags, Categories, SettingsFaces, SettingsMotifs, SettingsArchives, SettingsAppearance, SettingsStorage, SettingsInfo,
+        Library, Tags, Categories, SettingsFaces, SettingsMotifs, SettingsArchives, SettingsAppearance, SettingsStories, SettingsStorage, SettingsInfo,
     ];
 
     /// <summary>

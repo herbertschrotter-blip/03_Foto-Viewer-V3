@@ -30,7 +30,7 @@ public partial class SettingsPage : UserControl
         Shell.HiddenLibraries.HiddenLibrariesViewModel? hiddenLibraries = null,
         Motifs.MotifSettingsViewModel? motifs = null,
         Places.Styles.MapStyleSettingsViewModel? mapStyles = null,
-        Slideshow.SlideshowSettingsViewModel? slideshow = null)
+        Stories.StorySettingsViewModel? stories = null)
     {
         _sections = sections;
         InitializeComponent();
@@ -38,9 +38,7 @@ public partial class SettingsPage : UserControl
         MotifsView.DataContext = motifs; // Reiter „Motive“ (ADR-0052); ohne Dienst leer
         AppearanceView.MapSection.DataContext = mapStyles; // Darstellung › Karte (ADR-0055); ohne Dienst ausgeblendet
         AppearanceView.MapSection.Visibility = mapStyles is null ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;
-        // Darstellung › Diashow (ADR-0059); ohne Dienst ausgeblendet
-        AppearanceView.SlideshowSection.DataContext = slideshow;
-        AppearanceView.SlideshowSection.Visibility = slideshow is null ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;
+        StoriesView.DataContext = stories; // Reiter „Storys“ samt Diashow (ADR-0060, ADR-0059); ohne Dienst leer
 
         LibraryTab.Content = library;
         TagsTab.Content = tags;

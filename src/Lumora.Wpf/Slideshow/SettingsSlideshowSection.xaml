@@ -8,8 +8,8 @@
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance local:SlideshowSettingsViewModel, IsDesignTimeCreatable=False}"
              d:DesignWidth="900">
-    <!-- Einstellungen › Darstellung › Diashow (ADR-0059, Mockup 09 „Einstellungen › Storys“, Karte „Diashow“).
-         DataContext = SlideshowSettingsViewModel (von der SettingsPage gesetzt). Später unter „Storys“. -->
+    <!-- Einstellungen › Storys › Diashow (ADR-0059, seit 0.4.15 im Reiter „Storys“, ADR-0060; Mockup 09, Karte „Diashow“).
+         DataContext = SlideshowSettingsViewModel (vom Reiter „Storys“ gesetzt). -->
     <UserControl.Resources>
         <ResourceDictionary Source="../Settings/Sections/SettingsStyles.xaml" />
     </UserControl.Resources>
@@ -53,7 +53,7 @@
                              AutomationProperties.Name="Datum und Ort einblenden" />
 
             <TextBlock Style="{StaticResource Hint}" Margin="0,12,0,0"
-                       Text="Starten: in der Galerie „Diashow“ (Auswahl, sonst die ganze Ansicht), auf der Seite „Alben“ per Rechtsklick oder in der Lightbox mit S („Diashow ab hier“). Keine Musik. Tasten: ← → blättern, Leertaste Pause, Pos1/Ende, Esc beendet." />
+                       Text="Starten: in der Galerie „Diashow“ (Auswahl, sonst die ganze Ansicht), auf den Seiten „Alben“ und „Storys“ oder in der Lightbox mit S („Diashow ab hier“). Keine Musik. Tasten: ← → blättern, Leertaste Pause, Pos1/Ende, Esc beendet." />
             <TextBlock Style="{StaticResource Hint}" Margin="0,6,0,0" Text="{Binding SavedText}"
                        Visibility="{Binding SavedText, Converter={StaticResource NullToVis}}" />
         </StackPanel>

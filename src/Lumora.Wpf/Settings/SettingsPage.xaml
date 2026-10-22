@@ -8,6 +8,7 @@
              xmlns:local="clr-namespace:Lumora.Settings"
              xmlns:sections="clr-namespace:Lumora.Settings.Sections"
              xmlns:info="clr-namespace:Lumora.Settings.Info"
+             xmlns:stories="clr-namespace:Lumora.Stories"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance local:SettingsViewModel}"
              d:DesignWidth="1000"
@@ -98,6 +99,10 @@
             </TabItem>
             <TabItem Header="Darstellung" Tag="{x:Static shell:NavigationTags.SettingsAppearance}">
                 <sections:SettingsAppearanceSection x:Name="AppearanceView" />
+            </TabItem>
+            <!-- Storys (ADR-0060): Story-Arten, Erkennung, Highlights, Diashow; DataContext = StorySettingsViewModel (Code-Behind) -->
+            <TabItem Header="Storys" Tag="{x:Static shell:NavigationTags.SettingsStories}">
+                <stories:SettingsStoriesSection x:Name="StoriesView" />
             </TabItem>
             <TabItem Header="Speicher &amp; Wartung" Tag="{x:Static shell:NavigationTags.SettingsStorage}">
                 <sections:SettingsStorageSection />

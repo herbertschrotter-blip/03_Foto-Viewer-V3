@@ -292,6 +292,16 @@
                     <TextBlock Style="{StaticResource StatusText}" Text="{Binding QualityIndexText}" />
                     <Border Style="{StaticResource StatusSeparator}" />
                 </StackPanel>
+                <!-- Story-Erkennung (ADR-0060): „Storys aktuell“ / „Storys werden berechnet …“ -->
+                <StackPanel Orientation="Horizontal"
+                            AutomationProperties.Name="Storys"
+                            AutomationProperties.AutomationId="StatusStories"
+                            ToolTip="Storys werden im Hintergrund nach dem Scan, nach neuen Aufnahmedaten, Orten und Gesichtern neu berechnet."
+                            Visibility="{Binding StoryIndexText, Converter={StaticResource NullToVis}}">
+                    <ui:SymbolIcon Symbol="BookOpen24" Style="{StaticResource StatusIcon}" />
+                    <TextBlock Style="{StaticResource StatusText}" Text="{Binding StoryIndexText}" />
+                    <Border Style="{StaticResource StatusSeparator}" />
+                </StackPanel>
                 <StackPanel Orientation="Horizontal"
                             Visibility="{Binding IsBackgroundActive, Converter={StaticResource BoolToVis}}">
                     <Ellipse Width="7" Height="7" Margin="0,0,6,0" VerticalAlignment="Center"
