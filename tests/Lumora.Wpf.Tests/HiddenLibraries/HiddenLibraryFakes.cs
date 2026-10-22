@@ -214,9 +214,13 @@ internal sealed class ScriptedHiddenDialogs : IHiddenLibraryDialogs
 
     public bool? LastCanReset { get; private set; }
 
+    /// <summary>Laufwerke des letzten Anlegen-Dialogs (das erste ist vorgewählt).</summary>
+    public IReadOnlyList<string>? LastDrives { get; private set; }
+
     public HiddenLibraryCreateAnswer? AskCreate(IReadOnlyList<string> drives, Func<string, Task<string?>> validateFolder)
     {
         Asked.Add("create");
+        LastDrives = drives;
         return CreateAnswer;
     }
 

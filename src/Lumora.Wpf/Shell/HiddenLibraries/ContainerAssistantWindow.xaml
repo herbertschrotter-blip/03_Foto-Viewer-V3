@@ -1,0 +1,280 @@
+<dialogs:AppFluentWindow x:Class="Lumora.Shell.HiddenLibraries.ContainerAssistantWindow"
+                 xmlns:dialogs="clr-namespace:Lumora.Shell.Dialogs"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 xmlns:hidden="clr-namespace:Lumora.Shell.HiddenLibraries"
+                 mc:Ignorable="d"
+                 d:DataContext="{d:DesignInstance hidden:ContainerAssistantViewModel}"
+                 Title="Versteckte Bibliothek anlegen"
+                 Width="640"
+                 SizeToContent="Height"
+                 ResizeMode="NoResize"
+                 ShowInTaskbar="False"
+                 WindowStartupLocation="CenterOwner"
+                 WindowBackdropType="Mica"
+                 ExtendsContentIntoTitleBar="True"
+                 KeyDown="OnKeyDown">
+
+    <!-- Container-Assistent (ADR-0061): erst „schon eingehängt“ oder „neu erstellen“ (BitLocker-VHDX bzw. VeraCrypt),
+         dann Schritt für Schritt bis zum verschlüsselten Laufwerk. Container-Kennwörter gibt der Benutzer nur in den
+         Fenstern von Windows bzw. VeraCrypt ein — hier gibt es kein Kennwortfeld. DataContext = ContainerAssistantViewModel. -->
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+        <Style x:Key="Label" TargetType="TextBlock">
+            <Setter Property="Margin" Value="0,12,0,4" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+        </Style>
+        <Style x:Key="Hint" TargetType="TextBlock">
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        </Style>
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Margin" Value="0,14,0,0" />
+            <Setter Property="Padding" Value="12,10" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorSecondaryBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style x:Key="Warning" TargetType="TextBlock" BasedOn="{StaticResource Hint}">
+            <Setter Property="Margin" Value="0,2,0,0" />
+            <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+        </Style>
+        <Style x:Key="ChoiceRadio" TargetType="RadioButton">
+            <Setter Property="Margin" Value="0,12,0,0" />
+            <Setter Property="GroupName" Value="ContainerChoice" />
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar x:Name="DialogTitleBar" Grid.Row="0" Title="Versteckte Bibliothek anlegen" ShowMaximize="False" ShowMinimize="False" />
+
+        <ScrollViewer Grid.Row="1" MaxHeight="620" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="24,4,24,20">
+                <TextBlock Text="{Binding Heading}" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" />
+
+                <!-- 1. Wahl -->
+                <StackPanel Visibility="{Binding IsChoiceStep, Converter={StaticResource BoolToVisibility}}">
+                    <RadioButton x:Name="ExistingRadio" Style="{StaticResource ChoiceRadio}" IsChecked="{Binding IsExistingChoice, Mode=TwoWay}"
+                                 AutomationProperties.Name="Container ist schon eingehängt">
+                        <StackPanel>
+                            <TextBlock Text="Container ist schon eingehängt" FontWeight="SemiBold" />
+                            <TextBlock Style="{StaticResource Hint}" Text="Der verschlüsselte Container (VeraCrypt oder BitLocker) ist bereits als Laufwerk da — weiter wie bisher." />
+                        </StackPanel>
+                    </RadioButton>
+                    <RadioButton Style="{StaticResource ChoiceRadio}" IsChecked="{Binding IsBitLockerChoice, Mode=TwoWay}"
+                                 IsEnabled="{Binding IsBitLockerAvailable}"
+                                 AutomationProperties.Name="Neuen Container mit BitLocker erstellen">
+                        <StackPanel>
+                            <TextBlock Text="Neuen verschlüsselten Container erstellen — BitLocker (Windows, ohne Zusatzprogramm)" FontWeight="SemiBold" TextWrapping="Wrap" />
+                            <TextBlock Style="{StaticResource Hint}" Text="Lumora legt eine virtuelle Festplatte (VHDX) an — dafür fragt Windows einmal nach Administratorrechten — und öffnet dann den BitLocker-Assistenten von Windows." />
+                        </StackPanel>
+                    </RadioButton>
+                    <TextBlock Style="{StaticResource Warning}" Margin="28,4,0,0" Text="{Binding BitLockerUnavailableReason}"
+                               Visibility="{Binding IsBitLockerUnavailable, Converter={StaticResource BoolToVisibility}}" />
+                    <RadioButton Style="{StaticResource ChoiceRadio}" IsChecked="{Binding IsVeraCryptChoice, Mode=TwoWay}"
+                                 AutomationProperties.Name="Neuen Container mit VeraCrypt erstellen">
+                        <StackPanel>
+                            <TextBlock Text="Neuen verschlüsselten Container erstellen — VeraCrypt" FontWeight="SemiBold" />
+                            <TextBlock Style="{StaticResource Hint}" Text="Mit verstecktem Bereich (zwei Kennwörter, der innere ist nicht nachweisbar). Fehlt VeraCrypt, bietet Lumora die Installation über winget an." />
+                        </StackPanel>
+                    </RadioButton>
+                    <TextBlock Style="{StaticResource Hint}" Margin="0,14,0,0"
+                               Text="Lumora verschlüsselt selbst nichts und sieht nie ein Container-Kennwort: das geben Sie nur in den Fenstern von Windows bzw. VeraCrypt ein." />
+                </StackPanel>
+
+                <!-- 2a. BitLocker: VHDX festlegen -->
+                <StackPanel Visibility="{Binding IsBitLockerSetupStep, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Style="{StaticResource Label}" Text="Speicherort der Containerdatei (neutraler Name)" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ui:TextBox Text="{Binding VhdxPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Speicherort der Containerdatei" />
+                        <ui:Button Grid.Column="1" Margin="8,0,0,0" Content="Durchsuchen…" Command="{Binding BrowseVhdxCommand}" />
+                    </Grid>
+                    <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0" Text="{Binding VhdxHint}" />
+                    <Grid Margin="0,0,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="16" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="16" />
+                            <ColumnDefinition Width="2*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Style="{StaticResource Label}" Text="Größe (GB)" />
+                            <ui:TextBox Text="{Binding SizeText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Größe in GB" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Style="{StaticResource Label}" Text="Laufwerk" />
+                            <ComboBox ItemsSource="{Binding FreeLetters}" SelectedItem="{Binding SelectedLetter, Mode=TwoWay}" AutomationProperties.Name="Laufwerksbuchstabe" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="4">
+                            <TextBlock Style="{StaticResource Label}" Text="Bezeichnung" />
+                            <ui:TextBox Text="{Binding VolumeLabel, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Bezeichnung des Laufwerks" />
+                        </StackPanel>
+                    </Grid>
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource Hint}" FontWeight="SemiBold" Text="Was jetzt passiert" />
+                            <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0" Text="• Windows fragt einmal nach Administratorrechten. Lumora legt die VHDX an (dynamisch erweiterbar), hängt sie ein und formatiert sie (NTFS)." />
+                            <TextBlock Style="{StaticResource Hint}" Margin="0,2,0,0" Text="• Danach verschlüsseln Sie das neue Laufwerk im BitLocker-Assistenten von Windows." />
+                            <TextBlock Style="{StaticResource Warning}" Text="• Nie in OneDrive oder einem anderen Cloud-Ordner ablegen." />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- 2b. BitLocker: verschlüsseln -->
+                <StackPanel Visibility="{Binding IsBitLockerEncryptStep, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Style="{StaticResource Hint}" Margin="0,8,0,0" FontSize="13"
+                               Text="Öffnen Sie den BitLocker-Assistenten von Windows für das neue Laufwerk und folgen Sie diesen Hinweisen:" />
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource Hint}" Text="1. „Kennwort zum Entsperren des Laufwerks verwenden“ wählen und ein gutes Kennwort festlegen — Lumora sieht es nie." />
+                            <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0" Text="2. Wiederherstellungsschlüssel: „In Datei speichern“ oder „Drucken“ — NICHT „Im Microsoft-Konto speichern“. Die Datei bzw. den Ausdruck getrennt vom PC aufbewahren (z. B. USB-Stick)." />
+                            <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0" Text="3. „Nur verwendeten Speicherplatz verschlüsseln“ reicht (das Laufwerk ist neu); Verschlüsselungsmodus wie vorgeschlagen." />
+                            <TextBlock Style="{StaticResource Warning}" Margin="0,4,0,0" Text="4. „Automatisch entsperren“ NICHT einschalten — sonst öffnet Windows den Container ohne Kennwort." />
+                            <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0" Text="5. „Verschlüsselung starten“, dann hier „Verschlüsselung prüfen“." />
+                        </StackPanel>
+                    </Border>
+                    <ui:Button Margin="0,12,0,0" Content="BitLocker-Assistent öffnen" Icon="{ui:SymbolIcon LockClosed24}"
+                               Command="{Binding OpenBitLockerWizardCommand}" AutomationProperties.Name="BitLocker-Assistent öffnen" />
+                </StackPanel>
+
+                <!-- 3a. VeraCrypt installieren -->
+                <StackPanel Visibility="{Binding IsVeraCryptInstallStep, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel Visibility="{Binding IsWingetAvailable, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Style="{StaticResource Hint}" Margin="0,8,0,0" FontSize="13"
+                                   Text="VeraCrypt ist nicht installiert. Lumora kann es über winget installieren:" />
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource Hint}" Text="{Binding PackageText}" />
+                                <TextBlock Style="{StaticResource Hint}" Margin="0,2,0,0" Text="{Binding SourceText}" />
+                                <TextBlock Style="{StaticResource Hint}" Margin="0,2,0,0" Text="{Binding SizeInfoText}" />
+                                <TextBlock Style="{StaticResource Hint}" Margin="0,2,0,0" Text="Das Installationsprogramm fragt nach Administratorrechten (Windows-Rückfrage)." />
+                                <TextBlock Style="{StaticResource Hint}" Margin="0,6,0,0" Text="{Binding LicenseText}" />
+                            </StackPanel>
+                        </Border>
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <ui:Button Content="Erneut prüfen" Command="{Binding RecheckVeraCryptCommand}" IsEnabled="{Binding IsIdle}"
+                                       ToolTip="VeraCrypt selbst installiert? Dann hier weiter, ohne winget." />
+                        </StackPanel>
+                        <ItemsControl Margin="0,10,0,0" ItemsSource="{Binding InstallLines}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Style="{StaticResource Hint}" FontFamily="Consolas" Text="{Binding}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                    <StackPanel Visibility="{Binding IsWingetMissing, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Style="{StaticResource Hint}" Margin="0,8,0,0" FontSize="13"
+                                   Text="VeraCrypt ist nicht installiert, und winget (der Paketmanager von Windows) fehlt auf diesem PC. Bitte VeraCrypt von der offiziellen Seite herunterladen und installieren, danach „Erneut prüfen“." />
+                        <TextBlock Style="{StaticResource Hint}" Margin="0,6,0,0" Text="{Binding DownloadUrl}" />
+                        <ui:Button Margin="0,10,0,0" Content="Offizielle Seite öffnen" Icon="{ui:SymbolIcon Open24}" Command="{Binding OpenDownloadPageCommand}" />
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- 3b. VeraCrypt-Assistent mit Anleitung -->
+                <StackPanel Visibility="{Binding IsVeraCryptGuideStep, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                        <RadioButton GroupName="VolumeType" Content="Mit verstecktem Bereich (empfohlen)" IsChecked="{Binding IsHiddenVolume, Mode=TwoWay}"
+                                     AutomationProperties.Name="Verstecktes Volume" />
+                        <RadioButton GroupName="VolumeType" Margin="16,0,0,0" Content="Normaler Container (ein Kennwort)" IsChecked="{Binding IsNormalVolume, Mode=TwoWay}"
+                                     AutomationProperties.Name="Normaler Container" />
+                    </StackPanel>
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <ItemsControl ItemsSource="{Binding GuideWarnings}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Style="{StaticResource Warning}" Text="{Binding StringFormat='⚠ {0}'}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+                    <ItemsControl Margin="0,10,0,0" ItemsSource="{Binding GuideSteps}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,6,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="28" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding Number, StringFormat='{}{0}.'}" FontWeight="SemiBold" />
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                                        <TextBlock Style="{StaticResource Hint}" Text="{Binding Detail}" />
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <ui:Button Margin="0,12,0,0" Content="VeraCrypt-Assistent starten" Icon="{ui:SymbolIcon Open24}"
+                               Command="{Binding StartVeraCryptFormatCommand}" AutomationProperties.Name="VeraCrypt-Assistent starten" />
+                    <TextBlock Style="{StaticResource Hint}" Margin="0,8,0,0" Text="{Binding WhyWizardText}" />
+                </StackPanel>
+
+                <!-- 3c. VeraCrypt-Container einhängen -->
+                <StackPanel Visibility="{Binding IsVeraCryptMountStep, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Style="{StaticResource Label}" Text="Die eben erstellte Containerdatei" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ui:TextBox Text="{Binding ContainerFile, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Containerdatei" />
+                        <ui:Button Grid.Column="1" Margin="8,0,0,0" Content="Durchsuchen…" Command="{Binding BrowseContainerCommand}" />
+                    </Grid>
+                    <TextBlock Style="{StaticResource Label}" Text="Laufwerksbuchstabe" />
+                    <ComboBox Width="90" HorizontalAlignment="Left" ItemsSource="{Binding FreeLetters}" SelectedItem="{Binding SelectedMountLetter, Mode=TwoWay}"
+                              AutomationProperties.Name="Laufwerksbuchstabe zum Einhängen" />
+                    <TextBlock Style="{StaticResource Hint}" Margin="0,12,0,0"
+                               Text="VeraCrypt fragt das Kennwort in seinem eigenen Fenster. Bei einem Container mit verstecktem Bereich das Kennwort des INNEREN Bereichs eingeben — dort gehört die Bibliothek hin." />
+                </StackPanel>
+
+                <!-- 4. Bereit -->
+                <StackPanel Visibility="{Binding IsReadyStep, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Margin="0,10,0,0" TextWrapping="Wrap" Text="{Binding ReadyText}" />
+                </StackPanel>
+
+                <TextBlock Margin="0,12,0,0" TextWrapping="Wrap" Text="{Binding Info}"
+                           Foreground="{DynamicResource SystemFillColorSuccessBrush}"
+                           Visibility="{Binding HasInfo, Converter={StaticResource BoolToVisibility}}" />
+                <TextBlock Margin="0,12,0,0" TextWrapping="Wrap" Text="{Binding Error}"
+                           Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+                           Visibility="{Binding HasError, Converter={StaticResource BoolToVisibility}}" />
+            </StackPanel>
+        </ScrollViewer>
+
+        <Border Grid.Row="2" Padding="24,12"
+                Background="{DynamicResource LayerFillColorDefaultBrush}"
+                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                BorderThickness="0,1,0,0">
+            <Grid>
+                <ui:Button HorizontalAlignment="Left" MinWidth="90" Content="Zurück" Command="{Binding BackCommand}"
+                           Visibility="{Binding CanGoBack, Converter={StaticResource BoolToVisibility}}" IsEnabled="{Binding IsIdle}" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <ui:ProgressRing Width="20" Height="20" Margin="0,0,12,0" IsIndeterminate="True"
+                                     Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />
+                    <ui:Button x:Name="PrimaryButton" MinWidth="110" Margin="0,0,8,0" Appearance="Primary"
+                               Content="{Binding PrimaryText}" Command="{Binding PrimaryCommand}" IsEnabled="{Binding IsIdle}" />
+                    <ui:Button MinWidth="110" Content="Abbrechen" Command="{Binding CancelCommand}" IsEnabled="{Binding IsIdle}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</dialogs:AppFluentWindow>

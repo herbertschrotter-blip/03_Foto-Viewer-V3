@@ -21,17 +21,21 @@ public sealed partial class HiddenLibrariesViewModel : ObservableObject
     private readonly IHiddenLibraryDialogs _dialogs;
     private readonly IDialogService _messages;
     private readonly ILogger<HiddenLibrariesViewModel> _logger;
+    private readonly IContainerAssistant? _assistant;
 
+    /// <param name="assistant">Container-Assistent vor dem Anlegen (ADR-0061); null = direkt zum Anlegen-Dialog.</param>
     public HiddenLibrariesViewModel(
         ICatalogSessionManager sessions,
         IHiddenLibraryDialogs dialogs,
         IDialogService messages,
-        ILogger<HiddenLibrariesViewModel> logger)
+        ILogger<HiddenLibrariesViewModel> logger,
+        IContainerAssistant? assistant = null)
     {
         _sessions = sessions;
         _dialogs = dialogs;
         _messages = messages;
         _logger = logger;
+        _assistant = assistant;
         if (sessions.ActiveManifest is { } manifest)
         {
             _autoLockMinutes = manifest.AutoLockMinutes;
@@ -168,7 +172,21 @@ public sealed partial class HiddenLibrariesViewModel : ObservableObject
             return;
         }
 
-        var answer = _dialogs.AskCreate(_sessions.GetCandidateDrives(), _sessions.ValidateNewFolderAsync);
+        // ADR-0061: zuerst „Container ist schon eingehängt“ oder „Neuen verschlüsselten Container erstellen“
+        string? newDrive = null;
+        if (_assistant is not null)
+        {
+            var container = _assistant.Run();
+            if (container.Outcome == ContainerAssistantOutcome.Cancelled)
+            {
+                await ShowAsync("Versteckte Bibliothek anlegen", container.Message).ConfigureAwait(true);
+                return;
+            }
+
+            newDrive = container.DriveRoot;
+        }
+
+        var answer = _dialogs.AskCreate(PreferDrive(_sessions.GetCandidateDrives(), newDrive), _sessions.ValidateNewFolderAsync);
         if (answer is null)
         {
             return;
@@ -242,6 +260,17 @@ public sealed partial class HiddenLibrariesViewModel : ObservableObject
         {
             _saving = false;
         }
+    }
+
+    /// <summary>Das neue Laufwerk aus dem Container-Assistenten zuerst (der Anlegen-Dialog wählt das erste vor).</summary>
+    internal static System.Collections.Generic.IReadOnlyList<string> PreferDrive(System.Collections.Generic.IReadOnlyList<string> drives, string? preferred)
+    {
+        if (string.IsNullOrEmpty(preferred))
+        {
+            return drives;
+        }
+
+        return drives.Where(d => !string.Equals(d, preferred, StringComparison.OrdinalIgnoreCase)).Prepend(preferred).ToList();
     }
 
     private static System.Collections.Generic.HashSet<char> DriveInfoLetters()

@@ -3,6 +3,59 @@
 Alle nennenswerten Änderungen an Lumora (bis 0.2.48 „PhotoViewer V3“). Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.4.18] — 2026-10-22
+
+### Feature (ADR-0061) — Versteckte Bibliotheken: Container-Assistent (BitLocker oder VeraCrypt)
+- „Versteckte Bibliothek anlegen…“ fragt zuerst: **Container ist schon eingehängt** (bisheriger Weg), **Neuen
+  verschlüsselten Container erstellen — BitLocker** oder **— VeraCrypt**. Am Ende beider neuen Wege folgt der bisherige
+  Anlegen-Dialog mit dem neuen Laufwerk vorgewählt.
+- **BitLocker:** Speicherort (Vorschlag `<NTFS-Laufwerk>\Daten\sicherung.vhdx`, Cloud-Ordner und Nicht-NTFS gesperrt,
+  Hinweis beim Systemlaufwerk), Größe aus dem freien Platz (dynamisch erweiterbar), freier Buchstabe, Bezeichnung
+  „Daten“. Ein erhöhter PowerShell-Lauf (`Verb=runas`, eine UAC-Rückfrage, Befehl als `-EncodedCommand`) schreibt das
+  diskpart-Skript (ASCII, ohne Kennwort) erst selbst nach `%SystemRoot%\Temp`, führt es aus, räumt bei einem Fehler die
+  halbe VHDX ab und löscht das Skript immer — so kann kein anderer Prozess es zwischen Schreiben und UAC-Zustimmung
+  austauschen, und unter `%LocalAppData%\Lumora` entsteht keine Datei (Abweichung vom Plan „Skript im `TempRoot`“, aus
+  dem Selbst-Review); danach der Windows-BitLocker-Assistent (`BitLockerWizardElev.exe X:\ T`) mit Hinweisen
+  (Wiederherstellungsschlüssel nicht ins Microsoft-Konto, kein automatisches Entsperren); „Verschlüsselung prüfen“ liest
+  `System.Volume.BitLockerProtection` ohne Adminrechte. Windows Home → Hinweis und VeraCrypt; UAC abgelehnt → nichts
+  bleibt; Buchstabe belegt → Meldung.
+- **VeraCrypt:** fehlt es, Bestätigungsseite (Paket `IDRIX.VeraCrypt`, Quelle winget, ca. 40 MB, Adminrechte, Lizenz)
+  und erst auf **Zustimmen und installieren** `winget install --id IDRIX.VeraCrypt -e --accept-package-agreements
+  --accept-source-agreements` (Ausgabe sichtbar, Fehler verständlich); ohne winget Link zu veracrypt.fr. Dann
+  `VeraCrypt Format.exe` mit Schritt-Anleitung — Standard **verstecktes Volume** mit Warnungen, wählbar normaler
+  Container — und Einhängen über das vorhandene „Container öffnen…“ (VeraCrypt fragt das Kennwort; nicht aus einem
+  Cloud-Ordner). „Erneut prüfen“ erkennt ein von Hand installiertes VeraCrypt ohne zweites winget.
+- Abbrechen auf jeder Seite ohne Seiteneffekte (mit Hinweis, wenn schon ein Container angelegt bzw. eingehängt ist);
+  nichts davon im Protokoll; Dateidialoge ohne „Zuletzt verwendet“.
+- Selbst-Review (`code-review` medium, 9 Befunde): behoben — Skript-Austausch vor der UAC-Zustimmung, Zeitüberschreitung
+  räumte zu früh auf, halbe VHDX blieb eingehängt, VeraCrypt-Container aus Cloud-Ordnern, Nicht-NTFS-Laufwerke,
+  Abbrechen auf „bereit“ ohne Hinweis, kein „Erneut prüfen“ neben winget, Laufwerksliste bei jedem Tastendruck
+  (jetzt 10 s zwischengespeichert). Begründet offen: eigene `IProcessOutputRunner`/`IDriveSpaceSource` neben
+  `IProcessRunner`/`IDriveRootSource` (andere Aufgabe: Ausgabe mitlesen bzw. freier Platz + Dateisystem; die alten
+  Schnittstellen bleiben für bestehende Fakes unverändert).
+- Neue Schnittstellen (Services): `IContainerCreation`, `IElevatedRunner`, `IProcessOutputRunner`, `IShellLauncher`,
+  `IBitLockerPlatform`, `IVeraCryptInstaller`, `IDriveSpaceSource`; Oberfläche: `ContainerAssistantWindow` +
+  `ContainerAssistantViewModel`, `IContainerAssistant`, `IContainerFilePicker`. Kein neuer Rauchtest-Schritt (der
+  Rauchtest legt wie bisher direkt an).
+- Tests nur mit Fakes (nie echt diskpart/BitLocker/winget/VeraCrypt/UAC): `ContainerCreationTests` (Skript-Befehle,
+  Maskierung, kein Kennwort, Skript gelöscht, UAC abgelehnt ohne Rest, belegter Buchstabe/Cloud/Größe, BitLocker-
+  Assistent und -Zustand, Windows Home, winget-Befehl und -Meldungen, VeraCrypt-Assistent, Anleitung),
+  `ContainerAssistantTests` (Zustandsmaschine, Abbrechen auf jeder Seite, Übergabe an den Anlegen-Dialog, nichts im
+  Protokoll, Fenster).
+
+### Offen — erster echter Durchlauf mit Herbert (Checkliste)
+- BitLocker: UAC-Rückfrage erscheint genau einmal; diskpart legt VHDX an (dynamisch), GPT, NTFS, Bezeichnung, Buchstabe;
+  keine Explorer-Meldung „Datenträger formatieren“; Skript in `%SystemRoot%\Temp` danach weg, PowerShell-Here-Strings und`n  `$LASTEXITCODE` von diskpart wie erwartet, Aufräumen nach absichtlichem Fehler (z. B. belegter Buchstabe); Assistent öffnet
+  sich für das richtige Laufwerk; Statuswerte von `System.Volume.BitLockerProtection` (1/3 nach dem Assistenten, 6 nach
+  dem Sperren) stimmen; Doppelklick auf die VHDX nach Neustart fragt das Kennwort; Aushängen beim Zusperren.
+- VeraCrypt: winget-Rückgabewerte (abgelehnte UAC des Installers, schon installiert), Ausgabe-Zeilen lesbar (Umlaute),
+  `VeraCrypt Format.exe` startet (ggf. eigene UAC), Bezeichnungen der Anleitung passen zur installierten VeraCrypt-Version
+  (deutsch/englisch), Dateisystem-Empfehlung für das äußere Volume, Einhängen des inneren Bereichs mit `/volume … /letter`.
+- Allgemein: Fensterhöhe des Assistenten auf Herberts Bildschirm, hell/dunkel.
+- Rauchtest 43/43 OK; die bekannten 4 Binding-Fehler beim Öffnen des intelligenten Albums (0.4.10 „Offen“, Galerie
+  `GalleryListBoxItem`/`HeartButton`/`RatingStars`) traten in 2 von 2 Läufen auf — Alben/Galerie sind hier unverändert.
+- Tests: Lumora.Tests 1062 grün (2 übersprungen), Lumora.Wpf.Tests 1036 grün (7 übersprungen), dreimal hintereinander.
+
 ## [0.4.17] — 2026-10-22
 
 ### Docs — Mockup 10 um Garmin-Spuren erweitert, abgenommen

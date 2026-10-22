@@ -5,7 +5,8 @@
 - **Entscheider:** Herbert Schrotter (Anforderungen: Container, `_hidden`, Kennwort, Zusperren, Aushängen, Spurenfreiheit),
   Claude (Umsetzung und Detailentscheidungen ohne Rückfrage, siehe unten)
 - **Bezogen auf:** ADR-0001/0002 (Host, DI, Serilog), ADR-0003 (Datenpfade), ADR-0026 (Speicherort des Katalogs),
-  ADR-0035/0037 (Gesichter), ADR-0042 (Bibliotheks-Umschalter, Einstellungs-Reiter)
+  ADR-0035/0037 (Gesichter), ADR-0042 (Bibliotheks-Umschalter, Einstellungs-Reiter); ergänzt durch
+  [ADR-0061](0061-container-assistent.md) (Container-Assistent: neuen BitLocker-/VeraCrypt-Container erstellen)
 
 ## Kontext
 

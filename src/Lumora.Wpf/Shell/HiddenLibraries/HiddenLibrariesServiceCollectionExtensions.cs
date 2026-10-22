@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Lumora.Services.HiddenLibraries;
+using Lumora.Services.HiddenLibraries.Containers;
 using Lumora.Services.Infrastructure;
 
 namespace Lumora.Shell.HiddenLibraries;
@@ -24,7 +25,29 @@ public static class HiddenLibrariesServiceCollectionExtensions
         }
 
         services.TryAddSingleton<IHiddenLibraryDialogs, HiddenLibraryDialogs>();
+        services.AddContainerAssistant(setup.Sessions);
         services.AddSingleton<HiddenLibrariesViewModel>();
+        return services;
+    }
+
+    /// <summary>
+    /// Container-Assistent (ADR-0061): neue BitLocker-VHDX bzw. VeraCrypt-Container. Einhängen über die Container-Werkzeuge
+    /// des Sitzungsverwalters (im Rauchtest der Fake); alles andere startet erst auf Klick im Assistenten.
+    /// </summary>
+    private static IServiceCollection AddContainerAssistant(this IServiceCollection services, ICatalogSessionManager sessions)
+    {
+        services.TryAddSingleton<IProcessOutputRunner, ProcessOutputRunner>();
+        services.TryAddSingleton<IContainerCreation>(sp => new ContainerCreationService(
+            sessions.Containers,
+            new VeraCryptLocator(),
+            new VolumeDeviceQuery(),
+            new LocalDriveSpaceSource(),
+            new ElevatedProcessRunner(),
+            new ShellLauncher(),
+            new BitLockerPlatform(sp.GetRequiredService<IProcessOutputRunner>()),
+            new WingetVeraCryptInstaller(sp.GetRequiredService<IProcessOutputRunner>())));
+        services.TryAddSingleton<IContainerFilePicker, ContainerFilePicker>();
+        services.TryAddSingleton<IContainerAssistant, ContainerAssistant>();
         return services;
     }
 }

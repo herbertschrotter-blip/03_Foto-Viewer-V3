@@ -852,8 +852,32 @@ selbst einhängen) und von denen Lumora im Alltag **nichts zeigt** (ADR-0049).
   Verlauf); nicht über Win+R (Windows merkt sich die Eingabe) und nicht in PowerShell (Befehlsverlauf).
 - **Container nie in OneDrive** oder einem anderen Cloud-Ordner ablegen. Lumora verschlüsselt selbst nichts: der
   Container schützt Originale, Katalog, Vorschaubilder, Gesichter und Protokolle.
+- **Container-Assistent (seit 0.4.18, ADR-0061):** „Versteckte Bibliothek anlegen…“ fragt zuerst:
+  - **Container ist schon eingehängt** → weiter wie unten.
+  - **Neu mit BitLocker** (Windows Pro/Enterprise/Education, ohne Zusatzprogramm): Speicherort der Containerdatei
+    (Vorschlag z. B. `D:\Daten\sicherung.vhdx`, neutraler Name, nur Buchstaben ohne Umlaute, nur auf einem NTFS-Laufwerk; nie in OneDrive/Cloud —
+    Lumora lehnt das ab; Systemlaufwerk geht, mit Hinweis), Größe (Vorschlag aus dem freien Platz; die Datei wächst erst
+    mit dem Inhalt), freier Laufwerksbuchstabe und Bezeichnung. **Container erstellen** → Windows fragt einmal nach
+    Administratorrechten, Lumora legt die VHDX an, hängt sie ein und formatiert sie (NTFS). Dann **BitLocker-Assistent
+    öffnen** (der von Windows): Kennwort wählen, Wiederherstellungsschlüssel **in Datei speichern oder drucken — nicht im
+    Microsoft-Konto**, „Automatisch entsperren“ **nicht** einschalten, Verschlüsselung starten → **Verschlüsselung
+    prüfen** → **Bibliothek auf X: anlegen**. Später hängt ein Doppelklick auf die `.vhdx` im Explorer sie wieder ein
+    (Windows fragt das BitLocker-Kennwort). Windows Home hat kein BitLocker — Lumora schlägt dann VeraCrypt vor.
+  - **Neu mit VeraCrypt:** Fehlt VeraCrypt, zeigt Lumora Paket (`IDRIX.VeraCrypt`), Quelle (winget), Größe und Lizenz;
+    erst **Zustimmen und installieren** startet `winget install` (das Installationsprogramm fragt nach
+    Administratorrechten). Ohne winget gibt es den Link zur offiziellen Seite veracrypt.fr und **Erneut prüfen**. Dann
+    **VeraCrypt-Assistent starten** und der Anleitung daneben folgen — Standard ist ein Container **mit verstecktem
+    Bereich** (äußeres Volume mit harmlosen Fotos, inneres Volume mit einem ANDEREN Kennwort; die Bibliothek gehört in den
+    INNEREN Bereich; den äußeren Bereich nur mit „Verstecktes Volume schützen“ einhängen, sonst kann Schreiben den
+    inneren zerstören), wählbar **normaler Container** (ein Kennwort). **Weiter: Container einhängen** → Containerdatei
+    und Buchstabe wählen (nicht aus einem Cloud-Ordner), VeraCrypt fragt das Kennwort (bei verstecktem Bereich das innere) → **Bibliothek auf X:
+    anlegen**.
+  - Container-Kennwörter geben Sie nur in den Fenstern von Windows bzw. VeraCrypt ein; Lumora sieht und speichert sie nie
+    und protokolliert nichts vom Assistenten. **Abbrechen** geht auf jeder Seite; ein schon angelegter, noch nicht
+    verschlüsselter BitLocker-Container bleibt liegen (Lumora sagt, was zu tun ist).
 - **Anlegen:** Bibliotheks-Umschalter (oben links) → **Versteckte Bibliothek
-  anlegen…** → Laufwerk des eingehängten Containers wählen, optional einen Ordnernamen direkt darauf (z. B. `X:\Fotos`;
+  anlegen…** → (Container-Assistent) → Laufwerk des eingehängten Containers wählen (nach dem Assistenten ist das neue
+  Laufwerk vorgewählt), optional einen Ordnernamen direkt darauf (z. B. `X:\Fotos`;
   tiefer geht nicht, sonst fände Lumora ihn nicht wieder), Name, Lumora-Kennwort zweimal (mindestens 6 Zeichen). Lumora
   legt im Ordner den versteckten Katalogordner `.lumora` an, wechselt in die neue Bibliothek und scannt sie. Der Ort
   wird nicht gemerkt.
