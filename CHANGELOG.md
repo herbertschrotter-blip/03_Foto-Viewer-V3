@@ -3,6 +3,18 @@
 Alle nennenswerten Änderungen an Lumora (bis 0.2.48 „PhotoViewer V3“). Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.4.19] — 2026-10-22
+
+### Docs — Mockup 11 „Verbundene Apps“, abgenommen
+- `mockups/11-verbundene-apps.html`: neuer Reiter Einstellungen › **Verbundene Apps**, allgemein für künftige Apps
+  (erste: Gipfelbuch). Verbindungen erlauben, Hintergrundstart durch andere Apps (ohne Fenster, schlank, beendet sich
+  selbst), Symbol im Infobereich wahlweise; Karte je App mit Status (läuft / im Hintergrund / beendet), Rechten je
+  Richtung (Fotos suchen, Vorschaubilder, Originale öffnen, Personen; Touren mit GPS-Spur, Gipfel/Tourdaten für
+  Storys), freigegebenen Bibliotheken, Zugriffszahlen ohne Dateinamen, Trennen; Kopplungs-Dialog mit Code. Versteckte
+  Bibliotheken sind für verbundene Apps nie sichtbar.
+- Die Schnittstelle selbst steht im eigenen Vertrags-Repo **app-verbindung** (`VERTRAG.md`, Version 0.1 Entwurf);
+  Lumora schreibt sie nicht ab, sondern verweist darauf.
+
 ## [0.4.18] — 2026-10-22
 
 ### Feature (ADR-0061) — Versteckte Bibliotheken: Container-Assistent (BitLocker oder VeraCrypt)
