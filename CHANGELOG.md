@@ -3,6 +3,16 @@
 Alle nennenswerten Änderungen an Lumora (bis 0.2.48 „PhotoViewer V3“). Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.4.16] — 2026-10-22
+
+### Docs — Mockup 10 „Ungenaue Orte verbessern“, abgenommen
+- `mockups/10-ungenaue-orte.html`: Seite Orte mit Bereich **„Ungenau“** neben „Ohne Ort“ für Fotos mit geschätzter
+  Position (Handy hat nur Breite/Länge ohne GPS-Höhe/-Zeit gespeichert, oder unmöglicher Sprung zu zeitnahen Fotos).
+  Vorschläge aus zeitnahen Fotos mit echtem GPS (zwischen zwei Nachbarn gemittelt bzw. ein naher Nachbar), Stufen
+  sicher/wahrscheinlich/kein Vorschlag; Karte mit altem Punkt, Vorschlag und Korrektur-Linie; Übernehmen je Foto, je
+  Ausflug oder alle sicheren, von Hand ziehen, Speichern nur im Katalog oder auch ins Foto, Rückgängig; Lightbox-Hinweis
+  „Position geschätzt“. Hell/dunkel, Stil aus Mockup 08/09.
+
 ## [0.4.15] — 2026-10-22
 
 ### Feature (ADR-0060) — Story-Seite (Welle 6, Phase 2, Mockup 09)
