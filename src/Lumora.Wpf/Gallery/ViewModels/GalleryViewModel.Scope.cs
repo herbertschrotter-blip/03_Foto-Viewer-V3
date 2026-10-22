@@ -30,6 +30,9 @@ public sealed partial class GalleryViewModel
     /// <summary>Bibliotheken des Bereichs (nie leer, solange eine Bibliothek geladen ist).</summary>
     private IReadOnlyList<int> ScopeLibraryIds => _scope.HasLibrary ? _scope.LibraryIds : [_libraryId];
 
+    /// <summary>Bibliotheken des Galerie-Bereichs — nur für Meldungen des Rauchtests.</summary>
+    internal IReadOnlyList<int> ScopeLibraryIdsForSmoke => ScopeLibraryIds;
+
     /// <summary>Für <c>GalleryQuery.LibraryIds</c>: null außer in „Alle verknüpften“ (dann bleibt die SQL wie bisher).</summary>
     private IReadOnlyList<int>? ScopeLibraryIdsForQuery => _scope.IsAllLinked ? _scope.LibraryIds : null;
 

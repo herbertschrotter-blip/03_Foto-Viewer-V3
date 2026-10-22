@@ -3,6 +3,68 @@
 Alle nennenswerten Änderungen an Lumora (bis 0.2.48 „PhotoViewer V3“). Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.4.24] — 2026-10-23
+
+### Feature (ADR-0063) — Story-Assistent: Sätze in eigenen Worten, lokale Sprach-KI nur für die Absicht, Collage-Bild
+- **Seite Storys:** Eingabeleiste mit Beispielen und Hinweis „läuft nur auf diesem PC“ (Mockup 12). Ein Satz („Collage mit
+  meiner Schwester bis 20 Jahre“, „Weihnachten bei Oma, alle Jahre“, „Erstelle mir ein Album mit den schönsten
+  Urlaubsfotos der letzten fünf Jahre mit Nicole und Nina“) geht an eine **lokale Sprach-KI über Ollama**
+  (`http://127.0.0.1:11434`, sonst nichts) — sie sieht nur den Satz, das Datum, Namen/Rufnamen/Beziehungen der Personen und
+  die Namen von Motiven, Tags und Kategorien, **nie Fotos, Pfade, Koordinaten oder Geburtsdaten**, und liefert nur eine
+  Absicht (`StoryIntent`, JSON-Schema über Ollamas `format`, Temperatur 0, `keep_alive` 60 s) — keine Titel, keine Texte.
+  Strikte Prüfung (unbekannte Felder, Typen, Werte, Grenzen, abgeschnittene Antwort).
+- **Auflösung in Lumora:** Personen über Namen/Beziehungen mit Synonymen und „ich“; mehrdeutig/unbekannt → **Rückfrage**
+  mit Gesicht und Fotozahl („Beide“), die Antwort wird als Alias gemerkt (Einstellungen › Assistent: vergessen). Zeitraum
+  absolut, **„letzte N Jahre“ relativ zu heute** (als konkrete Daten), **Alter aus dem Geburtsdatum** (fehlt es → Rückfrage),
+  **jedes Jahr** (auch über den Jahreswechsel). **Begriffe** gegen Tags, Kategorien (Name/Wert), Motive, Personen, Länder/
+  Regionen und die Offline-Ortssuche — mehrere Treffer **vereinigt und mit Zahlen** („Barcelona: Tag (212) · Ort (180)“), auf
+  einen umschaltbar; kein Treffer → **„nicht gefunden“** markiert. **Urlaub/Reise** über die Reise-Erkennung der Storys plus
+  passende Tags/Kategorien (z. B. Kategorie „Reisen“, Standard vereinigt); ohne eingestelltes Zuhause **Rückfrage** („Zuhause
+  ist Graz“ speichert es, „In Einstellungen › Storys festlegen“, „Ohne Reise-Erkennung“). Mehrere Personen Standard **alle
+  zusammen auf dem Foto**, umschaltbar auf „mindestens eine“. **„Die besten N“** über die Highlight-Auswahl; „die schönsten“
+  ohne Zahl → Vorschlag (bis 24 alle, sonst ≈ 10 %, 24–100), in der Karte 24/50/100/200/alle. Alles im aktuellen Bereich.
+- **Karte „So habe ich es verstanden — stimmt das?“:** jeder Punkt per Klick änderbar (neu gezählt ohne Sprach-KI),
+  Trefferzahl, Vorschau-Streifen; **Erstellen** (erst jetzt: eigene Story bzw. Album mit sachlicher Überschrift wie „Nicole
+  und Nina · Urlaub 2023–2025“, Diashow, Galerie, Collage-Bild ggf. + Story), **Nur Fotos zeigen (Galerie)**, **Satz ändern**,
+  **Abbrechen**; Fortschritt mit Abbrechen; **Zuletzt gefragt** (Öffnen/Wieder abspielen ohne erneute KI-Anfrage, löschbar).
+- **Ohne Ollama:** Hinweis mit Weg in Einstellungen › Assistent; **regelbasierter Rückfall** für klare Sätze (Name/Beziehung/
+  Begriff + Jahr, „die besten N“, „letzte N Jahre“, Urlaub, Aktionswort) — sonst „dafür braucht es die Sprach-KI“.
+- **Als Collage-Bild speichern** (Dialog wie Mockup): Format 16:9 / A4 quer / A4 hoch / Quadrat, Full HD / 4K / Druck
+  300 dpi, 12/24/36/48 Fotos, Großes Titelbild / Raster / Zeitstrahl (lückenlos, ohne Überlappung), sachliche Überschrift
+  (änderbar) und Datum je Foto, Neu mischen, Foto per Klick tauschen; gerendert aus den **Originalen** (WIC, EXIF-Ausrichtung,
+  eigener STA-Thread, Temp-Datei im Zielordner), JPEG/PNG; gespeichert nur über den Dateidialog (ohne „Zuletzt verwendet“).
+  Der Menüpunkt der Story-Ansicht ist jetzt aktiv. Versteckte Bibliothek: nur im Container (`<Bibliothek>\Collagen`).
+- **Einstellungen › Assistent** (neuer Reiter nach „Storys“): an/aus, Ollama-Status + **Ollama installieren…** (winget
+  `Ollama.Ollama`, erst nach Bestätigung mit Name, Quelle, Größe, Lizenz) bzw. **Ollama starten**, Sprachmodell (Standard
+  `qwen2.5:3b`, Alternative `qwen2.5:7b`, frei wählbar) + **Herunterladen…** (genaue Größe vorher aus dem Manifest der
+  Ollama-Registry, Bestätigung, Fortschritt, Abbrechen), **Grafikkarte nutzen** (während einer Anfrage hält der Assistent
+  `IGpuGate` — Gesichts-/Motiv-Index warten zwischen zwei Fotos; aus = nur CPU), Verlauf merken + löschen, gemerkte Antworten,
+  **Ausprobieren** (zeigt nur das Verständnis).
+- **Daten:** Migration `AddStoryAssistant` (nur CREATE TABLE): `AssistantHistory`, `AssistantAliases` je Bibliotheks-Gruppe
+  (Verknüpfen/Lösen/leere Gruppe über `AssistantGroupStore`, in `LibraryGroupStore.TermTables`); Einstellungen
+  `assistant.*` je Katalog. Versteckte Bibliothek: Verlauf, Antworten und Wortschatz nur aus dem versteckten Katalog.
+  Protokoll ohne Satz und Namen („Assistent: Anfrage, n Treffer“).
+- **Rauchtest:** neuer Schritt „Story-Assistent“ vor „Versteckte Bibliothek“ mit Attrappe statt Ollama (kein Netzwerk):
+  Satz → Karte → eigene Story → Collage aus den Originalen in Temp (1920 × 1080) → Verlauf, aufgeräumt; Screenshots 67–68.
+- **Tests:** Services 1062 → 1147 (2 übersprungen wie vorher), Wpf 1058 → 1068 (7 übersprungen wie vorher); Wpf-Suite
+  dreimal: 2× grün, 1× der zeitabhängige Wackel-Test `TraceScanLockedRangeTests.Kurz_ganz_gesperrte_Datei_wird_nach_
+  erneutem_Lesen_durchsucht` („library.db-wal (nicht lesbar)“, unverändert, nicht angefasst); Rauchtest 45 Schritte OK,
+  0 Binding-Fehler (im ersten Lauf 12 im Schritt „Alben“ — bekannt wackelig unter Last).
+- **Selbst-Review** (`code-review` medium, 10 Befunde): behoben — Collage überschrieb still den Vorschlag (jetzt nur über den
+  Dateidialog), veraltete Ergebnisse nach Bibliothekswechsel/neuem Satz (Generationszähler), Videos verkleinerten den
+  Collage-Vorrat, Story vor fehlendem Collage-Dialog angelegt, Wortschatz bei jeder Antwort neu gezählt (2 min
+  Zwischenspeicher, Antwort setzt zurück), Urlaubs-Treffer mit 45 Zählabfragen (jetzt je Art eine), Dispatcher des
+  Render-Threads, toter Code. CHANGELOG/Temp-Datei: erledigt.
+
+### Offen
+- Rauchtest „Bibliotheks-Trennung: gelöst: A wieder ohne den Ort aus B“ beim Einspielen 1 von 3 Läufen rot (mit dem Galerie-Fix aus 0.4.23 lädt die Galerie nur noch A). Die Prüfung ist jetzt in „Karte“ und „Ort-Flyout“ (mit dem Galerie-Bereich in der Meldung) aufgeteilt, damit der nächste rote Lauf die Stelle zeigt.
+- **Echter Test mit Herbert**: Ollama über Einstellungen › Assistent installieren und `qwen2.5:3b` herunterladen (beides
+  nur nach Bestätigung), dann Herberts Sätze ausprobieren — Prompt und Beispiele ggf. nachschärfen; Antwortzeit auf der
+  GTX 1080 Ti messen; ob `qwen2.5:7b` als Standard besser passt.
+- Gemerkte Antworten unter **Personen** ändern (Mockup) — bisher nur in Einstellungen › Assistent vergessen.
+- „Nur Fotos zeigen (Galerie)“ nutzt den Datei-Filter der Galerie (Chip „Kartenausschnitt (n Dateien)“, wie ADR-0060).
+- Personen zählen nur über bestätigte Gesichter; Orte als Rechteck ± 20 km.
+
 ## [0.4.23] — 2026-10-23
 
 ### Feature (ADR-0062) — Ungenaue Orte verbessern und Garmin-Spuren (Mockup 10)

@@ -79,6 +79,74 @@ namespace Lumora.Data.Migrations
                     b.ToTable("AlbumItems", (string)null);
                 });
 
+            modelBuilder.Entity("Lumora.Domain.Entities.AssistantAlias", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("GroupId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("PersonId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Term")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PersonId")
+                        .HasDatabaseName("IX_AssistantAliases_Person");
+
+                    b.HasIndex("GroupId", "Term", "PersonId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_AssistantAliases_Group_Term_Person");
+
+                    b.ToTable("AssistantAliases", (string)null);
+                });
+
+            modelBuilder.Entity("Lumora.Domain.Entities.AssistantHistoryEntry", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Action")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("GroupId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("IntentJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("LastUsedAtUtc")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ResultCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Sentence")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GroupId", "LastUsedAtUtc")
+                        .HasDatabaseName("IX_AssistantHistory_Group_Used");
+
+                    b.ToTable("AssistantHistory", (string)null);
+                });
+
             modelBuilder.Entity("Lumora.Domain.Entities.CaptureDateUndo", b =>
                 {
                     b.Property<int>("FileOperationId")
@@ -1361,6 +1429,15 @@ namespace Lumora.Data.Migrations
                     b.HasOne("Lumora.Domain.Entities.MediaFile", null)
                         .WithMany()
                         .HasForeignKey("FileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Lumora.Domain.Entities.AssistantAlias", b =>
+                {
+                    b.HasOne("Lumora.Domain.Entities.Person", null)
+                        .WithMany()
+                        .HasForeignKey("PersonId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

@@ -181,7 +181,9 @@ internal sealed partial class SmokeScenario
         Check(!_gallery.IsAllLinkedView && _gallery.TotalCount == countA, $"A wieder allein: {_gallery.TotalCount} Dateien");
         await _switcher.RefreshAsync().ConfigureAwait(true);
         Check(_switcher.LinkedGroups.Count == 0, "Umschalter ohne „Alle verknüpften“");
-        Check(!(await MapFileIdsAsync().ConfigureAwait(true)).Contains(fileB) && !await PlaceFlyoutHasAsync(placeId).ConfigureAwait(true), "gelöst: A wieder ohne den Ort aus B");
+        Check(!(await MapFileIdsAsync().ConfigureAwait(true)).Contains(fileB), "gelöst: Karte in A wieder ohne den Ort aus B");
+        Check(!await PlaceFlyoutHasAsync(placeId).ConfigureAwait(true),
+            $"gelöst: Ort-Flyout in A wieder ohne den Ort aus B (Bereich der Galerie: {string.Join(",", _gallery.ScopeLibraryIdsForSmoke)})");
 
         // (6) Aufräumen: Ort in B zurücknehmen, B entfernen (Gruppe samt Kopien weg), Tag/Person/Motiv-Begriff in A löschen
         if (geoBatch is { } batch && await _scopeGeoUndo.GetUndoableBatchIdAsync().ConfigureAwait(true) == batch)

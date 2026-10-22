@@ -182,6 +182,7 @@ internal static class LibraryLinkStore
         Albums.AlbumGroupStore.Link(connection, tx, targetGroup, sourceGroup, sourceLibraryName); // Alben (ADR-0054)
         Stories.StoryGroupStore.Link(connection, tx, targetGroup, sourceGroup); // Storys (ADR-0058): gleiche Signatur = eine Story
         Places.Tracks.GpsTrackGroupStore.Link(connection, tx, targetGroup, sourceGroup); // GPS-Spuren (ADR-0062): gleiche Prüfsumme = eine Spur
+        Assistant.AssistantGroupStore.Link(connection, tx, targetGroup, sourceGroup); // Story-Assistent (ADR-0063): Verlauf + gemerkte Antworten
 
         // ---- Bibliotheken und Gruppe
         Execute(connection, tx, "UPDATE Libraries SET GroupId = $t WHERE GroupId = $s;", p);
@@ -260,6 +261,7 @@ internal static class LibraryLinkStore
             """, p);
         var sourceIsMe = Scalar(connection, tx, "SELECT IsMe FROM Persons WHERE Id = $s;", p) == 1;
         Stories.StoryGroupStore.MovePersonStories(connection, tx, sourceId, targetId); // Storys (ADR-0058): Zustand nicht per Kaskade verlieren
+        Assistant.AssistantGroupStore.MovePersonAliases(connection, tx, sourceId, targetId); // Story-Assistent (ADR-0063): gemerkte Antworten mitnehmen
         Execute(connection, tx, "DELETE FROM Persons WHERE Id = $s;", p);
         if (sourceIsMe)
         {
@@ -392,6 +394,7 @@ internal static class LibraryLinkStore
         }
 
         Stories.StoryGroupStore.CopyForLibrary(connection, tx, fromGroup, toGroup, libraryId); // Storys (ADR-0058), braucht noch _CopyMap (Personen)
+        Assistant.AssistantGroupStore.CopyForLibrary(connection, tx, fromGroup, toGroup); // Story-Assistent (ADR-0063), braucht noch _CopyMap (Personen)
         Execute(connection, tx, "DROP TABLE temp._CopyMap;");
         Albums.AlbumGroupStore.CopyForLibrary(connection, tx, fromGroup, toGroup, libraryId); // Alben (ADR-0054)
         Places.Tracks.GpsTrackGroupStore.CopyForLibrary(connection, tx, fromGroup, toGroup); // GPS-Spuren (ADR-0062): Kopie für die gelöste Bibliothek

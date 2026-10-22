@@ -27,7 +27,7 @@ namespace Lumora.Stories;
 /// (<see cref="StoryLayoutEngine"/>) bzw. dichter Collage (<see cref="JustifiedRowLayout"/>), aufklappbare Tage, lange
 /// Reisen ab dem vierten Tag eingeklappt, Ende-Kasten. Das „…“-Menü: Titel ändern (nur eigener Text), Titelbild wählen,
 /// Fotos hinzufügen/entfernen, Anheften, Als Album speichern, In der Galerie zeigen, Ausblenden, Neu berechnen, Löschen
-/// (eigene/Rückblicke) und „Als Collage-Bild speichern…“ (deaktiviert, Welle 6b). Öffnen markiert als gesehen.
+/// (eigene/Rückblicke) und „Als Collage-Bild speichern…“ (Collage-Dialog, ADR-0063). Öffnen markiert als gesehen.
 /// Alle Zeilen sind Daten einer virtualisierten Liste; Vorschaubilder kommen, sobald eine Zeile sichtbar wird.
 /// </summary>
 public sealed partial class StoryViewModel : ObservableObject, IDisposable
@@ -174,10 +174,11 @@ public sealed partial class StoryViewModel : ObservableObject, IDisposable
 
     public bool HasSlideshow => _services.Slideshow is not null;
 
-    /// <summary>„Als Collage-Bild speichern…“ kommt mit Welle 6b — sichtbar, aber deaktiviert.</summary>
-    public bool CanSaveCollage => false;
+    /// <summary>„Als Collage-Bild speichern…“ (Welle 6b, ADR-0063) — aktiv, sobald der Collage-Dialog da ist.</summary>
+    public bool CanSaveCollage => _services.Collage is not null;
 
-    public string CollageHint => "Welle 6b";
+    /// <summary>Früher „Welle 6b“ am deaktivierten Menüpunkt; jetzt ohne Zusatz.</summary>
+    public string? CollageHint => _services.Collage is null ? "nicht verfügbar" : null;
 
     /// <summary>Breite der Zeilen in DIP (setzt die Ansicht).</summary>
     public double LayoutWidth { get; private set; } = 1000;
@@ -951,10 +952,24 @@ public sealed partial class StoryViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>„Als Collage-Bild speichern…“ — Welle 6b; der Menüpunkt ist sichtbar, aber deaktiviert.</summary>
+    /// <summary>
+    /// „Als Collage-Bild speichern…“ (ADR-0063): Dialog mit den Highlights (sonst allen Fotos) der Story, Überschrift =
+    /// Titel der Story (sachlich bzw. eigener). Gespeichert wird erst nach „Speichern“ im Dialog.
+    /// </summary>
     [RelayCommand(CanExecute = nameof(CanSaveCollage))]
-    private void SaveCollage()
+    private async Task SaveCollageAsync()
     {
+        if (_services.Collage is null || Details is null)
+        {
+            return;
+        }
+
+        IReadOnlyList<int> ids = Highlights.Count >= 12 ? Highlights.Select(h => h.FileId).ToList() : Details.FileIds;
+        var saved = await _services.Collage.ShowAsync(new Assistant.CollageRequest(Title, ids));
+        if (saved is not null)
+        {
+            StatusText = $"Collage gespeichert: {System.IO.Path.GetFileName(saved.Path)} ({saved.Width} × {saved.Height}).";
+        }
     }
 
     private async Task RefreshCardAsync(bool reloadCover = false)

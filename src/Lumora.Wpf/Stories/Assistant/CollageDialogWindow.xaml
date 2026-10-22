@@ -1,0 +1,160 @@
+<dialogs:AppFluentWindow x:Class="Lumora.Stories.Assistant.CollageDialogWindow"
+                 xmlns:dialogs="clr-namespace:Lumora.Shell.Dialogs"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 xmlns:stories="clr-namespace:Lumora.Stories"
+                 xmlns:local="clr-namespace:Lumora.Stories.Assistant"
+                 mc:Ignorable="d"
+                 d:DataContext="{d:DesignInstance local:CollageDialogViewModel, IsDesignTimeCreatable=False}"
+                 Title="Als Collage-Bild speichern"
+                 Width="960"
+                 SizeToContent="Height"
+                 ResizeMode="NoResize"
+                 ShowInTaskbar="False"
+                 WindowStartupLocation="CenterOwner"
+                 WindowBackdropType="Mica"
+                 ExtendsContentIntoTitleBar="True"
+                 KeyDown="OnKeyDown">
+    <!-- „Als Collage-Bild speichern“ (Mockup 12, ADR-0063): Vorschau links (Klick auf ein Foto tauscht es), Optionen rechts,
+         Neu mischen / Abbrechen / Speichern. DataContext = CollageDialogViewModel. -->
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="../StoriesResources.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <Style x:Key="OptionLabel" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="Margin" Value="0,12,0,4" />
+                <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            </Style>
+            <DataTemplate x:Key="ChoiceTemplate" DataType="{x:Type local:CollageChoice}">
+                <stories:StorySelectButton Style="{StaticResource StorySegButton}" IsChecked="{Binding IsSelected, Mode=OneWay}"
+                                           Content="{Binding Label}" AutomationProperties.Name="{Binding Label}"
+                                           Command="{Binding Owner.ChooseCommand}" CommandParameter="{Binding}" />
+            </DataTemplate>
+            <ItemsPanelTemplate x:Key="WrapPanelTemplate">
+                <WrapPanel />
+            </ItemsPanelTemplate>
+            <Style x:Key="Segments" TargetType="Border">
+                <Setter Property="HorizontalAlignment" Value="Left" />
+                <Setter Property="CornerRadius" Value="6" />
+                <Setter Property="Padding" Value="2" />
+                <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+            </Style>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <ui:TitleBar Grid.Row="0" Title="Als Collage-Bild speichern" ShowMaximize="False" ShowMinimize="False" />
+
+        <Grid Grid.Row="1" Margin="24,4,24,16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Vorschau -->
+            <StackPanel>
+                <Border Width="{x:Static local:CollageDialogViewModel.PreviewWidth}" Height="{Binding PreviewHeight}" Background="White" CornerRadius="4"
+                        VerticalAlignment="Top" AutomationProperties.AutomationId="CollagePreview">
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="10" ShadowDepth="2" Opacity="0.18" />
+                    </Border.Effect>
+                    <Canvas ClipToBounds="True">
+                        <TextBlock Canvas.Left="{Binding TitleLeft}" Canvas.Top="{Binding TitleTop}" Width="{Binding TitleWidth}" Height="{Binding TitleHeight}"
+                                   Text="{Binding Title}" Foreground="#222222" FontWeight="SemiBold" FontSize="14" TextTrimming="CharacterEllipsis"
+                                   Visibility="{Binding ShowTitle, Converter={StaticResource BoolToVis}}" />
+                        <ItemsControl ItemsSource="{Binding Tiles}" Focusable="False">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <Canvas />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemContainerStyle>
+                                <Style TargetType="ContentPresenter">
+                                    <Setter Property="Canvas.Left" Value="{Binding X}" />
+                                    <Setter Property="Canvas.Top" Value="{Binding Y}" />
+                                </Style>
+                            </ItemsControl.ItemContainerStyle>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type local:CollagePreviewTile}">
+                                    <stories:StoryLeafButton Style="{StaticResource StoryTileButton}" Width="{Binding Width}" Height="{Binding Height}"
+                                                             ToolTip="Klicken: gegen ein anderes gutes Foto tauschen"
+                                                             AutomationProperties.Name="Foto tauschen"
+                                                             Command="{Binding Owner.SwapCommand}" CommandParameter="{Binding}">
+                                        <Grid>
+                                            <Border Background="#E4E4EA" />
+                                            <stories:StoryImage Source="{Binding Image}" />
+                                        </Grid>
+                                    </stories:StoryLeafButton>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Canvas>
+                </Border>
+                <TextBlock Margin="0,8,0,0" FontSize="12" Text="{Binding SizeText}" Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+            </StackPanel>
+
+            <!-- Optionen -->
+            <StackPanel Grid.Column="1" Margin="24,0,0,0">
+                <TextBlock Style="{StaticResource OptionLabel}" Margin="0,0,0,4" Text="Format" />
+                <Border Style="{StaticResource Segments}">
+                    <ItemsControl ItemsSource="{Binding Formats}" ItemTemplate="{StaticResource ChoiceTemplate}" ItemsPanel="{StaticResource WrapPanelTemplate}" Focusable="False" />
+                </Border>
+                <TextBlock Style="{StaticResource OptionLabel}" Text="Größe" />
+                <Border Style="{StaticResource Segments}">
+                    <ItemsControl ItemsSource="{Binding Sizes}" ItemTemplate="{StaticResource ChoiceTemplate}" ItemsPanel="{StaticResource WrapPanelTemplate}" Focusable="False" />
+                </Border>
+                <TextBlock Style="{StaticResource OptionLabel}" Text="Fotos" />
+                <Border Style="{StaticResource Segments}">
+                    <ItemsControl ItemsSource="{Binding Counts}" ItemTemplate="{StaticResource ChoiceTemplate}" ItemsPanel="{StaticResource WrapPanelTemplate}" Focusable="False" />
+                </Border>
+                <TextBlock Style="{StaticResource OptionLabel}" Text="Anordnung" />
+                <Border Style="{StaticResource Segments}">
+                    <ItemsControl ItemsSource="{Binding Arrangements}" ItemTemplate="{StaticResource ChoiceTemplate}" ItemsPanel="{StaticResource WrapPanelTemplate}" Focusable="False" />
+                </Border>
+                <ui:ToggleSwitch Margin="0,14,0,0" IsChecked="{Binding ShowTitle, Mode=TwoWay}" Content="Überschrift (Name · Zeitraum)" AutomationProperties.Name="Überschrift" />
+                <ui:TextBox Margin="0,6,0,0" Text="{Binding Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Überschrift ändern"
+                            IsEnabled="{Binding ShowTitle}" />
+                <TextBlock FontSize="12" Margin="0,4,0,0" Foreground="{DynamicResource TextFillColorTertiaryBrush}" TextWrapping="Wrap"
+                           Text="Sachlich aus Namen, Zeitraum und Ort — kein erfundener Text." />
+                <ui:ToggleSwitch Margin="0,10,0,0" IsChecked="{Binding ShowDates, Mode=TwoWay}" Content="Datum unter jedem Foto" AutomationProperties.Name="Datum unter jedem Foto" />
+                <TextBlock Style="{StaticResource OptionLabel}" Text="Speichern unter" />
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <ui:TextBox Text="{Binding TargetPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Speicherort" />
+                    <ui:Button Grid.Column="1" Margin="6,0,0,0" Content="…" ToolTip="Speicherort wählen" Command="{Binding BrowseCommand}" />
+                </Grid>
+                <TextBlock FontSize="12" Margin="0,10,0,0" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Text="„Neu mischen“ wählt andere gute Fotos; einzelne Fotos per Klick tauschen." />
+                <TextBlock Margin="0,10,0,0" TextWrapping="Wrap" Text="{Binding StatusText}" FontSize="12"
+                           Visibility="{Binding StatusText, Converter={StaticResource NullToVis}}" />
+                <TextBlock Margin="0,10,0,0" TextWrapping="Wrap" Text="{Binding ErrorText}" Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+                           Visibility="{Binding ErrorText, Converter={StaticResource NullToVis}}" />
+            </StackPanel>
+        </Grid>
+
+        <Border Grid.Row="2" Padding="24,12" Background="{DynamicResource LayerFillColorDefaultBrush}"
+                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <ui:ProgressRing Width="20" Height="20" Margin="0,0,12,0" IsIndeterminate="True"
+                                 Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}" />
+                <ui:Button MinWidth="110" Margin="0,0,8,0" Content="Neu mischen" Icon="{ui:SymbolIcon ArrowShuffle24}" Command="{Binding RemixCommand}" />
+                <ui:Button MinWidth="110" Margin="0,0,8,0" Content="Abbrechen" Command="{Binding CancelCommand}" />
+                <ui:Button MinWidth="110" Appearance="Primary" Content="Speichern" Icon="{ui:SymbolIcon Save24}" Command="{Binding SaveCommand}"
+                           AutomationProperties.AutomationId="CollageSave" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</dialogs:AppFluentWindow>

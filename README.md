@@ -61,6 +61,7 @@ Version übernimmt der erste Start automatisch; läuft dabei noch die ältere Ve
 | Video-Vorschaubilder | FFmpeg im `PATH`: `winget install Gyan.FFmpeg` (danach App neu starten). Ohne FFmpeg laufen Bilder normal, Videos bekommen keine Vorschaubilder; die Seite „Einstellungen“ zeigt den Status. |
 | Video-Wiedergabe | LibVLC kommt als NuGet-Paket (`VideoLAN.LibVLC.Windows`) mit — keine Installation nötig. |
 | Speicherplatz | Vorschaubilder (kurze Kante 400 px, ab 0.2.45) brauchen etwa **5,5 GB je 100 000 Fotos** (≈ 27 GB bei 500 000) im Ordner neben dem Katalog (Einstellungen → Speicherorte). Vorschaubilder älterer Versionen (320 px) werden nach dem Update im Hintergrund ersetzt — die Statusleiste zeigt „Vorschaubilder: N in Warteschlange“. |
+| Story-Assistent (optional) | [Ollama](https://ollama.com) mit einem kleinen Sprachmodell — Installation und Download aus Einstellungen › Assistent, jeweils erst nach Bestätigung (ADR-0063). Ohne Ollama verstehen nur einfache Sätze. |
 | Optional | Windows-Codec-Pakete aus dem Microsoft Store für HEIC/HEIF („HEIF-Bilderweiterungen“ + „HEVC-Videoerweiterungen“), WebP („Webp-Bilderweiterungen“) und Kamera-RAW („Raw-Bilderweiterung“). Ohne Codec erzeugt FFmpeg die Vorschaubilder, die Lightbox kann solche Bilder aber nicht anzeigen. |
 
 ## Build & Start
@@ -434,8 +435,8 @@ Statusleiste meldet „Storys aktuell“ bzw. „Storys werden berechnet …“.
 - **Menü „…“** am Titelbild: Titel ändern (nur eigener Text; leer = sachliche Überschrift), Titelbild wählen, Fotos
   hinzufügen (in der Galerie auswählen → Rechtsklick **Zur Story „…“ hinzufügen**), Fotos entfernen (anklicken →
   **Entfernen**; sie bleiben in der Galerie), Anheften, Als Album speichern (verknüpft, keine Kopien), In der Galerie zeigen,
-  Ausblenden, Neu berechnen, Story löschen (nur eigene Storys und gespeicherte Rückblicke). **Als Collage-Bild speichern…**
-  ist sichtbar, kommt aber erst mit Welle 6b.
+  Ausblenden, Neu berechnen, Story löschen (nur eigene Storys und gespeicherte Rückblicke), **Als Collage-Bild
+  speichern…** (seit 0.4.24, Dialog wie beim Story-Assistenten mit den Highlights der Story).
 - **Galerie:** Rechtsklick auf eine Auswahl → **Als Story…** legt eine eigene Story an (eigener Titel optional) und öffnet
   sie; **In Storys zeigen** listet die Storys, in denen das Foto steht.
 - **Einstellungen › Storys:** Ereignisse & Reisen, Rückblicke, Personen- und Orte-Storys an/aus; **Zu Hause** (automatisch =
@@ -443,6 +444,42 @@ Statusleiste meldet „Storys aktuell“ bzw. „Storys werden berechnet …“.
   Mindestgröße 8/12/20/40 Fotos; Highlights knapp (~8 %), automatisch (~15 %) oder großzügig (~30 %); dazu die Karte
   **Diashow**. Jede Änderung gilt sofort, die Storys werden im Hintergrund neu berechnet; angeheftete, ausgeblendete und
   eigene Storys bleiben.
+
+### Story-Assistent (seit 0.4.24, ADR-0063)
+Über der Story-Übersicht steht eine Eingabeleiste: einen Satz in eigenen Worten schreiben, z. B. „Collage mit meiner
+Schwester bis 20 Jahre“, „Story von allen Sonnenuntergängen am Meer“, „Diashow: Papa und ich, die besten 50“, „Weihnachten
+bei Oma, alle Jahre“ oder „Erstelle mir ein Album mit den schönsten Urlaubsfotos der letzten fünf Jahre mit Nicole und
+Nina“ → **Los** (Enter). Eine **lokale Sprach-KI** (Ollama, läuft nur auf diesem PC) übersetzt den Satz in Filter — sie
+bekommt nur den Satz, das Datum, die Namen/Rufnamen/Beziehungen der Personen und die Namen von Motiven, Tags und
+Kategorien, **nie Fotos, Pfade, Orte oder Geburtsdaten**. Die Fotos sucht Lumora selbst.
+
+- **So habe ich es verstanden — stimmt das?** zeigt jeden Punkt: Personen (mit Beziehung; bei mehreren „alle zusammen auf
+  dem Foto“ oder „mindestens eine“), weitere Personen, Zeitraum als konkrete Daten (z. B. „Geburt bis 20 Jahre (aus dem
+  Geburtsdatum von Anna)“, „letzte 5 Jahre“, „jedes Jahr 24.–26. Dezember“), Urlaub (Reise-Erkennung der Storys und
+  passende Tags/Kategorien wie „Reisen“), Begriffe mit ihren Treffern („Barcelona: Tag (212) · Ort (180)“, Standard: beide;
+  „nicht gefunden“ ist markiert), Medien, Auswahl („die besten 50“ — bei „die schönsten“ ohne Zahl schlägt Lumora eine
+  Anzahl vor) und was entsteht. **Jeder Punkt lässt sich anklicken und ändern** — Lumora zählt dann neu. Dazu die Trefferzahl
+  und ein Vorschau-Streifen.
+- **Erstellen** legt erst jetzt etwas an: eigene Story (sachliche Überschrift wie „Anna · 1985–2005“, änderbar), Album
+  („Nicole und Nina · Urlaub 2023–2025“), Diashow, Collage-Bild (Dialog, wahlweise zusätzlich als Story) oder nur die
+  Galerie. **Nur Fotos zeigen (Galerie)**, **Satz ändern**, **Abbrechen**.
+- **Rückfrage**, wenn etwas mehrdeutig ist („Wer ist „Oma“?“ mit Gesichtern und Fotozahlen, „Beide“) oder fehlt (Geburtsdatum,
+  Zuhause für Urlaub). Antworten auf „Wer ist …?“ merkt sich Lumora; unter Einstellungen › Assistent lassen sie sich
+  vergessen.
+- **Zuletzt gefragt**: die letzten Sätze mit **Öffnen** bzw. **Wieder abspielen** (ohne die Sprach-KI erneut zu fragen),
+  einzeln löschbar.
+- **Als Collage-Bild speichern**: Format 16:9 / A4 quer / A4 hoch / Quadrat, Größe Full HD / 4K / Druck 300 dpi, 12/24/36/48
+  Fotos, Anordnung Großes Titelbild / Raster / Zeitstrahl, Überschrift (sachlich, änderbar) und Datum je Foto an/aus,
+  Speicherort (Standard `Bilder\Lumora\Collagen`, in einer versteckten Bibliothek nur im Container unter
+  `<Bibliothek>\Collagen`). **Neu mischen** wählt andere gute Fotos, ein Klick auf ein Foto tauscht es. Gerendert wird aus
+  den Originalen in voller Qualität (JPEG oder PNG).
+- **Einstellungen › Assistent**: Assistent an/aus, Zustand von **Ollama** mit **Ollama installieren…** (über winget, erst
+  nach Bestätigung mit Name, Quelle, Größe und Lizenz) bzw. **Ollama starten**, **Sprachmodell** (Standard `qwen2.5:3b`,
+  ca. 1,9 GB; Alternative `qwen2.5:7b`, ca. 4,7 GB; eigener Name möglich) mit **Herunterladen…** (genaue Größe wird vorher
+  abgefragt, Fortschritt, Abbrechen), **Grafikkarte nutzen** (Gesichts- und Motiv-Erkennung warten kurz, solange die
+  Sprach-KI rechnet), **Zuletzt gefragte Sätze merken** + **Verlauf löschen**, gemerkte Antworten, **Ausprobieren** (zeigt nur,
+  wie ein Satz verstanden wird). Ohne Ollama verstehen einfache Sätze („Anna 2019“, „Album mit allen Fotos vom Hund 2022“)
+  trotzdem.
 
 ### Archive
 Archive (`.zip .rar .7z .tar .gz .tgz .bz2 .xz`) nimmt der Scan wie Fotos in den Katalog auf; sie bekommen kein

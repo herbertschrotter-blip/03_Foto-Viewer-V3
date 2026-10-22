@@ -336,6 +336,14 @@ FilesFts           -- FTS5 virtual table (Files.Name, Extension)
   Settings: `places.tracks.timeZone` (leer = Windows), `places.tracks.toleranceSeconds` (120),
   `places.tracks.cameraOffsets` (JSON Kamera → Sekunden), `places.tracks.watchFolder`, `places.tracks.usb` (Standard an),
   `places.suggestions.saveToFile` (Standard aus), Merker `places.tracks.watchLastScan`, `places.tracks.usbLastImport`.
+- Story-Assistent — umgesetzt in 0.4.24 (Migration `AddStoryAssistant`, ADR-0063, nur CREATE TABLE):
+  `AssistantHistory (Id AUTOINCREMENT, GroupId (ohne Fremdschlüssel, in LibraryGroupStore.TermTables), Sentence, IntentJson
+  (Absicht der Sprach-KI, ohne Fotos/Pfade/Koordinaten), Action 0 Story | 1 Collage | 2 Album | 3 Diashow | 4 Galerie,
+  ResultCount, CreatedAtUtc, LastUsedAtUtc; IX_AssistantHistory_Group_Used)` — je Gruppe höchstens 50, gleicher Satz nur
+  aufgefrischt. `AssistantAliases (Id AUTOINCREMENT, GroupId, Term (normalisiert: klein, ohne Akzente), PersonId → Persons
+  ON DELETE CASCADE, CreatedAtUtc; UX_AssistantAliases_Group_Term_Person eindeutig, IX_AssistantAliases_Person)` — gemerkte
+  Antworten auf Rückfragen („oma“ → Person(en)). Verknüpfen/Lösen/leere Gruppe über `AssistantGroupStore`. Settings:
+  `assistant.enabled` (an), `assistant.model` (`qwen2.5:3b`), `assistant.useGpu` (an), `assistant.history` (an) — je Katalog.
 
 ### Pflicht-Indizes V0.1
 ```sql
@@ -455,7 +463,7 @@ Status (Stand 0.2.0): ✅ umgesetzt · 🟡 teilweise · ⬜ offen
 | Status | Vorhaben | Inhalt | Grundlage |
 |---|---|---|---|
 | ✅ | **Ungenaue Orte + GPS-Spuren** | geschätzte Handy-Positionen erkennen, Vorschläge aus Garmin-Spuren (Export-ZIP/FIT/GPX/USB) und Nachbarfotos, Einstellungen › Orte | Mockup 10, ADR-0062, umgesetzt in 0.4.23 |
-| 🟡 | **Welle 6b Story-Assistent** | Sätze → lokale Sprach-KI (Ollama) → Filter + Aktion, Verständnis zur Bestätigung, Tags/Kategorien/Orte/Motive/Personen, Collage-Bild | Mockup 12, ADR-0063 (im Bau) |
+| ✅ | **Welle 6b Story-Assistent** | Sätze → lokale Sprach-KI (Ollama) → Filter + Aktion, Verständnis zur Bestätigung, Tags/Kategorien/Orte/Motive/Personen, Collage-Bild | Mockup 12, ADR-0063, umgesetzt in 0.4.24 |
 | ⬜ | **App-Verbindung (Gipfelbuch)** | lokale Schnittstelle 127.0.0.1, Kopplung, Rechte, Hintergrundstart, Reiter „Verbundene Apps“ | Mockup 11, Vertrag `herbertschrotter-blip/app-verbindung` v0.1 (Entwurf) |
 | ⬜ | **Nutzungs-Signale** | lokal messen, was Herbert mag: Öffnen, Ansehdauer (aktiv, 1 s–2 min, kein Durchblättern), Zoom, Wiederkehr an anderen Tagen, Verwendung in Album/Story/Collage/Titelbild, Drucken/Teilen/Exportieren über Lumora, später Handy (Welle 7). Nicht zählen: Sortieren, Doppelte, Suche nach einem Foto. Nur Tagessummen je Foto (kein Ereignisprotokoll), je Katalog, versteckt nur im Container, abschaltbar + „Nutzungsdaten löschen“, nichts im Protokoll. Nutzung: kleiner Zuschlag in der Highlight-Auswahl (ADR-0057) mit Grund („oft angesehen“, „3× geteilt“), gedämpft gegen Selbstverstärkung (Ansehen in Storys zählt weniger), fehlende Nutzung ist kein Abzug; neue Story-Art „Vergessene Schätze“ | Herbert 2026-10-22; Mockup folgt |
 | ⬜ | **Welle 7 Android-Begleit-App** | PC stellt Katalog + Vorschaubilder im Heimnetz bereit, Handy zeigt und bewertet | Memory/Plan |

@@ -9,7 +9,7 @@ namespace Lumora.Wpf.Tests.Stories;
 /// Story-Ansicht (ADR-0060): Laden markiert als gesehen, Kopf, Highlights ↔ Alle Fotos, Tagesabschnitte mit Collage-Blöcken
 /// bzw. dichter Collage (Nicht-Highlights blass), Tag aufklappen, lange Reisen eingeklappt, Tages-Sprung, Diashow mit der
 /// richtigen Liste, Lightbox, Titel ändern/zurücksetzen, Titelbild wählen, Fotos entfernen, Anheften, Album, Ausblenden,
-/// Collage-Menüpunkt deaktiviert, Abschnitte nach Tageszeit bei einem Tag.
+/// Collage-Menüpunkt (ohne Dialog deaktiviert), Abschnitte nach Tageszeit bei einem Tag.
 /// </summary>
 [Collection(UiTestCollection.Name)]
 public sealed class StoryViewModelTests
@@ -275,9 +275,9 @@ public sealed class StoryViewModelTests
         kit.Stories.Calls.Should().Contain("album:1:True", "im Modus Highlights die Highlights");
         vm.StatusText.Should().Contain("Als Album");
 
-        vm.SaveCollageCommand.CanExecute(null).Should().BeFalse("Welle 6b");
+        vm.SaveCollageCommand.CanExecute(null).Should().BeFalse("ohne Collage-Dialog (ADR-0063) bleibt der Menüpunkt aus");
         vm.CanSaveCollage.Should().BeFalse();
-        vm.CollageHint.Should().Be("Welle 6b");
+        vm.CollageHint.Should().Be("nicht verfügbar");
         vm.CanDelete.Should().BeFalse("automatische Storys lassen sich nur ausblenden");
 
         await vm.HideAsync();

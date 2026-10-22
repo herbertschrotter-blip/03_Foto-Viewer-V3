@@ -16,6 +16,8 @@ public partial class StoriesPage : UserControl
         DataContext = viewModel;
         ViewModel = viewModel;
         Loaded += (_, _) => _ = viewModel.EnsureLoadedAsync();
+        // Story-Assistent (ADR-0063): höchstens zwei Drittel der Seite, damit die Übersicht sichtbar bleibt
+        OverviewRoot.SizeChanged += (_, e) => AssistantScroll.MaxHeight = Math.Max(160, e.NewSize.Height * 0.66);
     }
 
     public StoriesViewModel ViewModel { get; }

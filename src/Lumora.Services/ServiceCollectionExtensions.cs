@@ -104,6 +104,8 @@ public static class ServiceCollectionExtensions
         services.AddQuality();
         // Storys: Ereignisse, Reisen, Rückblicke, Personen, Orte automatisch; Highlights über IHighlightSelector (Services/Stories, ADR-0058)
         services.AddStories();
+        // Story-Assistent: Satz → lokale Sprach-KI (Ollama, nur Absicht) → Filter + Aktion, Collage-Bild (Services/Assistant, ADR-0063)
+        Assistant.StoryAssistantServiceCollectionExtensions.AddStoryAssistant(services);
 
         return services;
     }

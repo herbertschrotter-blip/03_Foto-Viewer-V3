@@ -10,6 +10,7 @@
              xmlns:info="clr-namespace:Lumora.Settings.Info"
              xmlns:stories="clr-namespace:Lumora.Stories"
              xmlns:tracks="clr-namespace:Lumora.Places.TrackSettings"
+             xmlns:assistant="clr-namespace:Lumora.Stories.Assistant"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance local:SettingsViewModel}"
              d:DesignWidth="1000"
@@ -104,6 +105,10 @@
             <!-- Storys (ADR-0060): Story-Arten, Erkennung, Highlights, Diashow; DataContext = StorySettingsViewModel (Code-Behind) -->
             <TabItem Header="Storys" Tag="{x:Static shell:NavigationTags.SettingsStories}">
                 <stories:SettingsStoriesSection x:Name="StoriesView" />
+            </TabItem>
+            <!-- Assistent (ADR-0063): Ollama, Sprachmodell, Grafikkarte, Verlauf; DataContext = AssistantSettingsViewModel (Code-Behind) -->
+            <TabItem Header="Assistent" Tag="{x:Static shell:NavigationTags.SettingsAssistant}">
+                <assistant:SettingsAssistantSection x:Name="AssistantView" />
             </TabItem>
             <!-- Orte (ADR-0062): Garmin-Aktivitäten und Zeitabgleich; DataContext = PlacesSettingsViewModel (Code-Behind) -->
             <TabItem Header="Orte" Tag="{x:Static shell:NavigationTags.SettingsPlaces}">

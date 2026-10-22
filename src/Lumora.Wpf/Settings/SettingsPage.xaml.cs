@@ -31,7 +31,8 @@ public partial class SettingsPage : UserControl
         Motifs.MotifSettingsViewModel? motifs = null,
         Places.Styles.MapStyleSettingsViewModel? mapStyles = null,
         Stories.StorySettingsViewModel? stories = null,
-        Places.TrackSettings.PlacesSettingsViewModel? places = null)
+        Places.TrackSettings.PlacesSettingsViewModel? places = null,
+        Stories.Assistant.AssistantSettingsViewModel? assistant = null)
     {
         _sections = sections;
         InitializeComponent();
@@ -41,6 +42,7 @@ public partial class SettingsPage : UserControl
         AppearanceView.MapSection.Visibility = mapStyles is null ? System.Windows.Visibility.Collapsed : System.Windows.Visibility.Visible;
         StoriesView.DataContext = stories; // Reiter „Storys“ samt Diashow (ADR-0060, ADR-0059); ohne Dienst leer
         PlacesView.DataContext = places; // Reiter „Orte“: Garmin-Aktivitäten, Zeitabgleich (ADR-0062); ohne Dienst leer
+        AssistantView.DataContext = assistant; // Reiter „Assistent“ (ADR-0063); ohne Dienst leer
 
         LibraryTab.Content = library;
         TagsTab.Content = tags;

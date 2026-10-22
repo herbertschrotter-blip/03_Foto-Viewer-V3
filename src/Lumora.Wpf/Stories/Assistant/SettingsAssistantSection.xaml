@@ -1,0 +1,140 @@
+<UserControl x:Class="Lumora.Stories.Assistant.SettingsAssistantSection"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:local="clr-namespace:Lumora.Stories.Assistant"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance local:AssistantSettingsViewModel, IsDesignTimeCreatable=False}"
+             d:DesignWidth="1000">
+    <!-- Einstellungen › Assistent (Mockup 12, ADR-0063). DataContext = AssistantSettingsViewModel (SettingsPage). -->
+    <UserControl.Resources>
+        <ResourceDictionary Source="../../Settings/Sections/SettingsStyles.xaml" />
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Style="{StaticResource SectionPanel}">
+            <TextBlock Style="{StaticResource Lead}"
+                       Text="Versteht Sätze in eigenen Worten und macht daraus Story, Collage, Album oder Diashow. Die Sprach-KI läuft lokal über Ollama und bekommt nur Ihren Satz plus die Namen und Beziehungen Ihrer Personen und die Namen von Tags, Kategorien und Motiven — nie Fotos, Pfade, Orte oder Geburtsdaten. Nichts geht ins Internet (außer nach Ihrer Bestätigung zum Installieren bzw. Herunterladen)." />
+
+            <Border Style="{StaticResource SectionCard}" AutomationProperties.AutomationId="SettingsAssistantCard">
+                <StackPanel>
+                    <ui:TextBlock Style="{StaticResource SectionTitle}" Text="Story-Assistent" />
+                    <ui:ToggleSwitch Content="Assistent verwenden" IsChecked="{Binding Enabled, Mode=TwoWay}" AutomationProperties.Name="Assistent verwenden" />
+                    <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0" Text="Aus = keine Eingabeleiste auf der Seite Storys." />
+
+                    <!-- Ollama -->
+                    <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                        <TextBlock Style="{StaticResource Label}" Text="Ollama" Width="200" />
+                        <TextBlock Style="{StaticResource ValueText}" Text="{Binding OllamaText}" AutomationProperties.AutomationId="SettingsAssistantOllama" />
+                        <ui:Button Margin="12,0,0,0" Content="Ollama installieren…" Icon="{ui:SymbolIcon ArrowDownload24}"
+                                   Visibility="{Binding CanInstallOllama, Converter={StaticResource BoolToVis}}"
+                                   Command="{Binding InstallOllamaCommand}" />
+                        <ui:Button Margin="12,0,0,0" Content="Ollama starten"
+                                   Visibility="{Binding CanStartOllama, Converter={StaticResource BoolToVis}}"
+                                   Command="{Binding StartOllamaCommand}" />
+                        <ui:Button Margin="6,0,0,0" Content="Erneut prüfen" Appearance="Transparent" Command="{Binding RefreshCommand}" />
+                    </StackPanel>
+                    <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0"
+                               Text="Lokaler Dienst für Sprachmodelle (127.0.0.1). Installation über winget erst nach Ihrer Bestätigung (Name, Quelle, Größe, Lizenz)." />
+
+                    <!-- Sprachmodell -->
+                    <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                        <TextBlock Style="{StaticResource Label}" Text="Sprachmodell" Width="200" />
+                        <ComboBox Width="220" IsEditable="True" ItemsSource="{Binding SuggestedModels}"
+                                  Text="{Binding ModelName, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                  AutomationProperties.Name="Sprachmodell" LostFocus="OnModelLostFocus" />
+                        <TextBlock Style="{StaticResource ValueText}" Margin="12,0,0,0" Text="{Binding ModelText}" AutomationProperties.AutomationId="SettingsAssistantModel" />
+                        <ui:Button Margin="12,0,0,0" Content="Herunterladen…" Icon="{ui:SymbolIcon ArrowDownload24}"
+                                   Visibility="{Binding CanDownloadModel, Converter={StaticResource BoolToVis}}"
+                                   Command="{Binding DownloadModelCommand}" />
+                    </StackPanel>
+                    <Border Margin="0,8,0,0" Padding="12,8" CornerRadius="8" BorderThickness="1" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="110" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition />
+                                <RowDefinition />
+                                <RowDefinition />
+                                <RowDefinition />
+                                <RowDefinition />
+                            </Grid.RowDefinitions>
+                            <TextBlock Style="{StaticResource Hint}" Text="Modell" />
+                            <TextBlock Grid.Column="1" FontSize="12" Text="{Binding ModelInfo.Title}" TextWrapping="Wrap" />
+                            <TextBlock Grid.Row="1" Style="{StaticResource Hint}" Text="Quelle" />
+                            <TextBlock Grid.Row="1" Grid.Column="1" FontSize="12" Text="{Binding ModelSource}" TextWrapping="Wrap" />
+                            <TextBlock Grid.Row="2" Style="{StaticResource Hint}" Text="Größe" />
+                            <TextBlock Grid.Row="2" Grid.Column="1" FontSize="12" Text="{Binding ModelInfo.ApproximateSize, StringFormat='{}{0} — genaue Zahl vor dem Download'}" />
+                            <TextBlock Grid.Row="3" Style="{StaticResource Hint}" Text="Lizenz" />
+                            <TextBlock Grid.Row="3" Grid.Column="1" FontSize="12" Text="{Binding ModelInfo.License}" TextWrapping="Wrap" />
+                            <TextBlock Grid.Row="4" Style="{StaticResource Hint}" Text="Hinweis" />
+                            <TextBlock Grid.Row="4" Grid.Column="1" FontSize="12" Text="{Binding ModelInfo.Note}" TextWrapping="Wrap" />
+                        </Grid>
+                    </Border>
+                    <StackPanel Margin="0,8,0,0" Visibility="{Binding IsDownloading, Converter={StaticResource BoolToVis}}">
+                        <ProgressBar Height="4" Maximum="100" Value="{Binding DownloadProgress}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                            <TextBlock Style="{StaticResource Hint}" Text="{Binding ProgressText}" />
+                            <ui:Button Margin="12,0,0,0" Content="Abbrechen" Command="{Binding CancelDownloadCommand}" />
+                        </StackPanel>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0" Visibility="{Binding IsWorking, Converter={StaticResource BoolToVis}}">
+                        <ui:ProgressRing IsIndeterminate="True" Width="16" Height="16" Margin="0,0,8,0" />
+                        <TextBlock Style="{StaticResource Hint}" Text="{Binding ProgressText}" />
+                    </StackPanel>
+
+                    <!-- Grafikkarte -->
+                    <ui:ToggleSwitch Margin="0,16,0,0" Content="Grafikkarte nutzen" IsChecked="{Binding UseGpu, Mode=TwoWay}" AutomationProperties.Name="Grafikkarte nutzen" />
+                    <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0"
+                               Text="Teilt sich die Grafikkarte mit Gesichts- und Motiv-Erkennung (nacheinander: während die Sprach-KI rechnet, warten diese kurz). Aus = nur der Prozessor (langsamer)." />
+
+                    <!-- Verlauf -->
+                    <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                        <ui:ToggleSwitch Content="Zuletzt gefragte Sätze merken" IsChecked="{Binding RememberHistory, Mode=TwoWay}" AutomationProperties.Name="Zuletzt gefragte Sätze merken" />
+                        <ui:Button Margin="16,0,0,0" Content="Verlauf löschen" Icon="{ui:SymbolIcon Delete24}" Command="{Binding ClearHistoryCommand}" />
+                    </StackPanel>
+                    <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0" Text="Nur im Katalog dieser Bibliothek; „Verlauf löschen“ jederzeit." />
+
+                    <!-- Gemerkte Antworten -->
+                    <StackPanel Margin="0,16,0,0" Visibility="{Binding HasAliases, Converter={StaticResource BoolToVis}}">
+                        <TextBlock Style="{StaticResource Label}" Text="Gemerkte Antworten" />
+                        <ItemsControl ItemsSource="{Binding Aliases}" Focusable="False">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type local:AssistantAliasRow}">
+                                    <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                        <TextBlock Text="{Binding Text}" FontSize="13" VerticalAlignment="Center" MinWidth="260" />
+                                        <ui:Button Margin="8,0,0,0" Appearance="Transparent" Content="Vergessen" Command="{Binding Owner.DeleteAliasCommand}" CommandParameter="{Binding}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0" Text="Antworten auf Rückfragen („Wer ist Oma?“). Vergessen = beim nächsten Satz fragt Lumora wieder." />
+                    </StackPanel>
+
+                    <!-- Ausprobieren -->
+                    <TextBlock Style="{StaticResource Label}" Margin="0,16,0,4" Text="Ausprobieren" />
+                    <TextBlock Style="{StaticResource Hint}" Text="Zeigt nur, wie ein Satz verstanden wird — erstellt nichts." />
+                    <Grid Margin="0,6,0,0" MaxWidth="720" HorizontalAlignment="Left">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ui:TextBox Text="{Binding TrySentence, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Satz zum Ausprobieren" MinWidth="420" />
+                        <ui:Button Grid.Column="1" Margin="8,0,0,0" Content="Prüfen" Command="{Binding TryCommand}" IsEnabled="{Binding IsIdle}" />
+                    </Grid>
+                    <TextBlock Margin="0,8,0,0" FontSize="12" TextWrapping="Wrap" Text="{Binding TryResult}"
+                               Visibility="{Binding TryResult, Converter={StaticResource NullToVis}}" AutomationProperties.AutomationId="SettingsAssistantTryResult" />
+
+                    <TextBlock Margin="0,12,0,0" TextWrapping="Wrap" Text="{Binding Message}" Foreground="{DynamicResource SystemFillColorSuccessBrush}"
+                               Visibility="{Binding Message, Converter={StaticResource NullToVis}}" />
+                    <TextBlock Margin="0,12,0,0" TextWrapping="Wrap" Text="{Binding Error}" Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+                               Visibility="{Binding Error, Converter={StaticResource NullToVis}}" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

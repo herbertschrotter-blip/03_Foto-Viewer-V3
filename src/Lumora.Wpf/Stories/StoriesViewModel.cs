@@ -55,13 +55,20 @@ public sealed partial class StoriesViewModel : ObservableObject, IDisposable
         ILogger<StoriesViewModel> logger,
         StoriesNavigationBadge? badge = null,
         IMessenger? messenger = null,
-        ILoggerFactory? loggerFactory = null)
+        ILoggerFactory? loggerFactory = null,
+        Assistant.StoryAssistantViewModel? assistant = null)
     {
         _services = services;
         _logger = logger;
         _loggerFactory = loggerFactory;
         _messenger = messenger ?? WeakReferenceMessenger.Default;
         _badge = badge ?? StoriesNavigationBadge.Shared;
+        Assistant = assistant; // Story-Assistent (ADR-0063): Leiste über der Übersicht
+        if (assistant is not null)
+        {
+            assistant.OpenStory = OpenStoryAsync;
+        }
+
         KindOptions =
         [
             new StoryKindOption(StoryKindFilter.All, "Alle") { IsSelected = true },
@@ -137,6 +144,9 @@ public sealed partial class StoriesViewModel : ObservableObject, IDisposable
 
     public bool HasSlideshow => _services.Slideshow is not null;
 
+    /// <summary>Story-Assistent (ADR-0063) oder null (Tests ohne Assistent).</summary>
+    public Assistant.StoryAssistantViewModel? Assistant { get; }
+
     // ---- Laden -----------------------------------------------------------------------------------------------------
 
     /// <summary>Beim Anzeigen der Seite: einmal laden, danach nur nach Nachrichten.</summary>
@@ -145,6 +155,11 @@ public sealed partial class StoriesViewModel : ObservableObject, IDisposable
         if (!_loaded)
         {
             await LoadAsync();
+        }
+
+        if (Assistant is not null)
+        {
+            await Assistant.RefreshAsync();
         }
 
         if (_services.Gallery?.TakePendingOpen() is { } pending)
@@ -881,6 +896,7 @@ public sealed partial class StoriesViewModel : ObservableObject, IDisposable
     public void Dispose()
     {
         CloseStory();
+        Assistant?.Dispose();
         _services.Images.ImagesReady -= OnImagesReady;
         if (_services.Faces is not null)
         {

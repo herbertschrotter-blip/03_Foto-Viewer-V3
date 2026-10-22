@@ -84,7 +84,8 @@ public sealed class StoryPageServices
         ILightboxService? lightbox = null,
         IPlaceLookup? places = null,
         StoryGalleryBridge? gallery = null,
-        ISlideshowImageDecoder? decoder = null)
+        ISlideshowImageDecoder? decoder = null,
+        Assistant.ICollageDialogService? collage = null)
     {
         Stories = stories;
         Media = media;
@@ -97,6 +98,7 @@ public sealed class StoryPageServices
         Places = places;
         Gallery = gallery;
         Decoder = decoder;
+        Collage = collage;
     }
 
     public IStoryService Stories { get; }
@@ -121,4 +123,7 @@ public sealed class StoryPageServices
 
     /// <summary>Scharfes Titelbild aus dem Original (wie die Diashow); ohne: Vorschaubild.</summary>
     public ISlideshowImageDecoder? Decoder { get; }
+
+    /// <summary>„Als Collage-Bild speichern…“ (ADR-0063); ohne: Menüpunkt deaktiviert.</summary>
+    public Assistant.ICollageDialogService? Collage { get; }
 }

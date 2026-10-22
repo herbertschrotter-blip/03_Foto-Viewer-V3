@@ -5,6 +5,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:local="clr-namespace:Lumora.Stories"
+             xmlns:assistant="clr-namespace:Lumora.Stories.Assistant"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance local:StoriesViewModel, IsDesignTimeCreatable=False}"
              d:DesignWidth="1100"
@@ -343,6 +344,12 @@
             </Grid>
 
             <StackPanel Grid.Row="2" Margin="0,0,16,0">
+                <!-- Story-Assistent (ADR-0063, Mockup 12): Satz → Verständnis → Erstellen; höhenbegrenzt, scrollt selbst -->
+                <ScrollViewer x:Name="AssistantScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                              Margin="0,0,0,12" Focusable="False"
+                              Visibility="{Binding Assistant, Converter={StaticResource NullToVis}}">
+                    <assistant:StoryAssistantPanel DataContext="{Binding Assistant}" AutomationProperties.AutomationId="StoriesAssistant" />
+                </ScrollViewer>
                 <ui:InfoBar Message="{Binding ErrorText}" Severity="Error" IsClosable="False" Margin="0,0,0,8"
                             IsOpen="{Binding ErrorText, Converter={StaticResource NullToBool}, Mode=OneWay}"
                             Visibility="{Binding ErrorText, Converter={StaticResource NullToVis}}" />

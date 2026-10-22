@@ -24,6 +24,7 @@ public static class StoriesUiServiceCollectionExtensions
         services.TryAddSingleton<StoriesPage>();
         services.TryAddSingleton<StorySettingsViewModel>();
         services.TryAddSingleton<StoriesNavigationBadgeUpdater>();
+        Assistant.StoryAssistantUiServiceCollectionExtensions.AddStoryAssistantUi(services); // Story-Assistent + Collage-Bild (ADR-0063)
         return services;
     }
 }
