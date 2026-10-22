@@ -3,6 +3,15 @@
 Alle nennenswerten Änderungen an Lumora (bis 0.2.48 „PhotoViewer V3“). Format: `[Version] — Datum`, oberster Eintrag = aktuelle Version
 (Versionsquelle für das Commit-Profil in `CLAUDE.md`).
 
+## [0.4.22] — 2026-10-23
+
+### Docs — Mockup 13 „Foto verbessern“ (Welle 8), abgenommen
+- `mockups/13-foto-verbessern.html`: Lightbox-Leiste „Verbessern“ (Automatisch, Hochskalieren und Schärfen, Gesichter
+  restaurieren, Einfärben, Entfernen mit Pinsel bzw. Kratzer automatisch, Zuschneiden/Drehen/Licht) mit Vorschau und
+  Vorher/Nachher-Regler; Ergebnis immer als neue Datei neben dem Original, verknüpft; mehrere Fotos aus der Galerie
+  im Hintergrund; Galerie-Paare „2 Fassungen“; Einstellungen › Verbessern mit Modellen (Real-ESRGAN, GFPGAN,
+  DeOldify, LaMa) nur nach Bestätigung mit Name, Quelle, Größe, Lizenz.
+
 ## [0.4.21] — 2026-10-22
 
 ### Docs — Geplante Vorhaben in PLAN.md, neu: Nutzungs-Signale

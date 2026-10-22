@@ -441,7 +441,7 @@ Status (Stand 0.2.0): ✅ umgesetzt · 🟡 teilweise · ⬜ offen
 | ⬜ | **App-Verbindung (Gipfelbuch)** | lokale Schnittstelle 127.0.0.1, Kopplung, Rechte, Hintergrundstart, Reiter „Verbundene Apps“ | Mockup 11, Vertrag `herbertschrotter-blip/app-verbindung` v0.1 (Entwurf) |
 | ⬜ | **Nutzungs-Signale** | lokal messen, was Herbert mag: Öffnen, Ansehdauer (aktiv, 1 s–2 min, kein Durchblättern), Zoom, Wiederkehr an anderen Tagen, Verwendung in Album/Story/Collage/Titelbild, Drucken/Teilen/Exportieren über Lumora, später Handy (Welle 7). Nicht zählen: Sortieren, Doppelte, Suche nach einem Foto. Nur Tagessummen je Foto (kein Ereignisprotokoll), je Katalog, versteckt nur im Container, abschaltbar + „Nutzungsdaten löschen“, nichts im Protokoll. Nutzung: kleiner Zuschlag in der Highlight-Auswahl (ADR-0057) mit Grund („oft angesehen“, „3× geteilt“), gedämpft gegen Selbstverstärkung (Ansehen in Storys zählt weniger), fehlende Nutzung ist kein Abzug; neue Story-Art „Vergessene Schätze“ | Herbert 2026-10-22; Mockup folgt |
 | ⬜ | **Welle 7 Android-Begleit-App** | PC stellt Katalog + Vorschaubilder im Heimnetz bereit, Handy zeigt und bewertet | Memory/Plan |
-| ⬜ | **Welle 8 Foto verbessern** | hochskalieren, Gesichter restaurieren, einfärben, entfernen; Augen-offen/Lächeln als Gütemerkmal | Memory/Plan |
+| ⬜ | **Welle 8 Foto verbessern** | hochskalieren, Gesichter restaurieren, einfärben, entfernen, Zuschneiden/Licht; Ergebnis als neue Datei; Augen-offen/Lächeln als Gütemerkmal | Mockup 13 (abgenommen 2026-10-23) |
 | ⬜ | **Update-Manager „Modelle & Daten“** | alle heruntergeladenen Bausteine mit Version/Lizenz, Updates nur auf Wunsch, atomarer Tausch | Memory/Plan, am Schluss |
 
 ---

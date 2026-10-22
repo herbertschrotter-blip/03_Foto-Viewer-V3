@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lumora — Foto verbessern (Entwurf 13)</title>
+<style>
+/* =====================================================================
+   Mockup 13 · Welle 8 „Foto verbessern“. Tokens 1:1 aus 08–12.
+   Lokal auf der Grafikkarte (ONNX Runtime DirectML): Hochskalieren/Schärfen (Real-ESRGAN), Gesichter restaurieren
+   (GFPGAN), Einfärben (DeOldify), Entfernen/Kratzer (LaMa), dazu Zuschneiden/Drehen/Licht.
+   Original bleibt IMMER unverändert; Ergebnis = neue Datei daneben, verknüpft, mit Rückgängig.
+   Modelle nur nach Bestätigung (Name, Quelle, Größe, Lizenz). Fotos sind Platzhalter. Hell/Dunkel über „dark“.
+   ABGENOMMEN von Herbert am 2026-10-23: Lightbox-Leiste „Verbessern“ (Automatisch, Hochskalieren 2×/4×, Gesichter
+   mit Stärke, Einfärben, Entfernen mit Pinsel, Zuschneiden/Drehen/Licht, Modell-Status je Werkzeug), Vorschau mit
+   Vorher/Nachher-Regler, „Als neue Datei speichern“ (<Name>_verbessert.jpg) / Verwerfen; mehrere Fotos aus der Galerie
+   mit Zeitschätzung und Fortschritt in der Statusleiste; Galerie-Paare „2 Fassungen“; Einstellungen › Verbessern
+   (Modelle mit Quelle/Größe/Lizenz, Download nur nach Bestätigung; Speicherort, Dateiname, Metadaten übernehmen,
+   beste Fassung zeigen, Grafikkarte). Bewusst nicht: Bildgenerierung (ComfyUI nur gemerkt), Original überschreiben.
+   ===================================================================== */
+:root {
+  --mica-base:#F3F3F3; --layer-default:rgba(255,255,255,0.7); --layer-card:#FFFFFF; --layer-subtle:rgba(0,0,0,0.026);
+  --layer-secondary:rgba(0,0,0,0.04); --layer-tertiary:rgba(0,0,0,0.06);
+  --text-primary:#1A1A1A; --text-secondary:#5C5C5C; --text-tertiary:#8B8B8B; --text-on-accent:#FFFFFF;
+  --stroke-default:rgba(0,0,0,0.0578); --stroke-divider:rgba(0,0,0,0.0803); --stroke-card:rgba(0,0,0,0.0578); --ctl-bottom:rgba(0,0,0,0.16);
+  --accent:#5B5FC7; --accent-light:#7579D8; --accent-dark:#4145A0; --accent-soft:rgba(91,95,199,0.08); --accent-soft-2:rgba(91,95,199,0.16);
+  --success:#107C10; --success-soft:rgba(16,124,16,0.10); --warning:#C29C00; --warning-soft:rgba(194,156,0,0.14); --danger:#C42B1C;
+  --shadow-card:0 2px 4px rgba(0,0,0,0.02), 0 1px 2px rgba(0,0,0,0.03); --shadow-flyout:0 8px 16px rgba(0,0,0,0.14);
+  --brand-indigo:#5B5FC7; --brand-violet:#8B5CF6; --brand-coral:#F97362; --brand-amber:#F5A524;
+  --page-bg:#E4E4EA; --smoke:rgba(0,0,0,0.3);
+}
+body.dark {
+  color-scheme:dark;
+  --mica-base:#202020; --layer-default:rgba(43,43,43,0.7); --layer-card:#2C2C2C; --layer-subtle:rgba(255,255,255,0.03);
+  --layer-secondary:rgba(255,255,255,0.0418); --layer-tertiary:rgba(255,255,255,0.0605);
+  --text-primary:#FFFFFF; --text-secondary:#D0D0D0; --text-tertiary:#A0A0A0;
+  --stroke-default:rgba(255,255,255,0.0837); --stroke-divider:rgba(255,255,255,0.0837); --stroke-card:rgba(255,255,255,0.0578); --ctl-bottom:rgba(255,255,255,0.22);
+  --accent:#818CF8; --accent-light:#A5B0FF; --accent-dark:#6066D8; --accent-soft:rgba(129,140,248,0.12); --accent-soft-2:rgba(129,140,248,0.24);
+  --success:#6CCB5F; --success-soft:rgba(108,203,95,0.12); --warning:#FCE100; --warning-soft:rgba(252,225,0,0.14); --danger:#FF6B5E;
+  --shadow-card:0 2px 4px rgba(0,0,0,0.18), 0 1px 2px rgba(0,0,0,0.22); --shadow-flyout:0 8px 16px rgba(0,0,0,0.4);
+  --brand-indigo:#818CF8; --brand-violet:#A78BFA; --brand-coral:#FB8A7A; --brand-amber:#FBBF24;
+  --page-bg:#121214; --smoke:rgba(0,0,0,0.55);
+}
+* { box-sizing:border-box; } html,body { margin:0; }
+body { background:var(--page-bg); color:var(--text-primary); font-family:'Segoe UI Variable Text','Segoe UI',system-ui,sans-serif; font-size:14px; }
+button { font:inherit; color:inherit; }
+.ic { font-family:'Segoe Fluent Icons','Segoe MDL2 Assets'; font-size:16px; line-height:1; font-style:normal; }
+.ic.s { font-size:12px; }
+.hidden { display:none !important; }
+.mock-bar { position:sticky; top:0; z-index:100; display:flex; gap:16px; align-items:center; flex-wrap:wrap; padding:7px 20px; background:#2B2B33; color:#EEE; font-size:12px; }
+.mock-bar .grp { display:flex; gap:4px; align-items:center; }
+.mock-bar button { background:#44444F; color:#EEE; border:1px solid #5A5A66; border-radius:4px; padding:3px 9px; cursor:pointer; font-size:12px; }
+.mock-bar button.on { background:#5B5FC7; border-color:#7579D8; }
+.mock-bar .note { margin-left:auto; color:#AAB; }
+.stage-wrap { padding:16px 20px 32px; display:flex; justify-content:center; }
+.win-box { position:relative; flex:none; }
+.window { position:absolute; left:0; top:0; transform-origin:0 0; background:var(--mica-base); border-radius:8px; border:1px solid var(--stroke-default);
+  box-shadow:0 16px 48px rgba(0,0,0,0.22); overflow:hidden; display:grid; grid-template-columns:232px 1fr; grid-template-rows:36px 1fr 30px; }
+.titlebar { grid-column:1/-1; display:flex; align-items:center; gap:10px; padding-left:14px; font-size:12px; color:var(--text-secondary); }
+.titlebar .tile { width:16px; height:16px; border-radius:4px; background:linear-gradient(135deg,#6366F1,#4145A0); }
+.titlebar .wc { margin-left:auto; display:flex; height:100%; } .titlebar .wc span { width:46px; display:grid; place-items:center; font-family:'Segoe Fluent Icons'; font-size:10px; color:var(--text-primary); }
+.nav { padding:2px 8px 10px; display:flex; flex-direction:column; gap:2px; }
+.wbs { font-family:'Segoe UI Variable Display','Segoe UI',sans-serif; font-size:22px; padding:2px 12px 10px;
+  background:linear-gradient(100deg,var(--brand-indigo),var(--brand-violet) 45%,var(--brand-coral) 75%,var(--brand-amber)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+.lib-switch { margin:0 2px 8px; padding:8px 10px; border-radius:6px; background:var(--layer-card); border:1px solid var(--stroke-card); box-shadow:var(--shadow-card); display:flex; gap:10px; align-items:center; }
+.lib-switch b { display:block; font-weight:600; } .lib-switch small { display:block; color:var(--text-tertiary); font-size:11px; }
+.nav-item { display:flex; align-items:center; gap:12px; padding:9px 12px; border-radius:4px; position:relative; white-space:nowrap; }
+.nav-item.active { background:var(--layer-secondary); }
+.nav-item.active::before { content:''; position:absolute; left:0; top:10px; bottom:10px; width:3px; border-radius:2px; background:var(--accent); }
+.nav .spacer { flex:1; }
+.content { position:relative; min-width:0; min-height:0; background:var(--layer-default); border-top-left-radius:8px; border-left:1px solid var(--stroke-default); border-top:1px solid var(--stroke-default); overflow:auto; }
+.statusbar { grid-column:1/-1; display:flex; align-items:center; gap:18px; padding:0 14px; font-size:12px; color:var(--text-secondary); border-top:1px solid var(--stroke-divider); background:var(--mica-base); }
+.statusbar .r { margin-left:auto; }
+.btn-acc { background:var(--accent); color:var(--text-on-accent); border:1px solid transparent; border-radius:4px; padding:5px 14px; font-size:13px; cursor:pointer; display:inline-flex; gap:6px; align-items:center; white-space:nowrap; }
+body.dark .btn-acc { color:#111; } .btn-acc:hover { background:var(--accent-light); }
+.btn-std { background:var(--layer-card); border:1px solid var(--stroke-divider); border-bottom-color:var(--ctl-bottom); border-radius:4px; padding:5px 12px; font-size:13px; cursor:pointer; display:inline-flex; gap:6px; align-items:center; white-space:nowrap; }
+.btn-std:hover { background:var(--layer-subtle); }
+.muted { color:var(--text-secondary); font-size:12px; line-height:1.5; }
+.seg { display:inline-flex; background:var(--layer-secondary); border-radius:6px; padding:2px; gap:2px; flex-wrap:wrap; }
+.seg button { border:0; background:transparent; padding:4px 10px; border-radius:4px; cursor:pointer; font-size:12px; }
+.seg button.on { background:var(--layer-card); box-shadow:0 1px 2px rgba(0,0,0,.12); color:var(--accent); font-weight:600; }
+body.dark .seg button.on { background:#3A3A3A; }
+.sw { width:36px; height:18px; border-radius:9px; border:1px solid var(--text-secondary); position:relative; flex:none; cursor:pointer; display:inline-block; }
+.sw::after { content:''; position:absolute; top:3px; left:3px; width:10px; height:10px; border-radius:50%; background:var(--text-secondary); }
+.sw.on { background:var(--accent); border-color:var(--accent); } .sw.on::after { left:21px; background:#fff; }
+.chk { width:16px; height:16px; border-radius:3px; border:1px solid var(--text-secondary); display:inline-grid; place-items:center; flex:none; font-family:'Segoe Fluent Icons'; font-size:10px; color:transparent; cursor:pointer; }
+.chk.on { background:var(--accent); border-color:var(--accent); color:#fff; }
+.slider { height:4px; border-radius:2px; background:var(--layer-tertiary); position:relative; margin:10px 0 4px; }
+.slider i { position:absolute; left:0; top:0; bottom:0; border-radius:2px; background:var(--accent); }
+.slider b { position:absolute; top:-6px; width:16px; height:16px; border-radius:50%; background:var(--layer-card); border:4px solid var(--accent); margin-left:-8px; }
+.page { display:none; height:100%; } .page.on { display:block; }
+
+/* Lightbox mit Verbessern-Leiste */
+.lb { position:absolute; inset:0; background:#0F0F12; display:grid; grid-template-columns:1fr 340px; color:#EEE; z-index:5; }
+.lb .stage { position:relative; display:grid; grid-template-rows:44px 1fr 44px; min-width:0; }
+.lb .top { display:flex; align-items:center; gap:10px; padding:0 14px; font-size:13px; color:#CCC; }
+.lb .top .r { margin-left:auto; display:flex; gap:6px; }
+.lb .top .r span { padding:5px 10px; border-radius:4px; background:#26262C; font-size:12px; cursor:pointer; }
+.lb .top .r span.on { background:#5B5FC7; color:#fff; }
+.lb .bottom { display:flex; align-items:center; justify-content:center; gap:16px; font-size:12px; color:#AAA; }
+.pic { position:relative; margin:8px 24px; border-radius:4px; overflow:hidden; }
+.pic .layer { position:absolute; inset:0; background-size:cover; background-position:center; }
+.pic .before { filter:blur(2.2px) grayscale(.85) sepia(.35) contrast(.85); }
+.pic .after { clip-path:inset(0 0 0 50%); }
+.pic .split { position:absolute; top:0; bottom:0; left:50%; width:2px; background:#fff; box-shadow:0 0 6px rgba(0,0,0,.5); }
+.pic .split::after { content:'\E76B  \E76C'; font-family:'Segoe Fluent Icons'; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:38px; height:38px; border-radius:50%; background:#fff; color:#333; display:grid; place-items:center; font-size:10px; }
+.pic .lbl { position:absolute; top:10px; padding:3px 8px; border-radius:4px; background:rgba(0,0,0,.55); font-size:11px; }
+.mask { position:absolute; border-radius:40% 50% 45% 55%; background:rgba(249,115,98,.45); outline:2px dashed #F97362; }
+.brush { position:absolute; width:46px; height:46px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px rgba(0,0,0,.5); }
+.panel { background:#1E1E22; padding:14px 16px; display:flex; flex-direction:column; gap:10px; overflow:auto; font-size:13px; }
+.panel h3 { margin:0 0 2px; font-size:15px; display:flex; gap:8px; align-items:center; }
+.panel .muted { color:#AAA; }
+.tool { display:grid; grid-template-columns:28px 1fr auto; gap:10px; align-items:center; padding:9px 10px; border-radius:6px; background:#26262C; cursor:pointer; border:1px solid transparent; }
+.tool.on { border-color:#818CF8; background:#2C2C3A; }
+.tool .ic { color:#A5B0FF; }
+.tool b { display:block; font-weight:600; } .tool small { color:#AAA; font-size:11px; }
+.tool .st { font-size:10px; font-weight:700; border-radius:8px; padding:1px 7px; }
+.st-need { background:rgba(252,225,0,.14); color:#FCE100; } .st-ok { background:rgba(108,203,95,.14); color:#6CCB5F; }
+.sub { padding:4px 10px 10px 48px; display:grid; gap:8px; }
+.panel .seg { background:#26262C; } .panel .seg button { color:#DDD; } .panel .seg button.on { background:#3A3A44; color:#A5B0FF; }
+.panel .slider { background:#3A3A44; } .panel .slider b { background:#1E1E22; }
+.save { margin-top:auto; border-top:1px solid #333; padding-top:10px; display:grid; gap:8px; }
+.save .file { font-family:'Cascadia Mono',Consolas,monospace; font-size:12px; background:#26262C; border-radius:4px; padding:5px 8px; color:#DDD; }
+.panel .btn-acc { color:#111; background:#818CF8; justify-content:center; }
+.panel .btn-std { background:#26262C; border-color:#3A3A44; color:#EEE; justify-content:center; }
+.gpu { display:flex; gap:8px; align-items:center; font-size:12px; color:#AAA; }
+.bar { flex:1; height:4px; border-radius:2px; background:#3A3A44; overflow:hidden; } .bar i { display:block; height:100%; background:#818CF8; }
+
+/* Galerie + Stapel */
+.phead { display:flex; align-items:flex-end; gap:14px; padding:18px 24px 10px; }
+.phead h1 { font-size:28px; font-weight:600; margin:0; } .phead .sub2 { color:var(--text-secondary); font-size:13px; margin-top:4px; }
+.grid { display:grid; grid-template-columns:repeat(6,1fr); gap:6px; padding:0 24px; }
+.tile { aspect-ratio:1; border-radius:4px; position:relative; background-size:cover; }
+.tile.sel { outline:3px solid var(--accent); outline-offset:-3px; }
+.tile .pair { position:absolute; left:6px; bottom:6px; font-size:10px; font-weight:700; background:rgba(0,0,0,.6); color:#fff; border-radius:8px; padding:1px 7px; display:flex; gap:4px; align-items:center; }
+.smoke { position:absolute; inset:0; background:var(--smoke); z-index:40; display:grid; place-items:center; }
+.dlg { width:640px; max-width:calc(100% - 40px); background:var(--layer-card); border:1px solid var(--stroke-card); border-radius:8px; box-shadow:0 24px 48px rgba(0,0,0,.3); overflow:hidden; }
+body.dark .dlg { background:#2B2B2B; }
+.dlg .in { padding:20px 24px 14px; display:grid; gap:12px; }
+.dlg h2 { margin:0; font-size:20px; font-weight:600; }
+.dlg .ft { display:flex; gap:8px; justify-content:flex-end; padding:12px 24px; background:var(--layer-subtle); border-top:1px solid var(--stroke-divider); }
+.opt { display:flex; gap:10px; align-items:flex-start; font-size:13px; }
+.opt small { display:block; color:var(--text-secondary); font-size:11px; }
+.est { background:var(--accent-soft); border-radius:6px; padding:8px 12px; font-size:12px; color:var(--text-secondary); }
+
+/* Einstellungen */
+.tabs { display:flex; gap:4px; padding:0 24px 10px; border-bottom:1px solid var(--stroke-divider); flex-wrap:wrap; }
+.tabs span { padding:6px 12px; border-radius:4px; color:var(--text-secondary); }
+.tabs span.on { color:var(--text-primary); font-weight:600; box-shadow:inset 0 -3px 0 var(--accent); }
+.body { padding:14px 24px 24px; display:grid; gap:12px; max-width:980px; }
+.card { background:var(--layer-card); border:1px solid var(--stroke-card); border-radius:8px; box-shadow:var(--shadow-card); padding:14px 16px; }
+.card h2 { font-size:15px; margin:0 0 6px; display:flex; gap:10px; align-items:center; }
+table.models { width:100%; border-collapse:collapse; font-size:12px; }
+table.models th { text-align:left; color:var(--text-tertiary); font-weight:600; padding:6px 8px; border-bottom:1px solid var(--stroke-divider); }
+table.models td { padding:8px; border-bottom:1px solid var(--stroke-divider); vertical-align:middle; }
+table.models td b { font-size:13px; }
+.state { font-size:11px; font-weight:700; border-radius:9px; padding:2px 8px; white-space:nowrap; }
+.s-ok { background:var(--success-soft); color:var(--success); } .s-miss { background:var(--layer-tertiary); color:var(--text-secondary); }
+.row { display:grid; grid-template-columns:1fr auto; gap:12px; align-items:center; padding:10px 0; border-top:1px solid var(--stroke-divider); font-size:13px; }
+.row b { display:block; font-weight:600; }
+.field { display:inline-block; padding:5px 10px; border:1px solid var(--stroke-default); border-bottom-color:var(--ctl-bottom); border-radius:4px; background:var(--layer-card); font-size:13px; }
+</style>
+</head>
+<body>
+<div class="mock-bar">
+  <span><b>Mockup 13 · Foto verbessern (Welle 8) · Entwurf</b></span>
+  <span class="grp">Design: <button id="mbLight" class="on">Hell</button><button id="mbDark">Dunkel</button></span>
+  <span class="grp">Ansicht: <button data-v="lb" class="on">Lightbox: Verbessern</button><button data-v="erase">Entfernen (Pinsel)</button><button data-v="batch">Mehrere Fotos</button><button data-v="gallery">Galerie: Fassungen</button><button data-v="settings">Einstellungen › Verbessern</button></span>
+  <span class="note">Fotos sind Platzhalter</span>
+</div>
+
+<div class="stage-wrap"><div class="win-box" id="winBox">
+<div class="window" id="win">
+  <div class="titlebar"><span class="tile"></span> Lumora<span class="wc"><span>&#xE921;</span><span>&#xE922;</span><span>&#xE8BB;</span></span></div>
+  <nav class="nav">
+    <div class="wbs">lumora</div>
+    <div class="lib-switch"><span class="ic">&#xE8F1;</span><div><b>Familienfotos</b><small>Bibliothek wechseln</small></div></div>
+    <div class="nav-item active" id="navGal"><span class="ic">&#xE91B;</span>Galerie</div>
+    <div class="nav-item"><span class="ic">&#xE8B7;</span>Ordner</div>
+    <div class="nav-item"><span class="ic">&#xE8F1;</span>Alben</div>
+    <div class="nav-item"><span class="ic">&#xE786;</span>Storys</div>
+    <div class="nav-item"><span class="ic">&#xE716;</span>Personen</div>
+    <div class="nav-item"><span class="ic">&#xE707;</span>Orte</div>
+    <div class="nav-item"><span class="ic">&#xE8C8;</span>Doppelte</div>
+    <div class="nav-item"><span class="ic">&#xE8CB;</span>Sortieren</div>
+    <div class="spacer"></div>
+    <div class="nav-item" id="navSet"><span class="ic">&#xE713;</span>Einstellungen</div>
+  </nav>
+
+  <main class="content">
+    <!-- ===== Galerie (Hintergrund für Stapel und Fassungen) ===== -->
+    <section class="page on" id="pGallery">
+      <div class="phead"><div><h1>Galerie</h1><div class="sub2">Ordner „Scans Kindheit“ · 186 Fotos · <b>6 ausgewählt</b></div></div>
+        <div style="margin-left:auto;display:flex;gap:8px"><button class="btn-std" data-v="batch"><span class="ic s">&#xE771;</span>Verbessern…</button></div></div>
+      <div class="grid" id="grid"></div>
+
+      <!-- Stapel-Dialog -->
+      <div class="smoke hidden" id="dBatch">
+        <div class="dlg">
+          <div class="in">
+            <h2>6 Fotos verbessern</h2>
+            <div class="muted">Die Originale bleiben unverändert. Jedes Ergebnis wird eine neue Datei daneben und in der Galerie mit dem Original verknüpft.</div>
+            <div class="opt"><span class="chk on">&#xE73E;</span><div>Automatisch<small>Lumora wählt je Foto: Kratzer bei Scans, Gesichter bei unscharfen Porträts, Hochskalieren bei kleinen Bildern</small></div></div>
+            <div class="opt"><span class="chk">&#xE73E;</span><div>Hochskalieren und schärfen <span class="seg" style="margin-left:6px"><button>2×</button><button class="on">4×</button></span></div></div>
+            <div class="opt"><span class="chk on">&#xE73E;</span><div>Gesichter restaurieren<small>nur wo Gesichter erkannt sind</small></div></div>
+            <div class="opt"><span class="chk on">&#xE73E;</span><div>Schwarz-Weiß einfärben<small>nur bei Fotos ohne Farbe</small></div></div>
+            <div class="opt"><span class="chk on">&#xE73E;</span><div>Kratzer und Flecken entfernen<small>bei eingescannten Fotos</small></div></div>
+            <div class="est"><span class="ic s">&#xE7F4;</span> Geschätzt etwa 2 Minuten auf der Grafikkarte · läuft im Hintergrund, Fortschritt in der Statusleiste · pausiert Gesichts-/Motiv-Erkennung solange</div>
+          </div>
+          <div class="ft"><button class="btn-std" data-v="gallery">Abbrechen</button><button class="btn-acc" data-v="gallery"><span class="ic s">&#xE771;</span>Verbessern</button></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Einstellungen › Verbessern ===== -->
+    <section class="page" id="pSettings">
+      <div class="phead"><div><h1>Einstellungen</h1></div></div>
+      <div class="tabs"><span>Allgemein</span><span>Bibliotheken</span><span>Darstellung</span><span>Storys</span><span>Assistent</span><span>Orte</span><span>Gesichter</span><span>Motive</span><span class="on">Verbessern</span><span>Verbundene Apps</span></div>
+      <div class="body">
+        <section class="card">
+          <h2><span class="ic">&#xE771;</span>Modelle für „Foto verbessern“</h2>
+          <div class="muted" style="margin-bottom:8px">Alle laufen nur auf diesem PC auf der Grafikkarte. Jedes Modell wird erst nach Ihrer Bestätigung heruntergeladen; Name, Quelle, Größe und Lizenz sehen Sie vorher.</div>
+          <table class="models">
+            <tr><th>Werkzeug</th><th>Modell</th><th>Quelle</th><th>Größe</th><th>Lizenz</th><th></th></tr>
+            <tr><td><b>Hochskalieren / schärfen</b></td><td>Real-ESRGAN x4plus</td><td>GitHub (xinntao)</td><td>≈ 65 MB</td><td>BSD-3</td><td><span class="state s-ok">geladen</span></td></tr>
+            <tr><td><b>Gesichter restaurieren</b></td><td>GFPGAN v1.4</td><td>GitHub (TencentARC)</td><td>≈ 350 MB</td><td>Apache-2.0</td><td><button class="btn-std">Herunterladen…</button></td></tr>
+            <tr><td><b>Einfärben</b></td><td>DeOldify (artistic)</td><td>GitHub (jantic)</td><td>≈ 250 MB</td><td>MIT</td><td><button class="btn-std">Herunterladen…</button></td></tr>
+            <tr><td><b>Entfernen / Kratzer</b></td><td>LaMa (big-lama)</td><td>GitHub (advimman)</td><td>≈ 200 MB</td><td>Apache-2.0</td><td><span class="state s-miss">nicht geladen</span></td></tr>
+          </table>
+          <div class="muted" style="margin-top:6px">Größen ungefähr — die genaue Zahl und die Prüfsumme zeigt der Bestätigungsdialog.</div>
+        </section>
+        <section class="card">
+          <h2><span class="ic">&#xE74E;</span>Ergebnis speichern</h2>
+          <div class="row"><div><b>Ort</b><span class="muted">neben dem Original (Standard) oder in einem eigenen Ordner</span></div><span class="field">neben dem Original</span></div>
+          <div class="row"><div><b>Dateiname</b><span class="muted">Original + Zusatz; Original wird nie überschrieben</span></div><span class="field">&lt;Name&gt;_verbessert.jpg</span></div>
+          <div class="row"><div><b>Aufnahmedatum, Ort, Personen, Sterne übernehmen</b><span class="muted">EXIF/XMP und Katalog-Daten aus dem Original</span></div><span class="sw on"></span></div>
+          <div class="row"><div><b>In der Galerie nur die beste Fassung zeigen</b><span class="muted">Original und verbesserte Fassung als Paar („2 Fassungen“), umschaltbar</span></div><span class="sw on"></span></div>
+          <div class="row"><div><b>Grafikkarte</b><span class="muted">teilt sich mit Gesichtern, Motiven und Assistent — nacheinander</span></div><span class="field">GTX 1080 Ti · DirectML</span></div>
+        </section>
+      </div>
+    </section>
+
+    <!-- ===== Lightbox mit Verbessern ===== -->
+    <div class="lb" id="lb">
+      <div class="stage">
+        <div class="top"><span class="ic s">&#xE72B;</span> 1987-07-12 Garten.jpg · Scan 1200 × 820<div class="r"><span class="on" id="mCompare">Vergleich</span><span>Vorher</span><span>Nachher</span></div></div>
+        <div class="pic" id="pic">
+          <div class="layer before" id="before"></div>
+          <div class="layer after" id="after"></div>
+          <div class="split" id="split"></div>
+          <span class="lbl" style="left:10px">Vorher (Original)</span><span class="lbl" style="right:10px">Nachher · Vorschau</span>
+          <div class="mask hidden" id="mask" style="left:63%;top:34%;width:13%;height:38%"></div>
+          <div class="brush hidden" id="brush" style="left:72%;top:50%"></div>
+        </div>
+        <div class="bottom"><span>&#9664; vorheriges</span><span>3 / 186</span><span>nächstes &#9654;</span></div>
+      </div>
+      <div class="panel" id="panel">
+        <h3><span class="ic">&#xE771;</span>Verbessern</h3>
+        <div class="muted">Das Original bleibt unverändert. Vorschau zuerst, gespeichert wird erst auf Ihren Klick.</div>
+
+        <div class="tool on" id="tAuto"><span class="ic">&#xE945;</span><div><b>Automatisch</b><small>Scan erkannt: Kratzer + Gesichter + Einfärben</small></div><span class="st st-ok">bereit</span></div>
+        <div class="tool"><span class="ic">&#xE740;</span><div><b>Hochskalieren und schärfen</b><small>Real-ESRGAN · 1200 → 4800 px</small></div><span class="st st-ok">bereit</span></div>
+        <div class="sub" id="subUp"><div class="seg"><button>2×</button><button class="on">4×</button></div></div>
+        <div class="tool"><span class="ic">&#xE77B;</span><div><b>Gesichter restaurieren</b><small>GFPGAN · 3 Gesichter erkannt</small></div><span class="st st-need">Modell fehlt</span></div>
+        <div class="sub"><div class="muted">Stärke</div><div class="slider"><i style="width:60%"></i><b style="left:60%"></b></div></div>
+        <div class="tool"><span class="ic">&#xE790;</span><div><b>Einfärben</b><small>DeOldify · Foto ohne Farbe</small></div><span class="st st-need">Modell fehlt</span></div>
+        <div class="tool" id="tErase"><span class="ic">&#xE75C;</span><div><b>Entfernen</b><small>Pinsel über Störendes · Kratzer automatisch</small></div><span class="st st-need">Modell fehlt</span></div>
+        <div class="sub hidden" id="subErase"><div class="muted">Pinselgröße</div><div class="slider"><i style="width:35%"></i><b style="left:35%"></b></div>
+          <div style="display:flex;gap:6px"><button class="btn-std"><span class="ic s">&#xE7A7;</span>Strich zurück</button><button class="btn-std">Auswahl leeren</button></div></div>
+        <div class="tool"><span class="ic">&#xE7A8;</span><div><b>Zuschneiden, drehen, Licht</b><small>Helligkeit, Kontrast, gerade richten</small></div><span></span></div>
+
+        <div class="gpu"><span class="ic s">&#xE7F4;</span>Vorschau wird berechnet …<span class="bar"><i style="width:70%"></i></span>4 s</div>
+        <div class="save">
+          <div class="muted">Speichern als neue Datei daneben:</div>
+          <div class="file">1987-07-12 Garten_verbessert.jpg</div>
+          <button class="btn-acc"><span class="ic s">&#xE74E;</span>Als neue Datei speichern</button>
+          <button class="btn-std">Verwerfen</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div class="statusbar"><span>Familienfotos</span><span id="stat">Verbessern: bereit</span><div class="r">0.4.x</div></div>
+</div>
+</div></div>
+
+<script>
+const $=(s)=>document.querySelector(s), $$=(s)=>[...document.querySelectorAll(s)];
+const ph=['#E9D7C3,#8F7D73','#D9CFC9,#6E5E54','#C8BFB4,#5D544C','#EADFD0,#9C8672','#D5CABE,#7A6A5E','#E2D6C6,#8B7B6C'];
+const img='linear-gradient(180deg,#9EC9E8 0%,#CFE3F1 38%,#7DAA5E 39%,#5E8B47 70%,#3E6B30 100%)';
+$('#before').style.background=img; $('#after').style.background=img;
+let g=''; for(let i=0;i<24;i++){ const c=ph[i%ph.length]; const sel=i<6; g+=`<div class="tile${sel?' sel':''}" style="background:linear-gradient(160deg,${c});filter:${i%4===1?'grayscale(1)':'none'}">${i===2||i===7?'<span class="pair"><span class="ic s">&#xE8F1;</span>2 Fassungen</span>':''}</div>`; } $('#grid').innerHTML=g;
+const pic=$('#pic'), split=$('#split'), after=$('#after');
+pic.addEventListener('mousemove',e=>{ if(!$('#mask').classList.contains('hidden')) return; const r=pic.getBoundingClientRect(); const p=Math.max(5,Math.min(95,(e.clientX-r.left)/r.width*100)); split.style.left=p+'%'; after.style.clipPath=`inset(0 0 0 ${p}%)`; });
+function view(v){
+  $$('.mock-bar [data-v]').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+  const lb = v==='lb'||v==='erase';
+  $('#lb').classList.toggle('hidden',!lb);
+  $('#pGallery').classList.toggle('on', v==='batch'||v==='gallery'||lb);
+  $('#pSettings').classList.toggle('on', v==='settings');
+  $('#navGal').classList.toggle('active', v!=='settings'); $('#navSet').classList.toggle('active', v==='settings');
+  $('#dBatch').classList.toggle('hidden', v!=='batch');
+  const er = v==='erase';
+  $('#mask').classList.toggle('hidden',!er); $('#brush').classList.toggle('hidden',!er); $('#subErase').classList.toggle('hidden',!er);
+  $('#tErase').classList.toggle('on',er); $('#tAuto').classList.toggle('on',!er);
+  if(er){ split.style.left='100%'; after.style.clipPath='inset(0 0 0 100%)'; } else { split.style.left='50%'; after.style.clipPath='inset(0 0 0 50%)'; }
+  $('#stat').textContent = v==='gallery' ? 'Verbessern: 2 von 6 fertig · Gesichter/Motive pausiert' : 'Verbessern: bereit';
+}
+document.addEventListener('click',e=>{
+  const v=e.target.closest('[data-v]'); if(v){ view(v.dataset.v); return; }
+  const c=e.target.closest('.chk, .sw'); if(c){ c.classList.toggle('on'); return; }
+  const b=e.target.closest('.seg button'); if(b){ b.parentElement.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b)); }
+});
+function fit(){ const w=1280,h=800,win=$('#win'); win.style.width=w+'px'; win.style.height=h+'px'; const s=Math.min(1,(document.documentElement.clientWidth-40)/w);
+  win.style.transform=`scale(${s})`; $('#winBox').style.width=w*s+'px'; $('#winBox').style.height=h*s+'px'; }
+function theme(d){ document.body.classList.toggle('dark',d); $('#mbLight').classList.toggle('on',!d); $('#mbDark').classList.toggle('on',d); }
+$('#mbLight').onclick=()=>theme(false); $('#mbDark').onclick=()=>theme(true);
+window.addEventListener('resize',fit); fit(); theme(window.matchMedia('(prefers-color-scheme: dark)').matches);
+</script>
+</body>
+</html>
